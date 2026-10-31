@@ -2,8 +2,8 @@
 
 | Phase | Scope | Status |
 |---|---|---|
-| 1 | Inspect CocoaCanvas, design system, technology research, architecture proposal, decisions | **In progress** — awaiting architecture approval |
-| 2 | Desktop foundation: Electron app, CocoaCanvas-style shell, projects, viewport, scene model, selection, transforms, undo | Not started |
+| 1 | Inspect CocoaCanvas, design system, technology research, architecture proposal, decisions | **Done** |
+| 2 | Desktop foundation: Electron app, CocoaCanvas-style shell, projects, viewport, scene model, selection, transforms, undo | **In progress** |
 | 3 | Brush geometry: creation, manipulation, grid/snap, vertex and face editing, materials per face, carve/union/intersect, validation | Not started |
 | 4 | Entities and physics: components, Rapier, colliders, triggers, inspector, interaction infrastructure | Not started |
 | 5 | Visual scripting: blocks editor, script model, compiler, VM, events, debugging, recipes | Not started |
@@ -21,7 +21,7 @@ Order may shift where dependencies require it (for example, the project format f
 - [x] Approved editor mockups
 - [x] Research desktop, rendering, physics, geometry and packaging options
 - [x] Architecture proposal
-- [ ] Sign-off on decisions D1–D12 and V3
+- [x] Sign-off on decisions D1–D12 and V3
 
 ## Next
 

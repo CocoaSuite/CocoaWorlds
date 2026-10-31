@@ -1,6 +1,6 @@
 # CocoaWorlds Architecture
 
-> **Status: proposal awaiting approval.** Nothing below is implemented yet. Each numbered decision is tracked in [DECISIONS.md](DECISIONS.md) and changes from "proposed" to "approved" only after sign-off.
+> **Status: approved 2026-11-01.** Every decision below (D1–D12) is signed off; see [DECISIONS.md](DECISIONS.md). Implementation starts in Phase 2. Changes to an approved decision are proposed and approved again before they are made.
 
 ## 1. The shape of the system
 
@@ -33,9 +33,9 @@ The runtime never imports editor code. The editor depends on the runtime, never 
      no editor code, no Node in the page)          runtime bundle + data + wasm)
 ```
 
-## 2. Proposed choices
+## 2. Choices
 
-### D1. Desktop framework — **Electron** (recommended)
+### D1. Desktop framework — **Electron**
 
 | | Electron | Tauri 2 |
 |---|---|---|
@@ -47,16 +47,16 @@ The runtime never imports editor code. The editor depends on the runtime, never 
 
 A 3D engine lives or dies on GPU behaviour, and the user's games must look the same on all three systems. Electron removes a whole class of "works on Windows, broken on Linux" bugs and keeps the stack in one language. The size cost is real but acceptable for a development tool. Security is handled by running the renderer sandboxed with context isolation and exposing only a narrow, typed `window.cocoa` API from a preload script.
 
-### D2. Rendering — **Three.js behind a thin adapter** (recommended)
+### D2. Rendering — **Three.js behind a thin adapter**
 
 - Three.js (MIT, r187): lightweight, huge ecosystem, glTF loader, PBR materials, shadows, `BatchedMesh`/instancing, and a WebGPU renderer that falls back to WebGL2.
 - Babylon.js (Apache-2.0, v9): more engine-like out of the box (its own scene graph, physics plugins, inspector), heavier, and its scene model would compete with ours.
 
 CocoaWorlds owns the scene; the renderer only draws it. Engine code talks to a small `RenderAdapter` (create mesh, update transform, set material, lights, camera, debug lines), and only `engine/render-three` imports Three.js. Start on the WebGL2 path for predictability; WebGPU becomes an option later.
 
-### D3. Geometry — **Convex brushes as planes, with real carve CSG** (recommended)
+### D3. Geometry — **Convex brushes as planes, with real carve CSG**
 
-How Hammer-style editing actually works, and what we propose:
+How Hammer-style editing actually works, and what CocoaWorlds does:
 
 - **A brush is a convex solid stored as a set of planes**, each plane carrying its face data (material, UV axes, scale, offset, rotation). Vertices, edges and faces are *derived* from the planes, so a brush is always valid and closed.
 - **Editing** (move, scale, vertex drag, clip) edits planes or rebuilds them from moved vertices, then re-validates convexity.
@@ -69,7 +69,7 @@ How Hammer-style editing actually works, and what we propose:
 
 Generic mesh CSG libraries were considered and rejected for brushes: `three-bvh-csg` describes itself as experimental and its output may not be watertight; Manifold (Apache-2.0) is robust but produces triangle meshes, losing editable brush structure. Manifold remains a candidate later for booleans on imported models.
 
-### D4. Physics — **Rapier (3D, WASM)** (recommended)
+### D4. Physics — **Rapier (3D, WASM)**
 
 Rapier (`@dimforge/rapier3d-compat` 0.21, Apache-2.0) is fast, actively maintained, runs in browsers and Electron, supports convex hulls, sensors (triggers), shape casts and collision groups. Ammo.js (Bullet port) is older, larger and less maintained. Jolt (WASM build) is a strong alternative with heavier integration.
 
@@ -82,7 +82,7 @@ The player controller is **ours**, not Rapier's built-in one: a Source-style mov
 - Brushes are entities with a `Brush` component, so a door can be brush-built.
 - Prefabs: a prefab file holds an entity tree. Instances store only overrides (property paths that differ). Editing the prefab updates every instance except overridden fields; "Apply" and "Revert" per field.
 
-### D6. Visual scripting — **Blocks first, one script model underneath** (direction approved; details proposed)
+### D6. Visual scripting — **Blocks first, one script model underneath** 
 
 - Users write **plain-language blocks** ("When the player enters Doorway → If Main door is locked → Show message … Otherwise → Open Main door").
 - Blocks and the optional advanced graph are two views of **one script model**, so a script can be opened in either.
