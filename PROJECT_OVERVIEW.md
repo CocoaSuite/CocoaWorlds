@@ -20,7 +20,7 @@ CocoaWorlds is a desktop 3D game engine and editor in the Cocoa family. It makes
 
 ## Current capabilities
 
-None yet — the project is in Phase 1 (inspection and architecture). See [ROADMAP.md](ROADMAP.md) and [FEATURE_STATUS.md](FEATURE_STATUS.md).
+The desktop editor runs: create and open projects, edit a scene in a 3D viewport with four views, select and transform objects with a gizmo, organise them in a hierarchy, undo everything, save safely with autosave and recovery, in English or Russian. Brushes, scripting, Play and export are next. Details: [FEATURE_STATUS.md](FEATURE_STATUS.md), plan: [ROADMAP.md](ROADMAP.md).
 
 ## Documents
 

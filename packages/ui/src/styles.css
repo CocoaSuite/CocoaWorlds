@@ -1,0 +1,211 @@
+/*
+ * CocoaWorlds UI — tokens and base styles carried over from CocoaCanvas (editor.html).
+ * Values marked "CC" are copied unchanged. See DESIGN_SYSTEM.md before changing anything here.
+ */
+:root {
+  /* CC */
+  --bg: #121212;
+  --panel: #1a1a1a;
+  --panel2: #252525;
+  --line: #303030;
+  --fg: #ececec;
+  --mute: #8f8f8f;
+  --pri: #f2f2f2;
+  --prifg: #111;
+  --acc: #4a4a4a;
+  --accfg: #ffffff;
+  --hl: #ffffff;
+  --bad: #ff8a73;
+  --sel: #4b9cff;
+  --guide: #ff5b8a;
+  --cbg: #1f1f1f;
+  --rowsel: #2d3a4d;
+  --menuhover: #363636;
+  --sans: system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif;
+  --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  /* CocoaWorlds */
+  --cw-brand: #637f2a;
+  --cw-brand-hi: #8fb04a;
+  --cw-warn: #f0a442;
+  --cw-x: #ff6b5b;
+  --cw-y: #8fd14f;
+  --cw-z: #4b9cff;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body, #root { height: 100%; margin: 0; }
+body {
+  background: var(--bg);
+  color: var(--fg);
+  font: 13px/1.4 var(--sans);
+  overflow: hidden;
+  user-select: none;
+  -webkit-user-select: none;
+}
+input, textarea, [contenteditable] { user-select: text; -webkit-user-select: text; }
+button, input, select, textarea { font: inherit; color: inherit; }
+
+/* Buttons — CC */
+.cw-btn {
+  background: var(--panel2);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 5px 10px;
+  cursor: pointer;
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.cw-btn:hover { border-color: var(--mute); }
+.cw-btn:disabled { opacity: 0.45; cursor: default; }
+.cw-btn:disabled:hover { border-color: var(--line); }
+.cw-btn.pri { background: var(--pri); border-color: var(--pri); color: var(--prifg); font-weight: 600; }
+.cw-btn.pri:hover { background: #fff; border-color: #fff; }
+.cw-btn.ghost { background: none; border-color: transparent; color: var(--mute); }
+.cw-btn.ghost:hover { color: var(--fg); background: var(--panel2); }
+.cw-btn.sm { padding: 3px 9px; font-size: 12px; }
+:is(button, input, select, textarea):focus-visible { outline: 2px solid var(--hl); outline-offset: 1px; }
+
+.cw-ic { display: inline-grid; place-items: center; padding: 5px 8px; }
+.cw-ic svg, .cw-icon { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+
+/* Fields — CC */
+.cw-input, .cw-select {
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  padding: 4px 6px;
+  min-width: 0;
+  width: 100%;
+}
+.cw-input.mono { font: 12px var(--mono); }
+.cw-nf { position: relative; display: block; min-width: 0; }
+.cw-nf > span {
+  position: absolute; left: 3px; top: 50%; transform: translateY(-50%);
+  color: var(--mute); font-size: 11px; padding: 4px; cursor: ew-resize; touch-action: none;
+}
+.cw-nf > span:hover { color: var(--fg); }
+.cw-nf > input { padding-left: 20px; font: 12px var(--mono); }
+.cw-nf.x > span { color: var(--cw-x); }
+.cw-nf.y > span { color: var(--cw-y); }
+.cw-nf.z > span { color: var(--cw-z); }
+
+/* Top bar and menus — CC */
+.cw-top {
+  display: flex; align-items: center; gap: 6px; padding: 0 10px; min-height: 38px;
+  background: var(--panel); border-bottom: 1px solid var(--line);
+}
+.cw-menus { display: flex; align-items: center; margin-left: 8px; }
+.cw-mn { position: relative; }
+.cw-mt { background: none; border: 0; border-radius: 4px; padding: 4px 9px; cursor: pointer; }
+.cw-mt:hover, .cw-mn.on .cw-mt { background: var(--panel2); }
+.cw-dd, .cw-ctx {
+  display: flex; flex-direction: column; z-index: 40; min-width: 210px;
+  background: var(--panel2); border: 1px solid var(--line); border-radius: 7px; padding: 4px;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45);
+}
+.cw-dd { position: absolute; left: 0; top: calc(100% + 4px); }
+.cw-ctx { position: fixed; z-index: 80; }
+.cw-dd button, .cw-ctx button {
+  background: none; border: 0; border-radius: 4px; text-align: left; padding: 6px 10px; cursor: pointer;
+  display: flex; align-items: center; gap: 16px;
+}
+.cw-dd button:hover:not(:disabled), .cw-ctx button:hover:not(:disabled) { background: var(--menuhover); }
+.cw-dd button:disabled, .cw-ctx button:disabled { opacity: 0.45; cursor: default; }
+.cw-dd button kbd, .cw-ctx button kbd { margin-left: auto; color: var(--mute); background: none; border: 0; padding: 0; font: 12px var(--mono); }
+.cw-dd hr, .cw-ctx hr { border: 0; border-top: 1px solid var(--line); margin: 4px 2px; width: auto; }
+.cw-vs { width: 1px; height: 20px; background: var(--line); margin: 0 6px; flex: none; }
+.cw-sp { flex: 1; }
+
+/* Panels — CC */
+.cw-ph {
+  display: flex; align-items: center; justify-content: space-between; padding: 10px 12px;
+  font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--mute);
+}
+.cw-ph .cw-btn { text-transform: none; letter-spacing: 0; font-size: 12px; padding: 3px 9px; color: var(--fg); }
+.cw-sec {
+  font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--mute);
+  margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--line);
+  display: flex; align-items: center; justify-content: space-between;
+}
+.cw-sec:first-child { margin-top: 0; border-top: 0; padding-top: 0; }
+.cw-f { display: grid; grid-template-columns: 72px minmax(0, 1fr); gap: 8px; align-items: center; }
+.cw-f > span:first-child { color: var(--mute); }
+.cw-f3 { display: grid; grid-template-columns: 72px repeat(3, minmax(0, 1fr)); gap: 6px; align-items: center; }
+.cw-f3 > span:first-child { color: var(--mute); }
+.cw-empty { color: var(--mute); padding: 10px 8px; line-height: 1.5; }
+
+/* Tree rows — CC (.lr) */
+.cw-lr {
+  display: flex; align-items: center; gap: 5px; height: 28px; padding-right: 4px; border-radius: 5px;
+  cursor: default;
+}
+.cw-lr:hover { background: var(--panel2); }
+.cw-lr.on { background: var(--rowsel); }
+.cw-lr.off .cw-ln, .cw-lr.off .cw-ls { opacity: 0.45; }
+.cw-lr .cw-cx { width: 14px; height: 14px; flex: none; display: grid; place-items: center; color: var(--mute); background: none; border: 0; padding: 0; }
+.cw-lr .cw-cx::before { content: ''; border: 4px solid transparent; border-left: 5px solid currentColor; border-right: 0; transform: translateX(2px); }
+.cw-lr .cw-cx.o::before { transform: rotate(90deg) translateX(2px); }
+.cw-ls { flex: none; color: var(--mute); display: grid; }
+.cw-ls svg { width: 13px; height: 13px; stroke-width: 1.8; }
+.cw-lr.on .cw-ls { color: var(--fg); }
+.cw-ln { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cw-ln input { height: 22px; padding: 1px 4px; }
+.cw-lb { background: none; border: 0; padding: 2px; color: var(--mute); display: none; cursor: pointer; }
+.cw-lb svg { width: 14px; height: 14px; stroke-width: 1.8; display: block; }
+.cw-lr:hover .cw-lb, .cw-lb.set { display: block; }
+.cw-lb:hover { color: var(--fg); }
+
+/* Segmented — CC (.seg) */
+.cw-seg { display: flex; gap: 2px; background: var(--panel); border: 1px solid var(--line); border-radius: 7px; padding: 2px; }
+.cw-seg button { background: none; border: 1px solid transparent; border-radius: 5px; padding: 3px 9px; color: var(--mute); font-size: 12px; cursor: pointer; }
+.cw-seg button:hover { color: var(--fg); }
+.cw-seg button.on { background: var(--panel2); border-color: var(--line); color: var(--fg); }
+
+/* Switch — CC (.sw2), brand olive instead of brand orange */
+.cw-sw { position: relative; width: 42px; height: 24px; flex: none; display: inline-block; }
+.cw-sw input { position: absolute; opacity: 0; inset: 0; margin: 0; cursor: pointer; }
+.cw-sw i { position: absolute; inset: 0; border-radius: 12px; background: var(--panel2); border: 1px solid var(--line); transition: 0.15s; pointer-events: none; }
+.cw-sw i::after { content: ''; position: absolute; left: 3px; top: 3px; width: 16px; height: 16px; border-radius: 50%; background: var(--mute); transition: 0.15s; }
+.cw-sw input:checked + i { background: var(--cw-brand); border-color: var(--cw-brand); }
+.cw-sw input:checked + i::after { left: 21px; background: #fff; }
+.cw-sw input:focus-visible + i { outline: 2px solid var(--hl); outline-offset: 1px; }
+
+/* Tool bar — CC (#tbar) */
+.cw-tbar { display: flex; justify-content: center; align-items: center; gap: 4px; padding: 6px 10px; background: var(--panel); border-top: 1px solid var(--line); }
+.cw-tool { width: 34px; height: 30px; padding: 0; display: grid; place-items: center; background: none; border: 1px solid transparent; border-radius: 6px; cursor: pointer; }
+.cw-tool:hover { background: var(--panel2); }
+.cw-tool.on { background: var(--pri); color: var(--prifg); border-color: var(--pri); }
+.cw-tool:disabled { opacity: 0.35; cursor: default; background: none; }
+
+/* Dialog — CC (.modal) */
+.cw-modal { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.6); display: grid; place-items: center; z-index: 75; padding: 48px; }
+.cw-box {
+  background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 18px;
+  width: min(420px, 100%); display: flex; flex-direction: column; gap: 12px;
+  max-height: calc(100vh - 32px); overflow: auto; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+}
+.cw-box h2 { margin: 0; font-size: 16px; font-weight: 600; }
+.cw-box p { margin: 0; color: var(--mute); line-height: 1.5; }
+.cw-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px; }
+
+/* Toast — CC */
+.cw-toast {
+  position: fixed; left: 50%; bottom: 60px; transform: translateX(-50%); z-index: 86;
+  background: var(--panel2); border: 1px solid var(--line); padding: 8px 14px; border-radius: 8px;
+  opacity: 0; transition: opacity 0.2s; pointer-events: none;
+}
+.cw-toast.on { opacity: 1; }
+
+kbd { font: 12px var(--mono); background: var(--panel2); border: 1px solid var(--line); border-radius: 4px; padding: 1px 6px; white-space: nowrap; }
+
+.cw-scroll { overflow: auto; min-height: 0; }
+.cw-scroll::-webkit-scrollbar { width: 10px; height: 10px; }
+.cw-scroll::-webkit-scrollbar-thumb { background: #333; border-radius: 5px; border: 2px solid var(--panel); }
+
+@media (prefers-reduced-motion: reduce) {
+  .cw-toast, .cw-sw i, .cw-sw i::after { transition: none; }
+}

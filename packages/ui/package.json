@@ -1,0 +1,14 @@
+{
+  "name": "@cocoaworlds/ui",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "CocoaCanvas design tokens and components for the CocoaWorlds editor.",
+  "exports": {
+    ".": "./src/index.ts",
+    "./styles.css": "./src/styles.css"
+  },
+  "peerDependencies": {
+    "react": "^19.0.0"
+  }
+}

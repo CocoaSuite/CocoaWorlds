@@ -9,8 +9,8 @@ CocoaWorlds is a member of the Cocoa software family. Its editor must look and b
 | Aspect | Finding | Consequence for CocoaWorlds |
 |---|---|---|
 | Distribution | One self-contained ~780 KB HTML file plus a PWA shell (`index.html`, `manifest.webmanifest`, `sw.js`). | There is no component source to import. |
-| Code | One ~660 KB vanilla JavaScript bundle. No framework, no build artefacts from React/Vue/Svelte. DOM is built with template strings and `innerHTML`. | Components are reproduced, not imported. Class names and tokens are copied verbatim so the two products stay in step. |
-| Styling | One ~63 KB stylesheet driven by CSS custom properties on `:root`. | Tokens below are lifted 1:1 into `packages/ui/tokens.css`. |
+| Code | One ~660 KB vanilla JavaScript bundle. No framework, no build artefacts from React/Vue/Svelte. DOM is built with template strings and `innerHTML`. | Components are reproduced, not imported. Tokens are copied verbatim; class names keep CocoaCanvas' names with a `cw-` prefix (`.lr` → `.cw-lr`, `.sec` → `.cw-sec`) so they can't collide with third-party styles. |
+| Styling | One ~63 KB stylesheet driven by CSS custom properties on `:root`. | Tokens below are lifted 1:1 into `packages/ui/src/styles.css`. |
 | State | Module-level variables (`doc`, `sel`, `tool`, `view`) plus an `IDX` map for lookups. | CocoaWorlds needs a store (see ARCHITECTURE.md); behaviour, not implementation, is mirrored. |
 | Undo | Whole-document JSON snapshots: `commit()` pushes the previous snapshot onto a 200-entry history; `undo()`/`redo()` restore. | CocoaWorlds uses command/transaction undo (snapshots of a 3D level are too large), but keeps the same 200-step depth and the same "commit after each finished gesture" rhythm. |
 | Persistence | IndexedDB database `cocoacanvas` (key/value store) and `localStorage` keys prefixed `cv-`. | CocoaWorlds stores projects as real folders on disk. UI preferences use the `cw-` prefix. |
@@ -116,7 +116,7 @@ CocoaWorlds keeps this frame exactly and adds one thing: a collapsible **bottom 
 
 - **Keyboard:** Space held = temporary pan. Esc steps out one level (exit sub-mode → leave group → back to Select tool → clear selection). Enter steps in. F2 renames. Delete/Backspace deletes. Arrows nudge (Shift = larger step). `?` opens the shortcut sheet.
 - **Modifier shortcuts:** Ctrl/⌘ + Z undo, Shift+Z / Y redo, D duplicate, G group, Shift+G ungroup, A select all, S save, Shift+S save as, O open, `[` `]` reorder, `=` `-` `0` zoom.
-- **Tool letters:** CocoaCanvas uses V move, H hand, R rect, O ellipse, L line, P pen, T text. CocoaWorlds keeps V (select) and H (pan). Proposed 3D mapping, to be confirmed in Phase 2: W move, E rotate, R scale, B block brush, C clip, X vertex, F face, Shift+F frame selected. The final mapping will be listed in the editor's `?` sheet.
+- **Tool letters:** CocoaCanvas uses V move, H hand, R rect, O ellipse, L line, P pen, T text. CocoaWorlds keeps V (select). Implemented: W move, E rotate, R scale, F frame selected, G toggle snapping, 1–4 switch views, Space+drag pan. Reserved for Phase 3: B block brush, C clip, X vertex edit. The editor's `?` sheet lists the current set.
 - **Fields never steal shortcuts:** keydown inside inputs stops propagation; Enter commits, Esc cancels.
 - **Shortcut keys are read by physical layout** (CocoaCanvas' `latKey`), so shortcuts work with a Russian keyboard layout.
 - **Inline rename:** double-click or F2 swaps the row label for a 22px input.

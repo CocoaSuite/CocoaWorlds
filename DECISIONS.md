@@ -24,6 +24,8 @@ Details and trade-offs for each: [ARCHITECTURE.md](ARCHITECTURE.md).
 
 ## Log
 
+- **2026-11-01** — Routine choices made during Phase 2 (reversible, recorded for reference): Y-up coordinates with degrees in YXZ order; esbuild for the main/preload bundles and Vite for the UI; the editor grid is a shader rather than line geometry; editor-only overlays use Three.js directly while game content will go through the render adapter.
+
 - **2026-11-01** — Editor mockups approved. Scripting must be approachable: node-graph-first design replaced by plain-language blocks.
 - **2026-11-01** — Approved: Electron (D1), Three.js renderer (D2), convex brushes with carve CSG (D3), Rapier with a custom Source-style controller (D4), IR + VM script execution (D6), advanced graph view kept as an optional view (V3), React + TypeScript editor UI (D12).
 - **2026-11-01** — Approved: components + systems with per-field prefab overrides (D5), snapshot-based Play mode plus "Play as built" (D7), folder-of-JSON project format with `.meta` ids and recovery (D8), Electron runtime shell for desktop games (D9), static web export from the same runtime (D10), no custom JavaScript in v1 (D11). Phase 1 complete.

@@ -1,0 +1,27 @@
+{
+  "name": "cocoaworlds",
+  "private": true,
+  "version": "0.1.0",
+  "description": "CocoaWorlds — 3D game engine and editor",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "dev": "npm run dev -w @cocoaworlds/editor",
+    "build": "npm run build -w @cocoaworlds/editor",
+    "start": "npm run start -w @cocoaworlds/editor",
+    "typecheck": "tsc -b",
+    "test": "vitest run",
+    "test:e2e": "npm run test:e2e -w @cocoaworlds/editor"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.6",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.5"
+  },
+  "type": "module"
+}

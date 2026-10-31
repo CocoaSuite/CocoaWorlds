@@ -139,7 +139,24 @@ CocoaCanvas ships as one vanilla JS file, so its components cannot be imported. 
 2. Scene model notifies → geometry worker rebuilds that brush's mesh and hull → render adapter swaps buffers; physics (in edit mode) updates the collider for picking.
 3. Debounced autosave writes the scene JSON to `.cocoaworlds/autosave/`.
 
-## 4. Repository layout (planned)
+## 4. Repository layout
+
+Built so far:
+
+```
+apps/editor          Electron main (src/main), preload bridge (src/preload), React UI (src/renderer)
+packages/core        ids, math, file formats, validation, migrations, History, SceneDoc + commands
+packages/ui          CocoaCanvas tokens (styles.css) and React components
+```
+
+Implementation notes:
+
+- **Coordinates:** Y-up, right-handed (same as glTF, Three.js and Rapier). Rotations are stored as degrees in YXZ order. Default grid 16 units; a standing player is 72 units.
+- **Editor overlays use Three.js directly** (grid shader, gizmo, markers, camera rig) because they exist only in the editor. Game content will be drawn through the `RenderAdapter` in `@cocoaworlds/engine` when that package arrives (Phase 3–4), so the runtime stays renderer-agnostic.
+- **The UI never touches the file system.** All disk access is in `apps/editor/src/main/project-fs.ts`, which only accepts paths inside the open project.
+- **On-demand rendering:** the viewport draws a frame only after something changes, so an idle editor uses no GPU time.
+
+Full planned layout:
 
 ```
 apps/editor          Electron main + preload + renderer (React)

@@ -1,0 +1,80 @@
+/**
+ * On-disk formats. Every file is JSON with a `format` tag and a `schemaVersion`.
+ * Bump CURRENT_SCHEMA_VERSION and add a migration in migrate.ts whenever a format changes shape.
+ */
+import type { Transform } from './math';
+
+export const CURRENT_SCHEMA_VERSION = 1;
+
+export const PROJECT_FILE = 'project.cwproj';
+export const SCENE_EXT = '.cwscene';
+export const SCENES_DIR = 'scenes';
+export const ASSETS_DIR = 'assets';
+export const SCRIPTS_DIR = 'scripts';
+export const PREFABS_DIR = 'prefabs';
+/** Caches, autosaves and recovery data. Safe to delete; ignored by version control. */
+export const WORK_DIR = '.cocoaworlds';
+
+export interface ProjectSettings {
+  /** Grid step in units used by the editor when snapping. */
+  gridSize: number;
+  /** Units per metre, used to convert to physics space. */
+  unitsPerMetre: number;
+}
+
+export interface ProjectFile {
+  format: 'cocoaworlds.project';
+  schemaVersion: number;
+  id: string;
+  name: string;
+  /** Relative path of the scene the game starts in, e.g. `scenes/level_01.cwscene`. */
+  startScene: string;
+  /** Relative paths of every scene, in build order. */
+  scenes: string[];
+  settings: ProjectSettings;
+  createdAt: string;
+  engineVersion: string;
+}
+
+/** Component data is plain JSON keyed by component type, e.g. `{ light: { kind: 'point', ... } }`. */
+export type ComponentData = Record<string, unknown>;
+
+export interface EntityData {
+  id: string;
+  name: string;
+  /** Parent entity id, or null for scene roots. */
+  parent: string | null;
+  transform: Transform;
+  tags: string[];
+  layer: string;
+  visible: boolean;
+  locked: boolean;
+  components: Record<string, ComponentData>;
+}
+
+export interface SceneSettings {
+  ambientColor: string;
+  ambientIntensity: number;
+  backgroundColor: string;
+  fog: { enabled: boolean; color: string; near: number; far: number };
+  gravity: number;
+}
+
+export interface SceneFile {
+  format: 'cocoaworlds.scene';
+  schemaVersion: number;
+  id: string;
+  name: string;
+  settings: SceneSettings;
+  entities: EntityData[];
+}
+
+export const defaultProjectSettings = (): ProjectSettings => ({ gridSize: 16, unitsPerMetre: 39.37 });
+
+export const defaultSceneSettings = (): SceneSettings => ({
+  ambientColor: '#b8c2d0',
+  ambientIntensity: 0.35,
+  backgroundColor: '#1f1f1f',
+  fog: { enabled: false, color: '#1f1f1f', near: 512, far: 4096 },
+  gravity: 800,
+});

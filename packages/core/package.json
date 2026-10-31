@@ -1,0 +1,10 @@
+{
+  "name": "@cocoaworlds/core",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Shared engine foundations: ids, math types, project and scene schemas, migrations, undo history.",
+  "exports": {
+    ".": "./src/index.ts"
+  }
+}

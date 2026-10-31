@@ -23,6 +23,21 @@ Order may shift where dependencies require it (for example, the project format f
 - [x] Architecture proposal
 - [x] Sign-off on decisions D1–D12 and V3
 
+## Phase 2 checklist
+
+- [x] Monorepo (npm workspaces, TypeScript, Vitest), `core` and `ui` packages
+- [x] Electron app: sandboxed UI, typed IPC, native dialogs, unsaved-changes prompt
+- [x] CocoaCanvas-style editor frame and start screen, English and Russian
+- [x] Project folders: create, open, recent, atomic save, validation, autosave, recovery, migration framework
+- [x] Scene model and command-based undo/redo
+- [x] Viewport: four views, navigation, shader grid, axis indicator, stats
+- [x] Selection (viewport and hierarchy), move/rotate/scale gizmo with snapping
+- [x] Hierarchy: rename, hide, lock, reparent, duplicate, delete, context menus
+- [x] Unit/integration tests (28) and an end-to-end test that drives the real app
+- [ ] Nested transforms (children follow parents) — moved to Phase 4 with the runtime scene graph
+- [ ] Multi-object transforms and box selection
+- [ ] Run and check on Windows and macOS
+
 ## Next
 
-After sign-off: scaffold the monorepo, Electron shell with the CocoaCanvas frame, project create/open/save, and a viewport with a grid and camera navigation.
+Finish Phase 2 (multi-select transforms, box selection), then Phase 3: brushes — the block tool with draw-footprint-then-height creation, numeric sizes, vertex/face editing, per-face materials and carve. The brush data model and carve algorithm come to you for review before the UI is built on top of them.
