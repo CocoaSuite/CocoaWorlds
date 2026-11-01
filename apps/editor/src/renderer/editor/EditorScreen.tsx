@@ -1,7 +1,8 @@
 /** The main editor window: CocoaCanvas frame (top bar, scene list, stage, inspector) plus the bottom workspace. Mockup 01. */
+import { RECIPES, type Recipe } from '@cocoaworlds/scripting';
 import { Button, Dialog } from '@cocoaworlds/ui';
 import { useEffect, useState } from 'react';
-import { t } from '../i18n';
+import { getLang, t } from '../i18n';
 import { useEditor } from '../store';
 import { Viewport } from '../viewport/Viewport';
 import { BottomPanel } from './BottomPanel';
@@ -47,6 +48,7 @@ export function EditorScreen() {
       </div>
 
       <MakePrefabDialog />
+      <RecipesDialog />
       {recovery && (
         <Dialog title={t('recover.title')} onClose={() => void recover(false)}>
           <p>{t('recover.body')}</p>
@@ -119,6 +121,54 @@ function MakePrefabDialog() {
           </Button>
         </div>
       </form>
+    </Dialog>
+  );
+}
+
+/** Recipes (V2): pick a ready-made mechanic for the selected object. */
+function RecipesDialog() {
+  const open = useEditor((s) => s.dialog === 'recipes');
+  const target = useEditor((x) => (x.selection.length === 1 ? x.doc?.get(x.selection[0]!) : undefined));
+  if (!open) return null;
+  const s = useEditor.getState();
+  const close = () => s.openDialog(null);
+  const lang = getLang();
+  const groups: { id: Recipe['group']; title: string }[] = [
+    { id: 'doors', title: t('recipe.doors') },
+    { id: 'moving', title: t('recipe.moving') },
+    { id: 'gameplay', title: t('recipe.gameplay') },
+  ];
+  return (
+    <Dialog title={target ? t('recipe.title').replace('{name}', target.name) : t('recipe.open')} onClose={close}>
+      {!target ? (
+        <p className="cw-hint">{t('recipe.pick')}</p>
+      ) : (
+        <div className="cw-recipes">
+          <p className="cw-hint">{t('recipe.intro')}</p>
+          {groups.map((g) => (
+            <section key={g.id} aria-label={g.title}>
+              <h3 className="cw-recipe-h">{g.title}</h3>
+              {RECIPES.filter((r) => r.group === g.id).map((r) => (
+                <button
+                  key={r.id}
+                  type="button"
+                  className="cw-recipe"
+                  onClick={() => {
+                    s.applyRecipe(target.id, r.id);
+                    close();
+                  }}
+                >
+                  <strong>{r.name[lang]}</strong>
+                  <span>{r.description[lang]}</span>
+                </button>
+              ))}
+            </section>
+          ))}
+        </div>
+      )}
+      <div className="cw-actions">
+        <Button onClick={close}>{t('new.cancel')}</Button>
+      </div>
     </Dialog>
   );
 }

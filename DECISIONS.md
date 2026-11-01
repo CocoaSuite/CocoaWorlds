@@ -31,6 +31,8 @@ Details and trade-offs for each: [ARCHITECTURE.md](ARCHITECTURE.md).
 
 ## Log
 
+- **2026-11-01** — Routine choices for recipes (V2, reversible): a recipe only ever adds ordinary blocks (plus a trigger zone beside the object when it needs one), merged into the object's script as one undo step; doors open by their own height; the use-door closes by itself after 3 seconds, because an open door is above the player's reach; buttons and plates talk to doors with the message “open”. Hidden and switched-off objects no longer block or catch the player.
+
 - **2026-11-01** — Approved G4 (free vertex editing, edited meshes, loop cut) at the user's request: the vertex tool was too restrictive. Scenes move to format 3; older scenes open unchanged. Play now puts you in the player's shoes when the scene has a Player start (Source-style movement from D4: a 32 × 72 × 32 box like Source's hull, which steps and slides more cleanly than a capsule); without one, Play stays the physics preview. Routine choices: the first Esc frees the mouse and the second stops; F5 always stops; while the mouse is captured every other key belongs to the game; E uses whatever is within 96 u of the crosshair, and “When the player uses this” fires on that object and every group it is in.
 
 - **2026-11-01** — Approved S1 (scripts on objects) and S2 (core block set) at the start of Phase 5.

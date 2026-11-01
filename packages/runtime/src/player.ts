@@ -46,6 +46,9 @@ export const noInput = (): PlayerInput => ({ forward: 0, right: 0, jump: false, 
 
 type V = { x: number; y: number; z: number };
 
+/** Query groups that skip hidden and switched-off objects (their collision groups are 0). */
+const SOLID = 0xffffffff;
+
 export class Player {
   readonly body: RAPIER.RigidBody;
   readonly collider: RAPIER.Collider;
@@ -148,7 +151,7 @@ export class Player {
 
     const desired = { x: this.velocity.x * dt, y: this.velocity.y * dt, z: this.velocity.z * dt };
     // (Walking down slopes and steps: the controller's snap-to-ground keeps the player on the floor.)
-    this.controller.computeColliderMovement(this.collider, desired, RAPIER.QueryFilterFlags.EXCLUDE_SENSORS);
+    this.controller.computeColliderMovement(this.collider, desired, RAPIER.QueryFilterFlags.EXCLUDE_SENSORS, SOLID);
     const moved = this.controller.computedMovement();
     const grounded = this.controller.computedGrounded();
 
@@ -217,7 +220,7 @@ export class Player {
     const lift = PLAYER.height - PLAYER.crouchHeight;
     const shape = new RAPIER.Cuboid(PLAYER.radius, PLAYER.height / 2, PLAYER.radius);
     const pos = { x: t.x, y: t.y + lift / 2, z: t.z };
-    const blocked = this.world.intersectionWithShape(pos, { x: 0, y: 0, z: 0, w: 1 }, shape, RAPIER.QueryFilterFlags.EXCLUDE_SENSORS, undefined, this.collider);
+    const blocked = this.world.intersectionWithShape(pos, { x: 0, y: 0, z: 0, w: 1 }, shape, RAPIER.QueryFilterFlags.EXCLUDE_SENSORS, SOLID, this.collider);
     if (blocked) return;
     this.crouched = false;
     this.collider.setHalfExtents({ x: PLAYER.radius, y: PLAYER.height / 2, z: PLAYER.radius });
@@ -228,7 +231,7 @@ export class Player {
   aim(): RAPIER.Collider | null {
     const [x, y, z] = this.eye();
     const d = this.lookDirection();
-    const hit = this.world.castRay(new RAPIER.Ray({ x, y, z }, { x: d[0], y: d[1], z: d[2] }), PLAYER.useReach, true, undefined, undefined, this.collider);
+    const hit = this.world.castRay(new RAPIER.Ray({ x, y, z }, { x: d[0], y: d[1], z: d[2] }), PLAYER.useReach, true, RAPIER.QueryFilterFlags.EXCLUDE_SENSORS, SOLID, this.collider);
     return hit?.collider ?? null;
   }
 

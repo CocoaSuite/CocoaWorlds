@@ -18,6 +18,8 @@ import {
   componentDef,
   defaultComponent,
   composeTransform,
+  identityTransform,
+  type Vec3,
   decomposeMat4,
   identityMat4,
   invertMat4,
@@ -39,6 +41,7 @@ import {
 } from '@cocoaworlds/core';
 import {
   bakeSubtract,
+  box,
   bounds,
   classify,
   clipBrush,
@@ -59,7 +62,7 @@ import { create } from 'zustand';
 import { brushComponent, brushOf, isLocked, isShown, newBrushEntity, toLocal, toWorld, worldBrushOf, shapeBrushes, shapeName, worldBrushes, type DrawRole, type Outline, type ShapeOptions } from './brush/brushes';
 import { useShallow } from 'zustand/react/shallow';
 import type { OpenedProject, PrefabEntry } from '../shared/api';
-import { emptyScript, type Script } from '@cocoaworlds/scripting';
+import { emptyScript, recipe as findRecipe, type Script } from '@cocoaworlds/scripting';
 import { copyRootOf, recordAllChanges, repivot, syncCommands, unlinked } from './prefabs';
 import { DEV_TEXTURE_SIZE } from './brush/materials';
 import type { FaceRef } from './viewport/world-render';
@@ -125,7 +128,7 @@ interface State {
   /** Where "place" puts new things: the point the view is looking at (set by the viewport). */
   placementPoint: () => [number, number, number] | null;
   /** An open editor dialog. */
-  dialog: 'makePrefab' | null;
+  dialog: 'makePrefab' | 'recipes' | null;
   /** The bottom workspace's open tab. */
   bottomTab: 'script' | 'assets' | 'console' | 'problems';
   /** While playing: the blocks each object's script is running (for highlighting). */
@@ -204,6 +207,8 @@ interface Actions {
   updateScript(id: string, fn: (s: Script) => Script, label: string, mergeKey?: string): void;
   // components
   addComponent(id: string, name: string): void;
+  /** Put a ready-made script (V2) on an object, creating the trigger zone it needs. One undo step. */
+  applyRecipe(id: string, recipeId: string): void;
   removeComponent(id: string, name: string): void;
   setComponentField(id: string, name: string, key: string, value: unknown, mergeKey?: string): void;
 }
@@ -899,6 +904,55 @@ export const useEditor = create<State & Actions>()((set, get) => ({
     const data = name === 'script' ? emptyScript() : defaultComponent(name);
     get().execute(setComponentCmd(doc, id, name, data as never, `Add ${label}`));
     if (name === 'script') set({ bottomTab: 'script', showBottom: true });
+  },
+
+  applyRecipe(id, recipeId) {
+    const doc = get().doc;
+    const e = doc?.get(id);
+    const r = findRecipe(recipeId);
+    if (!doc || !e || !r) return;
+    // The object's world bounds: every brush inside it, or a small box at its place.
+    const min: Vec3 = [Infinity, Infinity, Infinity], max: Vec3 = [-Infinity, -Infinity, -Infinity];
+    for (const x of doc.subtree(id)) {
+      const wb = worldBrushOf(doc, x);
+      const bb = wb && !x.components.trigger ? bounds(wb.brush) : null;
+      if (!bb) continue;
+      for (let k = 0; k < 3; k++) {
+        min[k] = Math.min(min[k]!, bb.min[k]!);
+        max[k] = Math.max(max[k]!, bb.max[k]!);
+      }
+    }
+    if (!Number.isFinite(min[0])) {
+      const m = doc.worldMatrix(id);
+      for (let k = 0; k < 3; k++) {
+        min[k] = m[12 + k]! - 16;
+        max[k] = m[12 + k]! + 16;
+      }
+    }
+    const target = { id, name: e.name, min, max };
+    const h = get().history;
+    h.begin(`Recipe: ${r.name.en}`);
+    let zoneId: string | null = null;
+    if (r.zone) {
+      const z = r.zone(target);
+      const space = e.parent ? doc.worldMatrix(e.parent) : composeTransform(identityTransform());
+      const zone = newBrushEntity(uniqueName(doc, z.name), toLocal(box(z.min, z.max), space), 'solid');
+      zone.parent = e.parent;
+      zone.components.trigger = { ...defaultComponent('trigger'), detects: z.detects, once: z.once } as never;
+      h.execute(addEntitiesCmd(doc, [zone]));
+      zoneId = zone.id;
+    }
+    const out = r.build(target, zoneId);
+    const cur = (doc.get(id)!.components.script as unknown as Script | undefined) ?? emptyScript();
+    const next: Script = {
+      ...cur,
+      variables: [...cur.variables, ...out.variables.filter((v) => !cur.variables.some((c) => c.name === v.name))],
+      handlers: [...cur.handlers, ...out.handlers],
+    };
+    h.execute(setComponentCmd(doc, id, 'script', next as never, 'Recipe'));
+    h.commit();
+    set({ selection: [id], bottomTab: 'script', showBottom: true });
+    get().log('info', 'Script', `Added “${r.name[getLang()]}” to ${e.name}${zoneId ? ` with a zone (${doc.get(zoneId)?.name})` : ''}`);
   },
 
   setBottomTab(bottomTab) {

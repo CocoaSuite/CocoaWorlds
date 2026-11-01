@@ -27,3 +27,21 @@ Scripts are plain-language blocks on the object they control (decision S1): a do
 - “+ When…” adds a stack; “+ Add a block” adds to a list; on each row, + adds after it, ↑ ↓ move it, × removes it. ▾ next to a value turns it into another kind of value (a variable, maths, a random number …).
 - Problems appear under the block and in the **Problems** tab (click to jump to the script).
 - While playing, the running blocks are outlined; Write blocks and script errors appear in the console.
+
+## Recipes (V2)
+
+**Recipes…** (in the Inspector under the components, or in the Visual script tab) puts a ready-made mechanic
+on the selected object. A recipe adds ordinary blocks to the object's script, plus a trigger zone next to the
+object when it needs one, in one undo step. Change the blocks afterwards like any others.
+
+| Recipe | What it adds |
+|---|---|
+| Door that opens when the player comes near | A zone 96 u around the door; enters → move up by the door's height; leaves → return |
+| Door that opens when used (E) | When the player uses this → move up, wait 3 s, return (an `open` variable stops it restarting) |
+| Opens when it gets the message “open” | When this gets the message “open” → move up by its height |
+| Button that sends “open” when used (E) | When the player uses this → send “open” to everyone |
+| Pressure plate that sends “open” | A zone on top (once) → send “open” to everyone |
+| Lift that goes up and down | Game starts → repeat forever: up 128 over 2 s, wait 1, return over 2 s, wait 1 |
+| Keeps spinning | Game starts → repeat forever: turn 360° over 4 s |
+| Platform that vanishes when stepped on | A zone on top → wait 0.5 s, hide, wait 3 s, show |
+| Pickup the player collects | A zone around it (once) → hide, write “Picked up …” |

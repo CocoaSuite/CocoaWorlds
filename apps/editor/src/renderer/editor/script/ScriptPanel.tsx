@@ -84,6 +84,7 @@ export function ScriptPanel() {
         <Button variant="primary" onClick={() => st.addComponent(owner.id, 'script')}>
           {t('script.add')}
         </Button>
+        <Button onClick={() => st.openDialog('recipes')}>{t('recipe.open')}</Button>
       </div>
     );
 
@@ -117,6 +118,7 @@ export function ScriptPanel() {
           <span className="cw-script-owner">{t('script.title').replace('{name}', owner.name)}</span>
           <Variables />
           <span className="cw-sp" />
+          <Button onClick={() => st.openDialog('recipes')}>{t('recipe.open')}</Button>
           <Button onClick={addStack}>{t('script.addStack')}</Button>
         </div>
         <div className="cw-stacks">

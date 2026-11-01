@@ -56,6 +56,7 @@ export function ComponentsSection({ e }: { e: EntityData }) {
         >
           {t('comp.add')}
         </Button>
+        <Button onClick={() => s.openDialog('recipes')}>{t('recipe.open')}</Button>
       </div>
       {menu && (
         <ContextMenu
