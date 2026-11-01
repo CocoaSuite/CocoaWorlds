@@ -24,3 +24,16 @@ With nothing selected, the Inspector shows the scene's settings, all with undo:
 - **Sky**: a gradient from **Overhead** through **Horizon** to **Below**. New scenes have one; older scenes
   start with it off.
 - **Fog**: a colour, where it starts, and where it's thick.
+
+## Textures
+
+**Assets › Textures › Import…** copies PNG, JPG or WebP images into the project's `assets/textures/` folder
+(renamed to safe lower-case names). Click a texture to paint with it (Shift+click paints a whole brush), or
+pick it in the face Inspector or the Paint tool, where project textures follow the built-in ones.
+
+Faces store the texture's project path (`assets/textures/brick.png`), so levels keep working when the project
+folder moves. Texture coordinates follow Hammer: at the usual scale of 0.25, a 512-pixel image covers 128 u.
+Pixels less than half opaque are cut out (fences, grilles). A missing image shows Source's pink and black
+checker.
+
+Sounds (OGG, MP3, WAV) and models (GLB, glTF) can be imported the same way; using them comes next.

@@ -39,6 +39,7 @@ Last updated: 2026-11-01 (Phase 2, first slice).
 |---|---|---|
 | Hierarchy: select, rename, hide, lock, drag to reparent, context menu, filter | **Done** | |
 | Add: empty, point/spot/sun light, player spawn, text sign | **Done** | Lights light the level in Play and with Lighting: Game. |
+| Image textures: import PNG/JPG/WebP in the Assets tab, paint faces with them, Hammer-style scale; sounds and models can be imported (used next) | **Done** |
 | Scene lighting: bulbs, spotlights and suns with optional shadows, ambient light, gradient sky, fog; editable scene settings with undo; Lighting: Preview / Game in the view (benchmark B3) | **Done** |
 | Nested transforms (G3): transforms are relative to the parent; brush faces live in the parent's space; moving, turning or scaling a group carries its contents | **Done** | Format-2 scenes. Format-1 scenes upgrade on open with a backup and nothing moves. Changing parent (drag in the list, group, ungroup) keeps objects where they are. |
 | Multi-object transform: move, rotate and scale any selection (brushes, lights, spawns, groups) with one gizmo, as one undo step | **Done** | Grid snapping is relative to where the drag began, so off-grid objects keep their offset. |

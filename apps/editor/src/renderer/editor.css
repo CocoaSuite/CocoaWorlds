@@ -183,6 +183,15 @@ code { font: 12px var(--mono); color: var(--fg); }
 .cw-change-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cw-wrap { flex-wrap: wrap; }
 .cw-assets { display: flex; flex-direction: column; gap: 2px; }
+.cw-assets-all { display: flex; flex-direction: column; gap: 14px; }
+.cw-assets-h { display: flex; align-items: center; gap: 10px; margin: 0 0 6px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--mute); }
+.cw-tex-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); gap: 8px; }
+.cw-tex { all: unset; cursor: pointer; display: flex; flex-direction: column; gap: 4px; padding: 4px; border-radius: 6px; border: 1px solid transparent; }
+.cw-tex:hover { background: var(--panel2); }
+.cw-tex:focus-visible { border-color: var(--accent, #4b9cff); }
+.cw-tex-img { display: block; aspect-ratio: 1; border-radius: 4px; background: var(--panel2) center / cover no-repeat; }
+.cw-tex-name { font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cw-mat-sw.tex { background: var(--panel2) center / cover no-repeat; }
 .cw-asset { display: grid; grid-template-columns: 16px minmax(0, 1fr) auto auto auto; align-items: center; gap: 10px; padding: 3px 6px; border-radius: 4px; }
 .cw-asset:hover { background: var(--panel2); }
 .cw-asset svg { width: 14px; height: 14px; color: var(--mute); }

@@ -6,6 +6,8 @@ import { useEffect, useMemo, useRef } from 'react';
 import { t } from '../i18n';
 import { sceneInfo } from './script/scene-info';
 import { useEditor } from '../store';
+import { TextureSwatch } from './TextureSwatch';
+import type { AssetKind } from '../../shared/api';
 
 type Tab = 'console' | 'problems' | 'script' | 'assets';
 
@@ -60,26 +62,106 @@ export function BottomPanel() {
   );
 }
 
-/** Assets: the project's prefabs, each with Place. Textures, sounds and models arrive in Phase 7. */
+/** Assets: the project's prefabs (Place), textures (click to paint with), sounds and models, with Import. */
 function AssetsPanel() {
   const prefabs = useEditor((s) => s.prefabs);
+  const assets = useEditor((s) => s.assets);
   const place = useEditor((s) => s.placePrefab);
+  const st = useEditor.getState();
   const list = [...prefabs.values()].sort((a, b) => a.prefab.name.localeCompare(b.prefab.name));
+  const kb = (n: number) => (n >= 1024 * 1024 ? `${(n / 1024 / 1024).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`);
   return (
-    <div className="cw-assets" role="list" aria-label={t('assets.prefabs')}>
-      {!list.length && <div className="cw-muted">{t('assets.none')}</div>}
-      {list.map(({ path, prefab }) => (
-        <div key={prefab.id} className="cw-asset" role="listitem" aria-label={prefab.name}>
-          <Icon name="cube" />
-          <span className="cw-asset-name">{prefab.name}</span>
-          <span className="cw-asset-meta mono">{path}</span>
-          <span className="cw-asset-meta">{t('assets.objects').replace('{n}', String(prefab.entities.length))}</span>
-          <Button size="sm" onClick={() => place(prefab.id)}>
-            {t('assets.place')}
-          </Button>
+    <div className="cw-assets-all">
+      <section className="cw-assets-sec">
+        <h3 className="cw-assets-h">{t('assets.prefabs')}</h3>
+        <div className="cw-assets" role="list" aria-label={t('assets.prefabs')}>
+          {!list.length && <div className="cw-muted">{t('assets.none')}</div>}
+          {list.map(({ path, prefab }) => (
+            <div key={prefab.id} className="cw-asset" role="listitem" aria-label={prefab.name}>
+              <Icon name="cube" />
+              <span className="cw-asset-name">{prefab.name}</span>
+              <span className="cw-asset-meta mono">{path}</span>
+              <span className="cw-asset-meta">{t('assets.objects').replace('{n}', String(prefab.entities.length))}</span>
+              <Button size="sm" onClick={() => place(prefab.id)}>
+                {t('assets.place')}
+              </Button>
+            </div>
+          ))}
         </div>
+      </section>
+      <section className="cw-assets-sec">
+        <h3 className="cw-assets-h">
+          {t('assets.textures')}
+          <ImportButton kind="textures" accept=".png,.jpg,.jpeg,.webp" />
+        </h3>
+        <div className="cw-tex-grid" role="list" aria-label={t('assets.textures')}>
+          {!assets.textures.length && <div className="cw-muted">{t('assets.noTextures')}</div>}
+          {assets.textures.map((tx) => (
+            <button
+              key={tx.path}
+              type="button"
+              role="listitem"
+              className="cw-tex"
+              aria-label={tx.name}
+              title={`${tx.path} — ${t('assets.paintWith')}`}
+              onClick={() => {
+                st.setPaintMaterial(tx.path);
+                st.setTool('paint');
+              }}
+            >
+              <TextureSwatch path={tx.path} className="cw-tex-img" />
+              <span className="cw-tex-name">{tx.name}</span>
+            </button>
+          ))}
+        </div>
+      </section>
+      {(['sounds', 'models'] as const).map((kind) => (
+        <section key={kind} className="cw-assets-sec">
+          <h3 className="cw-assets-h">
+            {t(kind === 'sounds' ? 'assets.sounds' : 'assets.models')}
+            <ImportButton kind={kind} accept={kind === 'sounds' ? '.ogg,.mp3,.wav' : '.glb,.gltf'} />
+          </h3>
+          <div className="cw-assets" role="list" aria-label={t(kind === 'sounds' ? 'assets.sounds' : 'assets.models')}>
+            {!assets[kind].length && <div className="cw-muted">{t('assets.noneYet')}</div>}
+            {assets[kind].map((a) => (
+              <div key={a.path} className="cw-asset" role="listitem" aria-label={a.name}>
+                <Icon name={kind === 'sounds' ? 'sound' : 'cube'} />
+                <span className="cw-asset-name">{a.name}</span>
+                <span className="cw-asset-meta mono">{a.path}</span>
+                <span className="cw-asset-meta">{kb(a.bytes)}</span>
+                <span />
+              </div>
+            ))}
+          </div>
+        </section>
       ))}
     </div>
+  );
+}
+
+/** “Import…”: the system file chooser; the files are copied into the project. */
+function ImportButton({ kind, accept }: { kind: AssetKind; accept: string }) {
+  const ref = useRef<HTMLInputElement>(null);
+  const label = t('assets.import').replace('{kind}', t(`assets.${kind}` as Parameters<typeof t>[0]).toLowerCase());
+  return (
+    <>
+      <Button size="sm" onClick={() => ref.current?.click()} aria-label={label}>
+        {t('assets.importShort')}
+      </Button>
+      <input
+        ref={ref}
+        type="file"
+        multiple
+        accept={accept}
+        hidden
+        data-testid={`import-${kind}`}
+        onChange={(e) => {
+          const files = [...(e.currentTarget.files ?? [])];
+          e.currentTarget.value = '';
+          if (files.length) void useEditor.getState().importAssets(kind, files);
+        }}
+      />
+    </>
   );
 }
 

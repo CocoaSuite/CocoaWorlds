@@ -27,6 +27,16 @@ export interface PrefabEntry {
   prefab: PrefabFile;
 }
 
+export type AssetKind = 'textures' | 'sounds' | 'models';
+
+export interface AssetEntry {
+  /** Project-relative path, e.g. `assets/textures/brick.png`. */
+  path: string;
+  /** File name without its extension. */
+  name: string;
+  bytes: number;
+}
+
 export type Result<T> = { ok: true; value: T } | { ok: false; error: string; details?: string[] };
 
 export interface CocoaApi {
@@ -47,6 +57,10 @@ export interface CocoaApi {
     savePrefab(dir: string, prefab: PrefabFile, path?: string): Promise<Result<{ path: string }>>;
     /** Save the project's settings; returns the project as written. */
     saveSettings(dir: string, settings: ProjectFile['settings']): Promise<Result<ProjectFile>>;
+    listAssets(dir: string): Promise<Result<Record<AssetKind, AssetEntry[]>>>;
+    /** Copy a file the user picked into the project's assets. */
+    writeAsset(dir: string, kind: AssetKind, name: string, bytes: Uint8Array): Promise<Result<AssetEntry>>;
+    readAsset(dir: string, path: string): Promise<Result<Uint8Array>>;
   };
   window: {
     setTitle(title: string): void;
@@ -70,6 +84,9 @@ export const IPC = {
   listPrefabs: 'projects:listPrefabs',
   savePrefab: 'projects:savePrefab',
   saveSettings: 'projects:saveSettings',
+  listAssets: 'assets:list',
+  writeAsset: 'assets:write',
+  readAsset: 'assets:read',
   setTitle: 'window:setTitle',
   setDirty: 'window:setDirty',
   saveRequest: 'window:saveRequest',

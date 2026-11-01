@@ -1,9 +1,12 @@
 /** A grid of material swatches (radio group). Used by the face inspector and the paint tool. */
 import { DEV_MATERIALS, swatchStyle } from '../brush/materials';
 import { getLang } from '../i18n';
+import { useEditor } from '../store';
+import { TextureSwatch } from './TextureSwatch';
 
 export function MaterialPicker({ value, onChange, label }: { value: string | null; onChange: (id: string) => void; label: string }) {
   const lang = getLang();
+  const textures = useEditor((s) => s.assets.textures);
   return (
     <div className="cw-mat-grid" role="radiogroup" aria-label={label}>
       {DEV_MATERIALS.map((m) => (
@@ -18,6 +21,20 @@ export function MaterialPicker({ value, onChange, label }: { value: string | nul
           onClick={() => onChange(m.id)}
         >
           <span className="cw-mat-sw" style={swatchStyle(m.id)} />
+        </button>
+      ))}
+      {textures.map((tx) => (
+        <button
+          key={tx.path}
+          type="button"
+          role="radio"
+          aria-checked={value === tx.path}
+          aria-label={tx.name}
+          title={tx.path}
+          className={`cw-mat${value === tx.path ? ' on' : ''}`}
+          onClick={() => onChange(tx.path)}
+        >
+          <TextureSwatch path={tx.path} />
         </button>
       ))}
     </div>

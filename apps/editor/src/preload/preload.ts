@@ -23,6 +23,9 @@ const api: CocoaApi = {
     listPrefabs: (dir) => ipcRenderer.invoke(IPC.listPrefabs, dir),
     savePrefab: (dir, prefab, path) => ipcRenderer.invoke(IPC.savePrefab, dir, prefab, path),
     saveSettings: (dir, settings) => ipcRenderer.invoke(IPC.saveSettings, dir, settings),
+    listAssets: (dir) => ipcRenderer.invoke(IPC.listAssets, dir),
+    writeAsset: (dir, kind, name, bytes) => ipcRenderer.invoke(IPC.writeAsset, dir, kind, name, bytes),
+    readAsset: (dir, path) => ipcRenderer.invoke(IPC.readAsset, dir, path),
   },
   window: {
     setTitle: (title) => ipcRenderer.send(IPC.setTitle, title),

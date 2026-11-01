@@ -69,7 +69,8 @@ import {
 import { create } from 'zustand';
 import { brushBounds, brushComponent, brushOf, isLocked, isShown, newBrushEntity, toLocal, toWorld, worldBrushOf, shapeBrushes, shapeName, worldBrushes, type DrawRole, type Outline, type ShapeOptions } from './brush/brushes';
 import { useShallow } from 'zustand/react/shallow';
-import type { OpenedProject, PrefabEntry } from '../shared/api';
+import type { AssetEntry, AssetKind, OpenedProject, PrefabEntry } from '../shared/api';
+import { setAssetProject } from './assets';
 import { emptyScript, recipe as findRecipe, type Script } from '@cocoaworlds/scripting';
 import { copyRootOf, recordAllChanges, repivot, syncCommands, unlinked } from './prefabs';
 import { DEV_TEXTURE_SIZE } from './brush/materials';
@@ -208,6 +209,11 @@ interface Actions {
   // prefabs
   openDialog(d: State['dialog']): void;
   loadPrefabs(): Promise<void>;
+  /** The project's textures, sounds and models. */
+  assets: Record<AssetKind, AssetEntry[]>;
+  loadAssets(): Promise<void>;
+  /** Copy files the user picked into the project's assets; returns the new project paths. */
+  importAssets(kind: AssetKind, files: File[]): Promise<string[]>;
   makePrefab(name: string): Promise<boolean>;
   placePrefab(prefabId: string): void;
   revertChange(id: string, path: string | null): void;
@@ -260,6 +266,7 @@ export const useEditor = create<State & Actions>()((set, get) => ({
   view: 'perspective',
   showGrid: true,
   gameLighting: false,
+  assets: { textures: [], sounds: [], models: [] },
   showStats: true,
   showBottom: true,
   snap: true,
@@ -327,6 +334,9 @@ export const useEditor = create<State & Actions>()((set, get) => ({
     if (o.migrated) get().notify(t('toast.migrated'));
     set({ prefabs: new Map() });
     void get().loadPrefabs();
+    setAssetProject(o.dir);
+    set({ assets: { textures: [], sounds: [], models: [] } });
+    void get().loadAssets();
   },
 
   closeSession() {
@@ -1078,6 +1088,32 @@ export const useEditor = create<State & Actions>()((set, get) => ({
 
   openDialog(dialog) {
     set({ dialog });
+  },
+
+  async loadAssets() {
+    const session = get().session;
+    if (!session) return;
+    const r = await window.cocoa.projects.listAssets(session.dir);
+    if (!r.ok) return get().log('error', 'Assets', r.error);
+    if (get().session === session) set({ assets: r.value });
+  },
+
+  async importAssets(kind, files) {
+    const session = get().session;
+    if (!session) return [];
+    const added: string[] = [];
+    for (const f of files) {
+      const r = await window.cocoa.projects.writeAsset(session.dir, kind, f.name, new Uint8Array(await f.arrayBuffer()));
+      if (!r.ok) {
+        get().log('error', 'Assets', r.error);
+        get().notify(r.error);
+        continue;
+      }
+      added.push(r.value.path);
+      get().log('info', 'Assets', `Imported ${f.name} as ${r.value.path}`);
+    }
+    await get().loadAssets();
+    return added;
   },
 
   async loadPrefabs() {

@@ -7,6 +7,7 @@ import { buildLevel, type WorldResult } from './world-build';
 import WorldWorker from './world-worker?worker&inline';
 import * as THREE from 'three';
 import { DEV_TEXTURE_SIZE, devMaterial, paintDevTexture, paintToolTexture } from '../brush/materials';
+import { assetUrl, isTexture } from '../assets';
 
 const TEX_SIZE = DEV_TEXTURE_SIZE;
 
@@ -96,6 +97,8 @@ export class WorldRenderer {
       m = new THREE.MeshBasicMaterial({ map: devTexture(dev.base, 'COL'), transparent: true, opacity: 0.45, depthWrite: false, side: THREE.DoubleSide });
     } else if (dev) {
       m = new THREE.MeshStandardMaterial({ map: devTexture(dev.base), roughness: 0.9, metalness: 0 });
+    } else if (isTexture(name)) {
+      m = imageMaterial(name, () => this.onUpdate());
     } else {
       m = new THREE.MeshStandardMaterial({ color: hashColor(name), roughness: 0.9 });
     }
@@ -304,3 +307,57 @@ function clear(g: THREE.Group): void {
     if (c instanceof THREE.Mesh || c instanceof THREE.Line) c.geometry.dispose();
   }
 }
+
+const loader = new THREE.TextureLoader();
+let missing: THREE.Texture | null = null;
+
+/** Source's missing-texture checker, for images that can't be loaded. */
+function missingTexture(): THREE.Texture {
+  if (missing) return missing;
+  const c = document.createElement('canvas');
+  c.width = c.height = 64;
+  const g = c.getContext('2d')!;
+  g.fillStyle = '#000';
+  g.fillRect(0, 0, 64, 64);
+  g.fillStyle = '#ff00dc';
+  g.fillRect(0, 0, 32, 32);
+  g.fillRect(32, 32, 32, 32);
+  missing = new THREE.CanvasTexture(c);
+  missing.wrapS = missing.wrapT = THREE.RepeatWrapping;
+  missing.magFilter = THREE.NearestFilter;
+  missing.repeat.set(TEX_SIZE / 64, TEX_SIZE / 64);
+  return missing;
+}
+
+/**
+ * A material from a project image. Face coordinates are in texels, so the texture repeats every image width
+ * (a 512-pixel image at the usual 0.25 scale covers 128 units). Grey until the image has loaded; pixels with
+ * less than half opacity are cut out (fences, grilles).
+ */
+function imageMaterial(path: string, loaded: () => void): THREE.MeshStandardMaterial {
+  const m = new THREE.MeshStandardMaterial({ color: 0x8a8a8a, roughness: 0.9, metalness: 0, alphaTest: 0.5 });
+  m.name = path;
+  void assetUrl(path)
+    .then((url) => loader.loadAsync(url))
+    .then((tex) => {
+      const img = tex.image as { width: number; height: number };
+      tex.flipY = false;
+      tex.colorSpace = THREE.SRGBColorSpace;
+      tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+      tex.anisotropy = 8;
+      tex.repeat.set(TEX_SIZE / Math.max(1, img.width), TEX_SIZE / Math.max(1, img.height));
+      tex.needsUpdate = true;
+      m.map = tex;
+      m.color.set(0xffffff);
+      m.needsUpdate = true;
+      loaded();
+    })
+    .catch(() => {
+      m.map = missingTexture();
+      m.color.set(0xffffff);
+      m.needsUpdate = true;
+      loaded();
+    });
+  return m;
+}
+
