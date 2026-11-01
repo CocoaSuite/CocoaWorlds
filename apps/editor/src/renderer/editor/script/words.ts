@@ -48,6 +48,25 @@ const W = {
   heal: ['Heal the player by', 'Вылечить игрока на'],
   addScore: ['Change the score by', 'Изменить счёт на'],
   say: ['Show on screen', 'Показать на экране'],
+  breaks: ['When this breaks', 'Когда это ломается'],
+  spawn: ['Make a copy of', 'Создать копию'],
+  at: ['at', 'в месте:'],
+  aim: ['where the player looks', 'куда смотрит игрок'],
+  remove: ['Remove', 'Убрать'],
+  physical: ['Make', 'Пусть'],
+  fall: ['fall and tumble (physics)', 'падает и кувыркается (физика)'],
+  scale: ['Scale', 'Масштаб'],
+  timesSize: ['times its size over', '× от исходного за'],
+  push: ['Push', 'Толкнуть'],
+  withStrength: ['with strength', 'с силой'],
+  moveTo: ['Move to', 'Переместить к'],
+  stopping: ['stopping', 'остановившись за'],
+  short: ['units short', 'ед. до цели'],
+  teleport: ['Put the player at', 'Переместить игрока в'],
+  damage: ['Damage', 'Повредить'],
+  copy: ['the new copy', 'новая копия'],
+  ofWord: ['of', 'у'],
+  variableName: ['variable name', 'имя переменной'],
   forWord: ['for', 'на'],
   setText: ['Set the text of', 'Задать текст'],
   gameValue: ['game', 'игра'],
@@ -93,6 +112,7 @@ const PALETTE_EVENT: Record<EventKind, Pair> = {
   message: ['When this gets a message', 'Когда приходит сообщение'],
   every: ['Every few seconds', 'Каждые несколько секунд'],
   die: ['When the player dies', 'Когда игрок погибает'],
+  breaks: ['When this breaks', 'Когда это ломается'],
 };
 export const eventName = (k: EventKind) => pick(PALETTE_EVENT[k]);
 
@@ -118,12 +138,21 @@ const PALETTE_STMT: Record<StatementKind, Pair> = {
   addScore: ['Change the score', 'Изменить счёт'],
   say: ['Show a message on screen', 'Показать сообщение на экране'],
   setText: ['Set the text of a sign', 'Задать текст таблички'],
+  spawn: ['Make a copy', 'Создать копию'],
+  remove: ['Remove an object', 'Убрать объект'],
+  scale: ['Scale', 'Масштабировать'],
+  physical: ['Make it fall (physics)', 'Пусть падает (физика)'],
+  push: ['Push', 'Толкнуть'],
+  moveTo: ['Move to a place', 'Переместить к месту'],
+  teleport: ['Put the player somewhere', 'Переместить игрока'],
+  damage: ['Damage', 'Повредить'],
 };
 export const statementName = (k: StatementKind) => pick(PALETTE_STMT[k]);
 
 export const STATEMENT_GROUPS: { title: Pair; kinds: StatementKind[] }[] = [
   { title: ['Do', 'Действия'], kinds: ['move', 'turn', 'return', 'show', 'hide', 'turnOn', 'turnOff', 'send', 'log'] },
-  { title: ['Player and score', 'Игрок и счёт'], kinds: ['hurt', 'heal', 'addScore'] },
+  { title: ['Objects', 'Объекты'], kinds: ['spawn', 'remove', 'moveTo', 'scale', 'physical', 'push', 'damage'] },
+  { title: ['Player and score', 'Игрок и счёт'], kinds: ['teleport', 'hurt', 'heal', 'addScore'] },
   { title: ['Screen and signs', 'Экран и таблички'], kinds: ['say', 'setText'] },
   { title: ['Control', 'Управление'], kinds: ['wait', 'if', 'repeat', 'forever', 'stop'] },
   { title: ['Variables', 'Переменные'], kinds: ['set', 'change'] },
@@ -145,13 +174,15 @@ const VALUE: Record<ExprKind, Pair> = {
   time: ['Seconds since start', 'Секунд с начала'],
   health: ['The player’s health', 'Здоровье игрока'],
   score: ['The score', 'Счёт'],
+  copy: ['The new copy', 'Новая копия'],
+  varOf: ['Another object’s variable', 'Переменная другого объекта'],
 };
 export const valueName = (k: ExprKind) => pick(VALUE[k]);
 
 /** Which value blocks fit a slot of a given type. */
 export const VALUES_FOR: Record<'number' | 'boolean' | 'text' | 'any', ExprKind[]> = {
-  number: ['number', 'variable', 'maths', 'random', 'time', 'health', 'score'],
-  boolean: ['boolean', 'variable', 'compare', 'logic', 'not'],
-  text: ['text', 'variable', 'join', 'number', 'object', 'score'],
-  any: ['number', 'text', 'boolean', 'variable', 'maths', 'compare', 'logic', 'not', 'random', 'join', 'time', 'health', 'score', 'object'],
+  number: ['number', 'variable', 'varOf', 'maths', 'random', 'time', 'health', 'score'],
+  boolean: ['boolean', 'variable', 'varOf', 'compare', 'logic', 'not'],
+  text: ['text', 'variable', 'varOf', 'join', 'number', 'object', 'score'],
+  any: ['number', 'text', 'boolean', 'variable', 'varOf', 'maths', 'compare', 'logic', 'not', 'random', 'join', 'time', 'health', 'score', 'object', 'copy'],
 };

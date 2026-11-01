@@ -24,6 +24,7 @@ import {
   type Expr,
   type ExprKind,
   type Problem,
+  type Place,
   type Ref,
   type Script,
   type Statement,
@@ -109,7 +110,7 @@ export function ScriptPanel() {
     ctx.menu(
       ev.clientX,
       ev.clientY,
-      (['start', 'enter', 'leave', 'use', 'message', 'every', 'die'] as EventKind[]).map((k) => ({
+      (['start', 'enter', 'leave', 'use', 'message', 'every', 'die', 'breaks'] as EventKind[]).map((k) => ({
         label: eventName(k),
         onSelect: () => {
           const zone: Ref = objects.find((o) => o.id === owner.id)?.isZone ? { self: true } : objects.find((o) => o.isZone) ? { entity: objects.find((o) => o.isZone)!.id } : { self: true };
@@ -317,6 +318,7 @@ function EventRow({ ev, onRemove }: { ev: EventBlock; onRemove: () => void }) {
   if (ev.kind === 'start') content = w('start');
   else if (ev.kind === 'use') content = w('use');
   else if (ev.kind === 'die') content = w('die');
+  else if (ev.kind === 'breaks') content = w('breaks');
   else if (ev.kind === 'enter' || ev.kind === 'leave')
     content = (
       <>
@@ -514,6 +516,67 @@ function statementWords(s: Statement, set: (patch: Record<string, unknown>, merg
       return w('forever');
     case 'stop':
       return w('stop');
+    case 'spawn':
+      return (
+        <>
+          {w('spawn')} <RefSlot value={s.template} onChange={(template) => set({ template })} label={w('spawn')} /> {w('at')}{' '}
+          <RefSlot value={s.at} allowPlayer allowAim onChange={(at) => set({ at })} label={`${w('spawn')} ${w('at')}`} />
+        </>
+      );
+    case 'remove':
+      return (
+        <>
+          {w('remove')} <RefSlot value={s.target} onChange={(target) => set({ target })} label={w('remove')} />
+        </>
+      );
+    case 'physical':
+      return (
+        <>
+          {w('physical')} <RefSlot value={s.target} onChange={(target) => set({ target })} label={w('physical')} /> {w('fall')}
+        </>
+      );
+    case 'scale':
+      return (
+        <>
+          {w('scale')} <RefSlot value={s.target} onChange={(target) => set({ target })} label={w('scale')} /> {w('setTo')}{' '}
+          <ExprSlot expr={s.factor} type="number" label={`${w('scale')} ${w('setTo')}`} /> {w('timesSize')} <ExprSlot expr={s.seconds} type="number" label={`${w('scale')} ${w('over')}`} /> {w('seconds')}
+        </>
+      );
+    case 'push':
+      return (
+        <>
+          {w('push')} <RefSlot value={s.target} allowPlayer onChange={(target) => set({ target })} label={w('push')} />
+          <select className="cw-input cw-mini" aria-label={`${w('push')} ${w('direction')}`} value={s.direction} onChange={(e) => set({ direction: e.target.value })}>
+            {(['up', 'down', 'north', 'south', 'east', 'west'] as const).map((d) => (
+              <option key={d} value={d}>
+                {directionLabel(d)}
+              </option>
+            ))}
+          </select>
+          {w('withStrength')} <ExprSlot expr={s.strength} type="number" label={`${w('push')} ${w('withStrength')}`} />
+        </>
+      );
+    case 'moveTo':
+      return (
+        <>
+          {w('move')} <RefSlot value={s.target} onChange={(target) => set({ target })} label={w('moveTo')} /> {w('to')}{' '}
+          <RefSlot value={s.to} allowPlayer allowAim onChange={(to) => set({ to })} label={`${w('moveTo')} ${w('to')}`} /> {w('over')}{' '}
+          <ExprSlot expr={s.seconds} type="number" label={`${w('moveTo')} ${w('over')}`} /> {w('seconds')}, {w('stopping')} <ExprSlot expr={s.gap} type="number" label={`${w('moveTo')} ${w('stopping')}`} />{' '}
+          {w('short')}
+        </>
+      );
+    case 'teleport':
+      return (
+        <>
+          {w('teleport')} <RefSlot value={s.to} allowAim onChange={(to) => set({ to })} label={w('teleport')} />
+        </>
+      );
+    case 'damage':
+      return (
+        <>
+          {w('damage')} <RefSlot value={s.target} onChange={(target) => set({ target })} label={w('damage')} /> {w('by')} <ExprSlot expr={s.amount} type="number" label={`${w('damage')} ${w('by')}`} />
+        </>
+      );
     case 'say':
       return (
         <>
@@ -555,17 +618,51 @@ function BlockProblems({ id }: { id: string }) {
 
 // ── Slots ──
 
-function RefSlot({ value, onChange, label, zonesOnly, signsOnly, allowNone }: { value: Ref | null; onChange: (r: Ref | null) => void; label: string; zonesOnly?: boolean; signsOnly?: boolean; allowNone?: boolean }) {
+function RefSlot<T extends Ref | Place | null>({
+  value,
+  onChange,
+  label,
+  zonesOnly,
+  signsOnly,
+  allowNone,
+  allowPlayer,
+  allowAim,
+}: {
+  value: T;
+  onChange: (r: T) => void;
+  label: string;
+  zonesOnly?: boolean;
+  signsOnly?: boolean;
+  allowNone?: boolean;
+  /** Offer “the player”. */
+  allowPlayer?: boolean;
+  /** Offer “where the player looks” (places only). */
+  allowAim?: boolean;
+}) {
   const c = useC();
-  const enc = (r: Ref | null) => (r === null ? 'none' : 'self' in r ? 'self' : 'other' in r ? 'other' : `e:${r.entity}`);
-  const dec = (v: string): Ref | null => (v === 'none' ? null : v === 'self' ? { self: true } : v === 'other' ? { other: true } : { entity: v.slice(2) });
+  const enc = (r: Ref | Place | null) =>
+    r === null ? 'none' : 'self' in r ? 'self' : 'other' in r ? 'other' : 'player' in r ? 'player' : 'aim' in r ? 'aim' : `e:${r.entity}`;
+  const dec = (v: string) =>
+    (v === 'none'
+      ? null
+      : v === 'self'
+        ? { self: true }
+        : v === 'other'
+          ? { other: true }
+          : v === 'player'
+            ? { player: true }
+            : v === 'aim'
+              ? { aim: true }
+              : { entity: v.slice(2) }) as T;
   const objs = c.objects.filter((o) => o.id !== c.owner && (!zonesOnly || o.isZone) && (!signsOnly || o.isSign));
   const current = enc(value);
-  const missing = value && 'entity' in value && !c.objects.some((o) => o.id === value.entity);
+  const missing = current.startsWith('e:') && !c.objects.some((o) => o.id === current.slice(2));
   return (
     <select className="cw-input cw-ref" aria-label={label} value={current} onChange={(e) => onChange(dec(e.target.value))}>
       {allowNone && <option value="none">{w('everyone')}</option>}
       <option value="self">{w('self')}</option>
+      {(allowPlayer || current === 'player') && <option value="player">{w('player')}</option>}
+      {(allowAim || current === 'aim') && <option value="aim">{w('aim')}</option>}
       {!zonesOnly && (c.otherAllowed || current === 'other') && <option value="other">{c.otherIsPlayer ? w('player') : w('other')}</option>}
       {missing && <option value={current}>?</option>}
       {objs.map((o) => (
@@ -648,7 +745,16 @@ function ExprSlot({ expr, type, label }: { expr: Expr; type: 'number' | 'boolean
     case 'time':
     case 'health':
     case 'score':
+    case 'copy':
       body = <span className="cw-pill-text">{w(expr.kind)}</span>;
+      break;
+    case 'varOf':
+      body = (
+        <>
+          <TextSlot value={expr.variable} label={`${label} ${w('variableName')}`} onChange={(variable) => set({ variable })} /> {w('ofWord')}{' '}
+          <RefSlot value={expr.of} onChange={(of) => set({ of })} label={`${label} ${w('ofWord')}`} />
+        </>
+      );
       break;
     case 'object':
       body = <RefSlot value={expr.ref} label={label} onChange={(ref) => ref && set({ ref })} />;

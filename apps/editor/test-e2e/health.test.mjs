@@ -76,7 +76,7 @@ test('health and score', async () => {
     await new Promise((r) => setTimeout(r, 400));
     await shot(page, 'h02-rules');
     const project = JSON.parse(await fs.readFile(path.join(projectsDir, 'coins', 'project.cwproj'), 'utf8'));
-    assert.deepEqual(project.settings.game, { health: false, score: true });
+    assert.deepEqual(project.settings.game, { health: false, score: true, thirdPerson: false });
     await page.getByRole('button', { name: 'Play' }).click();
     await page.getByTestId('play-banner').waitFor();
     if (await page.getByTestId('click-to-play').count()) await page.getByTestId('click-to-play').click({ timeout: 2000 }).catch(() => {});

@@ -9,6 +9,7 @@
  *  - A failing action or a division by zero stops only that thread, with a message pointing at the block.
  */
 import type { ActionName, CompiledHandler, GameAction, GameValue, Op, Program, Value } from './compile';
+import type { Ref } from './model';
 
 export const STEP_BUDGET = 10_000;
 
@@ -34,6 +35,8 @@ export interface ScriptHost {
   say?(text: string, seconds: number, owner: string): void;
   /** Change what a text sign says. */
   setText?(target: string, text: string): void;
+  /** Make a copy of `template` at a place (an object, or 'aim'); returns the copy's id, or null if it couldn't. */
+  spawn?(template: string, place: Value, owner: string): string | null;
 }
 
 export interface ScriptError {
@@ -63,6 +66,8 @@ interface Thread {
   waitFor: (() => boolean) | null;
   /** The loop block it last jumped back through (a runaway loop is reported there). */
   loop: string | null;
+  /** The copy this stack made last (“the new copy”). */
+  copy: string | null;
 }
 
 export type RunnerEvent =
@@ -71,7 +76,9 @@ export type RunnerEvent =
   /** The player used `targets` (the object looked at and everything it is inside). */
   | { type: 'use'; targets: string[]; by: string }
   /** The player's health reached 0. */
-  | { type: 'die' };
+  | { type: 'die' }
+  /** A breakable object's health reached 0. */
+  | { type: 'breaks'; target: string };
 
 export class ScriptRunner {
   private instances: Instance[];
@@ -91,6 +98,24 @@ export class ScriptRunner {
     }));
   }
 
+  /** Add an object's script while playing (a copy): its “When the game starts” stacks run straight away. */
+  addProgram(program: Program): void {
+    const inst: Instance = {
+      program,
+      vars: program.variables.map((v) => v.initial),
+      timers: new Map(program.handlers.filter((h) => h.event.kind === 'every').map((h) => [h.id, 0])),
+    };
+    this.instances.push(inst);
+    if (!this.started) return;
+    for (const h of program.handlers) if (h.event.kind === 'start') this.spawn(inst, h, null);
+  }
+
+  /** Objects removed from the game: their scripts stop. */
+  removeOwners(ids: Set<string>): void {
+    for (const t of this.threads.filter((t) => ids.has(t.inst.program.owner))) this.finish(t);
+    this.instances = this.instances.filter((i) => !ids.has(i.program.owner));
+  }
+
   /** Run every "When the game starts" stack. */
   start(): void {
     if (this.started) return;
@@ -104,7 +129,9 @@ export class ScriptRunner {
     for (const inst of this.instances) {
       for (const h of inst.program.handlers) {
         const ev = h.event;
-        if (e.type === 'die') {
+        if (e.type === 'breaks') {
+          if (ev.kind === 'breaks' && inst.program.owner === e.target) this.spawn(inst, h, null);
+        } else if (e.type === 'die') {
           if (ev.kind === 'die') this.spawn(inst, h, null);
         } else if (e.type === 'use') {
           if (ev.kind === 'use' && e.targets.includes(inst.program.owner)) this.spawn(inst, h, e.by);
@@ -163,12 +190,14 @@ export class ScriptRunner {
     const k = this.key(inst, handler);
     if (this.running.has(k)) return;
     this.running.add(k);
-    this.threads.push({ inst, handler, pc: 0, stack: [], temps: new Array(handler.temps).fill(0), other, waitUntil: 0, waitFor: null, loop: null });
+    this.threads.push({ inst, handler, pc: 0, stack: [], temps: new Array(handler.temps).fill(0), other, waitUntil: 0, waitFor: null, loop: null, copy: null });
   }
 
   private runAll(): void {
     const now = this.host.now();
     for (const t of [...this.threads]) {
+      // (A stack can be stopped by another one this frame, when its object is removed.)
+      if (!this.threads.includes(t)) continue;
       if (t.waitUntil > now) continue;
       if (t.waitFor) {
         if (!t.waitFor()) continue;
@@ -194,7 +223,8 @@ export class ScriptRunner {
     this.finish(t);
   }
 
-  private resolve(t: Thread, ref: { self: true } | { entity: string } | { other: true }): Value {
+  private resolve(t: Thread, ref: Ref): Value {
+    if ('player' in ref) return { ref: 'player' };
     if ('self' in ref) return { ref: t.inst.program.owner };
     if ('other' in ref) return t.other ? { ref: t.other } : null;
     return { ref: ref.entity };
@@ -295,6 +325,8 @@ export class ScriptRunner {
           } catch (e) {
             return this.fail(t, (e as Error).message);
           }
+          // Its own object was removed (or broke): this stack ends here.
+          if (!this.threads.includes(t)) return;
           if (wait && !wait()) {
             t.waitFor = wait;
             return;
@@ -329,6 +361,28 @@ export class ScriptRunner {
         case 'say': {
           const sec = num(s.pop() ?? 0);
           this.host.say?.(this.text(s.pop() ?? null), Math.max(0, sec), t.inst.program.owner);
+          break;
+        }
+        case 'spawn': {
+          const place = s.pop() ?? null;
+          const template = s.pop();
+          t.copy = null;
+          if (!template || typeof template !== 'object' || place === null) break;
+          try {
+            t.copy = this.host.spawn?.(template.ref, place, t.inst.program.owner) ?? null;
+          } catch (e) {
+            return this.fail(t, (e as Error).message);
+          }
+          break;
+        }
+        case 'copy':
+          s.push(t.copy ? { ref: t.copy } : null);
+          break;
+        case 'varof': {
+          const of = s.pop();
+          const inst = of && typeof of === 'object' ? this.instances.find((i) => i.program.owner === of.ref) : undefined;
+          const slot = inst ? inst.program.variables.findIndex((v) => v.name === op.name) : -1;
+          s.push(inst && slot >= 0 ? (inst.vars[slot] ?? null) : null);
           break;
         }
         case 'settext': {

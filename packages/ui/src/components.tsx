@@ -133,7 +133,8 @@ export function ContextMenu({ x, y, items, onClose }: { x: number; y: number; it
   useLayoutEffect(() => {
     const r = ref.current?.getBoundingClientRect();
     if (!r) return;
-    setPos({ x: Math.min(x, window.innerWidth - r.width - 8), y: Math.min(y, window.innerHeight - r.height - 8) });
+    // Keep it on screen; a menu taller than the window starts at the top and scrolls.
+    setPos({ x: Math.max(8, Math.min(x, window.innerWidth - r.width - 8)), y: Math.max(8, Math.min(y, window.innerHeight - r.height - 8)) });
   }, [x, y]);
   useEffect(() => {
     const down = (e: PointerEvent) => {

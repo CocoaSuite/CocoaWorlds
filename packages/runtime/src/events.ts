@@ -12,6 +12,8 @@ export type GameEvent =
   | { type: 'player.hurt'; amount: number; health: number; cause: string; time: number }
   | { type: 'player.die'; cause: string; time: number }
   | { type: 'score'; score: number; by: number; time: number }
+  | { type: 'spawn'; template: string; copy: string; time: number }
+  | { type: 'break'; target: string; time: number }
   | { type: 'message'; name: string; from: string | null; time: number; data?: unknown };
 
 export type EventType = GameEvent['type'];

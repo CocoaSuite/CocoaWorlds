@@ -7,8 +7,14 @@
 
 export type ValueType = 'number' | 'boolean' | 'text' | 'object';
 
-/** A reference to an object in the scene. */
-export type Ref = { self: true } | { entity: string } | { other: true };
+/** A reference to an object in the scene (or the player). */
+export type Ref = { self: true } | { entity: string } | { other: true } | { player: true };
+
+/** A place in the world: where an object (or the player) is, or the spot the player is looking at. */
+export type Place = Ref | { aim: true };
+
+/** Statement and event fields that hold a value block (for walking and editing scripts). */
+export const EXPR_KEYS = ['distance', 'seconds', 'degrees', 'text', 'value', 'by', 'condition', 'times', 'amount', 'factor', 'strength', 'gap'] as const;
 
 export type Expr =
   | { id: string; kind: 'number'; value: number }
@@ -25,7 +31,11 @@ export type Expr =
   | { id: string; kind: 'time' }
   /** The player's health (0–100) and the game's score. */
   | { id: string; kind: 'health' }
-  | { id: string; kind: 'score' };
+  | { id: string; kind: 'score' }
+  /** The copy made last by “Make a copy” in this stack. */
+  | { id: string; kind: 'copy' }
+  /** Another object's variable (read only). */
+  | { id: string; kind: 'varOf'; variable: string; of: Ref };
 
 export type Direction = 'up' | 'down' | 'north' | 'south' | 'east' | 'west';
 export type Axis = 'up' | 'north' | 'east';
@@ -54,7 +64,23 @@ export type Statement =
   /** Show text in the middle of the screen for a while (doesn't wait). */
   | { id: string; kind: 'say'; text: Expr; seconds: Expr }
   /** Change what a text sign says. */
-  | { id: string; kind: 'setText'; target: Ref; text: Expr };
+  | { id: string; kind: 'setText'; target: Ref; text: Expr }
+  /** Make a copy of an object (and everything inside it) at a place; it runs its own scripts. */
+  | { id: string; kind: 'spawn'; template: Ref; at: Place }
+  /** Take an object out of the game. */
+  | { id: string; kind: 'remove'; target: Ref }
+  /** Grow or shrink to `factor` times its starting size, around its pivot. */
+  | { id: string; kind: 'scale'; target: Ref; factor: Expr; seconds: Expr }
+  /** Let it fall and tumble: physics takes over (unanchor). */
+  | { id: string; kind: 'physical'; target: Ref }
+  /** Give it (or the player) a push: a change of speed in units per second. */
+  | { id: string; kind: 'push'; target: Ref; direction: Direction; strength: Expr }
+  /** Glide to a place, stopping `gap` units short of it. */
+  | { id: string; kind: 'moveTo'; target: Ref; to: Place; seconds: Expr; gap: Expr }
+  /** Put the player at a place (facing the way that object faces). */
+  | { id: string; kind: 'teleport'; to: Place }
+  /** Take health from a breakable object; at 0 it breaks. */
+  | { id: string; kind: 'damage'; target: Ref; amount: Expr };
 
 export type EventBlock =
   | { id: string; kind: 'start' }
@@ -65,7 +91,9 @@ export type EventBlock =
   | { id: string; kind: 'use' }
   | { id: string; kind: 'every'; seconds: Expr }
   /** The player's health reached 0 (they start again at the Player start). */
-  | { id: string; kind: 'die' };
+  | { id: string; kind: 'die' }
+  /** This breakable object's health reached 0 (it is removed after this starts). */
+  | { id: string; kind: 'breaks' };
 
 export interface Handler {
   id: string;
@@ -119,7 +147,7 @@ export function* walk(script: Script): Generator<{ id: string; kind: string }> {
   function* stmts(list: Statement[]): Generator<{ id: string; kind: string }> {
     for (const s of list) {
       yield s;
-      for (const k of ['distance', 'seconds', 'degrees', 'text', 'value', 'by', 'condition', 'times', 'amount'] as const) {
+      for (const k of EXPR_KEYS) {
         const sub = (s as Record<string, unknown>)[k] as Expr | undefined;
         if (sub && typeof sub === 'object' && 'kind' in sub) yield* expr(sub);
       }

@@ -14,6 +14,9 @@
 - **Health and score are simple:** one player with 100 health, no armour, lives or game-over screen; dying starts again at the Player start straight away, and nothing that moved is put back. The score isn't saved between plays. The console can only be read after Esc frees the mouse.
 - **Game values:** renaming one doesn't update the blocks that use it (they show a problem until re-picked), and changes to game values are saved at once and can't be undone with Ctrl+Z. There is no countdown or progress widget yet; show a value instead.
 - **Text signs** don't move with an object a script moves, and Show/Hide don't apply to them yet.
+- **Copies:** a copy is one body: brushes inside a copied object with Physics are left out unless they have Physics too, text signs inside copies aren't drawn, and trigger zones inside a copy stay where they were made. Only objects in the scene can be copied (hide one to use it as a template); prefab files can't be copied directly yet.
+- **Object actions:** a Scale and a Move on the same object at once replace each other (the newer one wins); point objects' collision shapes are rescaled, but their drawn shape isn't. Breakable objects break only from the Damage block (no damage from hits or falls yet), and a broken object stays in the game, invisible and not colliding, so its “When this breaks” stacks can finish.
+- **Third-person camera:** a simple capsule body, no animation; Use still aims from the player's eyes.
 - **Player speeds are fixed** (Half-Life 2's: run 190, walk 100, crouch 64 u/s); a per-scene setting comes later.
 - **Keys while playing are fixed** (WASD, Space, Ctrl or C, Shift, E); rebinding comes later. While the mouse is captured, editor shortcuts are off; F5 still stops.
 - **Scripts: variables belong to each object** (no game-wide variables yet; use messages). Blocks are rearranged with ↑ ↓ for now; drag-and-drop comes later. The graph view (V3) comes later in Phase 5.

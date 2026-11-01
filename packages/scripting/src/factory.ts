@@ -9,6 +9,7 @@ export const text = (value: string): Expr => ({ id: id(), kind: 'text', value })
 export const variable = (name: string): Expr => ({ id: id(), kind: 'variable', name });
 export const self: Ref = { self: true };
 export const other: Ref = { other: true };
+export const player: Ref = { player: true };
 export const entity = (e: string): Ref => ({ entity: e });
 
 export type StatementKind = Statement['kind'];
@@ -20,6 +21,7 @@ export function newEvent(kind: EventKind, zone: Ref = self): EventBlock {
     case 'start':
     case 'use':
     case 'die':
+    case 'breaks':
       return { id: id(), kind };
     case 'enter':
     case 'leave':
@@ -73,6 +75,21 @@ export function newStatement(kind: StatementKind, opts: { target?: Ref; variable
       return { id: id(), kind, text: text('Hello!'), seconds: num(3) };
     case 'setText':
       return { id: id(), kind, target, text: text('Text') };
+    case 'spawn':
+      return { id: id(), kind, template: target, at: { self: true } };
+    case 'remove':
+    case 'physical':
+      return { id: id(), kind, target };
+    case 'scale':
+      return { id: id(), kind, target, factor: num(2), seconds: num(1) };
+    case 'push':
+      return { id: id(), kind, target, direction: 'up', strength: num(400) };
+    case 'moveTo':
+      return { id: id(), kind, target, to: { player: true }, seconds: num(0.5), gap: num(64) };
+    case 'teleport':
+      return { id: id(), kind, to: { self: true } };
+    case 'damage':
+      return { id: id(), kind, target, amount: num(10) };
   }
 }
 
@@ -103,6 +120,9 @@ export function newExpr(kind: ExprKind, opts: { variable?: string } = {}): Expr 
     case 'time':
     case 'health':
     case 'score':
+    case 'copy':
       return { id: id(), kind };
+    case 'varOf':
+      return { id: id(), kind, variable: opts.variable ?? 'value', of: other };
   }
 }

@@ -1059,7 +1059,8 @@ export const useEditor = create<State & Actions>()((set, get) => ({
       return;
     }
     set({ session: { ...get().session!, project: r.value }, rev: get().rev + 1 });
-    get().log('info', 'Project', `${rule === 'health' ? 'Health' : 'Score'} is now ${on ? 'on' : 'off'} for this project.`);
+    const what = rule === 'health' ? 'Health' : rule === 'score' ? 'Score' : 'The third-person camera';
+    get().log('info', 'Project', `${what} is now ${on ? 'on' : 'off'} for this project.`);
   },
 
   openDialog(dialog) {

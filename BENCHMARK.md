@@ -13,7 +13,7 @@ CocoaWorlds is measured by the games it can make. Two tiers:
 
 Each need also notes the roadmap step that delivers it (the B / A steps are in [ROADMAP.md](ROADMAP.md)). The last section lists the decisions that need approval.
 
-Status as of 2026-11-01 (after B1).
+Status as of 2026-11-01 (after B2).
 
 ## What every target needs
 
@@ -27,8 +27,8 @@ These come up in almost every game, so they come first.
 | Blocks: events, moving, turning, showing and hiding, messages, variables, if/repeat, timers | ✅ | — |
 | **Game-wide values** (Cash, Gems, Round, Wave) that every script shares, shown on screen when wanted | ✅ | B1 |
 | **On-screen text and messages** ("Round 3 starts!", "Need $50", "Press E to buy") | ✅ messages; 🟡 no countdown widget yet (build it from a value) | B1, B5 |
-| **Make copies while playing** (spawn a prefab at a place or object; remove a copy) | ❌ | B2 |
-| **More things blocks can do to objects**: scale, become physical (unanchor), push, spin speed, move toward or follow an object, teleport the player | 🟡 move/turn/show/hide only | B2 |
+| **Make copies while playing** (spawn a prefab at a place or object; remove a copy) | ✅ copies of scene objects (templates) | B2 |
+| **More things blocks can do to objects**: scale, become physical (unanchor), push, spin speed, move toward or follow an object, teleport the player | ✅ | B2 |
 | **Textures and materials from image files**, lights that light the level, sky, sound | ❌ dev textures, unlit | B3 (Phase 7) |
 | **Imported 3D models** (props, creatures), with animations | ❌ brushes and simple shapes only | B3 / A2 |
 | **Standalone export** (Windows, macOS, Linux, web) | ❌ plays only in the editor | B4 (Phases 8–9) |
@@ -46,13 +46,13 @@ You own a plot. Droppers make parts, conveyors carry them to a collector that pa
 |---|---|---|
 | Plot built from brushes and prefabs | ✅ | — |
 | Buy buttons: step on, pay if you have enough cash, the bought part appears | ✅ Cash game value + zone + Show (tested in `tycoon.test.ts`) | — |
-| Droppers make a part every few seconds | ❌ | B2 spawn |
-| Conveyor belts carry parts | ❌ | B2 surface speed |
-| Collector removes parts and pays their value | 🟡 a zone can hide a part, but can't remove it or know its value | B2 remove, values on copies |
+| Droppers make a part every few seconds | ✅ | — |
+| Conveyor belts carry parts | ✅ Conveyor component | — |
+| Collector removes parts and pays their value | ✅ Remove + “value of the thing that entered” (tested) | — |
 | Price signs over buttons | ✅ Text signs | — |
 | Cash on screen | ✅ | — |
 | Keep progress between sessions | ❌ | B4 |
-| Third-person camera (usual on Roblox) | ❌ first person only | B2 camera |
+| Third-person camera (usual on Roblox) | ✅ game rule | — |
 | Several players with their own plots | ❌ | M1 |
 
 ### Natural Disaster Survival
@@ -62,12 +62,12 @@ Rounds: everyone is put on a map, a random disaster strikes (flood, tornado, met
 | Need | Now | Step |
 |---|---|---|
 | Lobby and maps, round timer | ✅ timers, Round value on screen, messages | — |
-| Teleport the player to the map and back | ❌ | B2 |
+| Teleport the player to the map and back | ✅ | — |
 | Random disaster | ✅ random number + if | — |
 | Flood: rising water that kills | 🟡 a rising deadly zone works; no water to see or swim in | A1 water |
-| Buildings that break (parts become physical) | ❌ | B2 become physical |
-| Tornado or wind pushing things | ❌ | B2 push |
-| Meteors | ❌ | B2 spawn |
+| Buildings that break (parts become physical) | ✅ Make it fall | — |
+| Tornado or wind pushing things | ✅ Push (objects and the player) | — |
+| Meteors | ✅ copies with Physics | — |
 | "You survived!" message | ✅ | — |
 | Several players | ❌ | M1 |
 
@@ -77,11 +77,11 @@ Buy seeds, plant them in your plot, wait for them to grow (even while away), har
 
 | Need | Now | Step |
 |---|---|---|
-| Plant where you point | ❌ | B2 spawn at the aimed spot |
-| Plants grow over time (get bigger, change stage) | ❌ | B2 scale, swap model |
+| Plant where you point | ✅ copy at where the player looks | — |
+| Plants grow over time (get bigger, change stage) | ✅ Scale; 🟡 stages by swapping copies | B3 models |
 | Inventory and hotbar (seeds, tools) | ❌ | B5 inventory |
 | Shop window with buttons | ❌ | B5 screen UI |
-| Sell zone pays for crops | 🟡 zone + Cash; can't yet tell which crop | B2 |
+| Sell zone pays for crops | ✅ zone + “value of the thing that entered” | — |
 | Growing while you're away, saved garden | ❌ | B4 save, real-time clock |
 | Weather events (rain, gold mutations) | ❌ | B3 particles, B2 |
 
@@ -91,13 +91,13 @@ Break coins and chests to collect currency, buy eggs that hatch random pets, pet
 
 | Need | Now | Step |
 |---|---|---|
-| Breakable coins and chests with health | ❌ objects don't have health | B2 object health |
+| Breakable coins and chests with health | ✅ Breakable + Damage + When this breaks | — |
 | Several currencies | ✅ game values | — |
-| Eggs: random pet by rarity | 🟡 random works; can't make the pet | B2 spawn |
-| Pets follow the player | ❌ | B2 follow |
+| Eggs: random pet by rarity | ✅ random + copies | — |
+| Pets follow the player | ✅ Move to the player in a loop (tested) | — |
 | Pet inventory, equip | ❌ | B5 inventory |
 | Gates to new zones that open when paid | ✅ door recipe + score check | — |
-| Third-person camera, saving | ❌ | B2 camera, B4 |
+| Third-person camera ✅; saving ❌ | 🟡 | B4 |
 | Trading and seeing other players | ❌ | M1 |
 
 ## Advanced: Slime Rancher
@@ -114,7 +114,7 @@ A first-person ranch game on large outdoor islands. You suck up slimes and food 
 | Finding paths on terrain | ❌ | A2 navigation |
 | **Vacuum gun**: pull physics objects in, hold them in slots, shoot them out | ❌ | A1 held tools |
 | Hundreds of physics objects at once | 🟡 Rapier handles it; not measured | A2 performance check |
-| Corrals, feeders, silos built on plots | 🟡 prefabs; no building while playing | B2 spawn |
+| Corrals, feeders, silos built on plots | ✅ copies | — |
 | Market with changing prices, upgrade shop | 🟡 prices as game values and signs; no shop window | B5 UI |
 | Day and night, sky, lighting, water | ❌ | B3, A1 water |
 | Sound and music | ❌ | B3 |
@@ -134,7 +134,7 @@ A first-person shooter built from brush levels (the kind CocoaWorlds is designed
 | Health ✅; **armour (HEV suit)**, health and suit chargers | 🟡 | A1 |
 | **Ladders, water and swimming** | ❌ | A1 (Phase 6) |
 | **Weapons**: hitscan, projectiles, grenades, explosions, ammo, switching, view models | ❌ | A1 weapons |
-| **Breakable objects** (func_breakable), gibs | ❌ | B2 object health, A1 |
+| **Breakable objects** (func_breakable) ✅; gibs ❌ | 🟡 | A1 |
 | **Monsters and NPCs**: models, animation, AI (see, chase, attack, take cover), following the player | ❌ | A2 models, A1 NPCs |
 | NPC movement through the level | ❌ | A2 navigation |
 | Trains and moving platforms along paths (func_train, func_tracktrain) | 🟡 moves are straight lines | A1 paths |
@@ -149,12 +149,12 @@ A first-person shooter built from brush levels (the kind CocoaWorlds is designed
 
 | Target | Ready today | Main missing pieces |
 |---|---|---|
-| Tycoon | ~35% | spawning and conveyors (B2), export and saving (B4) |
-| Natural Disaster Survival | ~30% | B1, teleport and physics actions (B2), water |
-| Grow a Garden | ~15% | spawning and scale (B2), inventory and shop UI (B5), saving (B4) |
-| Pet Simulator | ~15% | object health, follow (B2), inventory (B5) |
-| Half-Life 1 | ~30% | weapons, NPCs and AI, models, level changes, lighting and sound |
-| Slime Rancher | ~10% | terrain, creatures with behaviour, vacuum tool, models |
+| Tycoon | ~60% | looks (B3), export and saving (B4), several players (M1) |
+| Natural Disaster Survival | ~55% | water, looks and sound (B3), export (B4), several players (M1) |
+| Grow a Garden | ~40% | inventory and shop UI (B5), saving and real-time growth (B4), models (B3) |
+| Pet Simulator | ~45% | inventory (B5), models (B3), saving (B4) |
+| Half-Life 1 | ~35% | weapons, NPCs and AI, models, level changes, lighting and sound |
+| Slime Rancher | ~15% | terrain, creatures with behaviour, vacuum tool, models |
 
 ## Decisions (approved 2026-11-01)
 

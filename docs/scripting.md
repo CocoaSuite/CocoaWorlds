@@ -86,3 +86,24 @@ every variable menu marked “(game)”; a script's own variable with the same n
 A **Text sign** (Add › Text sign, or the Text sign component on any point object) shows text in the world:
 the text (several lines allowed), letter height, colour, a dark background, and whether it always faces the
 camera. Otherwise it is a flat plaque, read from its front (+Z) side; turn the object to aim it.
+
+## Copies, object actions, conveyors and breakables
+
+| Block | What it does |
+|---|---|
+| Make a copy of *object* at *place* | Copies the object and everything inside it so its pivot lands on the place: an object, the player, or where the player looks. The original can be hidden (a template). The copy runs its own scripts; references inside it point at the copy. A copy of something with Physics falls and rolls; otherwise scripts can move it. |
+| the new copy | The copy this stack made last, for the blocks after it |
+| *variable* of *object* | Reads another object's variable, such as the value of the part that entered |
+| Remove *object* | Takes it (and what's inside it) out of the game |
+| Move *object* to *place* over *s* seconds, stopping *n* units short | Glides there; in a Repeat forever loop this makes a pet follow the player |
+| Scale *object* to *k* times its size over *s* seconds | Around its pivot; collisions match when it finishes |
+| Make *object* fall and tumble | Physics takes over (a building collapsing) |
+| Push *object or the player* *direction* with strength *n* | A change of speed in units per second (jump pads, wind, blasts); objects need physics |
+| Put the player at *place* | Teleports the player, facing the way the object faces |
+| Damage *object* by *n* | Takes health from a Breakable object; at 0 it disappears and **When this breaks** runs |
+
+**Conveyor** (component on a brush): carries physics objects lying on it and the player standing on it, at a
+speed towards north, south, east or west. **Breakable** (component): the object's health.
+
+**Third-person camera** is a game rule (Inspector with nothing selected): the camera follows behind and above
+the player, comes closer when a wall is in the way, and the player is drawn as a simple body.

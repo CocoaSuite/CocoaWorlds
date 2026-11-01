@@ -7,7 +7,7 @@
  */
 import { SceneDoc, readComponent, type ColliderData, type GameRules, type GameValue, type SceneFile, type SignData } from '@cocoaworlds/core';
 import { buildMesh, isInvisibleMaterial, type WorldBrush } from '@cocoaworlds/geometry';
-import { GameWorld, initPhysics, type PlayerInput, type PlayerStatus, type ScriptLog, type TriggerEvent } from '@cocoaworlds/runtime';
+import { GameWorld, initPhysics, type BodyInfo, type PlayerInput, type PlayerStatus, type ScriptLog, type TriggerEvent } from '@cocoaworlds/runtime';
 import type { Problem, ScriptError } from '@cocoaworlds/scripting';
 import * as THREE from 'three';
 import { worldBrushes } from '../brush/brushes';
@@ -68,35 +68,9 @@ export class PlaySession {
       this.group.add(new THREE.Mesh(toGeometry(m), m.groups.map((g) => material(g.material))));
     }
 
-    for (const b of this.world.movingBodies()) {
-      const e = doc.get(b.id);
-      if (!e || b.kind === 'zone') continue;
-      let obj: THREE.Object3D;
-      let base = new THREE.Matrix4();
-      if (b.kind === 'brush' || b.kind === 'unit') {
-        // Drawn in world space at the start; the body's motion moves it from there.
-        const brushes = this.world.bodyBrushes(b.id);
-        if (!brushes.length) continue;
-        const m = buildMesh(brushes);
-        obj = new THREE.Mesh(toGeometry(m), m.groups.map((g) => material(g.material)));
-      } else {
-        // A point object with a collision shape: draw the shape, placed like the entity (scale in the shape).
-        const c = readComponent<ColliderData>('collider', e.components.collider);
-        const geo =
-          c.shape === 'sphere'
-            ? new THREE.SphereGeometry(c.size[0] / 2, 24, 16)
-            : c.shape === 'capsule'
-              ? new THREE.CapsuleGeometry(c.size[0] / 2, Math.max(0, c.size[1] - c.size[0]), 6, 16)
-              : new THREE.BoxGeometry(...c.size);
-        geo.translate(...c.offset);
-        obj = new THREE.Mesh(geo, this.shapeMat);
-        base = new THREE.Matrix4().fromArray(doc.worldMatrix(b.id));
-      }
-      obj.matrixAutoUpdate = false;
-      obj.matrix.copy(base);
-      this.group.add(obj);
-      this.movers.push({ id: b.id, obj, base });
-    }
+    this.material = material;
+    for (const b of this.world.movingBodies()) if (doc.get(b.id)) this.addMover(b);
+
     // Text signs, where they stand (redrawn when blocks change their text).
     const shown = (id: string) => {
       for (let x = doc.get(id); x; x = x.parent ? doc.get(x.parent) : undefined) if (!x.visible) return false;
@@ -123,12 +97,72 @@ export class PlaySession {
     };
     this.world.bus.on('use', (e) => void this.uses.push(e.target));
     this.world.bus.on('player.die', (e) => void this.notes.push(`The player died (${e.cause}) and starts again`));
+    this.world.bus.on('break', (e) => void this.notes.push(`${this.info.names.get(e.target.split('#')[0]!) ?? 'Something'} broke`));
     this.world.bus.on('score', (e) => void this.notes.push(`Score: ${e.score} (${e.by > 0 ? '+' : ''}${e.by})`));
+  }
+
+  private material: (name: string) => THREE.Material;
+  private body: THREE.Group | null = null;
+
+  /** The player's body for the third-person camera: a capsule with a visor showing where they face. */
+  private makeBody(): THREE.Group {
+    const g = new THREE.Group();
+    const mat = new THREE.MeshStandardMaterial({ color: 0x8fb04a, roughness: 0.6 });
+    const capsule = new THREE.Mesh(new THREE.CapsuleGeometry(15, 40, 6, 16), mat);
+    capsule.position.y = 35;
+    const visor = new THREE.Mesh(new THREE.BoxGeometry(18, 8, 6), new THREE.MeshStandardMaterial({ color: 0x1f1f1f, roughness: 0.3 }));
+    visor.position.set(0, 58, -13);
+    g.add(capsule, visor);
+    g.name = 'player-body';
+    this.group.add(g);
+    return g;
+  }
+
+  /** Draw a body: its brushes, or a point object's collision shape. */
+  private addMover(b: BodyInfo): void {
+    if (b.kind === 'zone') return;
+    let obj: THREE.Object3D;
+    let base = new THREE.Matrix4();
+    if (b.kind === 'brush' || b.kind === 'unit') {
+      // Drawn in world space at the start; the body's motion moves it from there.
+      const brushes = this.world.bodyBrushes(b.id);
+      if (!brushes.length) return;
+      const m = buildMesh(brushes);
+      obj = new THREE.Mesh(toGeometry(m), m.groups.map((g) => this.material(g.material)));
+    } else {
+      // A point object with a collision shape: draw the shape, placed like the entity (scale in the shape).
+      const shape = this.world.pointShape(b.id);
+      if (!shape) return;
+      const c = shape.collider;
+      const geo =
+        c.shape === 'sphere'
+          ? new THREE.SphereGeometry(c.size[0] / 2, 24, 16)
+          : c.shape === 'capsule'
+            ? new THREE.CapsuleGeometry(c.size[0] / 2, Math.max(0, c.size[1] - c.size[0]), 6, 16)
+            : new THREE.BoxGeometry(...c.size);
+      geo.translate(...c.offset);
+      obj = new THREE.Mesh(geo, this.shapeMat);
+      base = new THREE.Matrix4().fromArray(shape.matrix);
+    }
+    obj.matrixAutoUpdate = false;
+    obj.matrix.copy(base);
+    this.group.add(obj);
+    this.movers.push({ id: b.id, obj, base });
   }
 
   /** Advance the game and move what moved. Returns what happened this frame. */
   tick(dt: number): PlayFrame {
     this.world.step(dt);
+    const changes = this.world.drainChanges();
+    for (const b of changes.spawned) this.addMover(b);
+    if (changes.removed.length) {
+      const gone = new Set(changes.removed);
+      for (const m of this.movers.filter((m) => gone.has(m.id))) {
+        this.group.remove(m.obj);
+        if (m.obj instanceof THREE.Mesh) m.obj.geometry.dispose();
+      }
+      this.movers = this.movers.filter((m) => !gone.has(m.id));
+    }
     const motion = new THREE.Matrix4();
     for (const m of this.movers) {
       m.obj.visible = this.world.isVisible(m.id);
@@ -197,6 +231,15 @@ export class PlaySession {
     cam.position.set(...v.eye);
     cam.rotation.set(v.pitch, v.yaw, 0, 'YXZ');
     cam.updateMatrixWorld();
+    // Third person: the player is seen, as a simple body turned the way they look.
+    if (v.thirdPerson) {
+      this.body ??= this.makeBody();
+      this.body.visible = true;
+      this.body.position.set(...v.feet);
+      this.body.rotation.set(0, v.yaw, 0);
+      const crouched = this.world.player?.crouched ?? false;
+      this.body.scale.set(1, crouched ? 0.5 : 1, 1);
+    }
     return true;
   }
 

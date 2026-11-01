@@ -71,6 +71,10 @@ export class Player {
   input: PlayerInput = noInput();
   /** How fast the player was falling when they last landed (set on landing, cleared by whoever reads it). */
   landingSpeed = 0;
+  /** What the floor under the player moves at (a conveyor), given a collider handle; set by the world. */
+  beltOf: ((collider: number) => { x: number; z: number } | null) | null = null;
+  /** The conveyor speed under the player at the last step. */
+  private belt = { x: 0, z: 0 };
   /** Feet position at the previous and current physics step (for smooth drawing between steps). */
   private prevFeet: V;
   private feet: V;
@@ -120,6 +124,45 @@ export class Player {
     return [-Math.sin(yaw) * Math.cos(pitch), Math.sin(pitch), -Math.cos(yaw) * Math.cos(pitch)];
   }
 
+  /** A sudden change of speed (a jump pad, a blast, wind). Upward pushes lift the player off the ground. */
+  push(dx: number, dy: number, dz: number): void {
+    this.velocity.x += dx;
+    this.velocity.y += dy;
+    this.velocity.z += dz;
+    if (dy > 0) this.onGround = false;
+  }
+
+  /**
+   * Put the player's feet at a place, lifted until they fit (so a pad's middle or the inside of a floor works),
+   * optionally facing a new way.
+   */
+  teleport(feet: V, yaw?: number): void {
+    const shape = new RAPIER.Cuboid(PLAYER.radius, this.height / 2, PLAYER.radius);
+    let y = feet.y + 1;
+    for (let i = 0; i < 64; i++, y += 8) {
+      const hit = this.world.intersectionWithShape({ x: feet.x, y: y + this.height / 2, z: feet.z }, { x: 0, y: 0, z: 0, w: 1 }, shape, RAPIER.QueryFilterFlags.EXCLUDE_SENSORS, SOLID, this.collider);
+      if (!hit) break;
+    }
+    this.feet = { x: feet.x, y, z: feet.z };
+    this.prevFeet = { ...this.feet };
+    this.velocity = { x: 0, y: 0, z: 0 };
+    this.landingSpeed = 0;
+    if (yaw !== undefined) {
+      this.input.yaw = yaw;
+      this.input.pitch = 0;
+    }
+    this.body.setTranslation({ x: feet.x, y: y + this.height / 2, z: feet.z }, true);
+  }
+
+  /** What the player is looking at up to `reach` away: the point and the collider. */
+  look(reach: number): { point: [number, number, number]; collider: RAPIER.Collider } | null {
+    const [x, y, z] = this.eye();
+    const d = this.lookDirection();
+    const hit = this.world.castRay(new RAPIER.Ray({ x, y, z }, { x: d[0], y: d[1], z: d[2] }), reach, true, RAPIER.QueryFilterFlags.EXCLUDE_SENSORS, SOLID, this.collider);
+    if (!hit) return null;
+    return { point: [x + d[0] * hit.timeOfImpact, y + d[1] * hit.timeOfImpact, z + d[2] * hit.timeOfImpact], collider: hit.collider };
+  }
+
   respawn(): void {
     this.feet = { ...this.spawn.feet };
     this.prevFeet = { ...this.spawn.feet };
@@ -163,7 +206,7 @@ export class Player {
     }
     this.jumpHeld = inp.jump;
 
-    const desired = { x: this.velocity.x * dt, y: this.velocity.y * dt, z: this.velocity.z * dt };
+    const desired = { x: (this.velocity.x + this.belt.x) * dt, y: this.velocity.y * dt, z: (this.velocity.z + this.belt.z) * dt };
     // (Walking down slopes and steps: the controller's snap-to-ground keeps the player on the floor.)
     this.controller.computeColliderMovement(this.collider, desired, RAPIER.QueryFilterFlags.EXCLUDE_SENSORS, SOLID);
     const moved = this.controller.computedMovement();
@@ -183,6 +226,16 @@ export class Player {
       if (into >= 0) continue;
       v.x -= nrm.x * into;
       v.z -= nrm.z * into;
+    }
+    // Standing on a conveyor: it carries the player next step. (Standing still, the controller touches
+    // nothing, so look straight down for the floor.)
+    this.belt = { x: 0, z: 0 };
+    if (grounded && this.beltOf) {
+      const t = this.body.translation();
+      const footY = t.y + moved.y - this.height / 2;
+      const hit = this.world.castRay(new RAPIER.Ray({ x: t.x + moved.x, y: footY + 2, z: t.z + moved.z }, { x: 0, y: -1, z: 0 }), 8, true, RAPIER.QueryFilterFlags.EXCLUDE_SENSORS, SOLID, this.collider);
+      const b = hit ? this.beltOf(hit.collider.handle) : null;
+      if (b) this.belt = b;
     }
     if (grounded && !this.onGround && v.y < 0) this.landingSpeed = -v.y;
     if (grounded && v.y <= 0) v.y = 0;

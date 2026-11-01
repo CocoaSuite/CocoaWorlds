@@ -46,15 +46,18 @@ export interface GameRules {
   health: boolean;
   /** The game keeps a score, shown once a script changes it. */
   score: boolean;
+  /** The camera follows behind the player (Roblox-style) instead of looking through their eyes. */
+  thirdPerson: boolean;
 }
 
-export const defaultGameRules = (): GameRules => ({ health: true, score: true });
+export const defaultGameRules = (): GameRules => ({ health: true, score: true, thirdPerson: false });
 
 /** A project's game rules with defaults filled in. */
 export function gameRules(settings: Pick<ProjectSettings, 'game'> | undefined): GameRules {
   const g = settings?.game ?? {};
   const d = defaultGameRules();
-  return { health: typeof g.health === 'boolean' ? g.health : d.health, score: typeof g.score === 'boolean' ? g.score : d.score };
+  const pick = (k: keyof GameRules) => (typeof g[k] === 'boolean' ? (g[k] as boolean) : d[k]);
+  return { health: pick('health'), score: pick('score'), thirdPerson: pick('thirdPerson') };
 }
 
 export interface ProjectFile {

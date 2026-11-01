@@ -7,6 +7,9 @@
 
 export type Lang = 'en' | 'ru';
 
+export type ConveyorData = { speed: number; direction: 'north' | 'south' | 'east' | 'west' };
+export type BreakableData = { health: number };
+
 /** A text sign's data (component `sign`). */
 export type SignData = {
   text: string;
@@ -83,6 +86,37 @@ export const COMPONENTS: ComponentDef[] = [
     description: e('Where the player appears when the game starts.', 'Здесь игрок появляется в начале игры.'),
     appliesTo: 'point',
     fields: [],
+  },
+  {
+    name: 'conveyor',
+    label: e('Conveyor', 'Конвейер'),
+    description: e('Carries what lies on it, and the player standing on it.', 'Везёт то, что на нём лежит, и игрока, который на нём стоит.'),
+    appliesTo: 'brush',
+    conflicts: ['rigidBody', 'trigger'],
+    fields: [
+      { key: 'speed', label: e('Speed', 'Скорость'), type: { kind: 'number', step: 8, unit: 'u/s' }, default: 64 },
+      {
+        key: 'direction',
+        label: e('Towards', 'Куда'),
+        type: {
+          kind: 'enum',
+          options: [
+            { value: 'north', label: e('North (−Z)', 'Север (−Z)') },
+            { value: 'south', label: e('South (+Z)', 'Юг (+Z)') },
+            { value: 'east', label: e('East (+X)', 'Восток (+X)') },
+            { value: 'west', label: e('West (−X)', 'Запад (−X)') },
+          ],
+        },
+        default: 'north',
+      },
+    ],
+  },
+  {
+    name: 'breakable',
+    label: e('Breakable', 'Разрушаемый'),
+    description: e('Has health; the Damage block takes it away and at 0 it breaks and disappears.', 'Есть здоровье; блок «Повредить» отнимает его, и на 0 объект ломается и исчезает.'),
+    appliesTo: 'any',
+    fields: [{ key: 'health', label: e('Health', 'Здоровье'), type: { kind: 'number', min: 1, step: 5 }, default: 50 }],
   },
   {
     name: 'sign',

@@ -3,7 +3,7 @@
  * the compiler turns each handler into a flat list of instructions for the VM. A handler with an error is
  * reported and left out, so one broken script never stops the rest of the game.
  */
-import type { Direction, Expr, Handler, Ref, Script, Statement, ValueType } from './model';
+import type { Direction, Expr, Handler, Place, Ref, Script, Statement, ValueType } from './model';
 
 /** What the checker needs to know about the scene. */
 export interface SceneInfo {
@@ -46,7 +46,9 @@ export type Op =
   | { op: 'jmpf'; to: number }
   /**
    * Pops `argc` arguments then a target ref; asks the host to act; waits if the action takes time.
-   * Arguments: move [distance, dx, dy, dz, seconds] · turn [axis, degrees, seconds] · return [seconds] · others none.
+   * Arguments: move [distance, dx, dy, dz, seconds] · turn [axis, degrees, seconds] · return [seconds] ·
+   * scale [factor, seconds] · push [dx, dy, dz, strength] · moveTo [place, seconds, gap] · teleport [place] ·
+   * damage [amount] · others none.
    */
   | { op: 'act'; name: ActionName; argc: number }
   | { op: 'wait' }
@@ -64,12 +66,18 @@ export type Op =
   | { op: 'say' }
   /** Pops text, then the target: change a sign's text. */
   | { op: 'settext' }
+  /** Pops the place, then the template: make a copy; the stack remembers it as “the new copy”. */
+  | { op: 'spawn' }
+  /** Pushes the new copy (or nothing). */
+  | { op: 'copy' }
+  /** Pops an object; pushes its variable called `name` (nothing if it has none). */
+  | { op: 'varof'; name: string }
   | { op: 'halt' };
 
 export type GameAction = 'hurt' | 'heal' | 'addScore';
 export type GameValue = 'health' | 'score';
 
-export type ActionName = 'move' | 'turn' | 'return' | 'show' | 'hide' | 'turnOn' | 'turnOff';
+export type ActionName = 'move' | 'turn' | 'return' | 'show' | 'hide' | 'turnOn' | 'turnOff' | 'remove' | 'scale' | 'physical' | 'push' | 'moveTo' | 'teleport' | 'damage';
 
 export type CompiledEvent =
   | { kind: 'start' }
@@ -77,6 +85,7 @@ export type CompiledEvent =
   | { kind: 'message'; message: string }
   | { kind: 'use' }
   | { kind: 'die' }
+  | { kind: 'breaks' }
   | { kind: 'every'; seconds: number };
 
 export interface CompiledHandler {
@@ -176,6 +185,7 @@ class HandlerCompiler {
     this.stmt = ev.id;
     if (ev.kind === 'start') event = { kind: 'start' };
     else if (ev.kind === 'use') event = { kind: 'use' };
+    else if (ev.kind === 'breaks') event = { kind: 'breaks' };
     else if (ev.kind === 'die') {
       event = { kind: 'die' };
       this.ruleOff('health', ev.id);
@@ -198,6 +208,13 @@ class HandlerCompiler {
 
   /** Object refs: `self` is the script's owner; `other` is the thing that entered or left. */
   private resolveRef(ref: Ref, block: string, mustBeZone = false): string | null {
+    if ('player' in ref) {
+      if (mustBeZone) {
+        this.problem(block, 'Pick a trigger zone here.');
+        return null;
+      }
+      return 'player';
+    }
     if ('self' in ref) {
       if (mustBeZone && !this.scene.objects.get(this.owner)?.isZone) {
         this.problem(block, 'This object is not a trigger zone. Pick a zone, or add a Trigger zone to this object.');
@@ -249,6 +266,18 @@ class HandlerCompiler {
     this.emit(r === null ? { op: 'push', v: null } : { op: 'ref', ref });
   }
 
+  /** A place: an object's position, or “aim” for where the player is looking. */
+  private pushPlace(place: Place, block: string): void {
+    if ('aim' in place) this.emit({ op: 'push', v: 'aim' });
+    else this.pushRef(place, block);
+  }
+
+  /** The target of an object action; the player can only be pushed. */
+  private actTarget(ref: Ref, block: string, playerOk = false): void {
+    if ('player' in ref && !playerOk) this.problem(block, 'This block works on objects, not on the player.');
+    this.pushRef(ref, block);
+  }
+
   private statements(list: Statement[]): void {
     for (const s of list) this.statement(s);
   }
@@ -260,7 +289,7 @@ class HandlerCompiler {
       case 'move':
       case 'turn':
       case 'return': {
-        this.pushRef(s.target, s.id);
+        this.actTarget(s.target, s.id);
         let argc = 1;
         if (s.kind === 'move') {
           const d = DIRECTIONS[s.direction];
@@ -282,7 +311,7 @@ class HandlerCompiler {
       case 'hide':
       case 'turnOn':
       case 'turnOff':
-        this.pushRef(s.target, s.id);
+        this.actTarget(s.target, s.id);
         this.emit({ op: 'act', name: s.kind, argc: 0 });
         break;
       case 'wait':
@@ -387,6 +416,51 @@ class HandlerCompiler {
       case 'stop':
         this.emit({ op: 'halt' });
         break;
+      case 'spawn':
+        if ('player' in s.template) this.problem(s.id, 'Pick an object to copy.');
+        this.pushRef(s.template, s.id);
+        this.pushPlace(s.at, s.id);
+        this.emit({ op: 'spawn' });
+        break;
+      case 'remove':
+      case 'physical':
+        this.actTarget(s.target, s.id);
+        this.emit({ op: 'act', name: s.kind, argc: 0 });
+        break;
+      case 'scale':
+        this.actTarget(s.target, s.id);
+        this.expect(s.factor, 'number', 'The size must be a number (1 is its starting size).');
+        this.expect(s.seconds, 'number', 'The time must be a number of seconds.');
+        this.emit({ op: 'act', name: 'scale', argc: 2 });
+        this.waits = true;
+        break;
+      case 'push': {
+        this.actTarget(s.target, s.id, true);
+        const d = DIRECTIONS[s.direction];
+        if (!d) this.problem(s.id, 'Pick a direction.');
+        for (const c of d ?? [0, 0, 0]) this.emit({ op: 'push', v: c });
+        this.expect(s.strength, 'number', 'The strength must be a number (units per second).');
+        this.emit({ op: 'act', name: 'push', argc: 4 });
+        break;
+      }
+      case 'moveTo':
+        this.actTarget(s.target, s.id);
+        this.pushPlace(s.to, s.id);
+        this.expect(s.seconds, 'number', 'The time must be a number of seconds.');
+        this.expect(s.gap, 'number', 'The distance to stop short must be a number.');
+        this.emit({ op: 'act', name: 'moveTo', argc: 3 });
+        this.waits = true;
+        break;
+      case 'teleport':
+        this.emit({ op: 'ref', ref: { player: true } });
+        this.pushPlace(s.to, s.id);
+        this.emit({ op: 'act', name: 'teleport', argc: 1 });
+        break;
+      case 'damage':
+        this.actTarget(s.target, s.id);
+        this.expect(s.amount, 'number', 'Damage must be a number.');
+        this.emit({ op: 'act', name: 'damage', argc: 1 });
+        break;
       case 'hurt':
       case 'heal':
       case 'addScore':
@@ -465,6 +539,14 @@ class HandlerCompiler {
       case 'time':
         this.emit({ op: 'time' });
         return 'number';
+      case 'copy':
+        this.emit({ op: 'copy' });
+        return 'object';
+      case 'varOf':
+        if (!e.variable.trim()) this.problem(e.id, 'Type the name of the variable to read.');
+        this.pushRef(e.of, e.id);
+        this.emit({ op: 'varof', name: e.variable.trim() });
+        return 'unknown';
       case 'health':
       case 'score':
         this.ruleOff(e.kind, e.id);

@@ -1,7 +1,7 @@
 /** Which objects scripts act on directly (named, or “this object”), so the world can give them a body. */
 import type { Script, Statement } from '@cocoaworlds/scripting';
 
-const ACTIONS = new Set(['move', 'turn', 'return', 'show', 'hide', 'turnOn', 'turnOff']);
+const ACTIONS = new Set(['move', 'turn', 'return', 'show', 'hide', 'turnOn', 'turnOff', 'remove', 'scale', 'physical', 'push', 'moveTo', 'damage']);
 
 export function scriptTargets(scripts: [owner: string, script: Script][]): string[] {
   const out = new Set<string>();

@@ -179,6 +179,9 @@ function GameRulesSection() {
       <Field label={t('insp.score')}>
         <Switch checked={rules.score} label={t('insp.score')} onChange={(on) => !playing && void set('score', on)} />
       </Field>
+      <Field label={t('insp.thirdPerson')}>
+        <Switch checked={rules.thirdPerson} label={t('insp.thirdPerson')} onChange={(on) => !playing && void set('thirdPerson', on)} />
+      </Field>
     </Section>
   );
 }
