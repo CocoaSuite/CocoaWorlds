@@ -8,6 +8,9 @@ import { useSelectedEntities, useEditor, type ViewMode } from '../store';
 import type { DraftState } from './brush-draft';
 import { BrushPanel } from './BrushPanel';
 import { PaintPanel } from './PaintPanel';
+import { ClipPanel } from './ClipPanel';
+import { VertexPanel } from './VertexPanel';
+import type { ClipKeep, ClipState } from './clip-tool';
 import { ViewportEngine, type ViewportStats } from './engine';
 
 const mod = navigator.platform.toLowerCase().includes('mac') ? '⌘' : 'Ctrl+';
@@ -19,6 +22,8 @@ export function Viewport() {
   const [ctx, setCtx] = useState<{ x: number; y: number; ground: Vec3 | null } | null>(null);
   const [glError, setGlError] = useState<string | null>(null);
   const [draft, setDraft] = useState<DraftState | null>(null);
+  const [vertexCount, setVertexCount] = useState(0);
+  const [clip, setClip] = useState<{ state: ClipState | null; keep: ClipKeep }>({ state: null, keep: 'both' });
   const brushOptions = useEditor((s) => s.brushOptions);
   const brushRole = useEditor((s) => s.brushRole);
 
@@ -50,6 +55,14 @@ export function Viewport() {
         createBrush: (min, max) => useEditor.getState().createBrushes(min, max),
         cancelTool: () => useEditor.getState().setTool('select'),
         selectFace: (ref, mode, cut) => useEditor.getState().selectFace(ref, mode, cut),
+        boxSelect: (ids, additive) => useEditor.getState().boxSelect(ids, additive),
+        vertexInfo: setVertexCount,
+        clipState: (state, keep) => setClip({ state, keep }),
+        clip: (plane, keep) => useEditor.getState().clipSelection(plane, keep),
+        message: (text) => {
+          const key = `vertex.${text}` as Parameters<typeof t>[0];
+          useEditor.getState().notify(t(key));
+        },
         endEdit: () => useEditor.getState().commit(),
         contextMenu: (x, y, ground) => setCtx({ x, y, ground }),
         stats: setStats,
@@ -79,13 +92,14 @@ export function Viewport() {
     engine.current?.setSelection(selection);
   }, [selection]);
   useEffect(() => {
-    engine.current?.setGizmoMode(tool === 'select' || tool === 'brush' || tool === 'face' || tool === 'paint' ? 'none' : tool === 'move' ? 'translate' : tool);
+    engine.current?.setGizmoMode(tool === 'select' || tool === 'brush' || tool === 'face' || tool === 'paint' || tool === 'vertex' || tool === 'clip' ? 'none' : tool === 'move' ? 'translate' : tool);
   }, [tool]);
   useEffect(() => {
     engine.current?.setBrushTool(tool === 'brush', brushOptions, brushRole);
   }, [tool, brushOptions, brushRole]);
   useEffect(() => {
     engine.current?.setFaceTool(tool === 'face' || tool === 'paint');
+    engine.current?.setEditTool(tool === 'vertex' ? 'vertex' : tool === 'clip' ? 'clip' : 'none');
   }, [tool]);
   useEffect(() => {
     engine.current?.setFaceSelection(faceSelection);
@@ -180,6 +194,17 @@ export function Viewport() {
         />
       )}
       {tool === 'paint' && <PaintPanel />}
+      {tool === 'vertex' && <VertexPanel count={vertexCount} hasBrushes={sel.some((e) => !!e.components.brush) || selection.length > 0} />}
+      {tool === 'clip' && (
+        <ClipPanel
+          state={clip.state}
+          keep={clip.keep}
+          hasBrushes={selection.length > 0}
+          onKeep={(k) => engine.current?.setClipKeep(k)}
+          onApply={() => engine.current?.applyClip()}
+          onCancel={() => engine.current?.cancelClip()}
+        />
+      )}
       {ctx && <ContextMenu x={ctx.x} y={ctx.y} items={ctxItems} onClose={() => setCtx(null)} />}
     </div>
   );

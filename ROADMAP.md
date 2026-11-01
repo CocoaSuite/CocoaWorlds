@@ -36,7 +36,7 @@ Order may shift where dependencies require it (for example, the project format f
 - [x] Unit/integration tests (28) and an end-to-end test that drives the real app
 - [ ] Nested transforms (children follow parents) — moved to Phase 4 with the runtime scene graph
 - [x] Multi-object transforms, groups, copy/cut/paste, snap to corners
-- [ ] Box selection
+- [x] Box selection
 - [ ] Run and check on Windows and macOS
 
 ## Phase 3 checklist
@@ -51,10 +51,10 @@ Order may shift where dependencies require it (for example, the project format f
 - [x] Make hollow: walls inward or outward
 - [x] Face tool: face selection, per-face materials, texture alignment (offset, scale, rotation, World/Face, Fit, line up)
 - [x] Paint tool with built-in development materials
-- [ ] Vertex and edge editing tools; clip tool
+- [x] Vertex and edge editing tool; clip tool
 - [ ] Subtract/union/intersect commands with undo
 - [ ] Spatial index for picking, culling and fast hidden-face removal
 
 ## Next
 
-Rest of Phase 3: vertex/edge editing, the clip tool, polygon prisms, then the spatial index and worker-based rebuilds. Box selection comes with vertex editing.
+Rest of Phase 3: polygon prisms (custom footprints), the spatial index and worker-based rebuilds, then a Phase 3 review before Phase 4.

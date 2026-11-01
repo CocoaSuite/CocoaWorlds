@@ -8,7 +8,8 @@
 - **Lights are markers only.** They don't light the scene until materials and lighting land (Phase 7).
 - **One scene per project in the UI.** The format supports a scene list; scene management UI comes later.
 - **The clipboard is inside the editor.** Copy/paste works across projects within one session, but not with other apps or after a restart.
-- **Some tools are visible but disabled** (vertex, clip, triggers, Play, Build), each labelled with when it arrives.
+- **Some tools are visible but disabled** (triggers, Play, Build), each labelled with when it arrives.
+- **The vertex tool moves corners with the gizmo only;** dragging a corner handle directly is not supported yet.
 - **Materials are built-in development colours** until material assets and textures arrive in Phase 7.
 - **Surfaces made by a live cut** (the inside of a doorway) follow the wall around them and can't be selected until the cut is applied.
 - **Level geometry rebuilds on the main thread.** Fine for hundreds of brushes; very large levels may stutter while editing until the rebuild moves to a worker. Hidden-face removal is O(n²) for now.

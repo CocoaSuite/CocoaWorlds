@@ -19,7 +19,7 @@ import {
 } from './brush';
 import { EPS, flip, planeFromPoints, samePlane, signedDist, type Plane } from './plane';
 import { lockedOffset } from './uv';
-import { add, applyM4, dot, scale, type M4, type V3 } from './vec';
+import { add, applyM4, cross, dot, scale, sub, type M4, type V3 } from './vec';
 
 /** Smallest volume (cubic units) for a piece to count as real; smaller slivers are dropped. */
 export const MIN_PIECE_VOLUME = 0.01;
@@ -243,3 +243,28 @@ export function pushFace(b: Brush, faceIndex: number, distance: number): Brush |
 }
 
 export const offsetPoint = (p: V3, n: V3, d: number): V3 => add(p, scale(n, d));
+
+/**
+ * The clip plane for two points drawn in a view: it contains both points and the view's depth direction
+ * (`along`), like Hammer's clipper. Null when the points coincide or the line runs along `along`.
+ */
+export function clipPlane(a: V3, b: V3, along: V3): Plane | null {
+  const n = cross(sub(b, a), along);
+  const len = Math.hypot(n[0], n[1], n[2]);
+  if (len < 1e-9) return null;
+  const u: V3 = [n[0] / len, n[1] / len, n[2] / len];
+  return { n: u, d: dot(u, a) };
+}
+
+/**
+ * Clip a brush with a plane. `front` is the piece on the side the normal points to. Each new cap face takes
+ * the surface of the brush face pointing the same way, so a clipped wall keeps its look. Brushes the plane
+ * doesn't cut come back whole on their side.
+ */
+export function clipBrush(b: Brush, p: Plane): { front: Brush | null; back: Brush | null; cut: boolean } {
+  const side = classify(b, p);
+  if (side !== 'spanning') return { front: side === 'front' ? b : null, back: side === 'back' ? b : null, cut: false };
+  const front = split(b, p, matchSurface(b, scale(p.n, -1))).front;
+  const back = split(b, p, matchSurface(b, p.n)).back;
+  return { front, back, cut: true };
+}

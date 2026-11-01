@@ -127,3 +127,7 @@ code { font: 12px var(--mono); color: var(--fg); }
 .cw-face-justify > button { padding: 4px 7px; font-size: 12px; }
 .cw-paint-panel { width: min(520px, calc(100% - 24px)); }
 .cw-paint-panel .cw-mat-grid { grid-template-columns: repeat(9, 34px); }
+
+/* Box selection and tool panels */
+.cw-marquee { position: absolute; z-index: 2; pointer-events: none; border: 1px solid var(--sel); background: rgba(75, 156, 255, 0.12); }
+.cw-tool-panel { width: min(640px, calc(100% - 24px)); }

@@ -21,6 +21,8 @@ import {
 import {
   bakeSubtract,
   bounds,
+  clipBrush,
+  type Plane,
   fitSurface,
   justifySurface,
   setSurface,
@@ -43,7 +45,7 @@ import type { LiveChange } from './viewport/engine';
 import { cloneSnapshot, isGroup, rootsOf, snapshotSubtrees } from './scene-ops';
 import { getLang, setLang, t, type Lang } from './i18n';
 
-export type Tool = 'select' | 'move' | 'rotate' | 'scale' | 'brush' | 'face' | 'paint';
+export type Tool = 'select' | 'move' | 'rotate' | 'scale' | 'brush' | 'face' | 'paint' | 'vertex' | 'clip';
 export type { FaceRef };
 export type Justify = 'left' | 'right' | 'top' | 'bottom' | 'center';
 export type ViewMode = 'perspective' | 'top' | 'front' | 'side';
@@ -142,6 +144,8 @@ interface Actions {
   // multi-object editing, groups, clipboard
   applyLive(changes: LiveChange[]): void;
   clickSelect(id: string | null, additive: boolean, deep: boolean): void;
+  boxSelect(ids: string[], additive: boolean): void;
+  clipSelection(plane: Plane, keep: 'both' | 'front' | 'back'): void;
   groupSelection(): void;
   ungroupSelection(): void;
   enterGroup(): void;
@@ -633,11 +637,7 @@ export const useEditor = create<State & Actions>()((set, get) => ({
       const parent = doc.get(id)?.parent ?? null;
       entered = parent && isGroup(doc, doc.get(parent)) ? parent : entered;
     } else {
-      // A click picks the outermost group around the object, unless the user has stepped inside it.
-      for (let a = doc.get(id)?.parent ?? null; a; a = doc.get(a)?.parent ?? null) {
-        if (a === entered) break;
-        if (isGroup(doc, doc.get(a))) pick = a;
-      }
+      pick = outermostGroup(doc, id, entered);
       if (entered && !doc.isAncestor(entered, id)) entered = null;
     }
     set({ enteredGroup: entered });
@@ -737,6 +737,57 @@ export const useEditor = create<State & Actions>()((set, get) => ({
     get().execute(addEntitiesCmd(doc, copies, 'Paste'));
     set({ selection: roots });
   },
+
+  boxSelect(ids, additive) {
+    const { doc, enteredGroup } = get();
+    if (!doc) return;
+    const picked = [...new Set(ids.map((id) => outermostGroup(doc, id, enteredGroup)))];
+    if (!additive) set({ selection: picked });
+    else set((s) => ({ selection: [...new Set([...s.selection, ...picked])] }));
+  },
+
+  clipSelection(plane, keep) {
+    const { doc, selection } = get();
+    if (!doc) return;
+    const ids = new Set<string>();
+    for (const id of selection) for (const e of doc.subtree(id)) ids.add(e.id);
+    const h = get().history;
+    const result: string[] = [];
+    let cut = 0;
+    h.begin('Clip');
+    for (const id of ids) {
+      const e = doc.get(id);
+      const b = brushOf(e);
+      if (!e || !b || !isShown(doc, e) || isLocked(doc, e)) continue;
+      const r = clipBrush(b.brush, plane);
+      if (!r.cut) {
+        result.push(id);
+        continue;
+      }
+      cut++;
+      const kept = keep === 'both' ? [r.front, r.back] : [keep === 'front' ? r.front : r.back];
+      const pieces = kept.filter((x): x is Brush => !!x);
+      if (!pieces.length) {
+        h.execute(deleteEntitiesCmd(doc, [id]));
+        continue;
+      }
+      h.execute(setComponentCmd(doc, id, 'brush', brushComponent(pieces[0]!, b.role) as never, 'Clip'));
+      result.push(id);
+      if (pieces[1]) {
+        const extra = newBrushEntity(uniqueName(doc, `${e.name}_2`), pieces[1], b.role);
+        extra.parent = e.parent;
+        h.execute(addEntitiesCmd(doc, [extra], 'Clip'));
+        result.push(extra.id);
+      }
+    }
+    h.commit();
+    if (!cut) {
+      get().notify(t('clip.missed'));
+      return;
+    }
+    set({ selection: result.filter((id) => doc.get(id)) });
+    get().log('info', 'Brush', `Clipped ${cut} brush(es)`);
+  },
 }));
 
 const selectedEntities = (s: State): EntityData[] =>
@@ -768,4 +819,14 @@ function applyToFaces(get: () => State & Actions, fn: (b: Brush, faces: number[]
     apply: () => cmds.forEach((c) => c.apply()),
     revert: () => [...cmds].reverse().forEach((c) => c.revert()),
   });
+}
+
+/** What a click on `id` selects: the outermost group around it, unless the user has stepped into that group. */
+function outermostGroup(doc: SceneDoc, id: string, entered: string | null): string {
+  let pick = id;
+  for (let a = doc.get(id)?.parent ?? null; a; a = doc.get(a)?.parent ?? null) {
+    if (a === entered) break;
+    if (isGroup(doc, doc.get(a))) pick = a;
+  }
+  return pick;
 }

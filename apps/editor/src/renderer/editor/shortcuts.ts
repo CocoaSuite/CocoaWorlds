@@ -16,6 +16,9 @@ export const SHORTCUTS: { label: string; keys: string[] }[] = [
   { label: 'Face tool (select faces, edit texture alignment)', keys: ['T'] },
   { label: 'Faces: add or remove / whole brush', keys: [`${mod}+click`, 'Shift+click'] },
   { label: 'Paint tool (click faces to apply a material)', keys: ['P'] },
+  { label: 'Vertex tool (pick corners or edge middles, move with the arrows)', keys: ['X'] },
+  { label: 'Clip tool (drag a line across brushes; Tab: what to keep; Enter: clip)', keys: ['C'] },
+  { label: 'Box select (drag on empty space)', keys: ['Left-drag'] },
   { label: 'Paint: pick up a material', keys: [`${mod}+click`] },
   { label: 'Perspective / Top / Front / Side', keys: ['1', '2', '3', '4'] },
   { label: 'Frame selected', keys: ['F'] },
@@ -89,6 +92,10 @@ export function useShortcuts(openKeys: () => void): void {
           return s.setTool('brush');
         case 'KeyT':
           return s.setTool('face');
+        case 'KeyX':
+          return s.setTool('vertex');
+        case 'KeyC':
+          return s.setTool('clip');
         case 'KeyP':
           return s.setTool('paint');
         case 'KeyF':
@@ -115,7 +122,7 @@ export function useShortcuts(openKeys: () => void): void {
         case 'Backspace':
           e.preventDefault();
           // Faces can't be deleted on their own; don't delete the whole brush by surprise.
-          if (s.tool === 'face' || s.tool === 'paint') return;
+          if (s.tool === 'face' || s.tool === 'paint' || s.tool === 'vertex') return;
           return s.deleteSelection();
         case 'Escape':
           if (s.tool === 'face' && s.faceSelection.length) return s.selectFace(null);

@@ -13,7 +13,6 @@ export function ToolBar() {
   const shape = useEditor((s) => s.brushOptions.shape);
   const setBrushOptions = useEditor((s) => s.setBrushOptions);
   const grid = useEditor((s) => s.session?.project.settings.gridSize ?? 16);
-  const later = (k: Parameters<typeof t>[0]) => `${t(k)} — ${t('tool.later')}`;
   const T = (id: Tool, icon: IconName, label: string, key: string) => (
     <ToolButton icon={icon} label={label} shortcut={key} active={tool === id} onClick={() => setTool(id)} />
   );
@@ -41,9 +40,9 @@ export function ToolBar() {
       {B('wedge', 'wedge', t('tool.wedge'))}
       {B('stairs', 'stairs', t('tool.stairs'))}
       <Divider />
-      <ToolButton icon="vertex" label={later('tool.vertex')} disabled />
+      {T('vertex', 'vertex', t('tool.vertex'), 'X')}
       {T('face', 'face', t('tool.face'), 'T')}
-      <ToolButton icon="clip" label={later('tool.clip')} disabled />
+      {T('clip', 'clip', t('tool.clip'), 'C')}
       <Divider />
       <ToolButton icon="trigger" label={`${t('tool.trigger')} — ${t('soon')}`} disabled />
       {T('paint', 'paint', t('tool.paint'), 'P')}

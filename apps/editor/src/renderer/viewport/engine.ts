@@ -3,7 +3,7 @@
  * and the brush tool. Renders on demand (only after something changes) so an idle editor costs no GPU time.
  */
 import type { EntityData, SceneDoc, Transform, Vec3 } from '@cocoaworlds/core';
-import { bounds, faceAt, transform as transformBrush, translate, vertices, type Brush, type V3 } from '@cocoaworlds/geometry';
+import { bounds, faceAt, transform as transformBrush, translate, vertices, type Brush, type Plane, type V3 } from '@cocoaworlds/geometry';
 import * as THREE from 'three';
 import { TransformControls } from 'three/addons/controls/TransformControls.js';
 import { brushOf, isLocked, isShown, worldBrushes, type ShapeOptions } from '../brush/brushes';
@@ -13,6 +13,8 @@ import { CameraRig, type ViewKind } from './camera';
 import { EditorGrid } from './grid';
 import { buildMarker, disposeMarker, markerKey, setMarkerSelected, type Marker } from './markers';
 import { WorldRenderer, type FaceRef } from './world-render';
+import { VertexTool } from './vertex-tool';
+import { ClipTool, type ClipKeep, type ClipState } from './clip-tool';
 
 export interface ViewportCallbacks {
   select(ids: string[], mode: 'replace' | 'toggle'): void;
@@ -30,6 +32,15 @@ export interface ViewportCallbacks {
   cancelTool(): void;
   /** Face tool click: `null` clicks empty space; `cut` is a surface made by a live cut (not editable). */
   selectFace(ref: FaceRef | null, mode: 'replace' | 'toggle' | 'brush', cut?: boolean): void;
+  /** Box selection: every object touching the rectangle. */
+  boxSelect(ids: string[], additive: boolean): void;
+  /** Vertex tool: how many corners are picked. */
+  vertexInfo(count: number): void;
+  /** Clip tool: the line drawn so far (null = none). */
+  clipState(state: ClipState | null, keep: ClipKeep): void;
+  clip(plane: Plane, keep: ClipKeep): void;
+  /** A short message for the user (e.g. why a vertex move was refused). */
+  message(text: string): void;
 }
 
 export interface LiveChange {
@@ -83,7 +94,7 @@ export class ViewportEngine {
   private raf = 0;
   private lastTick = performance.now();
   private keys = new Set<string>();
-  private drag: { button: number; x: number; y: number; moved: boolean; mode: 'look' | 'pan' | 'orbit' | 'click' | 'draw' | 'height' } | null = null;
+  private drag: { button: number; x: number; y: number; moved: boolean; mode: 'look' | 'pan' | 'orbit' | 'click' | 'draw' | 'height' | 'box' | 'clip'; sx: number; sy: number } | null = null;
   private spaceHeld = false;
   private doc: SceneDoc | null = null;
   private selection: string[] = [];
@@ -92,6 +103,11 @@ export class ViewportEngine {
   private gizmoMode: GizmoMode = 'none';
   private brushTool = false;
   private faceTool = false;
+  /** 'vertex' and 'clip' tools work on the selected brushes. */
+  private editTool: 'none' | 'vertex' | 'clip' = 'none';
+  private vertexTool = new VertexTool();
+  private clipTool = new ClipTool();
+  private marquee: HTMLDivElement;
   private shapeOpts: ShapeOptions = { shape: 'box', sides: 16, steps: 8, facing: 0 };
   private brushRole: 'solid' | 'subtract' = 'solid';
   private draft: BrushDraft | null = null;
@@ -114,7 +130,12 @@ export class ViewportEngine {
     this.renderer.domElement.setAttribute('aria-label', '3D viewport');
     host.prepend(this.renderer.domElement);
 
-    this.scene.add(this.grid.object, this.world.group, this.proxy);
+    this.scene.add(this.grid.object, this.world.group, this.proxy, this.vertexTool.group, this.clipTool.group);
+    this.vertexTool.group.visible = false;
+    this.marquee = document.createElement('div');
+    this.marquee.className = 'cw-marquee';
+    this.marquee.hidden = true;
+    host.append(this.marquee);
     {
       const g = new THREE.BufferGeometry();
       g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(3), 3));
@@ -141,11 +162,22 @@ export class ViewportEngine {
     this.gizmo.addEventListener('dragging-changed', (e) => {
       const dragging = (e as unknown as { value: boolean }).value;
       if (dragging) {
+        if (this.editTool === 'vertex') {
+          this.cb.beginEdit('Move corners');
+          this.vertexTool.beginDrag();
+          this.dragSet = this.buildVertexDragSet();
+          return;
+        }
         this.cb.beginEdit(this.gizmoMode === 'rotate' ? 'Rotate' : this.gizmoMode === 'scale' ? 'Scale' : 'Move');
         this.dragSet = this.buildDragSet();
       } else {
         this.dragSet = null;
         this.snapMarker.visible = false;
+        if (this.editTool === 'vertex') {
+          this.vertexTool.endDrag();
+          const why = this.vertexTool.lastRefusal;
+          if (why) this.cb.message(why);
+        }
         this.cb.endEdit();
         this.placeProxy();
       }
@@ -335,6 +367,9 @@ export class ViewportEngine {
     this.gizmo.dispose();
     for (const { m } of this.markers.values()) disposeMarker(m);
     this.world.dispose();
+    this.vertexTool.dispose();
+    this.clipTool.dispose();
+    this.marquee.remove();
     this.grid.dispose();
     this.renderer.dispose();
     this.renderer.domElement.remove();
@@ -371,14 +406,20 @@ export class ViewportEngine {
     const sel = new Set(expanded);
     for (const [id, { m }] of this.markers) setMarkerSelected(m, sel.has(id));
     this.world.setSelection(expanded);
+    this.refreshEditTools();
     let target: THREE.Object3D | null = null;
-    if (this.movable().length && this.gizmoMode !== 'none' && !this.brushTool && !this.faceTool) {
+    if (this.editTool === 'vertex') {
+      if (this.vertexTool.count) {
+        if (!this.dragSet) this.placeProxy();
+        target = this.proxy;
+      }
+    } else if (this.editTool === 'none' && this.movable().length && this.gizmoMode !== 'none' && !this.brushTool && !this.faceTool) {
       if (!this.dragSet) this.placeProxy();
       target = this.proxy;
     }
     if (target) {
       if (this.gizmo.object !== target) this.gizmo.attach(target);
-      this.gizmo.setMode(this.gizmoMode === 'none' ? 'translate' : this.gizmoMode);
+      this.gizmo.setMode(this.editTool === 'vertex' || this.gizmoMode === 'none' ? 'translate' : this.gizmoMode);
     } else if (this.gizmo.object) {
       this.gizmo.detach();
     }
@@ -418,6 +459,15 @@ export class ViewportEngine {
   }
 
   private placeProxy(): void {
+    if (this.editTool === 'vertex') {
+      const c = this.vertexTool.centre();
+      if (!c) return;
+      this.proxy.position.set(...c);
+      this.proxy.rotation.set(0, 0, 0);
+      this.proxy.scale.set(1, 1, 1);
+      this.proxy.updateMatrixWorld();
+      return;
+    }
     const items = this.movable();
     if (!items.length) return;
     const one = items.length === 1 && !items[0]!.components.brush ? items[0]! : null;
@@ -426,6 +476,88 @@ export class ViewportEngine {
     this.proxy.rotation.set(0, 0, 0);
     this.proxy.scale.set(1, 1, 1);
     this.proxy.updateMatrixWorld();
+  }
+
+  /** The selected brushes the vertex and clip tools work on. */
+  private editBrushes(): { id: string; brush: Brush }[] {
+    const out: { id: string; brush: Brush }[] = [];
+    for (const e of this.movable()) {
+      const b = brushOf(e);
+      if (b) out.push({ id: e.id, brush: b.brush });
+    }
+    return out;
+  }
+
+  private refreshEditTools(): void {
+    if (this.editTool === 'vertex') {
+      this.vertexTool.setBrushes(this.editBrushes());
+      this.cb.vertexInfo(this.vertexTool.count);
+    } else if (this.editTool === 'clip') {
+      this.clipTool.setBrushes(this.editBrushes());
+    }
+  }
+
+  private buildVertexDragSet(): DragSet {
+    const pivot: V3 = [this.proxy.position.x, this.proxy.position.y, this.proxy.position.z];
+    const set: DragSet = { pivot, items: [], grab: null, targets: [] };
+    if (!this.vertexSnap) return set;
+    const picked = this.vertexTool.pickedPoints();
+    let best = Infinity;
+    for (const p of picked) {
+      const sp = this.toScreen(p);
+      const d = Math.hypot(sp.x - this.lastPointer.x, sp.y - this.lastPointer.y);
+      if (d < best) {
+        best = d;
+        set.grab = p;
+      }
+    }
+    const isPicked = (p: V3) => picked.some((q) => Math.abs(q[0] - p[0]) < 1e-3 && Math.abs(q[1] - p[1]) < 1e-3 && Math.abs(q[2] - p[2]) < 1e-3);
+    const all = (this.doc?.entities ?? []).filter((e) => e.components.brush && isShown(this.doc!, e));
+    for (const p of this.pointsOf(all)) {
+      if (isPicked(p)) continue;
+      const sp = this.toScreen(p);
+      if (sp.z < 1) set.targets.push({ p, x: sp.x, y: sp.y });
+    }
+    return set;
+  }
+
+  // ── vertex and clip tools (public) ──
+
+  setEditTool(tool: 'none' | 'vertex' | 'clip'): void {
+    if (this.editTool === tool) return;
+    if (this.editTool === 'clip') {
+      this.clipTool.clear();
+      this.cb.clipState(null, this.clipTool.keep);
+    }
+    if (this.editTool === 'vertex') this.vertexTool.clearPicks();
+    this.editTool = tool;
+    this.vertexTool.group.visible = tool === 'vertex';
+    this.clipTool.group.visible = tool === 'clip';
+    this.renderer.domElement.style.cursor = tool === 'clip' ? 'crosshair' : '';
+    this.applySelection();
+    this.invalidate();
+  }
+
+  setClipKeep(k: ClipKeep): void {
+    this.clipTool.setKeep(k);
+    this.cb.clipState(this.clipTool.state, k);
+    this.invalidate();
+  }
+
+  applyClip(): void {
+    const p = this.clipTool.plane();
+    if (!p) return;
+    const keep = this.clipTool.keep;
+    this.clipTool.clear();
+    this.cb.clipState(null, keep);
+    this.cb.clip(p, keep);
+    this.invalidate();
+  }
+
+  cancelClip(): void {
+    this.clipTool.clear();
+    this.cb.clipState(null, this.clipTool.keep);
+    this.invalidate();
   }
 
   private buildDragSet(): DragSet | null {
@@ -506,7 +638,7 @@ export class ViewportEngine {
     if (!d) return;
     const p = this.proxy;
     const changes: LiveChange[] = [];
-    if (this.gizmoMode === 'translate') {
+    if (this.editTool === 'vertex' || this.gizmoMode === 'translate') {
       let delta: V3 = [p.position.x - d.pivot[0], p.position.y - d.pivot[1], p.position.z - d.pivot[2]];
       // Grid snapping is relative to where the drag began, so off-grid objects keep their offset.
       const axes = (this.gizmo as unknown as { axis: string | null }).axis ?? 'XYZ';
@@ -522,6 +654,9 @@ export class ViewportEngine {
       }
       this.showSnap(snapped);
       p.position.set(d.pivot[0] + delta[0], d.pivot[1] + delta[1], d.pivot[2] + delta[2]);
+      if (this.editTool === 'vertex') {
+        for (const b of this.vertexTool.dragTo(delta)) changes.push({ id: b.id, brush: b.brush });
+      }
       for (const it of d.items) {
         if (it.brush) changes.push({ id: it.id, brush: translate(it.brush, delta) });
         else if (it.transform) changes.push({ id: it.id, transform: { ...it.transform, position: it.transform.position.map((v, i) => r3(v + delta[i]!)) as Vec3 } });
@@ -715,6 +850,43 @@ export class ViewportEngine {
     return face < 0 ? { ref: null, cut: true } : { ref: { id: hit.entityId, face }, cut: false };
   }
 
+  /** Box selection works in the select/transform tools and the vertex tool. */
+  private boxAllowed(): boolean {
+    return !this.brushTool && !this.faceTool && this.editTool !== 'clip';
+  }
+
+  private drawMarquee(x0: number, y0: number, x1: number, y1: number): void {
+    const r = this.host.getBoundingClientRect();
+    const m = this.marquee;
+    m.hidden = false;
+    m.style.left = `${Math.min(x0, x1) - r.left}px`;
+    m.style.top = `${Math.min(y0, y1) - r.top}px`;
+    m.style.width = `${Math.abs(x1 - x0)}px`;
+    m.style.height = `${Math.abs(y1 - y0)}px`;
+  }
+
+  /** Objects whose on-screen outline touches the rectangle (hidden, locked and group entities excluded). */
+  private objectsInBox(r: { x0: number; y0: number; x1: number; y1: number }): string[] {
+    const doc = this.doc;
+    if (!doc) return [];
+    const out: string[] = [];
+    for (const e of doc.entities) {
+      if (!isShown(doc, e) || isLocked(doc, e) || isGroup(doc, e)) continue;
+      const b = brushOf(e);
+      if (!b && !this.markers.has(e.id)) continue;
+      const pts = b ? vertices(b.brush) : [[...e.transform.position] as V3];
+      let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity, any = false;
+      for (const p of pts) {
+        const s = this.toScreen(p);
+        if (s.z >= 1) continue;
+        any = true;
+        x0 = Math.min(x0, s.x); y0 = Math.min(y0, s.y); x1 = Math.max(x1, s.x); y1 = Math.max(y1, s.y);
+      }
+      if (any && x1 >= r.x0 && x0 <= r.x1 && y1 >= r.y0 && y0 <= r.y1) out.push(e.id);
+    }
+    return out;
+  }
+
   private onPointerDown = (e: PointerEvent): void => {
     const el = this.renderer.domElement;
     el.focus();
@@ -742,7 +914,18 @@ export class ViewportEngine {
       this.draft.update(this.shapeOpts, this.brushRole);
       this.cb.draft(this.draft.state());
     }
-    this.drag = { button: e.button, x: e.clientX, y: e.clientY, moved: false, mode };
+    if (mode === 'click' && this.editTool === 'clip') {
+      const p = this.drawPoint(e);
+      if (!p) return;
+      this.showSnap(null);
+      const along: V3 = [0, 0, 0];
+      along[draftAxes(this.rig.kind).e] = 1;
+      this.clipTool.start(p, along);
+      this.cb.clipState(this.clipTool.state, this.clipTool.keep);
+      mode = 'clip';
+      this.invalidate();
+    }
+    this.drag = { button: e.button, x: e.clientX, y: e.clientY, sx: e.clientX, sy: e.clientY, moved: false, mode };
     el.setPointerCapture(e.pointerId);
     if (mode === 'look') this.cb.setFlying(true);
   };
@@ -793,7 +976,24 @@ export class ViewportEngine {
       d.moved = true;
       return;
     }
+    if (d.mode === 'clip') {
+      const base = this.clipTool.a?.[draftAxes(this.rig.kind).e];
+      const p = this.drawPoint(e, base);
+      if (p) {
+        this.clipTool.moveEnd(p);
+        this.cb.clipState(this.clipTool.state, this.clipTool.keep);
+        this.invalidate();
+      }
+      d.moved = true;
+      return;
+    }
     if (!d.moved && Math.hypot(dx, dy) < 3) return;
+    if (d.mode === 'click' && this.boxAllowed()) d.mode = 'box';
+    if (d.mode === 'box') {
+      d.moved = true;
+      this.drawMarquee(d.sx, d.sy, e.clientX, e.clientY);
+      return;
+    }
     d.moved = true;
     d.x = e.clientX;
     d.y = e.clientY;
@@ -826,7 +1026,46 @@ export class ViewportEngine {
       this.invalidate();
       return;
     }
+    if (d.mode === 'clip') {
+      this.showSnap(null);
+      if (!this.clipTool.plane()) this.cancelClip();
+      return;
+    }
+    if (d.mode === 'box') {
+      this.marquee.hidden = true;
+      const r = { x0: Math.min(d.sx, e.clientX), y0: Math.min(d.sy, e.clientY), x1: Math.max(d.sx, e.clientX), y1: Math.max(d.sy, e.clientY) };
+      const additive = e.ctrlKey || e.metaKey || e.shiftKey;
+      if (this.editTool === 'vertex') {
+        this.vertexTool.pickBox(r, additive, (p) => this.toScreen(p));
+        this.cb.vertexInfo(this.vertexTool.count);
+        this.applySelection();
+        this.invalidate();
+      } else {
+        this.cb.boxSelect(this.objectsInBox(r), additive);
+      }
+      return;
+    }
     if (d.moved) return;
+    if (d.mode === 'click' && this.editTool === 'vertex') {
+      const additive = e.ctrlKey || e.metaKey || e.shiftKey;
+      if (this.vertexTool.pickAt(e.clientX, e.clientY, additive, (p) => this.toScreen(p))) {
+        this.cb.vertexInfo(this.vertexTool.count);
+        this.applySelection();
+        this.invalidate();
+        return;
+      }
+      // Not on a handle: pick another brush to edit (or clear).
+      const id = this.pick(e);
+      if (!id && this.vertexTool.count && !additive) {
+        this.vertexTool.clearPicks();
+        this.cb.vertexInfo(0);
+        this.applySelection();
+        this.invalidate();
+        return;
+      }
+      this.cb.clickSelect(id, additive, true);
+      return;
+    }
     if (d.mode === 'click' && this.faceTool) {
       const mode = e.shiftKey ? 'brush' : e.ctrlKey || e.metaKey ? 'toggle' : 'replace';
       const hit = this.pickFace(e);
@@ -861,6 +1100,27 @@ export class ViewportEngine {
       e.stopPropagation();
       if (e.key === 'Enter') this.confirmDraft();
       else this.cancelDraft();
+      return;
+    }
+    if (this.editTool === 'clip' && this.clipTool.state && ['Enter', 'Escape', 'Tab'].includes(e.key)) {
+      e.preventDefault();
+      e.stopPropagation();
+      if (e.key === 'Enter') this.applyClip();
+      else if (e.key === 'Escape') this.cancelClip();
+      else {
+        this.clipTool.cycleKeep();
+        this.cb.clipState(this.clipTool.state, this.clipTool.keep);
+        this.invalidate();
+      }
+      return;
+    }
+    if (this.editTool === 'vertex' && this.vertexTool.count && e.key === 'Escape') {
+      e.preventDefault();
+      e.stopPropagation();
+      this.vertexTool.clearPicks();
+      this.cb.vertexInfo(0);
+      this.applySelection();
+      this.invalidate();
       return;
     }
     if (e.code === 'Space') {

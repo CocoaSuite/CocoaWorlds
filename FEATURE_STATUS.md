@@ -44,7 +44,7 @@ Last updated: 2026-11-01 (Phase 2, first slice).
 | Snap to corners (vertex snap): moves and brush drawing snap to nearby brush corners; toolbar "Corners" or Shift+G | **Done** | The grabbed point is the moving corner nearest the cursor when the drag starts. |
 | Groups: Ctrl+G / Ctrl+Shift+G; click selects the group, double-click picks inside, Enter/Esc step in/out; hide/lock cascade | **Done** | Groups have no transform of their own until nested transforms (Phase 4). |
 | Copy / cut / paste (Ctrl+C / X / V), including groups and across projects in one session | **Done** | Each paste lands one grid step further; a cut pastes back in place. |
-| Box selection | Planned | |
+| Box selection: drag on empty space; everything the box touches is selected (Ctrl/Shift adds); groups are picked whole | **Done** | |
 
 ## Brushes (Phase 3)
 
@@ -63,8 +63,8 @@ Last updated: 2026-11-01 (Phase 2, first slice).
 | Face tool (T): select faces (Ctrl+click add/remove, Shift+click whole brush), per-face material, World/Face alignment, offset/scale/rotation, Fit, Reset, line up left/right/top/bottom/centre | **Done** | Several faces at once; differing values show as blank. Faces made by a live cut follow the wall and are painted after Apply cut. |
 | Paint tool (P): click a face to apply a material, Shift+click paints the whole brush, Ctrl+click picks up a material | **Done** | |
 | Built-in development materials (9 colours with a 16-unit grid) | **Done** | Placeholders until material assets in Phase 7. |
-| Vertex and edge editing tools | Planned | Engine support done (G2: bent faces split into triangles). |
-| Clip tool | Planned | Engine support done. |
+| Vertex tool (X): pick corners or edge middles (click, Ctrl+click, box), move them with the gizmo, grid and corner snapping | **Done** | Bent faces split into triangles (G2); moves that would dent or flatten a brush stop at the last good position with a message. |
+| Clip tool (C): drag a line across selected brushes in any view; keep both pieces, one side or the other (Tab); Enter clips | **Done** | New faces take the material of the brush face pointing the same way. Brushes the line misses are left alone. |
 | Polygon prism (custom footprint) | Planned | Engine support done. |
 
 ## Later phases
