@@ -167,7 +167,8 @@ describe('scripts in the game world', () => {
     expect(w.movingBodies().map((b) => `${b.kind}`).sort()).toEqual(['brush', 'unit']);
     expect(w.bodyBrushes(door.id)).toHaveLength(2);
     run(w, 3);
-    expect(w.positionOf(door.id)![1]).toBeCloseTo(128, 3);
+    // The group's pivot is the middle of its brushes (y = 64), moved up 128.
+    expect(w.positionOf(door.id)![1]).toBeCloseTo(192, 3);
     expect(w.drainLogs().map((l) => l.text)).toEqual(['opened']);
     expect(w.positionOf(crate.id)![1]).toBeCloseTo(16, 0);
     w.dispose();
@@ -185,8 +186,10 @@ describe('scripts in the game world', () => {
     w.dispose();
   });
 
-  it('turning a door 90° and returning it to the start', () => {
+  it('turning a door 90° around a hinge pivot, and returning it to the start', () => {
     const door = brush('door', [0, 0, 0], [64, 128, 8], {
+      // Hinge at the door's near edge: x = 0, z = 0 (an offset from the brush's centre).
+      pivot: { point: [-32, 0, -4] },
       ...script({
         id: id(),
         event: { id: id(), kind: 'start' },
@@ -207,6 +210,19 @@ describe('scripts in the game world', () => {
     run(w, 1.5);
     const back = applyMat4(w.motionOf(door.id)!, [64, 0, 0]);
     expect(back[0]).toBeCloseTo(64, 1);
+    w.dispose();
+  });
+
+  it('without a pivot set, an object turns around its own middle', () => {
+    const door = brush('door', [0, 0, 0], [64, 128, 8], {
+      ...script({ id: id(), event: { id: id(), kind: 'start' }, body: [{ id: id(), kind: 'turn', target: { self: true }, axis: 'up', degrees: num(90), seconds: num(0.5) }] }),
+    });
+    const w = GameWorld.create(scene(door));
+    run(w, 0.6);
+    expect(w.positionOf(door.id)).toEqual([32, 64, 4]);
+    const p = applyMat4(w.motionOf(door.id)!, [64, 0, 4]);
+    expect(p[0]).toBeCloseTo(32, 1);
+    expect(p[2]).toBeCloseTo(4 - 32, 1);
     w.dispose();
   });
 

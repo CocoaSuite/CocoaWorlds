@@ -4,7 +4,7 @@
  * air works), jumping, crouching, walking, stepping up stairs, and pushing physics objects.
  *
  * Units are game units (1 u ≈ 1 inch); the numbers follow Source's defaults so levels built for that scale
- * feel right: the player is a 32 × 72 × 32 box (like Source's hull; boxes step and slide cleanly), standing 72 u tall, eyes at 64 u, running 320 u/s, gravity 800 u/s².
+ * feel right (speeds are Half-Life 2's, calmer than Counter-Strike's): the player is a 32 × 72 × 32 box (like Source's hull; boxes step and slide cleanly), standing 72 u tall, eyes at 64 u, running 190 u/s, gravity 800 u/s².
  */
 import RAPIER from '@dimforge/rapier3d-compat';
 
@@ -15,9 +15,10 @@ export const PLAYER = {
   crouchHeight: 36,
   eye: 64,
   crouchEye: 28,
-  runSpeed: 320,
-  walkSpeed: 150,
-  crouchSpeed: 110,
+  /** Half-Life 2's normal speed (Source's 320 is a sprint, too fast for most levels). */
+  runSpeed: 190,
+  walkSpeed: 100,
+  crouchSpeed: 64,
   accelerate: 10,
   airAccelerate: 10,
   /** Air acceleration only adds speed up to this much along the wished direction (Source's 30). */

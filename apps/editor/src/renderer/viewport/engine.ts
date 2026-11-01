@@ -6,10 +6,10 @@ import type { EntityData, SceneDoc, Transform, Vec3 } from '@cocoaworlds/core';
 import { bounds, faceAt, loopCut, nearestEdge, transform as transformBrush, translate, vertices, type Brush, type Plane, type V3 } from '@cocoaworlds/geometry';
 import * as THREE from 'three';
 import { TransformControls } from 'three/addons/controls/TransformControls.js';
-import { brushOf, isLocked, isShown, worldBrushOf, worldBrushes, worldMatrices, type DrawRole, type Outline, type ShapeOptions } from '../brush/brushes';
+import { brushBounds, brushOf, isLocked, isShown, worldBrushOf, worldBrushes, worldMatrices, type DrawRole, type Outline, type ShapeOptions } from '../brush/brushes';
 import { rootsOf } from '../scene-ops';
 import { isGroup } from '../scene-ops';
-import { mat4Key, type Mat4 } from '@cocoaworlds/core';
+import { PIVOT, applyMat4, mat4Key, pivotOf, type Mat4 } from '@cocoaworlds/core';
 import { BrushDraft, draftAxes, type DraftState } from './brush-draft';
 import { CameraRig, type ViewKind } from './camera';
 import { EditorGrid } from './grid';
@@ -55,6 +55,8 @@ export interface ViewportCallbacks {
   loopCutState(cuts: number, fits: boolean | null): void;
   /** Loop cut tool: replace this brush (world space) with the cut one. */
   applyLoopCut(id: string, brush: Brush): void;
+  /** Edit pivot mode: the pivot was dragged to this world position. */
+  livePivot(id: string, world: V3): void;
 }
 
 /** A live gizmo result: a brush in world space, or an entity's new world placement. */
@@ -62,13 +64,17 @@ export interface LiveChange {
   id: string;
   brush?: Brush;
   world?: number[];
+  /** Where a brush's own pivot went (world), when it has one and the gizmo turned or scaled it. */
+  pivot?: V3;
 }
 
 /** What a gizmo drag moves: every selected object and its descendants, as they were when the drag began. */
 interface DragSet {
   pivot: V3;
-  /** Brushes in world space; other objects by their world matrix (their contents follow them). */
-  items: { id: string; brush?: Brush; world?: Mat4 }[];
+  /** Brushes in world space (with their own pivot, if one is set); other objects by their world matrix. */
+  items: { id: string; brush?: Brush; world?: Mat4; pivot?: V3 }[];
+  /** Edit pivot mode: only this object's pivot moves. */
+  pivotOnly?: string;
   /** Vertex snapping: the moving point nearest the cursor when the drag began. */
   grab: V3 | null;
   /** Screen positions of points that don't move (snap targets). */
@@ -107,6 +113,12 @@ export class ViewportEngine {
   private vertexSnap = true;
   private lastPointer = { x: 0, y: 0 };
   private snapMarker: THREE.Points;
+  /** Edit pivot mode: the move gizmo moves the selected object's pivot. */
+  private pivotEdit = false;
+  private pivotMarker = new THREE.Mesh(
+    new THREE.OctahedronGeometry(1),
+    new THREE.MeshBasicMaterial({ color: 0xffc94a, depthTest: false, transparent: true, opacity: 0.95 }),
+  );
   private axisScene = new THREE.Scene();
   private axisCam = new THREE.OrthographicCamera(-1.4, 1.4, 1.4, -1.4, -10, 10);
   private raycaster = new THREE.Raycaster();
@@ -185,6 +197,9 @@ export class ViewportEngine {
       this.snapMarker.frustumCulled = false;
       this.scene.add(this.snapMarker);
     }
+    this.pivotMarker.renderOrder = 21;
+    this.pivotMarker.visible = false;
+    this.scene.add(this.pivotMarker);
     // Editor preview lighting (scene lights take over when lighting lands in Phase 7).
     this.scene.add(new THREE.HemisphereLight(0xe8eef5, 0x3a3530, 1.4));
     const key = new THREE.DirectionalLight(0xfff6ea, 1.6);
@@ -208,8 +223,8 @@ export class ViewportEngine {
           this.dragSet = this.buildVertexDragSet();
           return;
         }
-        this.cb.beginEdit(this.gizmoMode === 'rotate' ? 'Rotate' : this.gizmoMode === 'scale' ? 'Scale' : 'Move');
         this.dragSet = this.buildDragSet();
+        this.cb.beginEdit(this.dragSet?.pivotOnly ? 'Move pivot' : this.gizmoMode === 'rotate' ? 'Rotate' : this.gizmoMode === 'scale' ? 'Scale' : 'Move');
       } else {
         this.dragSet = null;
         this.snapMarker.visible = false;
@@ -480,6 +495,31 @@ export class ViewportEngine {
     return true;
   }
 
+  /** Edit pivot mode (O): the move gizmo moves the pivot of the one selected object. */
+  setPivotEdit(on: boolean): void {
+    this.pivotEdit = on;
+    if (!this.dragSet) this.placeProxy();
+    this.applySelection();
+    this.invalidate();
+  }
+
+  /** The object whose pivot the gizmo moves, in edit pivot mode. */
+  private pivotTarget(): string | null {
+    if (!this.pivotEdit || this.editTool !== 'none' || this.brushTool || this.faceTool || this.play) return null;
+    const items = this.movable();
+    return items.length === 1 ? items[0]!.id : null;
+  }
+
+  private showPivotMarker(): void {
+    const id = this.pivotTarget();
+    this.pivotMarker.visible = !!id && !!this.doc;
+    if (!id || !this.doc) return;
+    if (!this.dragSet) this.pivotMarker.position.set(...pivotOf(this.doc, id, brushBounds));
+    // About 7 pixels across whatever the zoom.
+    const d = this.rig.kind === 'perspective' ? this.pivotMarker.position.distanceTo(this.rig.camera.position) * 0.006 : this.rig.unitsPerPixel * 7;
+    this.pivotMarker.scale.setScalar(Math.max(0.5, d));
+  }
+
   setVertexSnap(enabled: boolean): void {
     this.vertexSnap = enabled;
   }
@@ -608,13 +648,14 @@ export class ViewportEngine {
         if (!this.dragSet) this.placeProxy();
         target = this.proxy;
       }
-    } else if (this.editTool === 'none' && this.movable().length && this.gizmoMode !== 'none' && !this.brushTool && !this.faceTool) {
+    } else if (this.editTool === 'none' && this.movable().length && (this.gizmoMode !== 'none' || this.pivotTarget()) && !this.brushTool && !this.faceTool) {
       if (!this.dragSet) this.placeProxy();
       target = this.proxy;
     }
+    this.showPivotMarker();
     if (target) {
       if (this.gizmo.object !== target) this.gizmo.attach(target);
-      this.gizmo.setMode(this.editTool === 'vertex' || this.gizmoMode === 'none' ? 'translate' : this.gizmoMode);
+      this.gizmo.setMode(this.editTool === 'vertex' || this.gizmoMode === 'none' || this.pivotTarget() ? 'translate' : this.gizmoMode);
     } else if (this.gizmo.object) {
       this.gizmo.detach();
     }
@@ -685,8 +726,8 @@ export class ViewportEngine {
     }
     const items = this.movable();
     if (!items.length) return;
-    const one = items.length === 1 && this.markers.has(items[0]!.id) ? items[0]! : null;
-    const c = one ? new THREE.Vector3(...this.worldPos(one)) : this.selectionBox(items).getCenter(new THREE.Vector3());
+    // One object: its pivot. Several: the middle of them all.
+    const c = items.length === 1 && this.doc ? new THREE.Vector3(...pivotOf(this.doc, items[0]!.id, brushBounds)) : this.selectionBox(items).getCenter(new THREE.Vector3());
     this.proxy.position.copy(c);
     this.proxy.rotation.set(0, 0, 0);
     this.proxy.scale.set(1, 1, 1);
@@ -824,13 +865,26 @@ export class ViewportEngine {
     const items = this.movable();
     if (!items.length) return null;
     const pivot: V3 = [this.proxy.position.x, this.proxy.position.y, this.proxy.position.z];
+    const only = this.pivotTarget();
+    if (only) {
+      // Edit pivot: snap the pivot to any corner, the object's own included (a door's hinge edge).
+      const set: DragSet = { pivot, items: [], pivotOnly: only, grab: this.vertexSnap ? pivot : null, targets: [] };
+      if (this.vertexSnap) {
+        for (const p of this.pointsOf((this.doc?.entities ?? []).filter((e) => isShown(this.doc!, e)))) {
+          const sp = this.toScreen(p);
+          if (sp.z < 1) set.targets.push({ p, x: sp.x, y: sp.y });
+        }
+      }
+      return set;
+    }
     const inside = this.contents(items);
     const moving = new Set(inside.map((e) => e.id));
     const set: DragSet = {
       pivot,
       items: items.map((e) => {
         const b = this.doc ? worldBrushOf(this.doc, e, this.mats.get(e.id)) : null;
-        return b ? { id: e.id, brush: b.brush } : { id: e.id, world: [...(this.mats.get(e.id) ?? this.doc!.worldMatrix(e.id))] };
+        if (!b) return { id: e.id, world: [...(this.mats.get(e.id) ?? this.doc!.worldMatrix(e.id))] };
+        return e.components[PIVOT] ? { id: e.id, brush: b.brush, pivot: pivotOf(this.doc!, e.id, brushBounds) } : { id: e.id, brush: b.brush };
       }),
       grab: null,
       targets: [],
@@ -915,6 +969,11 @@ export class ViewportEngine {
       }
       this.showSnap(snapped);
       p.position.set(d.pivot[0] + delta[0], d.pivot[1] + delta[1], d.pivot[2] + delta[2]);
+      if (d.pivotOnly) {
+        this.cb.livePivot(d.pivotOnly, [d.pivot[0] + delta[0], d.pivot[1] + delta[1], d.pivot[2] + delta[2]]);
+        this.pivotMarker.position.copy(p.position);
+        return;
+      }
       if (this.editTool === 'vertex') {
         for (const b of this.vertexTool.dragTo(delta)) changes.push({ id: b.id, brush: b.brush });
       }
@@ -932,8 +991,10 @@ export class ViewportEngine {
       p.updateMatrixWorld();
       const m = new THREE.Matrix4().copy(p.matrixWorld).multiply(new THREE.Matrix4().makeTranslation(-d.pivot[0], -d.pivot[1], -d.pivot[2]));
       for (const it of d.items) {
-        if (it.brush) changes.push({ id: it.id, brush: transformBrush(it.brush, m.elements as unknown as number[]) });
-        else if (it.world) changes.push({ id: it.id, world: new THREE.Matrix4().fromArray(it.world).premultiply(m).toArray() });
+        if (it.brush) {
+          const pv = it.pivot ? (applyMat4(m.elements as unknown as Mat4, it.pivot) as V3) : undefined;
+          changes.push({ id: it.id, brush: transformBrush(it.brush, m.elements as unknown as number[]), pivot: pv });
+        } else if (it.world) changes.push({ id: it.id, world: new THREE.Matrix4().fromArray(it.world).premultiply(m).toArray() });
       }
     }
     this.cb.liveMany(changes);
@@ -1005,6 +1066,7 @@ export class ViewportEngine {
     r.setScissorTest(false);
     r.setViewport(0, 0, size.x, size.y);
     r.clear();
+    if (this.pivotMarker.visible) this.showPivotMarker();
     if (this.play?.placeCamera(this.fpCam)) {
       r.render(this.scene, this.fpCam);
       return;

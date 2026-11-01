@@ -1,5 +1,6 @@
 /** Inspector for the selection (CocoaCanvas right panel). Scene settings when nothing is selected. */
-import type { EntityData, Transform, Vec3 } from '@cocoaworlds/core';
+import { PIVOT, pivotOf, worldBoundsOf, type EntityData, type Transform, type Vec3 } from '@cocoaworlds/core';
+import { brushBounds } from '../brush/brushes';
 import { Button, Field, NumberField, PanelHeader, Section, Switch } from '@cocoaworlds/ui';
 import { t } from '../i18n';
 import { BrushInspector, MultiBrushActions } from './BrushInspector';
@@ -52,6 +53,7 @@ function BrushEntity({ e }: { e: EntityData }) {
       />
       <PrefabSection e={e} />
       <BrushInspector e={e} />
+      <PivotSection e={e} />
       <ComponentsSection e={e} />
       <Section title={t('insp.display')}>
         <div className="cw-flagrow">
@@ -92,6 +94,7 @@ function GroupEntity({ e }: { e: EntityData }) {
       />
       <PrefabSection e={e} />
       <TransformSection e={e} />
+      <PivotSection e={e} />
       <Section title={t('insp.group')}>
         <div className="cw-f">
           <span>{t('insp.contains')}</span>
@@ -232,6 +235,7 @@ function EntityInspector({ e }: { e: EntityData }) {
       />
       <PrefabSection e={e} />
       <TransformSection e={e} />
+      <PivotSection e={e} />
       <Section title={t('insp.display')}>
         <div className="cw-flagrow">
           <span>{t('insp.visible')}</span>
@@ -244,5 +248,47 @@ function EntityInspector({ e }: { e: EntityData }) {
       </Section>
       <ComponentsSection e={e} />
     </>
+  );
+}
+
+/** The point the object turns and scales around (gizmo and scripts). */
+function PivotSection({ e }: { e: EntityData }) {
+  const s = useEditor.getState();
+  const doc = useEditor((x) => x.doc);
+  useEditor((x) => x.rev);
+  const pivotEdit = useEditor((x) => x.pivotEdit);
+  const grid = useEditor((x) => (x.snap ? (x.session?.project.settings.gridSize ?? 16) : 1));
+  if (!doc) return null;
+  const r = (v: number) => Math.round(v * 100) / 100;
+  const p = pivotOf(doc, e.id, brushBounds).map(r) as Vec3;
+  const wb = worldBoundsOf(doc, e.id, brushBounds);
+  const set = (v: Vec3, live: boolean) => s.setPivot(e.id, v, live ? `pivot-${e.id}` : undefined);
+  return (
+    <Section title={t('pivot.title')}>
+      <Vec3Row
+        label={t('pivot.at')}
+        name="Pivot"
+        value={p}
+        step={grid}
+        onBegin={() => s.begin('Move pivot')}
+        onLive={(v) => set(v, true)}
+        onCommit={(v) => {
+          set(v, true);
+          s.commit();
+        }}
+      />
+      <div className="cw-row">
+        <Button onClick={() => s.setPivot(e.id, null)} disabled={!e.components[PIVOT]}>
+          {t('pivot.middle')}
+        </Button>
+        <Button disabled={!wb} onClick={() => wb && s.setPivot(e.id, [(wb.min[0] + wb.max[0]) / 2, wb.min[1], (wb.min[2] + wb.max[2]) / 2])}>
+          {t('pivot.bottom')}
+        </Button>
+        <Button variant={pivotEdit ? 'primary' : undefined} onClick={() => s.toggle('pivotEdit')} aria-pressed={pivotEdit}>
+          {t('pivot.edit')} (O)
+        </Button>
+      </div>
+      <p className="cw-hint">{t('pivot.hint')}</p>
+    </Section>
   );
 }

@@ -55,18 +55,18 @@ describe('recipes', () => {
     const door = brush('door', [-64, 0, -320], [64, 128, -304]);
     const w = GameWorld.create(scene(floor(), spawn(), ...apply('door-near', door, [-64, 0, -320], [64, 128, -304])));
     run(w, 0.2);
-    expect(w.positionOf(door.id)![1]).toBeCloseTo(0, 0);
+    expect(w.positionOf(door.id)![1]).toBeCloseTo(64, 0);
     w.setPlayerInput({ forward: 1 });
     run(w, 1.2);
     w.setPlayerInput({ forward: 0 });
     run(w, 0.8);
-    // Opened: up by its own height (the body sits at the object's placement, which starts at 0).
-    expect(w.positionOf(door.id)![1]).toBeCloseTo(128, 0);
+    // Opened: up by its own height (its pivot, the middle of the door, starts at y = 64).
+    expect(w.positionOf(door.id)![1]).toBeCloseTo(192, 0);
     w.setPlayerInput({ forward: -1 });
     run(w, 2);
     w.setPlayerInput({ forward: 0 });
     run(w, 0.8);
-    expect(w.positionOf(door.id)![1]).toBeCloseTo(0, 0);
+    expect(w.positionOf(door.id)![1]).toBeCloseTo(64, 0);
     w.dispose();
   });
 
@@ -76,13 +76,13 @@ describe('recipes', () => {
     run(w, 0.3);
     w.use();
     run(w, 1);
-    expect(w.positionOf(door.id)![1]).toBeCloseTo(128, 0);
+    expect(w.positionOf(door.id)![1]).toBeCloseTo(192, 0);
     // Using it again while it moves does nothing; it closes by itself after 3 seconds.
     w.use();
     run(w, 1.5);
-    expect(w.positionOf(door.id)![1]).toBeCloseTo(128, 0);
+    expect(w.positionOf(door.id)![1]).toBeCloseTo(192, 0);
     run(w, 2.5);
-    expect(w.positionOf(door.id)![1]).toBeCloseTo(0, 0);
+    expect(w.positionOf(door.id)![1]).toBeCloseTo(64, 0);
     w.dispose();
   });
 
@@ -119,7 +119,7 @@ describe('recipes', () => {
     run(w, 0.3);
     w.use();
     run(w, 1.3);
-    expect(w.positionOf(door.id)![1]).toBeCloseTo(128, 0);
+    expect(w.positionOf(door.id)![1]).toBeCloseTo(192, 0);
     w.dispose();
   });
 });

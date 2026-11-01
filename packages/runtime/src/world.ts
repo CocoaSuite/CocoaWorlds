@@ -11,6 +11,7 @@ import {
   SceneDoc,
   composeTransform,
   decomposeMat4,
+  pivotOf,
   readComponent,
   type ColliderData,
   type EntityData,
@@ -22,7 +23,7 @@ import { EventBus } from './events';
 import { ScriptRunner, compileScript, type ActionName, type Problem, type Program, type Script, type Value } from '@cocoaworlds/scripting';
 import { scriptTargets } from './script-targets';
 import { Player, type PlayerInput } from './player';
-import { brushToWorld, buildMesh, buildWorld, fromData, hullPoints, vertices, type Brush, type BrushData, type WorldBrush } from '@cocoaworlds/geometry';
+import { bounds, brushToWorld, buildMesh, buildWorld, fromData, hullPoints, vertices, type Brush, type BrushData, type WorldBrush } from '@cocoaworlds/geometry';
 
 /** Units per metre (an inch-based world). */
 export const UNITS_PER_METRE = 39.37;
@@ -182,7 +183,12 @@ export class GameWorld {
     }
     this.addLevel(level);
     this.levelIds = new Set(level.map((b) => b.id));
-    for (const root of unitRoots) this.addUnit(root, doc.worldMatrix(root), unitBrushes.get(root)!);
+    // A unit turns around its pivot (the centre of what it holds unless one was set).
+    const boundsOf = (x: EntityData) => {
+      const d = x.components.brush as unknown as BrushData | undefined;
+      return d?.faces ? bounds(fromData({ faces: d.faces, mesh: d.mesh })) : null;
+    };
+    for (const root of unitRoots) this.addUnit(root, doc.worldMatrix(root), unitBrushes.get(root)!, pivotOf(doc, root, boundsOf));
 
     // The player: at the first visible Player start, facing the way it faces.
     const spawn = doc.entities.find((e) => e.components.playerSpawn && shown(e));
@@ -211,11 +217,11 @@ export class GameWorld {
   }
 
   /** An object moved by scripts: a kinematic body at its place, carrying the hulls of every brush inside it. */
-  private addUnit(id: string, world: number[], brushes: Brush[]): void {
+  private addUnit(id: string, world: number[], brushes: Brush[], pivot: [number, number, number]): void {
     const t = decomposeMat4(world);
-    const placement = composeTransform({ position: t.position, rotation: t.rotation, scale: [1, 1, 1] });
+    const placement = composeTransform({ position: pivot, rotation: t.rotation, scale: [1, 1, 1] });
     const toLocal = invertRigid(placement);
-    const body = this.world.createRigidBody(RAPIER.RigidBodyDesc.kinematicPositionBased().setTranslation(...t.position).setRotation(quatFromMatrix(placement)));
+    const body = this.world.createRigidBody(RAPIER.RigidBodyDesc.kinematicPositionBased().setTranslation(...pivot).setRotation(quatFromMatrix(placement)));
     for (const b of brushes) {
       const pts = new Float32Array(vertices(b).flatMap((v) => transformPoint(toLocal, v)));
       const desc = RAPIER.ColliderDesc.convexHull(pts);

@@ -12,6 +12,7 @@ import {
 } from '@cocoaworlds/core';
 import {
   box,
+  bounds,
   cylinder,
   extrudePolygon,
   defaultSurface,
@@ -165,3 +166,9 @@ export function shapeBrushes(o: ShapeOptions, min: V3, max: V3, role: DrawRole, 
 }
 
 export const shapeName: Record<BrushShape, string> = { box: 'block', cylinder: 'cylinder', wedge: 'wedge', stairs: 'stairs', polygon: 'prism' };
+
+/** Bounds of a brush entity in its own space (for pivots), null for other objects. */
+export const brushBounds = (e: EntityData) => {
+  const b = brushOf(e);
+  return b ? bounds(b.brush) : null;
+};

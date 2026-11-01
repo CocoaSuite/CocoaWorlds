@@ -23,6 +23,9 @@ import {
   decomposeMat4,
   identityMat4,
   invertMat4,
+  applyMat4,
+  PIVOT,
+  pivotData,
   multiplyMat4,
   type Mat4,
   addEntitiesCmd,
@@ -59,7 +62,7 @@ import {
   type BrushRole,
 } from '@cocoaworlds/geometry';
 import { create } from 'zustand';
-import { brushComponent, brushOf, isLocked, isShown, newBrushEntity, toLocal, toWorld, worldBrushOf, shapeBrushes, shapeName, worldBrushes, type DrawRole, type Outline, type ShapeOptions } from './brush/brushes';
+import { brushBounds, brushComponent, brushOf, isLocked, isShown, newBrushEntity, toLocal, toWorld, worldBrushOf, shapeBrushes, shapeName, worldBrushes, type DrawRole, type Outline, type ShapeOptions } from './brush/brushes';
 import { useShallow } from 'zustand/react/shallow';
 import type { OpenedProject, PrefabEntry } from '../shared/api';
 import { emptyScript, recipe as findRecipe, type Script } from '@cocoaworlds/scripting';
@@ -117,6 +120,8 @@ interface State {
   paintMaterial: string;
   /** Snap moves and brush drawing to nearby brush corners. */
   vertexSnap: boolean;
+  /** Edit pivot mode: the move gizmo moves the selected object's pivot instead of the object. */
+  pivotEdit: boolean;
   /** The group the user has stepped into: clicks in the view pick objects inside it. */
   enteredGroup: string | null;
   /** Whether something has been copied (for menu state). */
@@ -145,7 +150,9 @@ interface Actions {
   selectAll(): void;
   setTool(t: Tool): void;
   setView(v: ViewMode): void;
-  toggle(k: 'showGrid' | 'showStats' | 'showBottom' | 'snap' | 'vertexSnap'): void;
+  toggle(k: 'showGrid' | 'showStats' | 'showBottom' | 'snap' | 'vertexSnap' | 'pivotEdit'): void;
+  /** Put an object's pivot at a world position (null: back to the default, its middle). */
+  setPivot(id: string, world: Vec3 | null, mergeKey?: string): void;
   execute(cmd: Command): void;
   begin(label: string): void;
   commit(): void;
@@ -254,6 +261,7 @@ export const useEditor = create<State & Actions>()((set, get) => ({
   faceSelection: [],
   paintMaterial: 'dev/wall',
   vertexSnap: true,
+  pivotEdit: false,
   enteredGroup: null,
   canPaste: false,
   playing: null,
@@ -699,6 +707,17 @@ export const useEditor = create<State & Actions>()((set, get) => ({
     set({ paintMaterial: id });
   },
 
+  setPivot(id, world, mergeKey) {
+    const doc = get().doc;
+    const e = doc?.get(id);
+    if (!doc || !e) return;
+    if (!world) {
+      if (e.components[PIVOT]) get().execute(setComponentCmd(doc, id, PIVOT, undefined, 'Reset pivot'));
+      return;
+    }
+    get().execute(setComponentCmd(doc, id, PIVOT, pivotData(doc, id, world, brushBounds) as never, 'Move pivot', mergeKey));
+  },
+
   applyLive(changes) {
     const doc = get().doc;
     if (!doc || !changes.length) return;
@@ -709,6 +728,18 @@ export const useEditor = create<State & Actions>()((set, get) => ({
       if (c.brush) {
         const cur = brushOf(e);
         if (cur) cmds.push(setComponentCmd(doc, c.id, 'brush', brushComponent(toLocal(c.brush, doc.worldMatrix(c.id)), cur.role) as never, 'Transform'));
+        // A brush's pivot is kept relative to its middle; after a turn or scale, place it where the gizmo took it.
+        if (c.pivot && e.components[PIVOT]) {
+          const local = toLocal(c.brush, doc.worldMatrix(c.id));
+          const bb = bounds(local);
+          const inv = invertMat4(doc.worldMatrix(c.id)) ?? identityMat4();
+          const p = applyMat4(inv, c.pivot);
+          if (bb) {
+            const r = (v: number) => Math.round(v * 1024) / 1024;
+            const point = [0, 1, 2].map((k) => r(p[k]! - (bb.min[k]! + bb.max[k]!) / 2));
+            cmds.push(setComponentCmd(doc, c.id, PIVOT, { point } as never, 'Transform'));
+          }
+        }
       } else if (c.world) {
         // A new world placement: express it relative to the parent.
         const inv = invertMat4(doc.parentMatrix(c.id)) ?? identityMat4();

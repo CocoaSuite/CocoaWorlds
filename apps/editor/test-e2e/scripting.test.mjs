@@ -82,7 +82,7 @@ test('a door script made from blocks', async () => {
         const w = window.__cwViewport.play.world;
         return w.movingBodies().filter((b) => b.kind === 'unit').map((b) => Math.round(w.positionOf(b.id)[1]));
       }).then((ys) => ys.join()),
-      '128',
+      '192', // the door's middle (its pivot) started at y = 64
       5000,
     );
     await shot(page, 's02-door-open');

@@ -19,6 +19,7 @@ export const SHORTCUTS: { label: string; keys: string[] }[] = [
   { label: 'Vertex tool (pick corners or edge middles, move with the arrows)', keys: ['X'] },
   { label: 'Clip tool (drag a line across brushes; Tab: what to keep; Enter: clip)', keys: ['C'] },
   { label: 'Loop cut (hover a brush, wheel for more cuts, click to cut)', keys: [`${mod}+R`] },
+  { label: 'Edit pivot: the move gizmo moves the selected object’s pivot (snaps to corners)', keys: ['O'] },
   { label: 'Box select (drag on empty space)', keys: ['Left-drag'] },
   { label: 'Paint: pick up a material', keys: [`${mod}+click`] },
   { label: 'Perspective / Top / Front / Side', keys: ['1', '2', '3', '4'] },
@@ -114,6 +115,8 @@ export function useShortcuts(openKeys: () => void): void {
           return s.setTool('paint');
         case 'KeyF':
           return s.frameSelection();
+        case 'KeyO':
+          return s.toggle('pivotEdit');
         case 'KeyG':
           return s.toggle(e.shiftKey ? 'vertexSnap' : 'snap');
         case 'Enter':

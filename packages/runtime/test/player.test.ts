@@ -38,14 +38,14 @@ describe('Player', () => {
     w.dispose();
   });
 
-  it('runs at about 320 u/s and walks slower; stops with friction', () => {
+  it('runs at about 190 u/s and walks slower; stops with friction', () => {
     const w = GameWorld.create(scene(floor(), spawn()));
     run(w, 0.2);
     w.setPlayerInput({ forward: 1 });
     run(w, 1);
     expect(Math.hypot(w.player!.velocity.x, w.player!.velocity.z)).toBeCloseTo(PLAYER.runSpeed, -1);
     // Yaw 0 looks along −Z.
-    expect(w.player!.feetPosition.z).toBeLessThan(-200);
+    expect(w.player!.feetPosition.z).toBeLessThan(-150);
     w.setPlayerInput({ walk: true });
     run(w, 1);
     expect(Math.hypot(w.player!.velocity.x, w.player!.velocity.z)).toBeCloseTo(PLAYER.walkSpeed, -1);
@@ -89,9 +89,9 @@ describe('Player', () => {
     const w = GameWorld.create(scene(floor(), step, spawn()));
     run(w, 0.2);
     w.setPlayerInput({ forward: 1 });
-    run(w, 0.5);
+    run(w, 0.8);
     expect(w.player!.feetPosition.z).toBeLessThan(-110);
-    expect(w.player!.feetPosition.y).toBeCloseTo(16, 0);
+    expect(w.player!.feetPosition.y).toBeCloseTo(16.5, 0); // (the controller keeps a 0.5 u gap)
     w.dispose();
 
     const wall = brush('wall', [-64, 0, -200], [64, 40, -100]);
@@ -110,7 +110,7 @@ describe('Player', () => {
     const w = GameWorld.create(scene(floor(), roof, spawn()));
     run(w, 0.2);
     w.setPlayerInput({ forward: 1, crouch: true });
-    run(w, 2);
+    run(w, 3);
     expect(w.player!.feetPosition.z).toBeLessThan(-150);
     w.setPlayerInput({ forward: 0, crouch: false });
     run(w, 0.2);

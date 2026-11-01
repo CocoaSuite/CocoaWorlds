@@ -40,6 +40,7 @@ export function Viewport() {
   const view = useEditor((s) => s.view);
   const snap = useEditor((s) => s.snap);
   const vertexSnap = useEditor((s) => s.vertexSnap);
+  const pivotEdit = useEditor((s) => s.pivotEdit);
   const showGrid = useEditor((s) => s.showGrid);
   const showStats = useEditor((s) => s.showStats);
   const gridSize = useEditor((s) => s.session?.project.settings.gridSize ?? 16);
@@ -74,6 +75,7 @@ export function Viewport() {
         },
         activeBlocks: (blocks) => useEditor.setState({ activeBlocks: blocks }),
         playerLock: setLock,
+        livePivot: (id, world) => useEditor.getState().setPivot(id, world, `pivot-${id}`),
         loopCutState: (cuts, fits) => setLoop({ cuts, fits }),
         applyLoopCut: (id, brush) => {
           const st = useEditor.getState();
@@ -141,6 +143,9 @@ export function Viewport() {
   useEffect(() => {
     engine.current?.setVertexSnap(vertexSnap);
   }, [vertexSnap]);
+  useEffect(() => {
+    engine.current?.setPivotEdit(pivotEdit);
+  }, [pivotEdit]);
   useEffect(() => {
     const e = engine.current;
     if (!e) return;

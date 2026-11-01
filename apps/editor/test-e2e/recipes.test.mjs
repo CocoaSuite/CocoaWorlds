@@ -51,13 +51,13 @@ test('recipe: door that opens when the player comes near', async () => {
     await page.getByTestId('play-banner').waitFor();
     if (await page.getByTestId('click-to-play').count()) await page.getByTestId('click-to-play').click();
     await until(() => page.evaluate(() => document.pointerLockElement?.tagName ?? ''), 'CANVAS');
-    await until(doorY, 0);
+    await until(doorY, 64);
     await page.keyboard.down('w');
-    await until(doorY, 128, 5000);
+    await until(doorY, 192, 5000);
     await page.keyboard.up('w');
     await shot(page, 'r03-open');
     await page.keyboard.down('s');
-    await until(doorY, 0, 6000);
+    await until(doorY, 64, 6000);
     await page.keyboard.up('s');
     await page.keyboard.press('F5');
     await until(() => page.getByTestId('play-banner').count(), 0);

@@ -28,6 +28,11 @@ Scripts are plain-language blocks on the object they control (decision S1): a do
 - Problems appear under the block and in the **Problems** tab (click to jump to the script).
 - While playing, the running blocks are outlined; Write blocks and script errors appear in the console.
 
+## Pivots
+
+“Move” and “Turn” act on an object's pivot: by default the middle of a brush or of a group's brushes. To swing a
+door on its hinge, select it, press **O** (Edit pivot) and drag the pivot onto the hinge edge; it snaps to corners.
+
 ## Recipes (V2)
 
 **Recipes…** (in the Inspector under the components, or in the Visual script tab) puts a ready-made mechanic
