@@ -34,7 +34,7 @@ import {
   type StatementKind,
   type VariableDef,
 } from '@cocoaworlds/scripting';
-import type { GameValue } from '@cocoaworlds/core';
+import { uiOf, type GameValue } from '@cocoaworlds/core';
 import { Button, ContextMenu, IconButton, type MenuEntry } from '@cocoaworlds/ui';
 import { createContext, useContext, useEffect, useMemo, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { t } from '../../i18n';
@@ -147,11 +147,14 @@ export function ScriptPanel() {
       ev.clientX,
       ev.clientY,
       [
-        ...(['start', 'enter', 'leave', 'use', 'message', 'messageStop', 'every', 'die', 'breaks'] as EventKind[]).map((k) => ({
+        ...(['start', 'enter', 'leave', 'use', 'message', 'messageStop', 'every', 'die', 'breaks', 'uiClick', 'useItem'] as EventKind[]).map((k) => ({
           label: eventName(k),
           onSelect: () => {
             const zone: Ref = objects.find((o) => o.id === owner.id)?.isZone ? { self: true } : objects.find((o) => o.isZone) ? { entity: objects.find((o) => o.isZone)!.id } : { self: true };
-            ctx.update((s) => addHandler(s, { id: blockId(), event: newEvent(k, zone), body: [] }), 'Add stack');
+            const ev = newEvent(k, zone);
+            const ui = uiOf(useEditor.getState().doc?.settings);
+            if (ev.kind === 'uiClick') ev.element = ui.screens.flatMap((x) => x.elements).find((e) => e.kind === 'button')?.id ?? '';
+            ctx.update((s) => addHandler(s, { id: blockId(), event: ev, body: [] }), 'Add stack');
           },
         })),
         ...(clip ? (['separator', { label: clipLabel(), onSelect: () => ctx.update((s) => pasteInto(s, null), 'Paste blocks') }] as MenuEntry[]) : []),
@@ -435,6 +438,16 @@ function EventRow({ ev, onRemove, onCopy, pick }: { ev: EventBlock; onRemove: ()
       {w('messageStop')} <TextSlot value={ev.message} label={w('messageStop')} onChange={(message) => set({ message } as Partial<EventBlock>)} /> {w('stopsComing')}
     </>
   );
+  else if (ev.kind === 'uiClick') content = (
+    <>
+      {w('uiClick')} <ElementSlot value={ev.element} kinds={['button']} label={w('uiClick')} onChange={(element) => set({ element } as Partial<EventBlock>)} />
+    </>
+  );
+  else if (ev.kind === 'useItem') content = (
+    <>
+      {w('useItem')} <ItemSlot value={ev.item} allowAny label={w('useItem')} onChange={(item) => set({ item } as Partial<EventBlock>)} />
+    </>
+  );
   else content = (
     <>
       {w('every')} <ExprSlot expr={ev.seconds} type="number" label={w('every')} /> {w('seconds')}
@@ -491,6 +504,17 @@ function focusRow(e: React.MouseEvent<HTMLElement>) {
   e.currentTarget.focus();
 }
 
+/** New screen and item blocks start on the first screen, element or item there is. */
+function withUiDefaults<T extends Statement>(s: T): T {
+  const ui = uiOf(useEditor.getState().doc?.settings);
+  const els = ui.screens.flatMap((x) => x.elements);
+  const o = s as Record<string, unknown>;
+  if (o.screen === '' && ui.screens[0]) o.screen = ui.screens[0].id;
+  if (o.element === '') o.element = (s.kind === 'setUiText' ? els.find((e) => e.kind === 'text' || e.kind === 'button') : els[0])?.id ?? '';
+  if (o.item === '' && ui.items[0]) o.item = ui.items[0].name;
+  return s;
+}
+
 function paletteItems(c: Ctx, add: (s: Statement) => void, paste?: () => void): MenuEntry[] {
   const out: MenuEntry[] = [];
   if (paste && clip?.kind === 'blocks') out.push({ label: clipLabel(), onSelect: paste }, 'separator');
@@ -498,7 +522,7 @@ function paletteItems(c: Ctx, add: (s: Statement) => void, paste?: () => void): 
   const target: Ref = c.objects.some((o) => o.id === c.owner) ? { self: true } : { self: true };
   STATEMENT_GROUPS.forEach((g, i) => {
     if (i) out.push('separator');
-    for (const k of g.kinds) out.push({ label: `${groupTitle(g.title)} › ${statementName(k)}`, onSelect: () => add(newStatement(k as StatementKind, { target, variable: firstVar })) });
+    for (const k of g.kinds) out.push({ label: `${groupTitle(g.title)} › ${statementName(k)}`, onSelect: () => add(withUiDefaults(newStatement(k as StatementKind, { target, variable: firstVar }))) });
   });
   return out;
 }
@@ -770,6 +794,39 @@ function statementWords(s: Statement, set: (patch: Record<string, unknown>, merg
           {w('say')} <ExprSlot expr={s.text} type="text" label={w('say')} /> {w('forWord')} <ExprSlot expr={s.seconds} type="number" label={`${w('say')} ${w('forWord')}`} /> {w('seconds')}
         </>
       );
+    case 'showScreen':
+    case 'hideScreen':
+      return (
+        <>
+          {w(s.kind)} <ScreenSlot value={s.screen} label={w(s.kind)} onChange={(screen) => set({ screen })} />
+        </>
+      );
+    case 'showUi':
+    case 'hideUi':
+      return (
+        <>
+          {w(s.kind)} <ElementSlot value={s.element} label={statementName(s.kind)} onChange={(element) => set({ element })} />
+        </>
+      );
+    case 'setUiText':
+      return (
+        <>
+          {w('setUiText')} <ElementSlot value={s.element} kinds={['text', 'button']} label={statementName('setUiText')} onChange={(element) => set({ element })} /> {w('setTo')}{' '}
+          <ExprSlot expr={s.text} type="text" label={`${statementName('setUiText')} ${w('setTo')}`} />
+        </>
+      );
+    case 'giveItem':
+      return (
+        <>
+          {w('giveItem')} <ExprSlot expr={s.amount} type="number" label={`${w('giveItem')} amount`} /> <ItemSlot value={s.item} label={w('giveItem')} onChange={(item) => set({ item })} />
+        </>
+      );
+    case 'takeItem':
+      return (
+        <>
+          {w('takeItem')} <ExprSlot expr={s.amount} type="number" label={`${w('takeItem')} amount`} /> <ItemSlot value={s.item} label={w('takeItem')} onChange={(item) => set({ item })} /> {w('fromPlayer')}
+        </>
+      );
     case 'setText':
       return (
         <>
@@ -858,6 +915,55 @@ function RefSlot<T extends Ref | Place | null>({
       {objs.map((o) => (
         <option key={o.id} value={`e:${o.id}`}>
           {o.name}
+        </option>
+      ))}
+    </select>
+  );
+}
+
+/** A screen of the scene's screen UI. */
+function ScreenSlot({ value, onChange, label }: { value: string; onChange: (v: string) => void; label: string }) {
+  useEditor((st) => st.rev);
+  const screens = uiOf(useEditor.getState().doc?.settings).screens;
+  return (
+    <select className="cw-input cw-ref" aria-label={label} value={value} onChange={(e) => onChange(e.target.value)}>
+      {!screens.some((x) => x.id === value) && <option value={value}>{value ? '?' : w('pickScreen')}</option>}
+      {screens.map((x) => (
+        <option key={x.id} value={x.id}>
+          {x.name}
+        </option>
+      ))}
+    </select>
+  );
+}
+
+/** Something on a screen (of the given kinds), listed as “screen › name”. */
+function ElementSlot({ value, onChange, label, kinds }: { value: string; onChange: (v: string) => void; label: string; kinds?: string[] }) {
+  useEditor((st) => st.rev);
+  const els = uiOf(useEditor.getState().doc?.settings).screens.flatMap((sc) => sc.elements.filter((e) => !kinds || kinds.includes(e.kind)).map((e) => ({ id: e.id, name: `${sc.name} › ${e.name}` })));
+  return (
+    <select className="cw-input cw-ref" aria-label={label} value={value} onChange={(e) => onChange(e.target.value)}>
+      {!els.some((x) => x.id === value) && <option value={value}>{value ? '?' : w('pickElement')}</option>}
+      {els.map((x) => (
+        <option key={x.id} value={x.id}>
+          {x.name}
+        </option>
+      ))}
+    </select>
+  );
+}
+
+/** An item the player can carry (or any item, for “When the player uses”). */
+function ItemSlot({ value, onChange, label, allowAny }: { value: string; onChange: (v: string) => void; label: string; allowAny?: boolean }) {
+  useEditor((st) => st.rev);
+  const items = uiOf(useEditor.getState().doc?.settings).items;
+  return (
+    <select className="cw-input cw-ref" aria-label={label} value={value} onChange={(e) => onChange(e.target.value)}>
+      {allowAny ? <option value="">{w('anyItem')}</option> : !items.some((x) => x.name === value) && <option value={value}>{value ? `${value} ?` : w('pickItem')}</option>}
+      {allowAny && value && !items.some((x) => x.name === value) && <option value={value}>{value} ?</option>}
+      {items.map((x) => (
+        <option key={x.name} value={x.name}>
+          {x.name}
         </option>
       ))}
     </select>
@@ -963,6 +1069,16 @@ function ExprSlot({ expr, type, label }: { expr: Expr; type: 'number' | 'boolean
       break;
     case 'object':
       body = <RefSlot value={expr.ref} label={label} onChange={(ref) => ref && set({ ref })} />;
+      break;
+    case 'itemCount':
+      body = (
+        <>
+          {w('itemCount')} <ItemSlot value={expr.item} label={`${label} ${w('itemCount')}`} onChange={(item) => set({ item })} /> {w('hasWord')}
+        </>
+      );
+      break;
+    case 'selectedItem':
+      body = <span className="cw-pill-text">{w('selectedItem')}</span>;
       break;
     case 'inside':
       body = (

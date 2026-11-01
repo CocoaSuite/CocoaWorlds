@@ -18,6 +18,7 @@ import { WorldRenderer, type FaceRef } from './world-render';
 import { VertexTool } from './vertex-tool';
 import { ClipTool, type ClipKeep, type ClipState } from './clip-tool';
 import type { PlayFrame, PlayInfo, PlaySession } from './play-session';
+import type { UiState } from '@cocoaworlds/runtime';
 import { SceneLighting } from './scene-lighting';
 
 /** Larger single mouse movements (pixels) while playing are glitches, not the player. */
@@ -38,6 +39,9 @@ export interface Hud {
   messages: string[];
   /** Looking at something usable: its prompt word ('' for plain “Use”), else null. */
   use: string | null;
+  /** The screen UI now, and every value texts and bars can show ({Cash}, health, score). */
+  ui: UiState;
+  allValues: Record<string, unknown>;
 }
 
 function formatValue(v: unknown): string {
@@ -78,6 +82,8 @@ export interface ViewportCallbacks {
   activeBlocks(blocks: Map<string, string[]>): void;
   /** Play mode as the player: whether the mouse is captured (false = “click to play”). */
   playerLock(locked: boolean): void;
+  /** A screen freed the mouse for its buttons (true) or gave it back (false). */
+  uiMouse(free: boolean): void;
   /** Health and score changed (only while playing as the player). */
   hud(hud: Hud | null): void;
   /** Loop cut tool: how many cuts, and whether the cursor is on a brush where a loop fits (null = not on a brush). */
@@ -468,6 +474,10 @@ export class ViewportEngine {
     this.hudKey = '';
     this.cb.hud(null);
     this.gameKeys.clear();
+    if (this.uiFree) {
+      this.uiFree = false;
+      this.cb.uiMouse(false);
+    }
     if (document.pointerLockElement === this.renderer.domElement) document.exitPointerLock();
     this.scene.remove(p.group);
     p.dispose();
@@ -490,7 +500,25 @@ export class ViewportEngine {
 
   /** “Click to play”. */
   capturePlayer(): void {
-    if (this.asPlayer) this.lockPointer();
+    if (this.asPlayer && !this.uiFree) this.lockPointer();
+  }
+
+  /** A shown screen has freed the mouse for its buttons (the view stops turning; keys still move). */
+  private uiFree = false;
+
+  /** Free the mouse when a screen asks for it, and take it back when no screen does. */
+  private followUiMouse(free: boolean): void {
+    if (!this.asPlayer || free === this.uiFree) return;
+    this.uiFree = free;
+    this.cb.uiMouse(free);
+    if (free) {
+      if (this.locked) document.exitPointerLock();
+    } else this.lockPointer();
+  }
+
+  /** The player clicked a button on screen. */
+  clickUi(id: string): void {
+    this.play?.clickUi(id);
   }
 
   private lockPointer(): void {
@@ -507,7 +535,7 @@ export class ViewportEngine {
 
   private onLockChange = (): void => {
     if (!this.asPlayer) return;
-    if (!this.locked) {
+    if (!this.locked && !this.uiFree) {
       this.gameKeys.clear();
       this.sendInput();
     }
@@ -542,7 +570,9 @@ export class ViewportEngine {
 
   /** Returns true when the key was the game's. */
   private gameKey(e: KeyboardEvent, down: boolean): boolean {
-    if (!this.asPlayer || !this.locked) return false;
+    if (!this.asPlayer || !(this.locked || (this.uiFree && this.play))) return false;
+    // (With the mouse freed by a screen, typing into nothing else is possible, so the keys stay the game's.)
+    if (e.key === 'Escape' && !this.locked) return false;
     if (e.key === 'Escape') {
       // First Esc lets go of the mouse; the next one (or Stop) ends the game.
       e.preventDefault();
@@ -555,6 +585,11 @@ export class ViewportEngine {
     // Otherwise every key belongs to the game (Ctrl+S, Ctrl+Z… would be surprising mid-jump).
     e.preventDefault();
     e.stopImmediatePropagation();
+    // 1–9 pick a hotbar slot.
+    if (down && /^Digit[1-9]$/.test(e.code)) {
+      this.play?.selectSlot(Number(e.code.slice(5)) - 1);
+      return true;
+    }
     if (!ViewportEngine.GAME_KEYS.has(e.code)) return true;
     if (down && e.code === 'KeyE' && !e.repeat) this.play?.use();
     if (down) this.gameKeys.add(e.code);
@@ -1116,7 +1151,10 @@ export class ViewportEngine {
           values: screen.values.filter((v) => v.show).map((v) => ({ name: v.name, value: formatValue(v.value) })),
           messages: screen.messages,
           use: this.locked ? this.play.usePrompt() : null,
+          ui: this.play.uiState(),
+          allValues: { ...Object.fromEntries(screen.values.map((v) => [v.name, v.value])), health: Math.ceil(status?.health ?? 0), score: status?.score ?? 0 },
         };
+        this.followUiMouse(hud.ui.freesMouse);
         const key = JSON.stringify(hud);
         if (key !== this.hudKey) {
           this.hudKey = key;
@@ -1314,7 +1352,8 @@ export class ViewportEngine {
     const el = this.renderer.domElement;
     el.focus();
     if (this.asPlayer) {
-      if (!this.locked && e.button === 0) this.lockPointer();
+      if (this.locked && e.button === 0) this.play?.useItem();
+      else if (!this.locked && !this.uiFree && e.button === 0) this.lockPointer();
       return;
     }
     if (this.gizmo.dragging || (this.gizmo as unknown as { axis: string | null }).axis) return;
@@ -1624,6 +1663,8 @@ export class ViewportEngine {
   private onWheel = (e: WheelEvent): void => {
     if (this.asPlayer) {
       e.preventDefault();
+      // The wheel moves along the hotbar.
+      if (this.locked && this.play && e.deltaY) this.play.selectSlot(this.play.uiState().slot + Math.sign(e.deltaY));
       return;
     }
     e.preventDefault();
@@ -1643,6 +1684,8 @@ export class ViewportEngine {
 
   private onKeyDown = (e: KeyboardEvent): void => {
     if (this.gameKey(e, true)) return;
+    // Another workspace (Screens) fills the window: the 3D view is hidden and takes no keys.
+    if (this.host.offsetParent === null) return;
     if (this.isTyping(e)) return;
     if (this.draft?.points && this.draft.stage === 'footprint' && (e.key === 'Enter' || e.key === 'Backspace')) {
       e.preventDefault();

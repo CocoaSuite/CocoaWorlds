@@ -105,6 +105,8 @@ Last updated: 2026-11-01 (Phase 2, first slice).
 | Copy and paste blocks and stacks (buttons, Ctrl+C / X / V / D, Delete), also between objects | **Done** |
 | Lifts and moving platforms carry the player (standing or crouched; no jumping while moving); the player slides round pillars and balls | **Done** |
 | Models collide by their own shape: box, hull or exact triangles | **Done** (B3) |
+| Screens workspace (full window): screens of text, buttons, panels, images, bars and a hotbar on nine anchors; drag, resize, nudge; values in texts; screens that free the mouse | **Done** (B5) |
+| Items and the inventory: hotbar slots (1–9, wheel), click to use; blocks to give, take, count, show and hide screens and elements, set texts, react to clicks and item use | **Done** (B5) |
 | The optional graph view (V3), drag-and-drop of blocks, watching values and breakpoints | Planned (rest of Phase 5) |
 | Standalone runtime and Play as built (Phase 8) | Planned |
 | Desktop and web export (Phase 9) | Planned |

@@ -15,6 +15,10 @@ export interface SceneInfo {
   globals?: { name: string; type: Exclude<ValueType, 'object'> }[];
   /** Objects that are text signs (for “Set the text of”). */
   signs?: Set<string>;
+  /** The screen UI: screens and their elements by id (missing: not checked). */
+  ui?: { screens: Map<string, string>; elements: Map<string, { name: string; kind: string }> };
+  /** The items the player can carry (missing: not checked). */
+  items?: Set<string>;
 }
 
 export interface Problem {
@@ -80,6 +84,16 @@ export type Op =
   | { op: 'anim'; name: string; loop: boolean }
   /** Pops the zone, then the thing: pushes whether it is inside the zone now. */
   | { op: 'inside' }
+  /** Show or hide a screen or one element of the screen UI. */
+  | { op: 'ui'; what: 'screen' | 'element'; id: string; show: boolean }
+  /** Pops text: change what an element says. */
+  | { op: 'uitext'; id: string }
+  /** Pops an amount: give (or with a minus, take) some of an item. */
+  | { op: 'item'; name: string; sign: 1 | -1 }
+  /** Pushes how many of an item the player has. */
+  | { op: 'count'; name: string }
+  /** Pushes the item in the picked hotbar slot. */
+  | { op: 'selitem' }
   | { op: 'halt' };
 
 export type GameAction = 'hurt' | 'heal' | 'addScore';
@@ -94,7 +108,9 @@ export type CompiledEvent =
   | { kind: 'use'; prompt: string }
   | { kind: 'die' }
   | { kind: 'breaks' }
-  | { kind: 'every'; seconds: number };
+  | { kind: 'every'; seconds: number }
+  | { kind: 'uiClick'; element: string }
+  | { kind: 'useItem'; item: string };
 
 export interface CompiledHandler {
   id: string;
@@ -204,6 +220,10 @@ class HandlerCompiler {
     } else if (ev.kind === 'message' || ev.kind === 'messageStop') {
       if (!ev.message.trim()) this.problem(ev.id, 'Give the message a name.');
       else event = { kind: ev.kind, message: ev.message.trim() };
+    } else if (ev.kind === 'uiClick') {
+      if (this.checkElement(ev.element, ev.id, 'button')) event = { kind: 'uiClick', element: ev.element };
+    } else if (ev.kind === 'useItem') {
+      if (!ev.item || this.checkItem(ev.item, ev.id)) event = { kind: 'useItem', item: ev.item };
     } else if (ev.kind === 'every') {
       if (ev.seconds.kind !== 'number' || !(ev.seconds.value > 0)) this.problem(ev.seconds.id, '“Every” needs a number of seconds above 0.');
       else event = { kind: 'every', seconds: Math.max(0.05, ev.seconds.value) };
@@ -251,6 +271,29 @@ class HandlerCompiler {
       return null;
     }
     return ref.entity;
+  }
+
+  /** A screen picked in a block: it must exist. */
+  private checkScreen(id: string, block: string): boolean {
+    if (!id) return this.problem(block, 'Pick a screen (make screens in the Screens tab).'), false;
+    if (this.scene.ui && !this.scene.ui.screens.has(id)) return this.problem(block, 'The screen this block points at no longer exists. Pick another one.'), false;
+    return true;
+  }
+
+  /** An element picked in a block: it must exist (and be a button, for clicks). */
+  private checkElement(id: string, block: string, kind?: string): boolean {
+    if (!id) return this.problem(block, kind === 'button' ? 'Pick a button (make them in the Screens tab).' : 'Pick something on a screen (make it in the Screens tab).'), false;
+    const e = this.scene.ui?.elements.get(id);
+    if (this.scene.ui && !e) return this.problem(block, 'The screen element this block points at no longer exists. Pick another one.'), false;
+    if (e && kind && e.kind !== kind) return this.problem(block, `${e.name} is not a button.`), false;
+    return true;
+  }
+
+  /** An item named in a block: it must be one of the scene's items. */
+  private checkItem(name: string, block: string): boolean {
+    if (!name) return this.problem(block, 'Pick an item (make items in the Screens tab).'), false;
+    if (this.scene.items && !this.scene.items.has(name)) return this.problem(block, `There is no item called “${name}”.`), false;
+    return true;
   }
 
   /** A block for a game system the project has switched off still compiles, with a warning. */
@@ -439,6 +482,29 @@ class HandlerCompiler {
       case 'stop':
         this.emit({ op: 'halt' });
         break;
+      case 'showScreen':
+      case 'hideScreen':
+        if (this.checkScreen(s.screen, s.id)) this.emit({ op: 'ui', what: 'screen', id: s.screen, show: s.kind === 'showScreen' });
+        break;
+      case 'showUi':
+      case 'hideUi':
+        if (this.checkElement(s.element, s.id)) this.emit({ op: 'ui', what: 'element', id: s.element, show: s.kind === 'showUi' });
+        break;
+      case 'setUiText': {
+        // (A problem here is an error, so the stack is left out of the game.)
+        this.checkElement(s.element, s.id);
+        const e = this.scene.ui?.elements.get(s.element);
+        if (e && e.kind !== 'text' && e.kind !== 'button') this.problem(s.id, `${e.name} has no text: pick a text or a button.`);
+        this.value(s.text);
+        this.emit({ op: 'uitext', id: s.element });
+        break;
+      }
+      case 'giveItem':
+      case 'takeItem':
+        this.checkItem(s.item, s.id);
+        this.expect(s.amount, 'number', 'How many must be a number.');
+        this.emit({ op: 'item', name: s.item, sign: s.kind === 'giveItem' ? 1 : -1 });
+        break;
       case 'spawn':
         if ('player' in s.template) this.problem(s.id, 'Pick an object to copy.');
         this.pushRef(s.template, s.id);
@@ -594,6 +660,13 @@ class HandlerCompiler {
         this.emit({ op: 'inside' });
         return 'boolean';
       }
+      case 'itemCount':
+        this.checkItem(e.item, e.id);
+        this.emit({ op: 'count', name: e.item });
+        return 'number';
+      case 'selectedItem':
+        this.emit({ op: 'selitem' });
+        return 'text';
       case 'health':
       case 'score':
         this.ruleOff(e.kind, e.id);

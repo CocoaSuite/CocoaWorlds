@@ -1,5 +1,6 @@
 /** React wrapper around ViewportEngine plus the viewport overlays (view switcher, grid/snap pill, stats, selection readout). */
-import type { Vec3 } from '@cocoaworlds/core';
+import { uiOf, type Vec3 } from '@cocoaworlds/core';
+import { UiLayer } from '../ui/UiLayer';
 import { ContextMenu, Segmented, type MenuEntry } from '@cocoaworlds/ui';
 import { useEffect, useRef, useState } from 'react';
 import { flyState } from '../editor/shortcuts';
@@ -26,6 +27,7 @@ export function Viewport() {
   const [vertexCount, setVertexCount] = useState(0);
   /** Playing as the player: null = not, false = waiting for a click, true = mouse captured. */
   const [lock, setLock] = useState<boolean | null>(null);
+  const [uiMouse, setUiMouse] = useState(false);
   const [hud, setHud] = useState<Hud | null>(null);
   const [loop, setLoop] = useState<{ cuts: number; fits: boolean | null }>({ cuts: 1, fits: null });
   const [clip, setClip] = useState<{ state: ClipState | null; keep: ClipKeep }>({ state: null, keep: 'both' });
@@ -36,6 +38,9 @@ export function Viewport() {
   const rev = useEditor((s) => s.rev);
   const selection = useEditor((s) => s.selection);
   const playing = useEditor((s) => s.playing);
+  const playScene = playing?.scene;
+  // Playing as the player: the editor's own overlays (views, grid, the selection) make way for the game's screen.
+  const asPlayer = !!playing && lock !== null;
   const faceSelection = useEditor((s) => s.faceSelection);
   const tool = useEditor((s) => s.tool);
   const view = useEditor((s) => s.view);
@@ -78,6 +83,7 @@ export function Viewport() {
         },
         activeBlocks: (blocks) => useEditor.setState({ activeBlocks: blocks }),
         playerLock: setLock,
+        uiMouse: setUiMouse,
         hud: setHud,
         livePivot: (id, world) => useEditor.getState().setPivot(id, world, `pivot-${id}`),
         loopCutState: (cuts, fits) => setLoop({ cuts, fits }),
@@ -225,6 +231,7 @@ export function Viewport() {
           The 3D view could not start: {glError}. Check that your graphics drivers support WebGL 2.
         </div>
       )}
+      {!asPlayer && (
       <div className="cw-ov cw-ov-tl">
         <Segmented<ViewMode>
           label="View"
@@ -238,6 +245,8 @@ export function Viewport() {
           ]}
         />
       </div>
+      )}
+      {!asPlayer && (
       <div className="cw-ov cw-ov-tr cw-pill">
         <span className="cw-pill-k">{t('grid.grid')}</span>
         <span className="mono">{gridSize}u</span>
@@ -259,7 +268,8 @@ export function Viewport() {
           </>
         )}
       </div>
-      {one && (
+      )}
+      {one && !asPlayer && (
         <div className="cw-ov cw-ov-bl mono" data-testid="selection-readout">
           <span>
             <span className="ax-x">X</span> {one.transform.position[0]} <span className="ax-y">Y</span> {one.transform.position[1]}{' '}
@@ -284,8 +294,9 @@ export function Viewport() {
         </div>
       )}
       {playing && lock === true && <div className="cw-crosshair" aria-hidden="true" />}
+      {playing && hud && playScene && <UiLayer ui={uiOf(playScene.settings)} live={hud.ui} values={hud.allValues} onClick={(id) => engine.current?.clickUi(id)} />}
       {playing && hud && <HudView hud={hud} />}
-      {playing && lock === false && (
+      {playing && lock === false && !uiMouse && (
         <button type="button" className="cw-ov cw-click-play" data-testid="click-to-play" onClick={() => engine.current?.capturePlayer()}>
           <strong>{t('play.click')}</strong>
           <span>{t('play.keys')}</span>

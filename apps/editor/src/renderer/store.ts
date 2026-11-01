@@ -144,6 +144,8 @@ interface State {
   dialog: 'makePrefab' | 'recipes' | null;
   /** The bottom workspace's open tab. */
   bottomTab: 'script' | 'assets' | 'console' | 'problems';
+  /** Which workspace fills the window: the scene (3D view and panels) or the screen UI editor. */
+  workspace: 'scene' | 'screens';
   /** While playing: the blocks each object's script is running (for highlighting). */
   activeBlocks: Map<string, string[]>;
 }
@@ -229,6 +231,7 @@ interface Actions {
   /** Replace the project's game values (saved to the project file at once). */
   setGameValues(values: GameValue[], label: string): Promise<boolean>;
   setBottomTab(tab: State['bottomTab']): void;
+  setWorkspace(w: State['workspace']): void;
   /** Change an object's script (the whole `script` component) as one undo step, merging with `mergeKey`. */
   updateScript(id: string, fn: (s: Script) => Script, label: string, mergeKey?: string): void;
   // components
@@ -290,6 +293,7 @@ export const useEditor = create<State & Actions>()((set, get) => ({
   placementPoint: () => null,
   dialog: null,
   bottomTab: 'console',
+  workspace: 'scene',
   activeBlocks: new Map(),
 
   setLang(l) {
@@ -1012,6 +1016,10 @@ export const useEditor = create<State & Actions>()((set, get) => ({
     get().log('info', 'Script', `Added “${r.name[getLang()]}” to ${e.name}${zoneId ? ` with a zone (${doc.get(zoneId)?.name})` : ''}`);
   },
 
+  setWorkspace(workspace) {
+    set({ workspace });
+  },
+
   setBottomTab(bottomTab) {
     set({ bottomTab, showBottom: true });
   },
@@ -1042,6 +1050,8 @@ export const useEditor = create<State & Actions>()((set, get) => ({
   },
 
   play() {
+    // The game is seen in the scene's 3D view.
+    if (get().workspace !== 'scene') set({ workspace: 'scene' });
     const { doc, playing } = get();
     if (!doc || playing) return;
     get().history.commit();

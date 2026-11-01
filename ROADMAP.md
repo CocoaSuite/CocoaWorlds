@@ -23,7 +23,7 @@ From here the order follows the benchmark: [BENCHMARK.md](BENCHMARK.md) — can 
 | B2 ✅ | Copies while playing (spawn a prefab, remove a copy, values on copies); object actions: scale, become physical, push, follow or move toward, teleport the player; conveyor surfaces; object health and breaking; third-person camera option | Droppers, conveyors, disasters, planting, pets, breakables | 6 |
 | B3 ✅ | Assets and rendering: image textures and materials, lights and sky, sound, glTF models (static first) | Every target looks and sounds like a game | 7 |
 | B4 | Standalone export (Windows, macOS, Linux, web) and saved progress | Games others can play and come back to | 8–9 |
-| B5 | Screen UI editor (text, images, buttons, bars, lists) and an inventory/hotbar | Shops, inventories, menus | 6–7 |
+| B5 ✅ | Screen UI editor (text, images, buttons, bars, lists) and an inventory/hotbar | Shops, inventories, menus | 6–7 |
 | A1 | Half-Life set: ladders, water and swimming, armour and chargers, weapons (hitscan, projectiles, explosions, ammo), paths and trains, level changes with landmarks, decals and particles, scripted scenes, NPCs | Half-Life 1 | 6, 10 |
 | A2 | Animated models, creature behaviours, navigation meshes, scattering foliage, many-objects performance | Half-Life NPCs, Slime Rancher creatures | 7, 10 |
 | T1 | Voxel terrain with heightmap import: sculpt, dig and paint | Slime Rancher, outdoor maps | 7 |
@@ -104,4 +104,4 @@ Order may shift where dependencies require it (for example, the project format f
 
 ## Next
 
-B5: the screen UI editor (text, images, buttons, bars and lists in anchored boxes, driven by blocks) and an inventory/hotbar, then B4: export (Windows, macOS, Linux, web) and saved progress. A1 (the Half-Life set) and T1 (voxel terrain) follow.
+B4: export (Windows, macOS, Linux, web) and saved progress. The Materials workspace (a full-window material editor, beside Scene and Screens) is planned with it or right after. A1 (the Half-Life set) and T1 (voxel terrain) follow.

@@ -10,6 +10,7 @@ import { Inspector } from './Inspector';
 import { SceneTree } from './SceneTree';
 import { ToolBar } from './ToolBar';
 import { TopBar } from './TopBar';
+import { ScreensPanel } from './ScreensPanel';
 import { SHORTCUTS, useShortcuts } from './shortcuts';
 
 const AUTOSAVE_MS = 30_000;
@@ -19,6 +20,7 @@ export function EditorScreen() {
   const playing = useEditor((s) => !!s.playing);
   const recovery = useEditor((s) => s.recovery);
   const recover = useEditor((s) => s.recover);
+  const workspace = useEditor((s) => s.workspace);
   const [keysOpen, setKeysOpen] = useState(false);
   useShortcuts(() => setKeysOpen(true));
 
@@ -30,7 +32,9 @@ export function EditorScreen() {
   return (
     <div className="cw-editor">
       <TopBar onShowKeys={() => setKeysOpen(true)} />
-      <div className={`cw-mid${playing ? ' cw-playing' : ''}`}>
+      {/* The scene stays mounted (hidden) under other workspaces, so its 3D view keeps its state. */}
+      {workspace === 'screens' && <ScreensPanel />}
+      <div className={`cw-mid${playing ? ' cw-playing' : ''}`} hidden={workspace !== 'scene'}>
         {/* While playing, editing panels are inert: the game runs from a snapshot of the scene. */}
         <div className="cw-inert-wrap" inert={playing}>
           <SceneTree />

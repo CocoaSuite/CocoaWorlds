@@ -3,6 +3,7 @@
  * Bump CURRENT_SCHEMA_VERSION and add a migration in migrate.ts whenever a format changes shape.
  */
 import type { Transform } from './math';
+import type { UiSettings } from './ui';
 
 /**
  * 1: first format (transforms and brush faces in world space).
@@ -98,6 +99,8 @@ export interface SceneSettings {
   gravity: number;
   /** A gradient sky behind the level (missing in older files: off, the plain background shows). */
   sky?: SkySettings;
+  /** Screen UI and the items the player can carry (missing: none). */
+  ui?: UiSettings;
 }
 
 export interface SkySettings {

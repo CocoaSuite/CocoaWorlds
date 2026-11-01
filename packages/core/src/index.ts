@@ -10,3 +10,4 @@ export * from './matrix';
 export * from './components';
 export * from './prefab';
 export * from './pivot';
+export * from './ui';

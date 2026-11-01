@@ -97,6 +97,7 @@ export function TopBar({ onShowKeys }: { onShowKeys: () => void }) {
       <div className="cw-crumbs">
         {session.project.name} <span className="cw-crumb-sep">/</span> <b>{s.doc?.name}</b>
       </div>
+      <Workspaces />
       <div className="cw-status" data-testid="save-status">
         <span className={`cw-dot ${s.dirty ? 'warn' : 'ok'}`} />
         {status}
@@ -147,5 +148,35 @@ export function TopBar({ onShowKeys }: { onShowKeys: () => void }) {
         </Dialog>
       )}
     </header>
+  );
+}
+
+/** Scene, Screens (the screen UI editor) and, later, Materials: each fills the window. */
+function Workspaces() {
+  const ws = useEditor((x) => x.workspace);
+  const playing = useEditor((x) => !!x.playing);
+  const set = useEditor((x) => x.setWorkspace);
+  const tabs: { id: 'scene' | 'screens' | 'materials'; label: string; soon?: boolean }[] = [
+    { id: 'scene', label: t('ws.scene') },
+    { id: 'screens', label: t('ws.screens') },
+    { id: 'materials', label: t('ws.materials'), soon: true },
+  ];
+  return (
+    <div className="cw-ws" role="tablist" aria-label={t('ws.label')}>
+      {tabs.map((x) => (
+        <button
+          key={x.id}
+          type="button"
+          role="tab"
+          aria-selected={ws === x.id}
+          className={ws === x.id ? 'on' : ''}
+          disabled={x.soon || (playing && x.id !== 'scene')}
+          title={x.soon ? t('ws.soon') : undefined}
+          onClick={() => x.id !== 'materials' && set(x.id)}
+        >
+          {x.label}
+        </button>
+      ))}
+    </div>
   );
 }

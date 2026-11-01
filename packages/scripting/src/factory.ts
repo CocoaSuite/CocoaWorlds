@@ -31,10 +31,14 @@ export function newEvent(kind: EventKind, zone: Ref = self): EventBlock {
       return { id: id(), kind, message: 'open' };
     case 'every':
       return { id: id(), kind, seconds: num(1) };
+    case 'uiClick':
+      return { id: id(), kind, element: '' };
+    case 'useItem':
+      return { id: id(), kind, item: '' };
   }
 }
 
-export function newStatement(kind: StatementKind, opts: { target?: Ref; variable?: string } = {}): Statement {
+export function newStatement(kind: StatementKind, opts: { target?: Ref; variable?: string; item?: string } = {}): Statement {
   const target = opts.target ?? self;
   switch (kind) {
     case 'move':
@@ -100,6 +104,17 @@ export function newStatement(kind: StatementKind, opts: { target?: Ref; variable
       return { id: id(), kind, target };
     case 'playAnim':
       return { id: id(), kind, target, name: '', loop: true };
+    case 'showScreen':
+    case 'hideScreen':
+      return { id: id(), kind, screen: '' };
+    case 'showUi':
+    case 'hideUi':
+      return { id: id(), kind, element: '' };
+    case 'setUiText':
+      return { id: id(), kind, element: '', text: text('Text') };
+    case 'giveItem':
+    case 'takeItem':
+      return { id: id(), kind, item: opts.item ?? '', amount: num(1) };
   }
 }
 
@@ -136,5 +151,9 @@ export function newExpr(kind: ExprKind, opts: { variable?: string } = {}): Expr 
       return { id: id(), kind, variable: opts.variable ?? 'value', of: other };
     case 'inside':
       return { id: id(), kind, what: player, zone: self };
+    case 'itemCount':
+      return { id: id(), kind, item: '' };
+    case 'selectedItem':
+      return { id: id(), kind };
   }
 }

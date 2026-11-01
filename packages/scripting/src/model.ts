@@ -37,7 +37,11 @@ export type Expr =
   /** Another object's variable (read only). */
   | { id: string; kind: 'varOf'; variable: string; of: Ref }
   /** Whether something (the player, an object) is inside a trigger zone right now. */
-  | { id: string; kind: 'inside'; what: Ref; zone: Ref };
+  | { id: string; kind: 'inside'; what: Ref; zone: Ref }
+  /** How many of an item the player carries. */
+  | { id: string; kind: 'itemCount'; item: string }
+  /** The item in the hotbar slot the player has picked ('' when that slot is empty). */
+  | { id: string; kind: 'selectedItem' };
 
 export type Direction = 'up' | 'down' | 'north' | 'south' | 'east' | 'west';
 export type Axis = 'up' | 'north' | 'east';
@@ -92,7 +96,15 @@ export type Statement =
   /** Stop the sounds an object is making (its Sound component and what its scripts played). */
   | { id: string; kind: 'stopSound'; target: Ref }
   /** Play one of a model's animations by name, looping or once. */
-  | { id: string; kind: 'playAnim'; target: Ref; name: string; loop: boolean };
+  | { id: string; kind: 'playAnim'; target: Ref; name: string; loop: boolean }
+  /** Show or hide a whole screen of the screen UI (by id). */
+  | { id: string; kind: 'showScreen' | 'hideScreen'; screen: string }
+  /** Show or hide one element of a screen (by id). */
+  | { id: string; kind: 'showUi' | 'hideUi'; element: string }
+  /** Change what a text or button says. */
+  | { id: string; kind: 'setUiText'; element: string; text: Expr }
+  /** Give the player some of an item, or take some away (never below 0). */
+  | { id: string; kind: 'giveItem' | 'takeItem'; item: string; amount: Expr };
 
 export type EventBlock =
   | { id: string; kind: 'start' }
@@ -113,7 +125,11 @@ export type EventBlock =
   /** The player's health reached 0 (they start again at the Player start). */
   | { id: string; kind: 'die' }
   /** This breakable object's health reached 0 (it is removed after this starts). */
-  | { id: string; kind: 'breaks' };
+  | { id: string; kind: 'breaks' }
+  /** The player clicked a button of the screen UI (by id). */
+  | { id: string; kind: 'uiClick'; element: string }
+  /** The player used (clicked with) an item from the hotbar; '' for any item. */
+  | { id: string; kind: 'useItem'; item: string };
 
 export interface Handler {
   id: string;

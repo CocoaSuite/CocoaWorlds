@@ -24,6 +24,8 @@ import {
   type SoundData,
   type GameRules,
   type ModelData,
+  type UiSettings,
+  uiOf,
 } from '@cocoaworlds/core';
 import { EventBus } from './events';
 import { DIRECTIONS, ScriptRunner, compileScript, type ActionName, type GameValueDef, type Problem, type Program, type SceneInfo, type Script, type Value } from '@cocoaworlds/scripting';
@@ -33,6 +35,21 @@ import { bounds, brushToWorld, buildMesh, buildWorld, fromData, hullPoints, vert
 
 /** Units per metre (an inch-based world). */
 export const UNITS_PER_METRE = 39.37;
+
+/** What the screen UI shows at a moment (see GameWorld.uiState). */
+export interface UiState {
+  /** Ids of the screens shown, and of the elements hidden. */
+  shown: string[];
+  hidden: string[];
+  /** Texts changed by scripts, by element id. */
+  texts: Record<string, string>;
+  /** What the player carries, in hotbar order. */
+  inventory: { item: string; count: number }[];
+  /** The picked hotbar slot. */
+  slot: number;
+  /** A shown screen frees the mouse (for its buttons). */
+  freesMouse: boolean;
+}
 
 /** A model's triangles as the editor read them from its file (in the file's own units), for collisions. */
 export interface ModelMesh {
@@ -204,11 +221,27 @@ export class GameWorld {
     return new GameWorld(scene, gameRules({ game: options.rules }), options.values ?? [], options.models ?? new Map());
   }
 
+  // ── Screen UI and the inventory (B5) ──
+  private ui!: UiSettings;
+  /** Screens shown now, elements hidden now, and texts scripts changed. */
+  private uiShown = new Set<string>();
+  private uiHidden = new Set<string>();
+  private uiText = new Map<string, string>();
+  /** What the player carries, in the order it was first picked up (the hotbar's order). */
+  private inventory = new Map<string, number>();
+  /** The hotbar slot the player has picked. */
+  private slot = 0;
+
   /** Model triangles by file (see `create`). */
   private models: Map<string, ModelMesh>;
 
   private constructor(scene: SceneFile, rules: GameRules, values: GameValueDef[], models: Map<string, ModelMesh>) {
     this.models = models;
+    this.ui = uiOf(scene.settings);
+    for (const sc of this.ui.screens) {
+      if (sc.shownAtStart) this.uiShown.add(sc.id);
+      for (const e of sc.elements) if (!e.visible) this.uiHidden.add(e.id);
+    }
     this.rules = rules;
     this.valueDefs = values;
     for (const v of values) this.globals.set(v.name, v.initial);
@@ -330,6 +363,15 @@ export class GameWorld {
       playAnimation: (target, name, loop) => this.bus.emit({ type: 'anim', target, name, loop, time: this.time }),
       spawn: (template, place) => this.spawn(template, place),
       isInside: (zone, what) => this.isInside(zone, what),
+      showUi: (what, id, show) => {
+        const set = what === 'screen' ? this.uiShown : this.uiHidden;
+        if (show === (what === 'screen')) set.add(id);
+        else set.delete(id);
+      },
+      setUiText: (id, text) => void this.uiText.set(id, text),
+      giveItem: (name, amount) => this.giveItem(name, amount),
+      itemCount: (name) => this.inventory.get(name) ?? 0,
+      selectedItem: () => this.selectedItem(),
       setText: (target, text) => {
         if (!this.signs.has(target) || this.signs.get(target) === text) return;
         this.signs.set(target, text);
@@ -1126,6 +1168,53 @@ export class GameWorld {
     const local = qrot({ x: -q0.x, y: -q0.y, z: -q0.z, w: q0.w }, [at.x - t0.x, at.y - t0.y, at.z - t0.z]);
     const w = qrot(q1, local);
     return { x: t1.x + w[0], y: t1.y + w[1], z: t1.z + w[2] };
+  }
+
+  /** Give the player some of an item (a minus takes some away; at 0 it leaves the hotbar). */
+  giveItem(name: string, amount: number): void {
+    if (!name || !Number.isFinite(amount)) return;
+    const n = Math.max(0, Math.round((this.inventory.get(name) ?? 0) + amount));
+    if (n > 0) this.inventory.set(name, n);
+    else this.inventory.delete(name);
+  }
+
+  /** The item in the picked hotbar slot ('' when that slot is empty). */
+  selectedItem(): string {
+    return [...this.inventory.keys()][this.slot] ?? '';
+  }
+
+  /** Pick a hotbar slot (0-based; wraps around the hotbar's slots). */
+  selectSlot(slot: number): void {
+    const n = Math.max(1, ...this.ui.screens.flatMap((s) => s.elements.filter((e) => e.kind === 'hotbar').map((e) => e.slots)));
+    this.slot = ((Math.round(slot) % n) + n) % n;
+  }
+
+  /** The player clicked a button on screen: its “When the player clicks” stacks start (if it is shown). */
+  clickUi(element: string): void {
+    for (const sc of this.ui.screens) {
+      const e = sc.elements.find((x) => x.id === element);
+      if (e && e.kind === 'button' && this.uiShown.has(sc.id) && !this.uiHidden.has(e.id)) this.runner.dispatch({ type: 'uiClick', element });
+    }
+  }
+
+  /** The player clicked with the item in the picked hotbar slot. */
+  useItem(): void {
+    const item = this.selectedItem();
+    if (item) this.runner.dispatch({ type: 'useItem', item });
+  }
+
+  /** What the screen UI shows now (for drawing it). */
+  uiState(): UiState {
+    const texts: Record<string, string> = {};
+    for (const [k, v] of this.uiText) texts[k] = v;
+    return {
+      shown: [...this.uiShown],
+      hidden: [...this.uiHidden],
+      texts,
+      inventory: [...this.inventory].map(([item, count]) => ({ item, count })),
+      slot: this.slot,
+      freesMouse: this.ui.screens.some((sc) => sc.freesMouse && this.uiShown.has(sc.id)),
+    };
   }
 
   /** Whether `what` (an object id or 'player') is in the trigger zone `zone` now. */

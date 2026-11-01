@@ -1,5 +1,6 @@
 /** Structural validation for files read from disk. Returns readable problems instead of throwing deep inside the editor. */
 import { isFiniteVec3 } from './math';
+import { validateUi } from './ui';
 import type { EntityData, ProjectFile, SceneFile } from './schema';
 
 export interface Problem {
@@ -75,6 +76,10 @@ export function validateScene(data: unknown): Result<SceneFile> {
   need(p, isStr(data.id), 'id', 'Missing scene id.');
   need(p, isStr(data.name), 'name', 'Missing scene name.');
   need(p, isObj(data.settings), 'settings', 'Missing scene settings.');
+  if (isObj(data.settings)) {
+    const bad = validateUi(data.settings.ui);
+    need(p, !bad, 'settings.ui', bad ?? '');
+  }
   if (!Array.isArray(data.entities)) {
     need(p, false, 'entities', 'Entities must be a list.');
   } else {

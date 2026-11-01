@@ -13,7 +13,7 @@ CocoaWorlds is measured by the games it can make. Two tiers:
 
 Each need also notes the roadmap step that delivers it (the B / A steps are in [ROADMAP.md](ROADMAP.md)). The last section lists the decisions that need approval.
 
-Status as of 2026-11-01 (after B3).
+Status as of 2026-11-02 (after B5).
 
 ## What every target needs
 
@@ -26,7 +26,7 @@ These come up in almost every game, so they come first.
 | Health, damage, death and restart, score (each can be switched off per project) | ✅ | — |
 | Blocks: events, moving, turning, showing and hiding, messages, variables, if/repeat, timers | ✅ | — |
 | **Game-wide values** (Cash, Gems, Round, Wave) that every script shares, shown on screen when wanted | ✅ | B1 |
-| **On-screen text and messages** ("Round 3 starts!", "Need $50", "Press E to buy") | ✅ messages; 🟡 no countdown widget yet (build it from a value) | B1, B5 |
+| **On-screen text and messages** ("Round 3 starts!", "Need $50", "Press E to buy") | ✅ messages, screen texts with values, bars | B1, B5 |
 | **Make copies while playing** (spawn a prefab at a place or object; remove a copy) | ✅ copies of scene objects (templates) | B2 |
 | **More things blocks can do to objects**: scale, become physical (unanchor), push, spin speed, move toward or follow an object, teleport the player | ✅ | B2 |
 | **Textures and materials from image files**, lights that light the level, sky, sound | ✅ | B3 |
@@ -79,8 +79,8 @@ Buy seeds, plant them in your plot, wait for them to grow (even while away), har
 |---|---|---|
 | Plant where you point | ✅ copy at where the player looks | — |
 | Plants grow over time (get bigger, change stage) | ✅ Scale; 🟡 stages by swapping copies | B3 models |
-| Inventory and hotbar (seeds, tools) | ❌ | B5 inventory |
-| Shop window with buttons | ❌ | B5 screen UI |
+| Inventory and hotbar (seeds, tools) | ✅ items, hotbar, “when the player uses” | B5 |
+| Shop window with buttons | ✅ screens that free the mouse, buttons | B5 |
 | Sell zone pays for crops | ✅ zone + “value of the thing that entered” | — |
 | Growing while you're away, saved garden | ❌ | B4 save, real-time clock |
 | Weather events (rain, gold mutations) | ❌ | B3 particles, B2 |
@@ -95,7 +95,7 @@ Break coins and chests to collect currency, buy eggs that hatch random pets, pet
 | Several currencies | ✅ game values | — |
 | Eggs: random pet by rarity | ✅ random + copies | — |
 | Pets follow the player | ✅ Move to the player in a loop (tested) | — |
-| Pet inventory, equip | ❌ | B5 inventory |
+| Pet inventory, equip | 🟡 items and hotbar; no scrolling list of pets yet | B5 |
 | Gates to new zones that open when paid | ✅ door recipe + score check | — |
 | Third-person camera ✅; saving ❌ | 🟡 | B4 |
 | Trading and seeing other players | ❌ | M1 |
@@ -115,7 +115,7 @@ A first-person ranch game on large outdoor islands. You suck up slimes and food 
 | **Vacuum gun**: pull physics objects in, hold them in slots, shoot them out | ❌ | A1 held tools |
 | Hundreds of physics objects at once | 🟡 Rapier handles it; not measured | A2 performance check |
 | Corrals, feeders, silos built on plots | ✅ copies | — |
-| Market with changing prices, upgrade shop | 🟡 prices as game values and signs; no shop window | B5 UI |
+| Market with changing prices, upgrade shop | ✅ prices as game values; shop screens with buttons | B5 |
 | Day and night, sky, lighting, water | ❌ | B3, A1 water |
 | Sound and music | ❌ | B3 |
 | Save the ranch | ❌ | B4 |
@@ -151,8 +151,8 @@ A first-person shooter built from brush levels (the kind CocoaWorlds is designed
 |---|---|---|
 | Tycoon | ~60% | looks (B3), export and saving (B4), several players (M1) |
 | Natural Disaster Survival | ~55% | water, looks and sound (B3), export (B4), several players (M1) |
-| Grow a Garden | ~40% | inventory and shop UI (B5), saving and real-time growth (B4), models (B3) |
-| Pet Simulator | ~45% | inventory (B5), models (B3), saving (B4) |
+| Grow a Garden | ~60% | saving and real-time growth (B4), weather and particles |
+| Pet Simulator | ~55% | a scrolling pet list, saving (B4) |
 | Half-Life 1 | ~35% | weapons, NPCs and AI, models, level changes, lighting and sound |
 | Slime Rancher | ~15% | terrain, creatures with behaviour, vacuum tool, models |
 

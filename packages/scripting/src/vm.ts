@@ -47,6 +47,15 @@ export interface ScriptHost {
   stopSound?(target: string): void;
   /** Play an animation of an object's model. */
   playAnimation?(target: string, name: string, loop: boolean): void;
+  /** Show or hide a screen, or one element of a screen. */
+  showUi?(what: 'screen' | 'element', id: string, show: boolean): void;
+  /** Change what a text or button says. */
+  setUiText?(id: string, text: string): void;
+  /** Give (or with a minus, take) some of an item. */
+  giveItem?(name: string, amount: number): void;
+  itemCount?(name: string): number;
+  /** The item in the picked hotbar slot ('' for none). */
+  selectedItem?(): string;
   /** Whether `what` (an object or 'player') is inside the trigger zone `zone` right now. */
   isInside?(zone: string, what: string): boolean;
   /** Make a copy of `template` at a place (an object, or 'aim'); returns the copy's id, or null if it couldn't. */
@@ -92,7 +101,11 @@ export type RunnerEvent =
   /** The player's health reached 0. */
   | { type: 'die' }
   /** A breakable object's health reached 0. */
-  | { type: 'breaks'; target: string };
+  | { type: 'breaks'; target: string }
+  /** The player clicked a button on screen. */
+  | { type: 'uiClick'; element: string }
+  /** The player used an item from the hotbar. */
+  | { type: 'useItem'; item: string };
 
 export class ScriptRunner {
   private instances: Instance[];
@@ -159,7 +172,11 @@ export class ScriptRunner {
     for (const inst of this.instances) {
       for (const h of inst.program.handlers) {
         const ev = h.event;
-        if (e.type === 'breaks') {
+        if (e.type === 'uiClick') {
+          if (ev.kind === 'uiClick' && ev.element === e.element) this.spawn(inst, h, null);
+        } else if (e.type === 'useItem') {
+          if (ev.kind === 'useItem' && (!ev.item || ev.item === e.item)) this.spawn(inst, h, null);
+        } else if (e.type === 'breaks') {
           if (ev.kind === 'breaks' && inst.program.owner === e.target) this.spawn(inst, h, null);
         } else if (e.type === 'die') {
           if (ev.kind === 'die') this.spawn(inst, h, null);
@@ -462,6 +479,21 @@ export class ScriptRunner {
           s.push(!!(zone && typeof zone === 'object' && what && typeof what === 'object' && this.host.isInside?.(zone.ref, what.ref)));
           break;
         }
+        case 'ui':
+          this.host.showUi?.(op.what, op.id, op.show);
+          break;
+        case 'uitext':
+          this.host.setUiText?.(op.id, this.text(s.pop() ?? null));
+          break;
+        case 'item':
+          this.host.giveItem?.(op.name, op.sign * num(s.pop() ?? 0));
+          break;
+        case 'count':
+          s.push(this.host.itemCount?.(op.name) ?? 0);
+          break;
+        case 'selitem':
+          s.push(this.host.selectedItem?.() ?? '');
+          break;
         case 'halt':
           return this.finish(t);
       }

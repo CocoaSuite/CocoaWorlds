@@ -257,3 +257,67 @@ code { font: 12px var(--mono); color: var(--fg); }
 .cw-recipe { display: flex; flex-direction: column; gap: 2px; width: 100%; text-align: left; background: none; border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; margin-bottom: 6px; color: inherit; font: inherit; cursor: pointer; }
 .cw-recipe:hover, .cw-recipe:focus-visible { border-color: var(--cw-brand-hi); background: var(--menuhover); }
 .cw-recipe span { font-size: 12px; color: var(--mute); }
+
+/* Screen UI (B5): the same layer in Play and in the Screens tab. */
+.cw-ui { position: absolute; inset: 0; overflow: hidden; pointer-events: none; font-family: var(--sans); }
+.cw-ui.editing { pointer-events: auto; }
+.cw-ui-screen { position: absolute; inset: 0; }
+.cw-ui-el { position: absolute; box-sizing: border-box; display: flex; align-items: center; justify-content: center; text-align: center; line-height: 1.15; border-radius: 6px; white-space: pre-wrap; overflow: hidden; }
+.cw-ui-el.text { text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6); }
+.cw-ui-el.button { pointer-events: auto; border: 0; cursor: pointer; font: inherit; font-weight: 600; color: inherit; box-shadow: 0 2px 0 rgba(0, 0, 0, 0.35); }
+.cw-ui-el.button:hover { filter: brightness(1.12); }
+.cw-ui-el.button:active { transform: translateY(1px); box-shadow: none; }
+.cw-ui-el.image img { width: 100%; height: 100%; object-fit: contain; }
+.cw-ui-noimg { width: 100%; height: 100%; display: grid; place-items: center; font-size: 12px; color: #aaa; border: 1px dashed #777; border-radius: 6px; }
+.cw-ui-el.bar { background: rgba(0, 0, 0, 0.5); justify-content: flex-start; padding: 2px; border-radius: 999px; }
+.cw-ui-bar-fill { display: block; height: 100%; border-radius: 999px; transition: width 0.15s; }
+.cw-ui-el.hotbar { gap: 4%; justify-content: center; overflow: visible; }
+.cw-ui-slot { position: relative; flex: 1 1 0; max-width: 100%; aspect-ratio: 1; height: auto; max-height: 100%; background: rgba(0, 0, 0, 0.5); border: 2px solid rgba(255, 255, 255, 0.25); border-radius: 8px; display: grid; place-items: center; }
+.cw-ui-slot.on { border-color: #fff; background: rgba(99, 127, 42, 0.6); }
+.cw-ui-slot-n { position: absolute; top: 2px; left: 5px; font-size: 0.75em; opacity: 0.7; }
+.cw-ui-slot-count { position: absolute; right: 5px; bottom: 2px; font-weight: 700; }
+.cw-ui-icon { width: 70%; height: 70%; object-fit: contain; image-rendering: auto; }
+.cw-ui-initials { font-weight: 700; font-size: 1.2em; text-transform: uppercase; }
+.cw-ui.editing .cw-ui-el { cursor: move; pointer-events: auto; outline: 1px dashed rgba(255, 255, 255, 0.25); }
+.cw-ui.editing .cw-ui-el.hidden { opacity: 0.4; }
+.cw-ui.editing .cw-ui-el.selected { outline: 2px solid var(--sel); outline-offset: 1px; z-index: 2; }
+.cw-ui-size { position: absolute; right: -5px; bottom: -5px; width: 12px; height: 12px; background: var(--sel); border: 2px solid #fff; border-radius: 3px; cursor: nwse-resize; }
+
+/* The Screens tab */
+.cw-mid[hidden] { display: none; }
+/* The Scene / Screens / Materials switcher in the top bar. */
+.cw-ws { display: flex; gap: 2px; margin-left: 14px; padding: 2px; border-radius: 8px; background: var(--cbg); border: 1px solid var(--line); }
+.cw-ws button { all: unset; padding: 3px 12px; border-radius: 6px; font-size: 13px; color: var(--mute); cursor: pointer; }
+.cw-ws button.on { background: var(--acc); color: var(--fg); }
+.cw-ws button:disabled { opacity: 0.45; cursor: default; }
+.cw-ws button:not(.on):not(:disabled):hover { color: var(--fg); }
+.cw-screens { display: grid; grid-template-columns: 260px minmax(0, 1fr) 300px; min-height: 0; background: var(--bg); }
+.cw-screens-side { display: flex; flex-direction: column; gap: 8px; min-height: 0; overflow: auto; padding: 12px; background: var(--panel); border-right: 1px solid var(--line); }
+.cw-screens-side.right { border-right: 0; border-left: 1px solid var(--line); }
+.cw-screens-h { display: flex; align-items: center; justify-content: space-between; gap: 6px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--mute); }
+.cw-screens-hint, .cw-screens-note { font-size: 12px; margin: 0; }
+.cw-screens-list, .cw-screens-itemlist { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.cw-screens-list li { border: 1px solid var(--line); border-radius: 8px; padding: 4px; }
+.cw-screens-list li.on { border-color: var(--sel); }
+.cw-screens-pick { all: unset; display: block; width: 100%; padding: 4px 6px; cursor: pointer; font-weight: 600; box-sizing: border-box; }
+.cw-screens-props { display: flex; flex-direction: column; gap: 6px; padding: 4px; }
+.cw-screens-sw { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+.cw-screens-main { display: flex; flex-direction: column; gap: 10px; min-width: 0; min-height: 0; padding: 12px; }
+.cw-screens-stagewrap { flex: 1; min-height: 0; display: grid; place-items: center; container-type: size; }
+.cw-screens-tools { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.cw-screens-tip { font-size: 12px; margin-left: 6px; }
+.cw-screens-stage { position: relative; width: min(100cqw, 100cqh * 16 / 9); aspect-ratio: 16 / 9; border-radius: 8px; overflow: hidden;
+  background: linear-gradient(180deg, #4a7fc1 0%, #c9dcef 55%, #3b3a36 56%, #2a2a28 100%); border: 1px solid var(--line); }
+.cw-screens-empty { position: absolute; inset: 0; display: grid; place-items: center; }
+.cw-screens-row { display: grid; grid-template-columns: 82px 1fr; align-items: center; gap: 6px; font-size: 13px; }
+.cw-screens-l { color: var(--mute); }
+.cw-screens-v { min-width: 0; display: flex; }
+.cw-screens-v > .cw-input, .cw-screens-v textarea { width: 100%; }
+.cw-screens-pair { display: flex; gap: 6px; align-items: center; }
+.cw-screens-items { margin-top: 10px; display: flex; flex-direction: column; gap: 6px; }
+.cw-screens-itemlist li { display: grid; grid-template-columns: 30px 1fr auto auto; gap: 4px; align-items: center; }
+.cw-screens-itemlist .cw-input { min-width: 0; }
+.cw-ui-slot.mini { width: 28px; height: 28px; aspect-ratio: auto; font-size: 11px; }
+.cw-anchor { display: grid; grid-template-columns: repeat(3, 18px); gap: 3px; }
+.cw-anchor button { width: 18px; height: 18px; border-radius: 4px; border: 1px solid var(--line); background: var(--cbg); cursor: pointer; padding: 0; }
+.cw-anchor button.on { background: var(--sel); border-color: var(--sel); }

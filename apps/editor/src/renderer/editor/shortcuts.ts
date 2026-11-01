@@ -72,6 +72,11 @@ export function useShortcuts(openKeys: () => void): void {
       }
       const m = e.ctrlKey || e.metaKey;
       const code = e.code;
+      // Other workspaces (Screens) have their own keys: only undo, redo and save are shared.
+      if (s.workspace !== 'scene') {
+        const k = code.replace(/^Key/, '').toLowerCase();
+        if (!m || !['z', 'y', 's'].includes(k)) return;
+      }
       if (m) {
         const k = code.replace(/^Key/, '').toLowerCase();
         const run = (fn: () => void) => {

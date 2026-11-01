@@ -7,7 +7,7 @@
  */
 import { SceneDoc, readComponent, type ColliderData, type GameRules, type GameValue, type ModelData, type SceneFile, type SignData } from '@cocoaworlds/core';
 import { buildMesh, isInvisibleMaterial, type WorldBrush } from '@cocoaworlds/geometry';
-import { GameWorld, initPhysics, type BodyInfo, type ModelMesh, type PlayerInput, type PlayerStatus, type ScriptLog, type TriggerEvent } from '@cocoaworlds/runtime';
+import { GameWorld, initPhysics, type BodyInfo, type ModelMesh, type UiState, type PlayerInput, type PlayerStatus, type ScriptLog, type TriggerEvent } from '@cocoaworlds/runtime';
 import type { Problem, ScriptError } from '@cocoaworlds/scripting';
 import * as THREE from 'three';
 import { worldBrushes } from '../brush/brushes';
@@ -353,6 +353,31 @@ export class PlaySession {
   /** Game values (all, with whether each is shown) and the messages on screen now. */
   screen(): { values: { name: string; value: unknown; show: boolean }[]; messages: string[] } {
     return { values: this.world.gameValues(), messages: this.world.screenMessages() };
+  }
+
+  /** What the screen UI shows now. */
+  uiState(): UiState {
+    return this.world.uiState();
+  }
+
+  /** The player clicked a button on screen. */
+  clickUi(id: string): void {
+    this.world.clickUi(id);
+  }
+
+  /** The player clicked with the item in their hand. */
+  useItem(): void {
+    this.world.useItem();
+  }
+
+  /** Pick a hotbar slot (0-based), or move along by `by` slots. */
+  selectSlot(slot: number): void {
+    this.world.selectSlot(slot);
+  }
+
+  /** For tests: give the player items as a script would. */
+  giveItem(name: string, n: number): void {
+    this.world.giveItem(name, n);
   }
 
   /** What pressing Use would do now (see GameWorld.usePrompt). */
