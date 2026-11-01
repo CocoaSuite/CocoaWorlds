@@ -69,6 +69,8 @@ How Hammer-style editing actually works, and what CocoaWorlds does:
 
 Generic mesh CSG libraries were considered and rejected for brushes: `three-bvh-csg` describes itself as experimental and its output may not be watertight; Manifold (Apache-2.0) is robust but produces triangle meshes, losing editable brush structure. Manifold remains a candidate later for booleans on imported models.
 
+**G3 (approved during Phase 4):** transforms nest. Entity transforms are relative to the parent, and brush faces are stored in the parent's space (see docs/geometry.md, "Spaces"). Scene format 2; format-1 scenes are upgraded on open.
+
 ### D4. Physics — **Rapier (3D, WASM)**
 
 Rapier (`@dimforge/rapier3d-compat` 0.21, Apache-2.0) is fast, actively maintained, runs in browsers and Electron, supports convex hulls, sensors (triggers), shape casts and collision groups. Ammo.js (Bullet port) is older, larger and less maintained. Jolt (WASM build) is a strong alternative with heavier integration.

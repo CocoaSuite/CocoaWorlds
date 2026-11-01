@@ -1,5 +1,18 @@
 /** Brushes inside scene entities: the `brush` component holds the role and the saved faces (world space). */
-import { newEntity, type EntityData, type SceneDoc } from '@cocoaworlds/core';
+import {
+  composeTransform,
+  identityMat4,
+  invertMat4,
+  isIdentityMat4,
+  isTranslationMat4,
+  mat4Key,
+  multiplyMat4,
+  newEntity,
+  translationOf,
+  type EntityData,
+  type Mat4,
+  type SceneDoc,
+} from '@cocoaworlds/core';
 import {
   box,
   cylinder,
@@ -8,6 +21,8 @@ import {
   fromData,
   stairs,
   toData,
+  transform as transformBrush,
+  translate,
   wedge,
   type Brush,
   type BrushData,
@@ -73,11 +88,66 @@ export function isLocked(doc: SceneDoc, e: EntityData | undefined): boolean {
   return false;
 }
 
+// ── Spaces (decision G3) ──
+// A brush's faces are saved in its own space: its parent's space combined with its own transform (normally
+// identity). The editor's tools work in world space and convert on the way in and out.
+
+/** Move a brush from its own space into the world. Pure moves keep textures locked to the faces. */
+export function toWorld(local: Brush, space: Mat4): Brush {
+  if (isIdentityMat4(space)) return local;
+  if (isTranslationMat4(space)) return translate(local, translationOf(space));
+  return transformBrush(local, space);
+}
+
+/** Move a world-space brush into a space (the inverse of toWorld). */
+export function toLocal(world: Brush, space: Mat4): Brush {
+  if (isIdentityMat4(space)) return world;
+  if (isTranslationMat4(space)) {
+    const t = translationOf(space);
+    return translate(world, [-t[0], -t[1], -t[2]]);
+  }
+  return transformBrush(world, invertMat4(space) ?? identityMat4());
+}
+
+/** Every entity's world matrix, computed once top-down. */
+export function worldMatrices(doc: SceneDoc): Map<string, Mat4> {
+  const out = new Map<string, Mat4>();
+  const get = (e: EntityData): Mat4 => {
+    const done = out.get(e.id);
+    if (done) return done;
+    const parent = e.parent ? doc.get(e.parent) : undefined;
+    const m = multiplyMat4(parent ? get(parent) : identityMat4(), composeTransform(e.transform));
+    out.set(e.id, m);
+    return m;
+  };
+  for (const e of doc.entities) get(e);
+  return out;
+}
+
+const worldCache = new WeakMap<object, { key: string; brush: Brush }>();
+
+/** The brush in world space (cached by its saved data and where it sits). */
+export function worldBrushOf(doc: SceneDoc, e: EntityData | undefined, space?: Mat4): { role: BrushRole; brush: Brush } | null {
+  const b = brushOf(e);
+  if (!b || !e) return null;
+  const m = space ?? doc.worldMatrix(e.id);
+  if (isIdentityMat4(m)) return b;
+  const faces = (e.components.brush as unknown as BrushComponent).faces;
+  const key = mat4Key(m);
+  const hit = worldCache.get(faces);
+  if (hit && hit.key === key) return { role: b.role, brush: hit.brush };
+  const brush = toWorld(b.brush, m);
+  worldCache.set(faces, { key, brush });
+  return { role: b.role, brush };
+}
+
+/** All visible brushes in world space, for building the level. */
 export function worldBrushes(doc: SceneDoc): WorldBrush[] {
   const out: WorldBrush[] = [];
+  const mats = worldMatrices(doc);
   for (const e of doc.entities) {
-    if (!isShown(doc, e)) continue;
-    const b = brushOf(e);
+    if (!e.components.brush || !isShown(doc, e)) continue;
+    const b = worldBrushOf(doc, e, mats.get(e.id));
     if (b) out.push({ id: e.id, role: b.role, brush: b.brush });
   }
   return out;

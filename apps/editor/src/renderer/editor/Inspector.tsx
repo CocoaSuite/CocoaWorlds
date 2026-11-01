@@ -86,6 +86,7 @@ function GroupEntity({ e }: { e: EntityData }) {
         }}
         onBlur={(ev) => s.rename(e.id, ev.currentTarget.value)}
       />
+      <TransformSection e={e} />
       <Section title={t('insp.group')}>
         <div className="cw-f">
           <span>{t('insp.contains')}</span>
@@ -182,8 +183,10 @@ function Vec3Row({ label, value, step, onCommit, onLive, onBegin, name }: { labe
   );
 }
 
-function EntityInspector({ e }: { e: EntityData }) {
+/** Position, rotation and scale, relative to the parent when there is one. */
+function TransformSection({ e }: { e: EntityData }) {
   const s = useEditor.getState();
+  const doc = useEditor((x) => x.doc);
   const grid = useEditor((x) => (x.snap ? (x.session?.project.settings.gridSize ?? 16) : 1));
   const tr = e.transform;
   const key = `insp-${e.id}`;
@@ -196,7 +199,19 @@ function EntityInspector({ e }: { e: EntityData }) {
     setPart(part, v, true);
     s.commit();
   };
+  const parent = e.parent ? doc?.get(e.parent) : undefined;
+  return (
+    <Section title={t('insp.transform')}>
+      <Vec3Row label={t('insp.position')} name="Position" value={tr.position} step={grid} onBegin={begin} onLive={(v) => setPart('position', v, true)} onCommit={end('position')} />
+      <Vec3Row label={t('insp.rotation')} name="Rotation" value={tr.rotation} step={1} onBegin={begin} onLive={(v) => setPart('rotation', v, true)} onCommit={end('rotation')} />
+      <Vec3Row label={t('insp.scale')} name="Scale" value={tr.scale} step={0.05} onBegin={begin} onLive={(v) => setPart('scale', v, true)} onCommit={end('scale')} />
+      {parent && <p className="cw-hint">{t('insp.relativeTo').replace('{name}', parent.name)}</p>}
+    </Section>
+  );
+}
 
+function EntityInspector({ e }: { e: EntityData }) {
+  const s = useEditor.getState();
   return (
     <>
       <input
@@ -210,11 +225,7 @@ function EntityInspector({ e }: { e: EntityData }) {
         }}
         onBlur={(ev) => s.rename(e.id, ev.currentTarget.value)}
       />
-      <Section title={t('insp.transform')}>
-        <Vec3Row label={t('insp.position')} name="Position" value={tr.position} step={grid} onBegin={begin} onLive={(v) => setPart('position', v, true)} onCommit={end('position')} />
-        <Vec3Row label={t('insp.rotation')} name="Rotation" value={tr.rotation} step={1} onBegin={begin} onLive={(v) => setPart('rotation', v, true)} onCommit={end('rotation')} />
-        <Vec3Row label={t('insp.scale')} name="Scale" value={tr.scale} step={0.05} onBegin={begin} onLive={(v) => setPart('scale', v, true)} onCommit={end('scale')} />
-      </Section>
+      <TransformSection e={e} />
       <Section title={t('insp.display')}>
         <div className="cw-flagrow">
           <span>{t('insp.visible')}</span>

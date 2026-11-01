@@ -3,7 +3,7 @@ import type { EntityData } from '@cocoaworlds/core';
 import { bounds, buildWorld, center, composeM4, polygons, transform, translate, validate, type V3 } from '@cocoaworlds/geometry';
 import { Button, NumberField, Section, Segmented } from '@cocoaworlds/ui';
 import { useState } from 'react';
-import { brushOf, worldBrushes } from '../brush/brushes';
+import { worldBrushOf, worldBrushes } from '../brush/brushes';
 import { t } from '../i18n';
 import { useEditor } from '../store';
 
@@ -16,7 +16,8 @@ export function BrushInspector({ e }: { e: EntityData }) {
   const grid = useEditor((x) => (x.snap ? (x.session?.project.settings.gridSize ?? 16) : 1));
   const [thickness, setThickness] = useState(16);
   const [hollowDir, setHollowDir] = useState<'inward' | 'outward'>('inward');
-  const b = brushOf(e);
+  // Sizes and centres are shown and edited in world space.
+  const b = worldBrushOf(doc, e);
   if (!b) return null;
   const bb = bounds(b.brush);
   if (!bb) return null;

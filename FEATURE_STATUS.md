@@ -39,10 +39,10 @@ Last updated: 2026-11-01 (Phase 2, first slice).
 |---|---|---|
 | Hierarchy: select, rename, hide, lock, drag to reparent, context menu, filter | **Done** | |
 | Add: empty, point/spot/sun light, player spawn | **Done** | Editor markers only; lights don't light anything yet. |
-| Parent transforms affect children in the viewport | Planned | Parenting is stored; world placement arrives with the runtime scene graph (Phase 4). |
+| Nested transforms (G3): transforms are relative to the parent; brush faces live in the parent's space; moving, turning or scaling a group carries its contents | **Done** | Format-2 scenes. Format-1 scenes upgrade on open with a backup and nothing moves. Changing parent (drag in the list, group, ungroup) keeps objects where they are. |
 | Multi-object transform: move, rotate and scale any selection (brushes, lights, spawns, groups) with one gizmo, as one undo step | **Done** | Grid snapping is relative to where the drag began, so off-grid objects keep their offset. |
 | Snap to corners (vertex snap): moves and brush drawing snap to nearby brush corners; toolbar "Corners" or Shift+G | **Done** | The grabbed point is the moving corner nearest the cursor when the drag starts. |
-| Groups: Ctrl+G / Ctrl+Shift+G; click selects the group, double-click picks inside, Enter/Esc step in/out; hide/lock cascade | **Done** | Groups have no transform of their own until nested transforms (Phase 4). |
+| Groups: Ctrl+G / Ctrl+Shift+G; click selects the group, double-click picks inside, Enter/Esc step in/out; hide/lock cascade | **Done** | Groups have a transform (position, rotation, scale) shown in the Inspector. |
 | Copy / cut / paste (Ctrl+C / X / V), including groups and across projects in one session | **Done** | Each paste lands one grid step further; a cut pastes back in place. |
 | Box selection: drag on empty space; everything the box touches is selected (Ctrl/Shift adds); groups are picked whole | **Done** | |
 

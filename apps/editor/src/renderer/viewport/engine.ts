@@ -6,8 +6,10 @@ import type { EntityData, SceneDoc, Transform, Vec3 } from '@cocoaworlds/core';
 import { bounds, faceAt, transform as transformBrush, translate, vertices, type Brush, type Plane, type V3 } from '@cocoaworlds/geometry';
 import * as THREE from 'three';
 import { TransformControls } from 'three/addons/controls/TransformControls.js';
-import { brushOf, isLocked, isShown, worldBrushes, type Outline, type ShapeOptions } from '../brush/brushes';
+import { brushOf, isLocked, isShown, worldBrushOf, worldBrushes, worldMatrices, type Outline, type ShapeOptions } from '../brush/brushes';
+import { rootsOf } from '../scene-ops';
 import { isGroup } from '../scene-ops';
+import { mat4Key, type Mat4 } from '@cocoaworlds/core';
 import { BrushDraft, draftAxes, type DraftState } from './brush-draft';
 import { CameraRig, type ViewKind } from './camera';
 import { EditorGrid } from './grid';
@@ -43,16 +45,18 @@ export interface ViewportCallbacks {
   message(text: string): void;
 }
 
+/** A live gizmo result: a brush in world space, or an entity's new world placement. */
 export interface LiveChange {
   id: string;
   brush?: Brush;
-  transform?: Transform;
+  world?: number[];
 }
 
 /** What a gizmo drag moves: every selected object and its descendants, as they were when the drag began. */
 interface DragSet {
   pivot: V3;
-  items: { id: string; brush?: Brush; transform?: Transform }[];
+  /** Brushes in world space; other objects by their world matrix (their contents follow them). */
+  items: { id: string; brush?: Brush; world?: Mat4 }[];
   /** Vertex snapping: the moving point nearest the cursor when the drag began. */
   grab: V3 | null;
   /** Screen positions of points that don't move (snap targets). */
@@ -117,6 +121,8 @@ export class ViewportEngine {
   private draft: BrushDraft | null = null;
   private lastHeight = 128;
   private worldKey = '';
+  /** World matrix of every entity, refreshed on each scene change. */
+  private mats = new Map<string, Mat4>();
   private disposed = false;
   private resizeObs: ResizeObserver;
 
@@ -211,6 +217,7 @@ export class ViewportEngine {
   /** Re-read entities from the doc (called after any scene change). */
   syncAll(): void {
     const doc = this.doc;
+    this.mats = doc ? worldMatrices(doc) : new Map();
     const seen = new Set<string>();
     if (doc) {
       for (const e of doc.entities) {
@@ -229,7 +236,8 @@ export class ViewportEngine {
     }
     // Rebuild level geometry only when brushes actually changed.
     const wb = doc ? worldBrushes(doc) : [];
-    const key = wb.map((b) => `${b.id}:${b.role}:${faceKey(doc!.get(b.id)!)}`).join('|');
+    // Faces and where each brush sits (a moved group moves its brushes without touching their faces).
+    const key = wb.map((b) => `${b.id}:${b.role}:${faceKey(doc!.get(b.id)!)}:${mat4Key(this.mats.get(b.id) ?? [])}`).join('|');
     if (key !== this.worldKey) {
       this.worldKey = key;
       this.world.rebuild(wb);
@@ -401,10 +409,9 @@ export class ViewportEngine {
     }
     const g = rec.m.group;
     if (!(this.gizmo.dragging && this.gizmo.object === g)) {
-      const t = e.transform;
-      g.position.set(...t.position);
-      g.rotation.set(t.rotation[0] * DEG, t.rotation[1] * DEG, t.rotation[2] * DEG, 'YXZ');
-      g.scale.set(...t.scale);
+      // Markers sit where their whole parent chain puts them.
+      const m = new THREE.Matrix4().fromArray(this.mats.get(e.id) ?? new THREE.Matrix4().toArray());
+      m.decompose(g.position, g.quaternion, g.scale);
     }
     g.visible = isShown(this.doc!, e);
     g.userData.locked = isLocked(this.doc!, e);
@@ -445,23 +452,43 @@ export class ViewportEngine {
   }
 
   /** The objects a gizmo drag would move: visible, unlocked, and actually something in space. */
+  /** The top-level selected objects a gizmo drag moves (their contents follow through the hierarchy). */
   private movable(): EntityData[] {
     const doc = this.doc;
     if (!doc) return [];
-    return this.expandedSelection()
+    return rootsOf(doc, this.selection)
       .map((id) => doc.get(id))
-      .filter((e): e is EntityData => !!e && isShown(this.doc!, e) && !isLocked(this.doc!, e) && (!!e.components.brush || this.markers.has(e.id)));
+      .filter((e): e is EntityData => !!e && isShown(doc, e) && !isLocked(doc, e) && this.occupiesSpace(e));
+  }
+
+  /** Brushes, markers, and groups/parents that contain at least one of those. */
+  private occupiesSpace(e: EntityData): boolean {
+    return !!this.doc?.subtree(e.id).some((x) => !!x.components.brush || this.markers.has(x.id));
+  }
+
+  /** Everything inside the given objects (themselves included). */
+  private contents(items: EntityData[]): EntityData[] {
+    const doc = this.doc;
+    if (!doc) return [];
+    const seen = new Map<string, EntityData>();
+    for (const e of items) for (const x of doc.subtree(e.id)) if (isShown(doc, x)) seen.set(x.id, x);
+    return [...seen.values()];
+  }
+
+  private worldPos(e: EntityData): V3 {
+    const m = this.mats.get(e.id) ?? this.doc?.worldMatrix(e.id);
+    return m ? [m[12]!, m[13]!, m[14]!] : [...e.transform.position];
   }
 
   private selectionBox(items: EntityData[]): THREE.Box3 {
     const box = new THREE.Box3();
-    for (const e of items) {
-      const b = brushOf(e);
+    for (const e of this.contents(items)) {
+      const b = this.doc ? worldBrushOf(this.doc, e, this.mats.get(e.id)) : null;
       if (b) {
         const bb = bounds(b.brush);
         if (bb) box.expandByPoint(new THREE.Vector3(...bb.min)).expandByPoint(new THREE.Vector3(...bb.max));
-      } else {
-        box.expandByPoint(new THREE.Vector3(...e.transform.position));
+      } else if (this.markers.has(e.id)) {
+        box.expandByPoint(new THREE.Vector3(...this.worldPos(e)));
       }
     }
     return box;
@@ -479,8 +506,8 @@ export class ViewportEngine {
     }
     const items = this.movable();
     if (!items.length) return;
-    const one = items.length === 1 && !items[0]!.components.brush ? items[0]! : null;
-    const c = one ? new THREE.Vector3(...one.transform.position) : this.selectionBox(items).getCenter(new THREE.Vector3());
+    const one = items.length === 1 && this.markers.has(items[0]!.id) ? items[0]! : null;
+    const c = one ? new THREE.Vector3(...this.worldPos(one)) : this.selectionBox(items).getCenter(new THREE.Vector3());
     this.proxy.position.copy(c);
     this.proxy.rotation.set(0, 0, 0);
     this.proxy.scale.set(1, 1, 1);
@@ -488,11 +515,16 @@ export class ViewportEngine {
   }
 
   /** The selected brushes the vertex and clip tools work on. */
+  /** Selected brushes (including those inside selected groups) in world space, for the vertex and clip tools. */
   private editBrushes(): { id: string; brush: Brush }[] {
+    const doc = this.doc;
     const out: { id: string; brush: Brush }[] = [];
-    for (const e of this.movable()) {
-      const b = brushOf(e);
-      if (b) out.push({ id: e.id, brush: b.brush });
+    if (!doc) return out;
+    for (const id of this.expandedSelection()) {
+      const e = doc.get(id);
+      if (!e || !isShown(doc, e) || isLocked(doc, e)) continue;
+      const b = worldBrushOf(doc, e, this.mats.get(id));
+      if (b) out.push({ id, brush: b.brush });
     }
     return out;
   }
@@ -573,12 +605,13 @@ export class ViewportEngine {
     const items = this.movable();
     if (!items.length) return null;
     const pivot: V3 = [this.proxy.position.x, this.proxy.position.y, this.proxy.position.z];
-    const moving = new Set(items.map((e) => e.id));
+    const inside = this.contents(items);
+    const moving = new Set(inside.map((e) => e.id));
     const set: DragSet = {
       pivot,
       items: items.map((e) => {
-        const b = brushOf(e);
-        return b ? { id: e.id, brush: b.brush } : { id: e.id, transform: structuredClone(e.transform) };
+        const b = this.doc ? worldBrushOf(this.doc, e, this.mats.get(e.id)) : null;
+        return b ? { id: e.id, brush: b.brush } : { id: e.id, world: [...(this.mats.get(e.id) ?? this.doc!.worldMatrix(e.id))] };
       }),
       grab: null,
       targets: [],
@@ -586,7 +619,7 @@ export class ViewportEngine {
     if (this.vertexSnap && this.gizmoMode === 'translate') {
       // The grab point: the moving point nearest the cursor. Targets: every point that stays put.
       let best = Infinity;
-      for (const p of this.pointsOf(items)) {
+      for (const p of this.pointsOf(inside)) {
         const sp = this.toScreen(p);
         const d = Math.hypot(sp.x - this.lastPointer.x, sp.y - this.lastPointer.y);
         if (d < best) {
@@ -607,9 +640,9 @@ export class ViewportEngine {
   private pointsOf(items: EntityData[]): V3[] {
     const out: V3[] = [];
     for (const e of items) {
-      const b = brushOf(e);
+      const b = this.doc ? worldBrushOf(this.doc, e, this.mats.get(e.id)) : null;
       if (b) out.push(...vertices(b.brush));
-      else if (this.markers.has(e.id)) out.push([...e.transform.position] as V3);
+      else if (this.markers.has(e.id)) out.push(this.worldPos(e));
     }
     return out;
   }
@@ -668,30 +701,20 @@ export class ViewportEngine {
       }
       for (const it of d.items) {
         if (it.brush) changes.push({ id: it.id, brush: translate(it.brush, delta) });
-        else if (it.transform) changes.push({ id: it.id, transform: { ...it.transform, position: it.transform.position.map((v, i) => r3(v + delta[i]!)) as Vec3 } });
+        else if (it.world) {
+          const w = [...it.world];
+          w[12] = w[12]! + delta[0];
+          w[13] = w[13]! + delta[1];
+          w[14] = w[14]! + delta[2];
+          changes.push({ id: it.id, world: w });
+        }
       }
     } else {
       p.updateMatrixWorld();
       const m = new THREE.Matrix4().copy(p.matrixWorld).multiply(new THREE.Matrix4().makeTranslation(-d.pivot[0], -d.pivot[1], -d.pivot[2]));
-      const s: V3 = [Math.max(0.01, Math.abs(p.scale.x)), Math.max(0.01, Math.abs(p.scale.y)), Math.max(0.01, Math.abs(p.scale.z))];
-      const q = p.quaternion.clone();
       for (const it of d.items) {
-        if (it.brush) {
-          changes.push({ id: it.id, brush: transformBrush(it.brush, m.elements as unknown as number[]) });
-        } else if (it.transform) {
-          const t = it.transform;
-          const pos = new THREE.Vector3(...t.position).applyMatrix4(m);
-          const e = new THREE.Euler(t.rotation[0] * DEG, t.rotation[1] * DEG, t.rotation[2] * DEG, 'YXZ');
-          const rot = new THREE.Euler().setFromQuaternion(q.clone().multiply(new THREE.Quaternion().setFromEuler(e)), 'YXZ');
-          changes.push({
-            id: it.id,
-            transform: {
-              position: [r3(pos.x), r3(pos.y), r3(pos.z)],
-              rotation: [r3(rot.x / DEG), r3(rot.y / DEG), r3(rot.z / DEG)],
-              scale: [r3(t.scale[0] * s[0]), r3(t.scale[1] * s[1]), r3(t.scale[2] * s[2])],
-            },
-          });
-        }
+        if (it.brush) changes.push({ id: it.id, brush: transformBrush(it.brush, m.elements as unknown as number[]) });
+        else if (it.world) changes.push({ id: it.id, world: new THREE.Matrix4().fromArray(it.world).premultiply(m).toArray() });
       }
     }
     this.cb.liveMany(changes);
@@ -883,9 +906,9 @@ export class ViewportEngine {
     const out: string[] = [];
     for (const e of doc.entities) {
       if (!isShown(doc, e) || isLocked(doc, e) || isGroup(doc, e)) continue;
-      const b = brushOf(e);
+      const b = worldBrushOf(doc, e, this.mats.get(e.id));
       if (!b && !this.markers.has(e.id)) continue;
-      const pts = b ? vertices(b.brush) : [[...e.transform.position] as V3];
+      const pts = b ? vertices(b.brush) : [this.worldPos(e)];
       let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity, any = false;
       for (const p of pts) {
         const s = this.toScreen(p);

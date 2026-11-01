@@ -1,10 +1,10 @@
 /** Scene hierarchy (CocoaCanvas layers panel): select, rename, hide, lock, reparent by drag, context menu. */
-import { reparentCmd, type EntityData } from '@cocoaworlds/core';
+import type { EntityData } from '@cocoaworlds/core';
 import { Button, ContextMenu, Icon, PanelHeader, type IconName, type MenuEntry } from '@cocoaworlds/ui';
 import { useMemo, useState, type DragEvent } from 'react';
 import { t } from '../i18n';
 import { isGroup } from '../scene-ops';
-import { useEditor } from '../store';
+import { reparentKeepWorld, useEditor } from '../store';
 
 export function iconFor(e: EntityData): IconName {
   const brush = e.components.brush as { role?: string } | undefined;
@@ -55,7 +55,11 @@ export function SceneTree() {
     const id = e.dataTransfer.getData('application/x-cw-entity');
     if (!id || id === target) return;
     try {
-      useEditor.getState().execute(reparentCmd(doc, id, target));
+      // Keep the object where it is in the world while it changes parent.
+      const h = useEditor.getState().history;
+      h.begin('Move in hierarchy');
+      for (const c of reparentKeepWorld(doc, id, target)) h.execute(c);
+      h.commit();
     } catch (err) {
       useEditor.getState().notify((err as Error).message);
     }

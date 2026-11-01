@@ -5,7 +5,7 @@
 | 1 | Inspect CocoaCanvas, design system, technology research, architecture proposal, decisions | **Done** |
 | 2 | Desktop foundation: Electron app, CocoaCanvas-style shell, projects, viewport, scene model, selection, transforms, undo | **Mostly done** (see checklist) |
 | 3 | Brush geometry: creation, manipulation, grid/snap, vertex and face editing, materials per face, carve/union/intersect, validation | **In progress** — brushes can be drawn, sized, cut and saved |
-| 4 | Entities and physics: components, Rapier, colliders, triggers, inspector, interaction infrastructure | Not started |
+| 4 | Entities and physics: components, Rapier, colliders, triggers, inspector, interaction infrastructure | **In progress** — nested transforms done |
 | 5 | Visual scripting: blocks editor, script model, compiler, VM, events, debugging, recipes | Not started |
 | 6 | Gameplay: Source-style controller, player, interaction, health/score, doors/plates/buttons/lifts | Not started |
 | 7 | Assets and rendering: asset browser, material editor, textures, lighting, audio | Not started |
@@ -34,7 +34,7 @@ Order may shift where dependencies require it (for example, the project format f
 - [x] Selection (viewport and hierarchy), move/rotate/scale gizmo with snapping
 - [x] Hierarchy: rename, hide, lock, reparent, duplicate, delete, context menus
 - [x] Unit/integration tests (28) and an end-to-end test that drives the real app
-- [ ] Nested transforms (children follow parents) — moved to Phase 4 with the runtime scene graph
+- [x] Nested transforms (children follow parents) — done at the start of Phase 4 (G3)
 - [x] Multi-object transforms, groups, copy/cut/paste, snap to corners
 - [x] Box selection
 - [ ] Run and check on Windows and macOS
@@ -57,4 +57,4 @@ Order may shift where dependencies require it (for example, the project format f
 
 ## Next
 
-Phase 3 features are complete. Next: a Phase 3 review with the user, then Phase 4 (entities, physics, nested transforms).
+Phase 3 is complete. Phase 4 has started with nested transforms (G3). Next in Phase 4: the component inspector (adding and editing components), Rapier physics and colliders from brushes, triggers, and a Play-mode preview of physics.

@@ -3,7 +3,7 @@
 ## Current build
 
 - **Only tested on Linux.** The editor is built on cross-platform pieces (Electron, Three.js) but has not yet been run on Windows or macOS. Packaged installers come in Phase 9.
-- **No nested transforms yet.** Selecting a parent or group and using the gizmo moves everything inside it, but children's positions are stored in world space and a group has no transform of its own. Nested transforms arrive with the runtime scene graph in Phase 4.
+- **Rotating or scaling a group re-projects world-aligned textures** on the brushes inside it (moving keeps them locked). Non-uniform scale on a rotated parent is stored as the nearest rotation and scale (no shear).
 - **No box selection** in the viewport yet.
 - **Lights are markers only.** They don't light the scene until materials and lighting land (Phase 7).
 - **One scene per project in the UI.** The format supports a scene list; scene management UI comes later.

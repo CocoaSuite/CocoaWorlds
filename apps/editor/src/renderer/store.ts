@@ -5,6 +5,12 @@
 import {
   History,
   SceneDoc,
+  composeTransform,
+  decomposeMat4,
+  identityMat4,
+  invertMat4,
+  multiplyMat4,
+  type Mat4,
   addEntitiesCmd,
   deleteEntitiesCmd,
   newEntity,
@@ -36,7 +42,7 @@ import {
   type BrushRole,
 } from '@cocoaworlds/geometry';
 import { create } from 'zustand';
-import { brushComponent, brushOf, isLocked, isShown, newBrushEntity, shapeBrushes, shapeName, worldBrushes, type Outline, type ShapeOptions } from './brush/brushes';
+import { brushComponent, brushOf, isLocked, isShown, newBrushEntity, toLocal, toWorld, worldBrushOf, shapeBrushes, shapeName, worldBrushes, type Outline, type ShapeOptions } from './brush/brushes';
 import { useShallow } from 'zustand/react/shallow';
 import type { OpenedProject } from '../shared/api';
 import { DEV_TEXTURE_SIZE } from './brush/materials';
@@ -129,6 +135,7 @@ interface Actions {
   setBrushOptions(o: Partial<ShapeOptions>): void;
   setBrushRole(r: BrushRole): void;
   createBrushes(min: [number, number, number], max: [number, number, number], outline?: Outline): void;
+  /** `brush` is in world space. */
   setBrush(id: string, brush: Brush, mergeKey?: string, label?: string): void;
   changeBrushRole(id: string, role: BrushRole): void;
   applySubtract(ids: string[]): void;
@@ -446,7 +453,9 @@ export const useEditor = create<State & Actions>()((set, get) => ({
     const doc = get().doc;
     const cur = brushOf(doc?.get(id));
     if (!doc || !cur) return;
-    get().execute(setComponentCmd(doc, id, 'brush', brushComponent(brush, cur.role) as never, label, mergeKey));
+    // Tools hand over world-space brushes; the scene keeps them in the brush's own space.
+    const local = toLocal(brush, doc.worldMatrix(id));
+    get().execute(setComponentCmd(doc, id, 'brush', brushComponent(local, cur.role) as never, label, mergeKey));
   },
 
   changeBrushRole(id, role) {
@@ -467,9 +476,11 @@ export const useEditor = create<State & Actions>()((set, get) => ({
     const added: string[] = [];
     for (const [solidId, pieces] of replace) {
       const src = doc.get(solidId)!;
+      const space = doc.worldMatrix(solidId);
       const ents = pieces.map((p, i) => {
-        const e = newBrushEntity(`${src.name}${pieces.length > 1 ? `_${i + 1}` : ''}`, p, 'solid');
+        const e = newBrushEntity(`${src.name}${pieces.length > 1 ? `_${i + 1}` : ''}`, toLocal(p, space), 'solid');
         e.parent = src.parent;
+        e.transform = structuredClone(src.transform);
         return e;
       });
       h.execute(deleteEntitiesCmd(doc, [solidId]));
@@ -499,6 +510,8 @@ export const useEditor = create<State & Actions>()((set, get) => ({
     const names = ['floor', 'ceiling', 'wall_west', 'wall_east', 'wall_north', 'wall_south'];
     const group = newEntity(e.name, { group: {} });
     group.parent = e.parent;
+    // The walls live in the block's own space, which the group takes over.
+    group.transform = structuredClone(e.transform);
     const ents = walls.map((w, i) => {
       const x = newBrushEntity(names[i] ?? `wall_${i}`, w, 'solid');
       x.parent = group.id;
@@ -516,7 +529,7 @@ export const useEditor = create<State & Actions>()((set, get) => ({
   mergeSelection() {
     const { doc, selection } = get();
     if (!doc) return;
-    const solids = selection.map((id) => ({ id, b: brushOf(doc.get(id)) })).filter((x) => x.b?.role === 'solid');
+    const solids = selection.map((id) => ({ id, b: worldBrushOf(doc, doc.get(id)) })).filter((x) => x.b?.role === 'solid');
     if (solids.length < 2) return;
     const merged = mergeAll(solids.map((x) => x.b!.brush));
     if (merged.length === solids.length) {
@@ -524,9 +537,11 @@ export const useEditor = create<State & Actions>()((set, get) => ({
       return;
     }
     const first = doc.get(solids[0]!.id)!;
+    const space = doc.worldMatrix(first.id);
     const ents = merged.map((m, i) => {
-      const e = newBrushEntity(merged.length > 1 ? `${first.name}_${i + 1}` : first.name, m, 'solid');
+      const e = newBrushEntity(merged.length > 1 ? `${first.name}_${i + 1}` : first.name, toLocal(m, space), 'solid');
       e.parent = first.parent;
+      e.transform = structuredClone(first.transform);
       return e;
     });
     const h = get().history;
@@ -555,7 +570,8 @@ export const useEditor = create<State & Actions>()((set, get) => ({
         if (m) set({ paintMaterial: m });
         return;
       }
-      st.setBrush(ref.id, setSurface(b.brush, { material: st.paintMaterial }, mode === 'brush' ? undefined : [ref.face]), undefined, 'Paint');
+      const painted = setSurface(b.brush, { material: st.paintMaterial }, mode === 'brush' ? undefined : [ref.face]);
+      st.execute(setComponentCmd(doc, ref.id, 'brush', brushComponent(painted, b.role) as never, 'Paint'));
       return;
     }
     if (!ref) {
@@ -615,9 +631,11 @@ export const useEditor = create<State & Actions>()((set, get) => ({
       if (!e) continue;
       if (c.brush) {
         const cur = brushOf(e);
-        if (cur) cmds.push(setComponentCmd(doc, c.id, 'brush', brushComponent(c.brush, cur.role) as never, 'Transform'));
-      } else if (c.transform) {
-        cmds.push(setTransformCmd(doc, c.id, c.transform));
+        if (cur) cmds.push(setComponentCmd(doc, c.id, 'brush', brushComponent(toLocal(c.brush, doc.worldMatrix(c.id)), cur.role) as never, 'Transform'));
+      } else if (c.world) {
+        // A new world placement: express it relative to the parent.
+        const inv = invertMat4(doc.parentMatrix(c.id)) ?? identityMat4();
+        cmds.push(setTransformCmd(doc, c.id, decomposeMat4(multiplyMat4(inv, c.world))));
       }
     }
     if (!cmds.length) return;
@@ -665,7 +683,7 @@ export const useEditor = create<State & Actions>()((set, get) => ({
     const h = get().history;
     h.begin('Group');
     h.execute(addEntitiesCmd(doc, [group], 'Group'));
-    for (const id of roots) h.execute(reparentCmd(doc, id, group.id));
+    for (const id of roots) for (const c of reparentKeepWorld(doc, id, group.id)) h.execute(c);
     h.commit();
     set({ selection: [group.id] });
     get().log('info', 'Edit', `Grouped ${roots.length} object(s) into ${name}`);
@@ -682,7 +700,7 @@ export const useEditor = create<State & Actions>()((set, get) => ({
     for (const g of groups) {
       const parent = doc.get(g)?.parent ?? null;
       for (const c of doc.children(g)) {
-        h.execute(reparentCmd(doc, c.id, parent));
+        for (const cmd of reparentKeepWorld(doc, c.id, parent)) h.execute(cmd);
         freed.push(c.id);
       }
       h.execute(deleteEntitiesCmd(doc, [g]));
@@ -764,8 +782,9 @@ export const useEditor = create<State & Actions>()((set, get) => ({
     h.begin('Clip');
     for (const id of ids) {
       const e = doc.get(id);
-      const b = brushOf(e);
+      const b = worldBrushOf(doc, e);
       if (!e || !b || !isShown(doc, e) || isLocked(doc, e)) continue;
+      const space = doc.worldMatrix(id);
       const r = clipBrush(b.brush, plane);
       if (!r.cut) {
         result.push(id);
@@ -778,11 +797,12 @@ export const useEditor = create<State & Actions>()((set, get) => ({
         h.execute(deleteEntitiesCmd(doc, [id]));
         continue;
       }
-      h.execute(setComponentCmd(doc, id, 'brush', brushComponent(pieces[0]!, b.role) as never, 'Clip'));
+      h.execute(setComponentCmd(doc, id, 'brush', brushComponent(toLocal(pieces[0]!, space), b.role) as never, 'Clip'));
       result.push(id);
       if (pieces[1]) {
-        const extra = newBrushEntity(uniqueName(doc, `${e.name}_2`), pieces[1], b.role);
+        const extra = newBrushEntity(uniqueName(doc, `${e.name}_2`), toLocal(pieces[1], space), b.role);
         extra.parent = e.parent;
+        extra.transform = structuredClone(e.transform);
         h.execute(addEntitiesCmd(doc, [extra], 'Clip'));
         result.push(extra.id);
       }
@@ -836,4 +856,28 @@ function outermostGroup(doc: SceneDoc, id: string, entered: string | null): stri
     if (isGroup(doc, doc.get(a))) pick = a;
   }
   return pick;
+}
+
+/**
+ * Move an entity under a new parent without moving it in the world: its transform (or, for brushes, its
+ * faces) is re-expressed in the new parent's space. Returns the commands to run, in order.
+ */
+export function reparentKeepWorld(doc: SceneDoc, id: string, parent: string | null): Command[] {
+  const e = doc.get(id);
+  if (!e || e.parent === parent) return [];
+  const oldParent = doc.parentMatrix(id);
+  const newParent: Mat4 = parent ? doc.worldMatrix(parent) : identityMat4();
+  const cmds: Command[] = [];
+  const b = brushOf(e);
+  if (b) {
+    // Brushes keep their own transform; their faces move between parent spaces.
+    const own = composeTransform(e.transform);
+    const world = toWorld(b.brush, multiplyMat4(oldParent, own));
+    cmds.push(setComponentCmd(doc, id, 'brush', brushComponent(toLocal(world, multiplyMat4(newParent, own)), b.role) as never, 'Move in hierarchy'));
+  } else {
+    const inv = invertMat4(newParent) ?? identityMat4();
+    cmds.push(setTransformCmd(doc, id, decomposeMat4(multiplyMat4(inv, multiplyMat4(oldParent, composeTransform(e.transform))))));
+  }
+  cmds.push(reparentCmd(doc, id, parent));
+  return cmds;
 }

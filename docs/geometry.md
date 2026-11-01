@@ -25,6 +25,12 @@ Brushes (editable, saved) ──► buildMesh() ──► render mesh grouped by
 
 Each face is saved as **three points on its plane** plus its surface (the same idea as Hammer's .vmf). Points of grid-drawn brushes are exact integers, so files don't drift when saved repeatedly. Off-grid results (rotations, cylinders) are rounded to 1/1024 unit; a 24-sided cylinder saved and reopened 20 times stays within 0.5 cubic units of its original volume (tested).
 
+## Spaces (decision G3)
+
+Every entity's transform is relative to its parent. A brush's faces are saved in its own space: its parent's space combined with its own transform (normally identity), so a group can be moved, turned or scaled without rewriting the brushes inside it, and a prefab copy is just another transform.
+
+The editor's tools work in world space. `toWorld` and `toLocal` convert on the way in and out; pure moves use `translate`, which keeps textures locked to the faces, and other transforms re-project world-aligned textures. Changing an object's parent keeps it where it is in the world.
+
 ## Operations
 
 | Operation | Function | Notes |

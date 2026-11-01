@@ -3,6 +3,7 @@
  * All edits that should be undoable go through the command factories at the bottom of this file.
  */
 import type { Command } from './history';
+import { composeTransform, identityMat4, multiplyMat4, type Mat4 } from './matrix';
 import { newId } from './ids';
 import { identityTransform, type Transform } from './math';
 import {
@@ -63,6 +64,21 @@ export class SceneDoc {
     };
     visit(id);
     return out;
+  }
+
+  /** Where the entity's own space sits in the world: its parents' transforms then its own. */
+  worldMatrix(id: string): Mat4 {
+    const chain: EntityData[] = [];
+    for (let e = this.index.get(id); e; e = e.parent ? this.index.get(e.parent) : undefined) chain.push(e);
+    let m = identityMat4();
+    for (let i = chain.length - 1; i >= 0; i--) m = multiplyMat4(m, composeTransform(chain[i]!.transform));
+    return m;
+  }
+
+  /** The space an entity's transform is expressed in (its parent's world matrix; identity at the top level). */
+  parentMatrix(id: string): Mat4 {
+    const p = this.index.get(id)?.parent;
+    return p ? this.worldMatrix(p) : identityMat4();
   }
 
   isAncestor(ancestor: string, id: string): boolean {

@@ -4,7 +4,11 @@
  */
 import type { Transform } from './math';
 
-export const CURRENT_SCHEMA_VERSION = 1;
+/**
+ * 1: first format (transforms and brush faces in world space).
+ * 2: nested transforms (decision G3): transforms are relative to the parent; brush faces are in the parent's space.
+ */
+export const CURRENT_SCHEMA_VERSION = 2;
 
 export const PROJECT_FILE = 'project.cwproj';
 export const SCENE_EXT = '.cwscene';

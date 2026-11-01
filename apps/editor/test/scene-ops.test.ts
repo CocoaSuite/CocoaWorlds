@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { SceneDoc, newEntity, newScene } from '@cocoaworlds/core';
 import { bounds, box } from '@cocoaworlds/geometry';
-import { brushOf, newBrushEntity } from '../src/renderer/brush/brushes';
+import { brushOf, newBrushEntity, worldBrushOf } from '../src/renderer/brush/brushes';
 import { cloneSnapshot, isGroup, rootsOf, snapshotSubtrees } from '../src/renderer/scene-ops';
 
 function setup() {
@@ -51,10 +51,15 @@ describe('copies', () => {
       expect(ids.has(c.parent!)).toBe(true);
       expect(c.name).not.toMatch(/_2$/); // only roots are renamed
     }
+    // Only the group moves; what's inside keeps its place relative to it and follows in the world.
+    expect(root.transform.position).toEqual([16, 0, 16]);
+    doc.insert(copies);
     const wall = copies.find((c) => c.name === 'wall')!;
-    expect(bounds(brushOf(wall)!.brush)).toEqual({ min: [16, 0, 16], max: [32, 128, 272] });
-    expect(wall.transform.position).toEqual([0, 0, 0]);
-    expect(copies.find((c) => c.name === 'lamp')!.transform.position).toEqual([24, 100, 24]);
+    expect(bounds(brushOf(wall)!.brush)).toEqual({ min: [0, 0, 0], max: [16, 128, 256] });
+    expect(bounds(worldBrushOf(doc, doc.get(wall.id))!.brush)).toEqual({ min: [16, 0, 16], max: [32, 128, 272] });
+    const lamp = copies.find((c) => c.name === 'lamp')!;
+    expect(lamp.transform.position).toEqual([8, 100, 8]);
+    expect(doc.worldMatrix(lamp.id).slice(12, 15)).toEqual([24, 100, 24]);
   });
 
   it('a copied child goes back under its original parent when that still exists', () => {
@@ -87,5 +92,20 @@ describe('copies', () => {
     const b = cloneSnapshot(doc, snapshotSubtrees(doc, [a.roots[0]!]), [0, 0, 0]);
     expect(a.copies[0]!.name).toBe('crate_2');
     expect(b.copies[0]!.name).toBe('crate_3');
+  });
+});
+
+describe('copies keep their world place', () => {
+  it('a child pasted where its parent no longer exists lands at its world position', () => {
+    const doc = new SceneDoc(newScene('t'));
+    const g = newEntity('g', { group: {} }, { position: [100, 0, 0] });
+    const lamp = newEntity('lamp', { light: {} }, { position: [10, 0, 0] });
+    lamp.parent = g.id;
+    doc.insert([g, lamp]);
+    const snap = snapshotSubtrees(doc, [lamp.id]);
+    const other = new SceneDoc(newScene('o'));
+    const { copies } = cloneSnapshot(other, snap, [0, 0, 0]);
+    expect(copies[0]!.parent).toBeNull();
+    expect(copies[0]!.transform.position).toEqual([110, 0, 0]);
   });
 });

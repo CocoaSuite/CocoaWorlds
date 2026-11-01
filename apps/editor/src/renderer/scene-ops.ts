@@ -1,10 +1,10 @@
 /**
- * Scene helpers shared by duplicate, copy/paste and grouping. Positions are still world-space (nested
- * transforms arrive in Phase 4), so moving a copy moves every object in it, and brushes move their faces.
+ * Scene helpers shared by duplicate, copy/paste and grouping. Transforms nest (decision G3), so a copy is
+ * placed by moving only its top-level objects; everything inside follows through the hierarchy.
  */
-import { newId, type EntityData, type SceneDoc } from '@cocoaworlds/core';
+import { composeTransform, decomposeMat4, identityMat4, identityTransform, invertMat4, multiplyMat4, newId, type EntityData, type SceneDoc } from '@cocoaworlds/core';
 import { translate, type V3 } from '@cocoaworlds/geometry';
-import { brushComponent, brushOf } from './brush/brushes';
+import { brushComponent, brushOf, toLocal, worldBrushOf } from './brush/brushes';
 
 /** A group: an entity made to hold others (the `group` component), or an older empty entity with children. */
 export function isGroup(doc: SceneDoc, e: EntityData | undefined): boolean {
@@ -19,14 +19,28 @@ export function rootsOf(doc: SceneDoc, ids: string[]): string[] {
   return doc.entities.filter((e) => set.has(e.id) && !ids.some((o) => o !== e.id && doc.isAncestor(o, e.id))).map((e) => e.id);
 }
 
-/** Deep copies of the roots and everything under them, in scene order. */
+/**
+ * Deep copies of the roots and everything under them, in scene order. Each root is stored in world space
+ * (as if it had no parent), so a paste can place it under any parent, or none, without moving it.
+ */
 export function snapshotSubtrees(doc: SceneDoc, roots: string[]): EntityData[] {
   const seen = new Set<string>();
   const out: EntityData[] = [];
+  const rootSet = new Set(roots);
   for (const id of roots) for (const e of doc.subtree(id)) {
     if (seen.has(e.id)) continue;
     seen.add(e.id);
-    out.push(structuredClone(e));
+    const c = structuredClone(e);
+    if (rootSet.has(e.id)) {
+      const b = worldBrushOf(doc, e);
+      if (b) {
+        c.components.brush = brushComponent(b.brush, b.role) as unknown as Record<string, unknown>;
+        c.transform = identityTransform();
+      } else {
+        c.transform = decomposeMat4(doc.worldMatrix(e.id));
+      }
+    }
+    out.push(c);
   }
   return out;
 }
@@ -57,10 +71,19 @@ export function cloneSnapshot(doc: SceneDoc, snapshot: EntityData[], delta: V3):
       c.name = unique(src.name);
       roots.push(c.id);
     }
-    if (moved) {
-      const b = brushOf(c);
-      if (b) c.components.brush = brushComponent(translate(b.brush, delta), b.role) as unknown as Record<string, unknown>;
-      else c.transform.position = [c.transform.position[0] + delta[0], c.transform.position[1] + delta[1], c.transform.position[2] + delta[2]];
+    if (inside) return c;
+    // Roots: offset in the world, then express them in their new parent's space. Contents follow.
+    const b = brushOf(c);
+    const parentSpace = c.parent ? doc.worldMatrix(c.parent) : identityMat4();
+    if (b) {
+      const world = moved ? translate(b.brush, delta) : b.brush;
+      c.components.brush = brushComponent(toLocal(world, parentSpace), b.role) as unknown as Record<string, unknown>;
+    } else {
+      const w = composeTransform(c.transform);
+      w[12] = w[12]! + delta[0];
+      w[13] = w[13]! + delta[1];
+      w[14] = w[14]! + delta[2];
+      c.transform = decomposeMat4(multiplyMat4(invertMat4(parentSpace) ?? identityMat4(), w));
     }
     return c;
   });

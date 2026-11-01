@@ -6,3 +6,4 @@ export * from './migrate';
 export * from './history';
 export * from './scene-doc';
 export * from './project';
+export * from './matrix';
