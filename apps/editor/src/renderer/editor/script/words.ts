@@ -11,6 +11,8 @@ const W = {
   enter: ['When something enters', 'Когда что-то входит в'],
   leave: ['When something leaves', 'Когда что-то выходит из'],
   message: ['When this gets the message', 'Когда приходит сообщение'],
+  messageStop: ['When the message', 'Когда сообщение'],
+  stopsComing: ['stops coming', 'перестаёт приходить'],
   use: ['When the player uses this', 'Когда игрок использует это'],
   every: ['Every', 'Каждые'],
   die: ['When the player dies', 'Когда игрок погибает'],
@@ -43,6 +45,11 @@ const W = {
   repeat: ['Repeat', 'Повторить'],
   times: ['times', 'раз'],
   forever: ['Repeat forever', 'Повторять всегда'],
+  while: ['Repeat while', 'Повторять, пока'],
+  turnTo: ['Turn', 'Повернуть'],
+  toAngle: ['to', 'на угол'],
+  fromStart: ['degrees from its start, around', '° от начального, вокруг оси'],
+  isInside: ['is inside', 'внутри'],
   stop: ['Stop this stack', 'Остановить этот стек'],
   hurt: ['Hurt the player by', 'Ранить игрока на'],
   heal: ['Heal the player by', 'Вылечить игрока на'],
@@ -120,6 +127,7 @@ const PALETTE_EVENT: Record<EventKind, Pair> = {
   leave: ['When something leaves a zone', 'Когда что-то выходит из зоны'],
   use: ['When the player uses this (E)', 'Когда игрок использует это (E)'],
   message: ['When this gets a message', 'Когда приходит сообщение'],
+  messageStop: ['When a message stops coming', 'Когда сообщение перестаёт приходить'],
   every: ['Every few seconds', 'Каждые несколько секунд'],
   die: ['When the player dies', 'Когда игрок погибает'],
   breaks: ['When this breaks', 'Когда это ломается'],
@@ -128,7 +136,8 @@ export const eventName = (k: EventKind) => pick(PALETTE_EVENT[k]);
 
 const PALETTE_STMT: Record<StatementKind, Pair> = {
   move: ['Move', 'Сдвинуть'],
-  turn: ['Turn', 'Повернуть'],
+  turn: ['Turn by', 'Повернуть на'],
+  turnTo: ['Turn to an angle (doors)', 'Повернуть до угла (двери)'],
   return: ['Return to start', 'Вернуть на место'],
   show: ['Show', 'Показать'],
   hide: ['Hide', 'Скрыть'],
@@ -142,6 +151,7 @@ const PALETTE_STMT: Record<StatementKind, Pair> = {
   if: ['If … otherwise', 'Если … иначе'],
   repeat: ['Repeat N times', 'Повторить N раз'],
   forever: ['Repeat forever', 'Повторять всегда'],
+  while: ['Repeat while …', 'Повторять, пока …'],
   stop: ['Stop this stack', 'Остановить стек'],
   hurt: ['Hurt the player', 'Ранить игрока'],
   heal: ['Heal the player', 'Вылечить игрока'],
@@ -163,13 +173,13 @@ const PALETTE_STMT: Record<StatementKind, Pair> = {
 export const statementName = (k: StatementKind) => pick(PALETTE_STMT[k]);
 
 export const STATEMENT_GROUPS: { title: Pair; kinds: StatementKind[] }[] = [
-  { title: ['Do', 'Действия'], kinds: ['move', 'turn', 'return', 'show', 'hide', 'turnOn', 'turnOff', 'send', 'log'] },
+  { title: ['Do', 'Действия'], kinds: ['move', 'turn', 'turnTo', 'return', 'show', 'hide', 'turnOn', 'turnOff', 'send', 'log'] },
   { title: ['Objects', 'Объекты'], kinds: ['spawn', 'remove', 'moveTo', 'scale', 'physical', 'push', 'damage'] },
   { title: ['Player and score', 'Игрок и счёт'], kinds: ['teleport', 'hurt', 'heal', 'addScore'] },
   { title: ['Screen and signs', 'Экран и таблички'], kinds: ['say', 'setText'] },
   { title: ['Sound', 'Звук'], kinds: ['playSound', 'stopSound'] },
   { title: ['Models', 'Модели'], kinds: ['playAnim'] },
-  { title: ['Control', 'Управление'], kinds: ['wait', 'if', 'repeat', 'forever', 'stop'] },
+  { title: ['Control', 'Управление'], kinds: ['wait', 'if', 'repeat', 'while', 'forever', 'stop'] },
   { title: ['Variables', 'Переменные'], kinds: ['set', 'change'] },
 ];
 export const groupTitle = (p: Pair) => pick(p);
@@ -191,13 +201,14 @@ const VALUE: Record<ExprKind, Pair> = {
   score: ['The score', 'Счёт'],
   copy: ['The new copy', 'Новая копия'],
   varOf: ['Another object’s variable', 'Переменная другого объекта'],
+  inside: ['Is inside a zone', 'Внутри зоны'],
 };
 export const valueName = (k: ExprKind) => pick(VALUE[k]);
 
 /** Which value blocks fit a slot of a given type. */
 export const VALUES_FOR: Record<'number' | 'boolean' | 'text' | 'any', ExprKind[]> = {
   number: ['number', 'variable', 'varOf', 'maths', 'random', 'time', 'health', 'score'],
-  boolean: ['boolean', 'variable', 'varOf', 'compare', 'logic', 'not'],
+  boolean: ['boolean', 'inside', 'variable', 'varOf', 'compare', 'logic', 'not'],
   text: ['text', 'variable', 'varOf', 'join', 'number', 'object', 'score'],
-  any: ['number', 'text', 'boolean', 'variable', 'varOf', 'maths', 'compare', 'logic', 'not', 'random', 'join', 'time', 'health', 'score', 'object', 'copy'],
+  any: ['number', 'text', 'boolean', 'variable', 'varOf', 'maths', 'compare', 'logic', 'not', 'inside', 'random', 'join', 'time', 'health', 'score', 'object', 'copy'],
 };

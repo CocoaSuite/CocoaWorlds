@@ -13,6 +13,12 @@ import type { Ref } from './model';
 
 export const STEP_BUDGET = 10_000;
 
+/**
+ * A message that comes again within this many seconds counts as still coming (a “while” loop sends it every
+ * frame): “When I get” doesn't start again, and “When it stops coming” waits for a longer break.
+ */
+export const MESSAGE_HOLD = 0.1;
+
 /** What scripts can do to the game. The runtime provides it; tests use a fake. */
 export interface ScriptHost {
   /** Seconds since the game started. */
@@ -41,6 +47,8 @@ export interface ScriptHost {
   stopSound?(target: string): void;
   /** Play an animation of an object's model. */
   playAnimation?(target: string, name: string, loop: boolean): void;
+  /** Whether `what` (an object or 'player') is inside the trigger zone `zone` right now. */
+  isInside?(zone: string, what: string): boolean;
   /** Make a copy of `template` at a place (an object, or 'aim'); returns the copy's id, or null if it couldn't. */
   spawn?(template: string, place: Value, owner: string): string | null;
 }
@@ -92,6 +100,8 @@ export class ScriptRunner {
   private running = new Set<string>();
   readonly errors: ScriptError[] = [];
   private started = false;
+  /** Messages that are coming in, by `${owner}\n${message}`: when each arrived last. */
+  private held = new Map<string, { inst: Instance; message: string; last: number }>();
 
   constructor(
     programs: Program[],
@@ -145,6 +155,7 @@ export class ScriptRunner {
 
   /** Something happened in the game: start the stacks that listen for it (they run on the next tick). */
   dispatch(e: RunnerEvent): void {
+    if (e.type === 'message') return this.deliver(e.message, e.to);
     for (const inst of this.instances) {
       for (const h of inst.program.handlers) {
         const ev = h.event;
@@ -154,8 +165,6 @@ export class ScriptRunner {
           if (ev.kind === 'die') this.spawn(inst, h, null);
         } else if (e.type === 'use') {
           if (ev.kind === 'use' && e.targets.includes(inst.program.owner)) this.spawn(inst, h, e.by);
-        } else if (e.type === 'message') {
-          if (ev.kind === 'message' && ev.message === e.message && (e.to === null || e.to === inst.program.owner)) this.spawn(inst, h, null);
         } else if ((ev.kind === 'enter' || ev.kind === 'leave') && ev.kind === e.type && ev.zone === e.zone) {
           this.spawn(inst, h, e.other);
         }
@@ -163,8 +172,30 @@ export class ScriptRunner {
     }
   }
 
+  /** A message arrived for every object that listens for it (or the one it was sent to). */
+  private deliver(message: string, to: string | null): void {
+    const now = this.host.now();
+    for (const inst of this.instances) {
+      if (to !== null && to !== inst.program.owner) continue;
+      const hs = inst.program.handlers.filter((h) => (h.event.kind === 'message' || h.event.kind === 'messageStop') && h.event.message === message);
+      if (!hs.length) continue;
+      const key = `${inst.program.owner}\n${message}`;
+      const prev = this.held.get(key);
+      this.held.set(key, { inst, message, last: now });
+      if (prev && now - prev.last <= MESSAGE_HOLD + 1e-6) continue;
+      for (const h of hs) if (h.event.kind === 'message') this.spawn(inst, h, null);
+    }
+  }
+
   /** Advance time: fire "every" timers and run every thread that can run. */
   tick(dt: number): void {
+    const now = this.host.now();
+    for (const [key, m] of this.held) {
+      if (now - m.last <= MESSAGE_HOLD + 1e-6) continue;
+      this.held.delete(key);
+      if (!this.instances.includes(m.inst)) continue;
+      for (const h of m.inst.program.handlers) if (h.event.kind === 'messageStop' && h.event.message === m.message) this.spawn(m.inst, h, null);
+    }
     for (const inst of this.instances) {
       for (const h of inst.program.handlers) {
         if (h.event.kind !== 'every') continue;
@@ -424,6 +455,11 @@ export class ScriptRunner {
           const txt = this.text(s.pop() ?? null);
           const target = s.pop();
           if (target && typeof target === 'object') this.host.setText?.(target.ref, txt);
+          break;
+        }
+        case 'inside': {
+          const zone = s.pop(), what = s.pop();
+          s.push(!!(zone && typeof zone === 'object' && what && typeof what === 'object' && this.host.isInside?.(zone.ref, what.ref)));
           break;
         }
         case 'halt':

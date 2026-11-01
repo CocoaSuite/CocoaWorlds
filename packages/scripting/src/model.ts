@@ -35,7 +35,9 @@ export type Expr =
   /** The copy made last by “Make a copy” in this stack. */
   | { id: string; kind: 'copy' }
   /** Another object's variable (read only). */
-  | { id: string; kind: 'varOf'; variable: string; of: Ref };
+  | { id: string; kind: 'varOf'; variable: string; of: Ref }
+  /** Whether something (the player, an object) is inside a trigger zone right now. */
+  | { id: string; kind: 'inside'; what: Ref; zone: Ref };
 
 export type Direction = 'up' | 'down' | 'north' | 'south' | 'east' | 'west';
 export type Axis = 'up' | 'north' | 'east';
@@ -43,6 +45,8 @@ export type Axis = 'up' | 'north' | 'east';
 export type Statement =
   | { id: string; kind: 'move'; target: Ref; direction: Direction; distance: Expr; seconds: Expr }
   | { id: string; kind: 'turn'; target: Ref; axis: Axis; degrees: Expr; seconds: Expr }
+  /** Turn to an angle measured from how it started (a door: 90 open, 0 shut), however far it has turned. */
+  | { id: string; kind: 'turnTo'; target: Ref; axis: Axis; degrees: Expr; seconds: Expr }
   | { id: string; kind: 'return'; target: Ref; seconds: Expr }
   | { id: string; kind: 'show'; target: Ref }
   | { id: string; kind: 'hide'; target: Ref }
@@ -56,6 +60,8 @@ export type Statement =
   | { id: string; kind: 'if'; condition: Expr; then: Statement[]; otherwise: Statement[] | null }
   | { id: string; kind: 'repeat'; times: Expr; body: Statement[] }
   | { id: string; kind: 'forever'; body: Statement[] }
+  /** Run the blocks inside again and again while the condition holds (once per frame at most). */
+  | { id: string; kind: 'while'; condition: Expr; body: Statement[] }
   | { id: string; kind: 'stop' }
   /** Hurt or heal the player; change the game's score (all by an amount, which may be negative). */
   | { id: string; kind: 'hurt'; amount: Expr }
@@ -92,7 +98,12 @@ export type EventBlock =
   | { id: string; kind: 'start' }
   | { id: string; kind: 'enter'; zone: Ref }
   | { id: string; kind: 'leave'; zone: Ref }
+  /**
+   * A message arrived. A message sent again and again without a break (from a “while” loop) counts as one:
+   * this starts when it begins, and `messageStop` starts when it stops coming.
+   */
   | { id: string; kind: 'message'; message: string }
+  | { id: string; kind: 'messageStop'; message: string }
   /**
    * The player pressed Use (E) while looking at this object (or anything inside it). `prompt` is the word shown
    * under the crosshair when the player looks at it (“E  Open”); empty shows “Use”.
@@ -160,11 +171,7 @@ export function* walk(script: Script): Generator<{ id: string; kind: string }> {
         const sub = (s as Record<string, unknown>)[k] as Expr | undefined;
         if (sub && typeof sub === 'object' && 'kind' in sub) yield* expr(sub);
       }
-      if (s.kind === 'if') {
-        yield* stmts(s.then);
-        if (s.otherwise) yield* stmts(s.otherwise);
-      }
-      if (s.kind === 'repeat' || s.kind === 'forever') yield* stmts(s.body);
+      for (const [, list] of innerLists(s)) yield* stmts(list);
     }
   }
   for (const h of script.handlers) {
@@ -173,4 +180,16 @@ export function* walk(script: Script): Generator<{ id: string; kind: string }> {
     if (h.event.kind === 'every') yield* expr(h.event.seconds);
     yield* stmts(h.body);
   }
+}
+
+/** The statement lists inside a statement, with their list-key suffix (`then`, `otherwise`, `body`). */
+export function innerLists(s: Statement): [string, Statement[]][] {
+  if (s.kind === 'if') return s.otherwise ? [['then', s.then], ['otherwise', s.otherwise]] : [['then', s.then]];
+  if (s.kind === 'repeat' || s.kind === 'forever' || s.kind === 'while') return [['body', s.body]];
+  return [];
+}
+
+/** A copy of blocks with new ids everywhere (for pasting). */
+export function freshIds<T>(blocks: T): T {
+  return JSON.parse(JSON.stringify(blocks), (k, v) => (k === 'id' && typeof v === 'string' ? blockId() : v)) as T;
 }

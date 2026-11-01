@@ -27,6 +27,7 @@ export function newEvent(kind: EventKind, zone: Ref = self): EventBlock {
     case 'leave':
       return { id: id(), kind, zone };
     case 'message':
+    case 'messageStop':
       return { id: id(), kind, message: 'open' };
     case 'every':
       return { id: id(), kind, seconds: num(1) };
@@ -39,6 +40,7 @@ export function newStatement(kind: StatementKind, opts: { target?: Ref; variable
     case 'move':
       return { id: id(), kind, target, direction: 'up' as Direction, distance: num(128), seconds: num(1) };
     case 'turn':
+    case 'turnTo':
       return { id: id(), kind, target, axis: 'up', degrees: num(90), seconds: num(1) };
     case 'return':
       return { id: id(), kind, target, seconds: num(1) };
@@ -63,6 +65,8 @@ export function newStatement(kind: StatementKind, opts: { target?: Ref; variable
       return { id: id(), kind, times: num(3), body: [] };
     case 'forever':
       return { id: id(), kind, body: [] };
+    case 'while':
+      return { id: id(), kind, condition: newExpr('inside'), body: [] };
     case 'stop':
       return { id: id(), kind };
     case 'hurt':
@@ -130,5 +134,7 @@ export function newExpr(kind: ExprKind, opts: { variable?: string } = {}): Expr 
       return { id: id(), kind };
     case 'varOf':
       return { id: id(), kind, variable: opts.variable ?? 'value', of: other };
+    case 'inside':
+      return { id: id(), kind, what: player, zone: self };
   }
 }

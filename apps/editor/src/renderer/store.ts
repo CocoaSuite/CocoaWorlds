@@ -998,6 +998,7 @@ export const useEditor = create<State & Actions>()((set, get) => ({
       h.execute(addEntitiesCmd(doc, [zone]));
       zoneId = zone.id;
     }
+    if (r.pivot) h.execute(setComponentCmd(doc, id, PIVOT, pivotData(doc, id, r.pivot(target), brushBounds) as never, 'Recipe hinge'));
     const out = r.build(target, zoneId);
     const cur = (doc.get(id)!.components.script as unknown as Script | undefined) ?? emptyScript();
     const next: Script = {

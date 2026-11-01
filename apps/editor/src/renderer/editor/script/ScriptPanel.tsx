@@ -19,7 +19,10 @@ import {
   renameVariable,
   replaceBlock,
   blockId,
+  freshIds,
+  innerLists,
   type EventBlock,
+  type Handler,
   type EventKind,
   type Expr,
   type ExprKind,
@@ -33,7 +36,7 @@ import {
 } from '@cocoaworlds/scripting';
 import type { GameValue } from '@cocoaworlds/core';
 import { Button, ContextMenu, IconButton, type MenuEntry } from '@cocoaworlds/ui';
-import { createContext, useContext, useMemo, useState, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useMemo, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { t } from '../../i18n';
 import { useEditor } from '../../store';
 import { sceneInfo } from './scene-info';
@@ -57,6 +60,33 @@ interface Ctx {
 const C = createContext<Ctx | null>(null);
 const useC = () => useContext(C)!;
 
+/**
+ * Copied blocks: one block (with what's inside it) or a whole stack. Lives for the app session, so blocks can
+ * be pasted into another object's script.
+ */
+type Clip = { kind: 'blocks'; blocks: Statement[] } | { kind: 'stack'; handler: Handler };
+let clip: Clip | null = null;
+const clipListeners = new Set<() => void>();
+function setClip(next: Clip) {
+  clip = JSON.parse(JSON.stringify(next)) as Clip;
+  for (const f of clipListeners) f();
+}
+/** Paste the clipboard into a script: blocks into a list at an index, a stack at the end. */
+function pasteInto(s: Script, at: { key: string; index: number } | null): Script {
+  if (!clip) return s;
+  if (clip.kind === 'stack') return addHandler(s, freshIds(clip.handler));
+  let out = s;
+  const blocks = freshIds(clip.blocks);
+  const where = at ?? (s.handlers.length ? { key: s.handlers[s.handlers.length - 1]!.id, index: s.handlers[s.handlers.length - 1]!.body.length } : null);
+  if (!where) return s;
+  blocks.forEach((b, i) => (out = insertStatement(out, where.key, where.index + i, b)));
+  return out;
+}
+const clipLabel = () => (!clip ? '' : clip.kind === 'stack' ? t('script.pasteStack') : t('script.pasteBlocks').replace('{n}', String(countBlocks(clip.blocks))));
+function countBlocks(list: Statement[]): number {
+  return list.reduce((n, s) => n + 1 + innerLists(s).reduce((m, [, l]) => m + countBlocks(l), 0), 0);
+}
+
 export function ScriptPanel() {
   useEditor((s) => s.rev);
   const doc = useEditor((s) => s.doc);
@@ -65,6 +95,12 @@ export function ScriptPanel() {
   const playing = useEditor((s) => !!s.playing);
   const st = useEditor.getState();
   const [menu, setMenu] = useState<{ x: number; y: number; items: MenuEntry[] } | null>(null);
+  const [, setClipRev] = useState(0);
+  useEffect(() => {
+    const f = () => setClipRev((n) => n + 1);
+    clipListeners.add(f);
+    return () => void clipListeners.delete(f);
+  }, []);
 
   const owner = selection.length === 1 ? doc?.get(selection[0]!) : undefined;
   const script = owner?.components.script as unknown as Script | undefined;
@@ -110,18 +146,58 @@ export function ScriptPanel() {
     ctx.menu(
       ev.clientX,
       ev.clientY,
-      (['start', 'enter', 'leave', 'use', 'message', 'every', 'die', 'breaks'] as EventKind[]).map((k) => ({
-        label: eventName(k),
-        onSelect: () => {
-          const zone: Ref = objects.find((o) => o.id === owner.id)?.isZone ? { self: true } : objects.find((o) => o.isZone) ? { entity: objects.find((o) => o.isZone)!.id } : { self: true };
-          ctx.update((s) => addHandler(s, { id: blockId(), event: newEvent(k, zone), body: [] }), 'Add stack');
-        },
-      })),
+      [
+        ...(['start', 'enter', 'leave', 'use', 'message', 'messageStop', 'every', 'die', 'breaks'] as EventKind[]).map((k) => ({
+          label: eventName(k),
+          onSelect: () => {
+            const zone: Ref = objects.find((o) => o.id === owner.id)?.isZone ? { self: true } : objects.find((o) => o.isZone) ? { entity: objects.find((o) => o.isZone)!.id } : { self: true };
+            ctx.update((s) => addHandler(s, { id: blockId(), event: newEvent(k, zone), body: [] }), 'Add stack');
+          },
+        })),
+        ...(clip ? (['separator', { label: clipLabel(), onSelect: () => ctx.update((s) => pasteInto(s, null), 'Paste blocks') }] as MenuEntry[]) : []),
+      ],
     );
+  /** Ctrl+C / Ctrl+X / Ctrl+V / Delete on the block (or stack) that has the keyboard focus. */
+  const onKey = (e: KeyboardEvent<HTMLDivElement>) => {
+    const el = e.target as HTMLElement;
+    if (el.tagName === 'INPUT' || el.tagName === 'SELECT' || el.tagName === 'TEXTAREA' || playing) return;
+    const id = el.closest<HTMLElement>('[data-pick]')?.dataset.pick;
+    if (!id) return;
+    const m = e.ctrlKey || e.metaKey;
+    const k = e.code.replace(/^Key/, '').toLowerCase();
+    const handler = script.handlers.find((h) => h.id === id);
+    const at = handler ? null : locate(script, id);
+    const stmt = at ? findStatement(script, id) : null;
+    const done = () => {
+      e.preventDefault();
+      e.stopPropagation();
+    };
+    if (m && (k === 'c' || k === 'x')) {
+      if (handler) setClip({ kind: 'stack', handler });
+      else if (stmt) setClip({ kind: 'blocks', blocks: [stmt] });
+      if (k === 'x') ctx.update((s) => (handler ? removeHandler(s, id) : removeStatement(s, id)), 'Cut blocks');
+      return done();
+    }
+    if (m && k === 'v') {
+      if (clip) ctx.update((s) => pasteInto(s, clip?.kind === 'blocks' ? (handler ? { key: handler.id, index: handler.body.length } : at && { key: at.key, index: at.index + 1 }) : null), 'Paste blocks');
+      return done();
+    }
+    if (m && k === 'd') {
+      if (handler) ctx.update((s) => addHandler(s, freshIds(handler)), 'Duplicate stack');
+      else if (stmt && at) ctx.update((s) => insertStatement(s, at.key, at.index + 1, freshIds(stmt)), 'Duplicate block');
+      return done();
+    }
+    if (!m && (e.key === 'Delete' || e.key === 'Backspace')) {
+      ctx.update((s) => (handler ? removeHandler(s, id) : removeStatement(s, id)), 'Remove block');
+      return done();
+    }
+    // Keep editor shortcuts (tools, Ctrl+Z) off the picked block's keys.
+    if (m && k !== 'z' && k !== 'y' && k !== 's') e.stopPropagation();
+  };
 
   return (
     <C.Provider value={ctx}>
-      <div className={`cw-script${playing ? ' playing' : ''}`} aria-label={t('script.title').replace('{name}', owner.name)} role="region">
+      <div className={`cw-script${playing ? ' playing' : ''}`} aria-label={t('script.title').replace('{name}', owner.name)} role="region" onKeyDown={onKey}>
         <div className="cw-script-head">
           <span className="cw-script-owner">{t('script.title').replace('{name}', owner.name)}</span>
           <Variables />
@@ -135,7 +211,7 @@ export function ScriptPanel() {
           {script.handlers.map((h) => (
             <C.Provider key={h.id} value={{ ...ctx, otherAllowed: h.event.kind === 'enter' || h.event.kind === 'leave' || h.event.kind === 'use', otherIsPlayer: h.event.kind === 'use' }}>
               <div className="cw-stack" role="group" aria-label={eventName(h.event.kind)}>
-                <EventRow ev={h.event} onRemove={() => ctx.update((s) => removeHandler(s, h.id), 'Remove stack')} />
+                <EventRow ev={h.event} onRemove={() => ctx.update((s) => removeHandler(s, h.id), 'Remove stack')} onCopy={() => setClip({ kind: 'stack', handler: h })} pick={h.id} />
                 <List listKey={h.id} list={h.body} />
               </div>
             </C.Provider>
@@ -311,7 +387,25 @@ function InlineValue({ type, value, label, onChange }: { type: VariableDef['type
 
 // ── Stacks and statements ──
 
-function EventRow({ ev, onRemove }: { ev: EventBlock; onRemove: () => void }) {
+function findStatement(script: Script, id: string): Statement | null {
+  const search = (list: Statement[]): Statement | null => {
+    for (const s of list) {
+      if (s.id === id) return s;
+      for (const [, inner] of innerLists(s)) {
+        const f = search(inner);
+        if (f) return f;
+      }
+    }
+    return null;
+  };
+  for (const h of script.handlers) {
+    const f = search(h.body);
+    if (f) return f;
+  }
+  return null;
+}
+
+function EventRow({ ev, onRemove, onCopy, pick }: { ev: EventBlock; onRemove: () => void; onCopy: () => void; pick: string }) {
   const c = useC();
   const set = (patch: Partial<EventBlock>) => c.update((s) => replaceBlock(s, ev.id, (b) => ({ ...b, ...patch }) as EventBlock), 'Edit block');
   let content: ReactNode;
@@ -336,16 +430,22 @@ function EventRow({ ev, onRemove }: { ev: EventBlock; onRemove: () => void }) {
       {w('message')} <TextSlot value={ev.message} label={w('message')} onChange={(message) => set({ message } as Partial<EventBlock>)} />
     </>
   );
+  else if (ev.kind === 'messageStop') content = (
+    <>
+      {w('messageStop')} <TextSlot value={ev.message} label={w('messageStop')} onChange={(message) => set({ message } as Partial<EventBlock>)} /> {w('stopsComing')}
+    </>
+  );
   else content = (
     <>
       {w('every')} <ExprSlot expr={ev.seconds} type="number" label={w('every')} /> {w('seconds')}
     </>
   );
   return (
-    <div className="cw-blk event" data-block={ev.id}>
+    <div className="cw-blk event" data-block={ev.id} data-pick={pick} tabIndex={-1} onMouseDown={focusRow}>
       <div className="cw-blk-line">
         <span className="cw-blk-words">{content}</span>
         <span className="cw-blk-tools">
+          <IconButton icon="copy" label={t('script.copyStack')} onClick={onCopy} />
           <IconButton icon="close" label={t('script.removeStack')} onClick={onRemove} />
         </span>
       </div>
@@ -364,7 +464,17 @@ function List({ listKey, list }: { listKey: string; list: Statement[] }) {
       <button
         type="button"
         className="cw-add-blk"
-        onClick={(ev) => c.menu(ev.clientX, ev.clientY, paletteItems(c, (stmt) => c.update((sc) => insertStatement(sc, listKey, list.length, stmt), 'Add block')))}
+        onClick={(ev) =>
+          c.menu(
+            ev.clientX,
+            ev.clientY,
+            paletteItems(
+              c,
+              (stmt) => c.update((sc) => insertStatement(sc, listKey, list.length, stmt), 'Add block'),
+              () => c.update((sc) => pasteInto(sc, { key: listKey, index: list.length }), 'Paste blocks'),
+            ),
+          )
+        }
       >
         + {t('script.addBlock')}
       </button>
@@ -372,8 +482,18 @@ function List({ listKey, list }: { listKey: string; list: Statement[] }) {
   );
 }
 
-function paletteItems(c: Ctx, add: (s: Statement) => void): MenuEntry[] {
+/** Clicking a block's words picks it (for Ctrl+C, Ctrl+V, Delete), unless the click was in a slot. */
+function focusRow(e: React.MouseEvent<HTMLElement>) {
+  const el = e.target as HTMLElement;
+  if (el.closest('input, select, button, textarea')) return;
+  if (el.closest('[data-pick]') !== e.currentTarget) return;
+  e.preventDefault();
+  e.currentTarget.focus();
+}
+
+function paletteItems(c: Ctx, add: (s: Statement) => void, paste?: () => void): MenuEntry[] {
   const out: MenuEntry[] = [];
+  if (paste && clip?.kind === 'blocks') out.push({ label: clipLabel(), onSelect: paste }, 'separator');
   const firstVar = c.script.variables[0]?.name;
   const target: Ref = c.objects.some((o) => o.id === c.owner) ? { self: true } : { self: true };
   STATEMENT_GROUPS.forEach((g, i) => {
@@ -406,15 +526,30 @@ function StatementRow({ s, listKey }: { s: Statement; listKey: string }) {
           </button>
         )}
       </>
-    ) : s.kind === 'repeat' || s.kind === 'forever' ? (
+    ) : s.kind === 'repeat' || s.kind === 'forever' || s.kind === 'while' ? (
       <List listKey={`${s.id}:body`} list={s.body} />
     ) : null;
   return (
-    <div className={`cw-blk ${kindClass(s.kind)}${c.active.has(s.id) ? ' running' : ''}${c.problems.get(s.id)?.some((p) => p.severity === 'error') ? ' bad' : ''}`} data-block={s.id} role="group" aria-label={statementName(s.kind)}>
+    <div className={`cw-blk ${kindClass(s.kind)}${c.active.has(s.id) ? ' running' : ''}${c.problems.get(s.id)?.some((p) => p.severity === 'error') ? ' bad' : ''}`} data-block={s.id} data-pick={s.id} tabIndex={-1} onMouseDown={focusRow} role="group" aria-label={statementName(s.kind)}>
       <div className="cw-blk-line">
         <span className="cw-blk-words">{words}</span>
         <span className="cw-blk-tools">
-          <IconButton icon="plus" label={t('script.addAfter')} onClick={(ev) => c.menu(ev.clientX, ev.clientY, paletteItems(c, (stmt) => at && c.update((sc) => insertStatement(sc, at.key, at.index + 1, stmt), 'Add block')))} />
+          <IconButton
+            icon="plus"
+            label={t('script.addAfter')}
+            onClick={(ev) =>
+              c.menu(
+                ev.clientX,
+                ev.clientY,
+                paletteItems(
+                  c,
+                  (stmt) => at && c.update((sc) => insertStatement(sc, at.key, at.index + 1, stmt), 'Add block'),
+                  () => at && c.update((sc) => pasteInto(sc, { key: at.key, index: at.index + 1 }), 'Paste blocks'),
+                ),
+              )
+            }
+          />
+          <IconButton icon="copy" label={t('script.copyBlock')} onClick={() => setClip({ kind: 'blocks', blocks: [s] })} />
           <IconButton icon="up" label={t('script.moveUp')} onClick={() => c.update((sc) => moveStatement(sc, s.id, -1), 'Move block')} />
           <IconButton icon="down" label={t('script.moveDown')} onClick={() => c.update((sc) => moveStatement(sc, s.id, 1), 'Move block')} />
           <IconButton icon="close" label={t('script.removeBlock')} onClick={() => c.update((sc) => removeStatement(sc, s.id), 'Remove block')} />
@@ -427,7 +562,7 @@ function StatementRow({ s, listKey }: { s: Statement; listKey: string }) {
   void listKey;
 }
 
-const kindClass = (k: StatementKind) => (k === 'if' || k === 'repeat' || k === 'forever' || k === 'wait' || k === 'stop' ? 'control' : k === 'set' || k === 'change' ? 'data' : 'action');
+const kindClass = (k: StatementKind) => (k === 'if' || k === 'repeat' || k === 'forever' || k === 'while' || k === 'wait' || k === 'stop' ? 'control' : k === 'set' || k === 'change' ? 'data' : 'action');
 
 function statementWords(s: Statement, set: (patch: Record<string, unknown>, mergeKey?: string) => void): ReactNode {
   switch (s.kind) {
@@ -457,6 +592,21 @@ function statementWords(s: Statement, set: (patch: Record<string, unknown>, merg
             ))}
           </select>
           {w('over')} <ExprSlot expr={s.seconds} type="number" label={`${w('turn')} ${w('over')}`} /> {w('seconds')}
+        </>
+      );
+    case 'turnTo':
+      return (
+        <>
+          {w('turnTo')} <RefSlot value={s.target} onChange={(target) => set({ target })} label={statementName('turnTo')} /> {w('toAngle')}{' '}
+          <ExprSlot expr={s.degrees} type="number" label={`${statementName('turnTo')} ${w('toAngle')}`} /> {w('fromStart')}
+          <select className="cw-input cw-mini" aria-label={`${statementName('turnTo')} ${w('around')}`} value={s.axis} onChange={(e) => set({ axis: e.target.value })}>
+            {(['up', 'north', 'east'] as const).map((a) => (
+              <option key={a} value={a}>
+                {axisLabel(a)}
+              </option>
+            ))}
+          </select>
+          {w('over')} <ExprSlot expr={s.seconds} type="number" label={`${statementName('turnTo')} ${w('over')}`} /> {w('seconds')}
         </>
       );
     case 'return':
@@ -520,6 +670,12 @@ function statementWords(s: Statement, set: (patch: Record<string, unknown>, merg
       );
     case 'forever':
       return w('forever');
+    case 'while':
+      return (
+        <>
+          {w('while')} <ExprSlot expr={s.condition} type="boolean" label={w('while')} />
+        </>
+      );
     case 'stop':
       return w('stop');
     case 'spawn':
@@ -807,6 +963,14 @@ function ExprSlot({ expr, type, label }: { expr: Expr; type: 'number' | 'boolean
       break;
     case 'object':
       body = <RefSlot value={expr.ref} label={label} onChange={(ref) => ref && set({ ref })} />;
+      break;
+    case 'inside':
+      body = (
+        <>
+          <RefSlot value={expr.what} allowPlayer onChange={(what) => set({ what })} label={`${label} ${w('isInside')}`} /> {w('isInside')}{' '}
+          <RefSlot value={expr.zone} zonesOnly onChange={(zone) => set({ zone })} label={`${label} ${w('isInside')} zone`} />
+        </>
+      );
       break;
     case 'not':
       body = (

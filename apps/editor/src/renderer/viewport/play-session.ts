@@ -7,7 +7,7 @@
  */
 import { SceneDoc, readComponent, type ColliderData, type GameRules, type GameValue, type ModelData, type SceneFile, type SignData } from '@cocoaworlds/core';
 import { buildMesh, isInvisibleMaterial, type WorldBrush } from '@cocoaworlds/geometry';
-import { GameWorld, initPhysics, type BodyInfo, type PlayerInput, type PlayerStatus, type ScriptLog, type TriggerEvent } from '@cocoaworlds/runtime';
+import { GameWorld, initPhysics, type BodyInfo, type ModelMesh, type PlayerInput, type PlayerStatus, type ScriptLog, type TriggerEvent } from '@cocoaworlds/runtime';
 import type { Problem, ScriptError } from '@cocoaworlds/scripting';
 import * as THREE from 'three';
 import { worldBrushes } from '../brush/brushes';
@@ -15,7 +15,7 @@ import { buildLevel } from './world-build';
 import { toGeometry } from './world-render';
 import { buildSign, type SignObject } from './sign';
 import { assetUrl } from '../assets';
-import { modelInstance, type ModelInstance } from './models';
+import { modelGeometry, modelInstance, type ModelInstance } from './models';
 
 export interface PlayInfo {
   moving: number;
@@ -51,14 +51,28 @@ export class PlaySession {
 
   static async start(scene: SceneFile, material: (name: string) => THREE.Material, rules?: GameRules, values?: GameValue[]): Promise<PlaySession> {
     await initPhysics();
+    // The triangles of models that collide by their own shape (read from the files, which are loaded already).
+    const models = new Map<string, ModelMesh>();
+    const wanted = new Set<string>();
+    for (const e of scene.entities) {
+      const m = e.components.model as Partial<ModelData> | undefined;
+      if (m?.model && m.collision && m.collision !== 'none') wanted.add(m.model);
+    }
+    await Promise.all(
+      [...wanted].map((path) =>
+        modelGeometry(path)
+          .then((g) => void models.set(path, g))
+          .catch(() => {}),
+      ),
+    );
     // Invisible colliders (COL) collide but aren't drawn in the game.
     const hidden = new THREE.MeshBasicMaterial({ visible: false });
-    return new PlaySession(scene, (name) => (isInvisibleMaterial(name) ? hidden : material(name)), rules, values);
+    return new PlaySession(scene, (name) => (isInvisibleMaterial(name) ? hidden : material(name)), rules, values, models);
   }
 
-  private constructor(scene: SceneFile, material: (name: string) => THREE.Material, rules?: GameRules, values?: GameValue[]) {
+  private constructor(scene: SceneFile, material: (name: string) => THREE.Material, rules?: GameRules, values?: GameValue[], models = new Map<string, ModelMesh>()) {
     this.group.name = 'play';
-    this.world = GameWorld.create(scene, { rules, values });
+    this.world = GameWorld.create(scene, { rules, values, models });
     const doc = new SceneDoc(structuredClone(scene));
     const bodies = new Set(this.world.movingBodies().map((b) => b.id));
 

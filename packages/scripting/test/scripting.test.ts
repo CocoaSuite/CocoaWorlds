@@ -347,3 +347,85 @@ describe('game values, messages and signs', () => {
     ]);
   });
 });
+
+describe('while, “is inside” and messages that keep coming', () => {
+  it('a while loop runs once a frame while its condition holds, then goes on', () => {
+    const { host, runFor } = run(
+      [
+        [
+          'me',
+          script(
+            [
+              handler(newEvent('start'), {
+                ...(newStatement('while') as Extract<Statement, { kind: 'while' }>),
+                condition: { id: 'c', kind: 'compare', op: '<', a: variable('n'), b: num(3) },
+                body: [{ id: 's', kind: 'change', variable: 'n', by: num(1) }, { id: 'l', kind: 'log', text: variable('n') }],
+              }, { id: 'd', kind: 'log', text: text('done') }),
+            ],
+            [{ name: 'n', type: 'number', initial: 0 }],
+          ),
+        ],
+      ],
+      1,
+    );
+    runFor(1);
+    // One turn of the loop per frame: 1 at the start, then 2 and 3 on the next frames.
+    expect(host.log).toEqual(['0.0 1', '0.1 2', '0.2 3', '0.3 done']);
+  });
+
+  it('a while loop that never waits is not a problem', () => {
+    const s = script([handler(newEvent('start'), { ...(newStatement('while') as Extract<Statement, { kind: 'while' }>), condition: { id: 'b', kind: 'boolean', value: true }, body: [] })]);
+    expect(compileScript('me', s, scene).problems).toEqual([]);
+  });
+
+  it('“is inside” asks the game and must point at a zone', () => {
+    const inside = newExpr('inside') as Extract<Expr, { kind: 'inside' }>;
+    const bad = script([handler(newEvent('start'), { id: 'i', kind: 'if', condition: { ...inside, zone: entity('door') }, then: [], otherwise: null })]);
+    expect(compileScript('me', bad, scene).problems.map((p) => p.message)).toEqual(['Main door is not a trigger zone.']);
+    const good = script([handler(newEvent('start'), { id: 'i', kind: 'if', condition: { ...inside, zone: entity('zone') }, then: [{ id: 'l', kind: 'log', text: text('in') }], otherwise: null })]);
+    const r = compileScript('me', good, scene);
+    expect(r.problems).toEqual([]);
+    const asked: string[] = [];
+    const logs: string[] = [];
+    const vm = new ScriptRunner([r.program], {
+      now: () => 0,
+      random: () => 0,
+      nameOf: (x) => x,
+      act: () => null,
+      send: () => {},
+      log: (t) => void logs.push(t),
+      isInside: (zone, what) => (asked.push(`${what} in ${zone}`), true),
+    });
+    vm.start();
+    expect(asked).toEqual(['player in zone']);
+    expect(logs).toEqual(['in']);
+  });
+
+  it('a message sent every frame starts “When I get” once, and “stops coming” after it stops', () => {
+    const sender = script(
+      [
+        handler(newEvent('start'), {
+          ...(newStatement('while') as Extract<Statement, { kind: 'while' }>),
+          condition: { id: 'c', kind: 'compare', op: '<', a: { id: 't', kind: 'time' }, b: num(1) },
+          body: [{ id: 's', kind: 'send', message: 'open', to: null }],
+        }),
+      ],
+    );
+    const door = script([
+      handler(newEvent('message'), { id: 'a', kind: 'log', text: text('open') }),
+      handler({ ...newEvent('messageStop'), message: 'open' } as Handler['event'], { id: 'b', kind: 'log', text: text('shut') }),
+    ]);
+    const { host, runFor } = run([['me', sender], ['door', door]]);
+    runFor(2);
+    expect(host.sent.length).toBeGreaterThan(5);
+    expect(host.log).toEqual(['0.1 open', '1.1 shut']);
+  });
+
+  it('messages with a break between them each start “When I get”', () => {
+    const sender = script([handler({ ...newEvent('every'), seconds: num(0.5) } as Handler['event'], { id: 's', kind: 'send', message: 'open', to: null })]);
+    const door = script([handler(newEvent('message'), { id: 'a', kind: 'log', text: text('open') })]);
+    const { host, runFor } = run([['me', sender], ['door', door]]);
+    runFor(1.6);
+    expect(host.log).toEqual(['0.6 open', '1.1 open', '1.6 open']);
+  });
+});

@@ -76,8 +76,23 @@ export const defaultSurface = (material = DEFAULT_MATERIAL): FaceSurface => ({
 
 export const cloneSurface = (s: FaceSurface): FaceSurface => ({ ...s, offset: [...s.offset], scale: [...s.scale] });
 
+/**
+ * Polygons worked out before, by brush. Brushes are never changed in place (every edit makes a new one), so
+ * the editor asking again for the same brush (selection outlines, the Inspector, the gizmo) costs nothing.
+ */
+const polyCache = new WeakMap<Brush, { eps: number; faces: BrushFace[]; polys: BrushPolygon[] }>();
+
 /** The polygon of every face that actually touches the solid. Faces that are fully clipped away are omitted. */
 export function polygons(b: Brush, eps = EPS): BrushPolygon[] {
+  if (b.mesh) return clipPolygons(b, eps);
+  const hit = polyCache.get(b);
+  if (hit && hit.eps === eps && hit.faces === b.faces) return hit.polys.map((p) => ({ ...p, points: p.points.slice() }));
+  const polys = clipPolygons(b, eps);
+  polyCache.set(b, { eps, faces: b.faces, polys });
+  return polys.map((p) => ({ ...p, points: p.points.slice() }));
+}
+
+function clipPolygons(b: Brush, eps: number): BrushPolygon[] {
   const out: BrushPolygon[] = [];
   if (b.mesh) {
     const { verts, polys } = b.mesh;
@@ -87,19 +102,38 @@ export function polygons(b: Brush, eps = EPS): BrushPolygon[] {
     });
     return out;
   }
+  const buckets: number[][] = NEAR.map(() => []);
   b.faces.forEach((f, i) => {
     let w: Winding | null = baseWinding(f.plane);
-    for (let j = 0; j < b.faces.length && w; j++) {
-      if (j === i) continue;
-      const other = b.faces[j]!.plane;
-      if (samePlane(other, f.plane, eps)) {
-        // Duplicate plane: keep only the first copy.
-        if (j < i) w = null;
-        continue;
-      }
-      const r = clipWinding(w, other, eps);
-      w = r.onPlane ? null : r.back;
+    // Neighbours first (the planes facing most nearly the same way): the polygon shrinks to its final size in
+    // a few cuts, and every later plane is then passed over without any work (many-sided spheres, cylinders).
+    // (Rough buckets rather than a sort: sorting every face's planes costs more than it saves.)
+    const n = f.plane.n;
+    for (const bk of buckets) bk.length = 0;
+    for (let j = 0; j < b.faces.length; j++) {
+      const d = dot(b.faces[j]!.plane.n, n);
+      let k = 0;
+      while (d < NEAR[k]!) k++;
+      buckets[k]!.push(j);
     }
+    // A ball around the polygon: a plane that has the whole ball behind it can't cut the polygon.
+    let ball = enclose(w);
+    for (const bucket of buckets)
+      for (const j of bucket) {
+        if (!w) break;
+        if (j === i) continue;
+        const other = b.faces[j]!.plane;
+        if (signedDist(other, ball.c) + ball.r < -eps) continue;
+        if (samePlane(other, f.plane, eps)) {
+          // Duplicate plane: keep only the first copy.
+          if (j < i) w = null;
+          continue;
+        }
+        if (allBehind(w, other, eps)) continue;
+        const r = clipWinding(w, other, eps);
+        w = r.onPlane ? null : r.back;
+        if (w) ball = enclose(w);
+      }
     if (!w) return;
     w = cleanWinding(w, eps);
     if (w.length >= 3 && windingArea(w) > eps * eps) out.push({ face: i, plane: f.plane, surface: f.surface, points: w });
@@ -107,18 +141,99 @@ export function polygons(b: Brush, eps = EPS): BrushPolygon[] {
   return out;
 }
 
+/** Bucket limits for “how nearly the same way two planes face” (see `polygons`). */
+const NEAR = [0.995, 0.98, 0.95, 0.85, 0.6, 0, -Infinity];
+
+/** A ball that holds every point of the polygon (centred on the average point). */
+function enclose(w: Winding): { c: V3; r: number } {
+  let x = 0, y = 0, z = 0;
+  for (const p of w) {
+    x += p[0];
+    y += p[1];
+    z += p[2];
+  }
+  const c: V3 = [x / w.length, y / w.length, z / w.length];
+  let r2 = 0;
+  for (const p of w) r2 = Math.max(r2, (p[0] - c[0]) ** 2 + (p[1] - c[1]) ** 2 + (p[2] - c[2]) ** 2);
+  return { c, r: Math.sqrt(r2) };
+}
+
+/** True when every point of the polygon is behind (or on) the plane: the plane doesn't cut it. */
+function allBehind(w: Winding, p: Plane, eps: number): boolean {
+  for (const x of w) if (signedDist(p, x) > eps) return false;
+  return true;
+}
+
+/**
+ * Unique points within a tolerance, found through a grid of cells instead of comparing with every point
+ * (spheres have hundreds of corners). `index` returns the first matching point's index, adding it if new.
+ */
+export class PointSet {
+  readonly points: V3[] = [];
+  private cells = new Map<string, number[]>();
+  private size: number;
+  constructor(private tol: number) {
+    this.size = Math.max(tol * 2, 1e-9);
+  }
+  private cell(p: V3, dx = 0, dy = 0, dz = 0) {
+    return `${Math.floor(p[0] / this.size) + dx},${Math.floor(p[1] / this.size) + dy},${Math.floor(p[2] / this.size) + dz}`;
+  }
+  find(p: V3): number {
+    let best = -1;
+    for (let dx = -1; dx <= 1; dx++)
+      for (let dy = -1; dy <= 1; dy++)
+        for (let dz = -1; dz <= 1; dz++) {
+          const list = this.cells.get(this.cell(p, dx, dy, dz));
+          if (!list) continue;
+          for (const k of list) if ((best < 0 || k < best) && eq(p, this.points[k]!, this.tol)) best = k;
+        }
+    return best;
+  }
+  index(p: V3): number {
+    const found = this.find(p);
+    if (found >= 0) return found;
+    this.points.push(p);
+    const key = this.cell(p);
+    const list = this.cells.get(key);
+    if (list) list.push(this.points.length - 1);
+    else this.cells.set(key, [this.points.length - 1]);
+    return this.points.length - 1;
+  }
+}
+
 /** Unique corner points of the solid. */
 export function vertices(b: Brush, eps = EPS): V3[] {
   if (b.mesh) return b.mesh.verts.map((v) => [...v] as V3);
-  const out: V3[] = [];
-  for (const p of polygons(b, eps)) for (const x of p.points) if (!out.some((y) => eq(x, y, eps * 4))) out.push(x);
-  return out;
+  const set = new PointSet(eps * 4);
+  for (const p of polygons(b, eps)) for (const x of p.points) set.index(x);
+  return set.points;
 }
 
 /** Unique edges as index pairs into `vertices(b)`. */
 export function edges(b: Brush, eps = EPS): { verts: V3[]; edges: [number, number][] } {
+  if (!b.mesh) {
+    // One pass: the corners and the edges from the same polygons.
+    const set = new PointSet(eps * 4);
+    const seen = new Set<string>();
+    const out: [number, number][] = [];
+    for (const poly of polygons(b, eps)) {
+      const ids = poly.points.map((p) => set.index(p));
+      for (let i = 0; i < ids.length; i++) {
+        const a = ids[i]!, c = ids[(i + 1) % ids.length]!;
+        if (a === c) continue;
+        const k = a < c ? `${a}:${c}` : `${c}:${a}`;
+        if (!seen.has(k)) {
+          seen.add(k);
+          out.push([Math.min(a, c), Math.max(a, c)]);
+        }
+      }
+    }
+    return { verts: set.points, edges: out };
+  }
   const verts = vertices(b, eps);
-  const idx = (p: V3) => verts.findIndex((q) => eq(p, q, eps * 4));
+  const lookup = new PointSet(eps * 4);
+  for (const v of verts) lookup.index(v);
+  const idx = (p: V3) => lookup.find(p);
   const seen = new Set<string>();
   const out: [number, number][] = [];
   for (const poly of polygons(b, eps)) {
@@ -189,8 +304,11 @@ export function validate(b: Brush): BrushProblem[] {
   const polys = polygons(b);
   if (polys.length < 4) return ['too-few-faces'];
   // Closed: every polygon edge is shared by exactly two polygons.
-  const vs = vertices(b);
-  const key = (p: V3) => vs.findIndex((q) => eq(p, q, EPS * 4));
+  const set = new PointSet(EPS * 4);
+  if (b.mesh) for (const v of b.mesh.verts) set.index([...v] as V3);
+  else for (const p of polys) for (const x of p.points) set.index(x);
+  const vs = set.points;
+  const key = (p: V3) => set.find(p);
   const count = new Map<string, number>();
   for (const p of polys) {
     for (let i = 0; i < p.points.length; i++) {

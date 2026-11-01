@@ -8,7 +8,9 @@
 export type Lang = 'en' | 'ru';
 
 export type SoundData = { sound: string; volume: number; loop: boolean; playOnStart: boolean; range: number };
-export type ModelData = { model: string; units: 'metres' | 'units'; animation: string; castShadows: boolean };
+/** How a model collides: not at all, by its bounding box, by its convex hull, or by its exact triangles. */
+export type ModelCollision = 'none' | 'box' | 'hull' | 'exact';
+export type ModelData = { model: string; units: 'metres' | 'units'; animation: string; castShadows: boolean; collision: ModelCollision };
 export type ConveyorData = { speed: number; direction: 'north' | 'south' | 'east' | 'west' };
 export type BreakableData = { health: number };
 
@@ -114,8 +116,8 @@ export const COMPONENTS: ComponentDef[] = [
     name: 'model',
     label: e('Model', 'Модель'),
     description: e(
-      'A 3D model (GLB or glTF) drawn at this object. For collisions add a Collision shape (and Physics to make it move).',
-      '3D-модель (GLB или glTF) на месте объекта. Для столкновений добавьте форму столкновения (и Физику, чтобы двигалась).',
+      'A 3D model (GLB or glTF) drawn at this object. Pick how it collides; add Physics to make it move.',
+      '3D-модель (GLB или glTF) на месте объекта. Выберите, как она сталкивается; добавьте Физику, чтобы двигалась.',
     ),
     appliesTo: 'point',
     fields: [
@@ -135,6 +137,24 @@ export const COMPONENTS: ComponentDef[] = [
       },
       { key: 'animation', label: e('Animation', 'Анимация'), hint: e('Plays from the start, looping (empty: none).', 'Играет с начала, по кругу (пусто — нет).'), type: { kind: 'text' }, default: '' },
       { key: 'castShadows', label: e('Shadows', 'Тени'), type: { kind: 'boolean' }, default: true },
+      {
+        key: 'collision',
+        label: e('Collision', 'Столкновения'),
+        hint: e(
+          'Box: its bounding box (cheapest). Hull: shrink-wrapped, no hollows (good for things that move). Exact: every triangle, for still scenery like arches and rooms (moving objects use the hull).',
+          'Коробка: габаритный короб (дешевле всего). Оболочка: «обтянутая» форма без впадин (хорошо для движущихся). Точно: каждый треугольник — для неподвижных арок и комнат (движущиеся используют оболочку).',
+        ),
+        type: {
+          kind: 'enum',
+          options: [
+            { value: 'none', label: e('None', 'Нет') },
+            { value: 'box', label: e('Box', 'Коробка') },
+            { value: 'hull', label: e('Hull', 'Оболочка') },
+            { value: 'exact', label: e('Exact', 'Точно') },
+          ],
+        },
+        default: 'none',
+      },
     ],
   },
   {

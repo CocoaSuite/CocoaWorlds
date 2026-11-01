@@ -1,0 +1,87 @@
+import { beforeAll, describe, expect, it } from 'vitest';
+import { newEntity, newScene, type EntityData, type SceneFile, type Vec3 } from '@cocoaworlds/core';
+import { box, toData } from '@cocoaworlds/geometry';
+import { GameWorld, initPhysics, type ModelMesh } from '../src';
+
+beforeAll(async () => {
+  await initPhysics();
+});
+
+const brush = (name: string, min: Vec3, max: Vec3): EntityData => newEntity(name, { brush: { role: 'solid', faces: toData(box(min, max)).faces } as never });
+const floor = () => brush('floor', [-1024, -16, -1024], [1024, 0, 1024]);
+const spawn = () => newEntity('start', { playerSpawn: {} }, { position: [0, 0, 0] });
+function scene(...entities: EntityData[]): SceneFile {
+  const s = newScene('test');
+  s.entities = entities;
+  return s;
+}
+const run = (w: GameWorld, seconds: number) => {
+  for (let t = 0; t < seconds; t += 1 / 60) w.step(1 / 60);
+};
+
+/** Boxes as triangles (in metres, like a file from Blender). */
+function boxes(list: [Vec3, Vec3][]): ModelMesh {
+  const pos: number[] = [], idx: number[] = [];
+  for (const [a, b] of list) {
+    const base = pos.length / 3;
+    for (let i = 0; i < 8; i++) pos.push(i & 1 ? b[0] : a[0], i & 2 ? b[1] : a[1], i & 4 ? b[2] : a[2]);
+    const quads = [[0, 2, 3, 1], [4, 5, 7, 6], [0, 1, 5, 4], [2, 6, 7, 3], [0, 4, 6, 2], [1, 3, 7, 5]];
+    for (const [p, q, r, s] of quads) idx.push(base + p!, base + q!, base + r!, base + p!, base + r!, base + s!);
+  }
+  return { positions: new Float32Array(pos), indices: new Uint32Array(idx) };
+}
+
+// An arch 3 m wide and 3 m tall, its opening 2 m wide and 2.5 m tall, standing 4 m ahead of the player.
+const ARCH = boxes([
+  [[-1.5, 0, -0.25], [-1, 3, 0.25]],
+  [[1, 0, -0.25], [1.5, 3, 0.25]],
+  [[-1.5, 2.5, -0.25], [1.5, 3, 0.25]],
+]);
+const arch = (collision: string, extra: Record<string, unknown> = {}) =>
+  newEntity('arch', { model: { model: 'assets/models/arch.glb', units: 'metres', animation: '', castShadows: true, collision } as never, ...extra }, { position: [0, 0, -160] });
+
+describe('models collide by their own shape', () => {
+  const walk = (e: EntityData) => {
+    const w = GameWorld.create(scene(floor(), e, spawn()), { models: new Map([['assets/models/arch.glb', ARCH]]) });
+    run(w, 0.3);
+    w.setPlayerInput({ forward: 1 });
+    run(w, 2);
+    const z = w.player!.feetPosition.z;
+    w.dispose();
+    return z;
+  };
+
+  it('none: walks straight through', () => {
+    expect(walk(arch('none'))).toBeLessThan(-300);
+  });
+
+  it('box and hull: the opening is filled in, so the player stops in front of it', () => {
+    for (const c of ['box', 'hull']) {
+      const z = walk(arch(c));
+      expect(z, c).toBeGreaterThan(-160 + 10 - 30);
+      expect(z, c).toBeLessThan(-100);
+    }
+  });
+
+  it('exact: walks through the opening', () => {
+    expect(walk(arch('exact'))).toBeLessThan(-300);
+  });
+
+  it('a model with Physics falls and lands on the floor, using its hull', () => {
+    const crate = newEntity('crate', { model: { model: 'assets/models/crate.glb', units: 'metres', animation: '', castShadows: true, collision: 'exact' } as never, rigidBody: { motion: 'dynamic' } as never }, { position: [200, 100, 0] });
+    const w = GameWorld.create(scene(floor(), crate, spawn()), { models: new Map([['assets/models/crate.glb', boxes([[[-0.5, 0, -0.5], [0.5, 1, 0.5]]])]]) });
+    run(w, 2);
+    expect(w.positionOf(crate.id)![1]).toBeCloseTo(0, 0);
+    w.dispose();
+  });
+
+  it('a Collision shape without Physics stays put and blocks the player', () => {
+    const post = newEntity('post', { collider: { shape: 'box', size: [64, 128, 64], offset: [0, 64, 0] } as never }, { position: [0, 0, -160] });
+    const w = GameWorld.create(scene(floor(), post, spawn()));
+    run(w, 0.3);
+    w.setPlayerInput({ forward: 1 });
+    run(w, 2);
+    expect(w.player!.feetPosition.z).toBeGreaterThan(-140);
+    w.dispose();
+  });
+});

@@ -1,6 +1,6 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import { newEntity, newScene, type EntityData, type SceneFile, type Vec3 } from '@cocoaworlds/core';
-import { COLLIDER_MATERIAL, box, defaultSurface, toData } from '@cocoaworlds/geometry';
+import { COLLIDER_MATERIAL, box, cylinder, defaultSurface, sphere, toData, type Brush } from '@cocoaworlds/geometry';
 import { GameWorld, PLAYER, initPhysics } from '../src';
 
 beforeAll(async () => {
@@ -268,5 +268,114 @@ describe('smoothness and grip', () => {
     run(w, 1);
     expect(Math.hypot(w.player!.velocity.x, w.player!.velocity.z)).toBeGreaterThan(PLAYER.crouchSpeed - 4);
     w.dispose();
+  });
+});
+
+describe('round things and moving things', () => {
+  const round = (name: string, b: Brush) => newEntity(name, { brush: { role: 'solid', faces: toData(b).faces } as never });
+  const trip = (obstacle: Brush, start: Vec3, seconds = 2.5) => {
+    const w = GameWorld.create(scene(floor(), round('o', obstacle), spawn(start)));
+    run(w, 0.3);
+    w.setPlayerInput({ forward: 1 });
+    let slowest = Infinity;
+    for (let i = 0; i < seconds * 60; i++) {
+      w.step(1 / 60);
+      const v = w.player!.velocity;
+      if (i > 30) slowest = Math.min(slowest, Math.hypot(v.x, v.z));
+    }
+    const end = w.player!.feetPosition;
+    w.dispose();
+    return { slowest, end };
+  };
+
+  for (const [label, make] of [
+    ['a 16-sided pillar', () => cylinder([-48, 0, -248], [48, 128, -152], 16)],
+    ['a 32-sided pillar', () => cylinder([-48, 0, -248], [48, 128, -152], 32)],
+    ['a ball', () => sphere([-48, 0, -248], [48, 96, -152], 16)],
+  ] as const)
+    it(`walking into ${label} a little off centre slides round it instead of stopping`, () => {
+      const { slowest, end } = trip(make(), [20, 0, 0]);
+      expect(slowest).toBeGreaterThan(50);
+      expect(end.z).toBeLessThan(-300);
+      expect(end.y).toBeLessThan(3);
+    });
+
+  it('walks onto, across and off a platform that scripts can move (while it stands still)', () => {
+    const plat = brush('plat', [-128, 0, -200], [128, 8, -100], { script: { version: 1, variables: [], handlers: [{ id: 'h', event: { id: 'e', kind: 'message', message: 'go' }, body: [{ id: 's', kind: 'hide', target: { self: true } }] }] } });
+    const w = GameWorld.create(scene(floor(), plat, spawn()));
+    run(w, 0.3);
+    w.setPlayerInput({ forward: 1 });
+    run(w, 1);
+    expect(w.player!.feetPosition.y).toBeGreaterThan(7);
+    run(w, 1);
+    expect(w.player!.feetPosition.z).toBeLessThan(-280);
+    expect(w.player!.feetPosition.y).toBeLessThan(1);
+    w.dispose();
+  });
+
+  const lift = (seconds: number) =>
+    brush('lift', [-64, 0, -64], [64, 8, 64], {
+      script: {
+        version: 1,
+        variables: [],
+        handlers: [
+          {
+            id: 'h',
+            event: { id: 'e', kind: 'start' },
+            body: [
+              { id: 'w', kind: 'wait', seconds: { id: 'w1', kind: 'number', value: 0.5 } },
+              { id: 'm', kind: 'move', target: { self: true }, direction: 'up', distance: { id: 'd', kind: 'number', value: 256 }, seconds: { id: 's1', kind: 'number', value: seconds } },
+              { id: 'w2', kind: 'wait', seconds: { id: 'w3', kind: 'number', value: 0.5 } },
+              { id: 'r', kind: 'return', target: { self: true }, seconds: { id: 's2', kind: 'number', value: seconds } },
+            ],
+          },
+        ],
+      },
+    });
+
+  it('on a lift the feet stay on it, going up and coming down, standing or crouched; no jumping while it moves', () => {
+    for (const crouch of [false, true]) {
+      const l = lift(1.5);
+      const w = GameWorld.create(scene(floor(), l, spawn([0, 8, 0])));
+      w.setPlayerInput({ crouch });
+      let worst = 0, rode = 0;
+      for (let i = 0; i < 4.5 * 60; i++) {
+        // Trying to jump while it moves (up 0.5–2 s, down 2.5–4 s): that doesn't work.
+        const moving = (i > 40 && i < 110) || (i > 160 && i < 230);
+        w.setPlayerInput({ jump: moving && i % 20 < 10 });
+        w.step(1 / 60);
+        const top = w.positionOf(l.id)![1] + 4;
+        if (i > 40) worst = Math.max(worst, Math.abs(w.player!.feetPosition.y - top));
+        if (w.player!.riding) rode++;
+      }
+      expect(rode, crouch ? 'crouched' : 'standing').toBeGreaterThan(150);
+      expect(worst, crouch ? 'crouched' : 'standing').toBeLessThan(2);
+      w.dispose();
+    }
+  });
+
+  it('can jump off a lift that stands still', () => {
+    const l = lift(1.5);
+    const w = GameWorld.create(scene(floor(), l, spawn([0, 8, 0])));
+    run(w, 0.3);
+    w.setPlayerInput({ jump: true });
+    run(w, 0.2);
+    expect(w.player!.feetPosition.y).toBeGreaterThan(30);
+    w.dispose();
+  });
+
+  it('crouching right away, at 0,0 on a block (moving or not), stays on top of it', () => {
+    for (const script of [undefined, { version: 1, variables: [], handlers: [{ id: 'h', event: { id: 'e', kind: 'message', message: 'x' }, body: [{ id: 's', kind: 'hide', target: { self: true } }] }] }]) {
+      const block = brush('block', [-64, 0, -64], [64, 8, 64], script ? { script } : {});
+      const w = GameWorld.create(scene(floor(), block, spawn([0, 8, 0])));
+      w.setPlayerInput({ crouch: true });
+      let low = Infinity;
+      for (let i = 0; i < 60; i++) {
+        w.step(1 / 60);
+        low = Math.min(low, w.player!.feetPosition.y);
+      }
+      expect(low, script ? 'scripted block' : 'plain block').toBeGreaterThan(7.5);
+      w.dispose();
+    }
   });
 });

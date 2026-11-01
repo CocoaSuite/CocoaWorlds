@@ -59,8 +59,13 @@ Models (GLB, glTF) can be imported the same way; see Models below.
 - **Animation**: the name of an animation in the file to play from the start, looping.
 - **Shadows**: whether it casts them (with Lighting: Game and in Play).
 
-Models are for looks. For collisions add a **Collision shape**, and **Physics** to make it move: a crate model
-with a box shape and Physics falls and tumbles. Models inside objects that scripts move go with them, and
+- **Collision**: how it collides. **None** (looks only); **Box**, its bounding box (the cheapest); **Hull**, the
+  model shrink-wrapped with no hollows (good for things that move); **Exact**, every triangle, for still scenery
+  the player walks through or under, like arches and rooms (with Physics it uses the hull instead).
+
+A model with a collision and no Physics stays put; add **Physics** to make it move: a crate model with Hull and
+Physics falls and tumbles. A **Collision shape** component, if the object has one, is used instead of the model's
+own shape (and on its own, without Physics, it is a still collider too). Models inside objects that scripts move go with them, and
 copies made while playing show their original's model.
 
 The **Play animation [name] on [object], looping/once** block switches a model's animation.

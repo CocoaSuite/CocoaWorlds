@@ -23,6 +23,7 @@ import {
   type ConveyorData,
   type SoundData,
   type GameRules,
+  type ModelData,
 } from '@cocoaworlds/core';
 import { EventBus } from './events';
 import { DIRECTIONS, ScriptRunner, compileScript, type ActionName, type GameValueDef, type Problem, type Program, type SceneInfo, type Script, type Value } from '@cocoaworlds/scripting';
@@ -32,6 +33,12 @@ import { bounds, brushToWorld, buildMesh, buildWorld, fromData, hullPoints, vert
 
 /** Units per metre (an inch-based world). */
 export const UNITS_PER_METRE = 39.37;
+
+/** A model's triangles as the editor read them from its file (in the file's own units), for collisions. */
+export interface ModelMesh {
+  positions: Float32Array;
+  indices: Uint32Array;
+}
 /** Physics runs at a fixed rate whatever the frame rate. */
 export const STEP = 1 / 60;
 const MAX_STEPS_PER_FRAME = 5;
@@ -99,6 +106,8 @@ interface Body {
   scale: number;
   /** Point objects: their collision shape and where they were placed (for drawing and rescaling). */
   shape?: { collider: ColliderData; matrix: number[] };
+  /** Point objects that collide by their model's shape. */
+  model?: { data: ModelData; mesh: ModelMesh; matrix: number[] };
   /** Physics settings, when it has a Physics component. */
   rb?: RigidBodyData;
 }
@@ -125,11 +134,21 @@ export interface WorldStats {
 
 export class GameWorld {
   private world: RAPIER.World;
+  /**
+   * Stand-ins for the player: a fixed copy of every collider of a moving (kinematic) object, by the real
+   * collider's handle. The physics engine's character movement sticks on kinematic bodies, so the player moves
+   * against these copies instead (the real ones still push physics objects).
+   */
+  private standIns = new Map<number, RAPIER.Collider>();
+  /** Stand-in handle → the real collider. */
+  private standInOf = new Map<number, RAPIER.Collider>();
+  private standInBody!: RAPIER.RigidBody;
   private events = new RAPIER.EventQueue(true);
   private bodies = new Map<string, Body>();
   /** Collider handle → entity id. */
   private owner = new Map<number, string>();
-  private triggers = new Map<number, { id: string; data: TriggerData; fired: boolean; inside: Set<string> }>();
+  /** Zones by collider: `inside` is what scripts were told entered; `present` is everything in it now. */
+  private triggers = new Map<number, { id: string; data: TriggerData; fired: boolean; inside: Set<string>; present: Set<string> }>();
   private pending: TriggerEvent[] = [];
   private accumulator = 0;
   private disposed = false;
@@ -180,11 +199,16 @@ export class GameWorld {
   readonly rules: GameRules;
 
   /** Build a world from a scene snapshot. Call `initPhysics()` first. */
-  static create(scene: SceneFile, options: { rules?: Partial<GameRules>; values?: GameValueDef[] } = {}): GameWorld {
-    return new GameWorld(scene, gameRules({ game: options.rules }), options.values ?? []);
+  /** `models`: the triangles of the model files that objects collide by (Model component, Collision). */
+  static create(scene: SceneFile, options: { rules?: Partial<GameRules>; values?: GameValueDef[]; models?: Map<string, ModelMesh> } = {}): GameWorld {
+    return new GameWorld(scene, gameRules({ game: options.rules }), options.values ?? [], options.models ?? new Map());
   }
 
-  private constructor(scene: SceneFile, rules: GameRules, values: GameValueDef[]) {
+  /** Model triangles by file (see `create`). */
+  private models: Map<string, ModelMesh>;
+
+  private constructor(scene: SceneFile, rules: GameRules, values: GameValueDef[], models: Map<string, ModelMesh>) {
+    this.models = models;
     this.rules = rules;
     this.valueDefs = values;
     for (const v of values) this.globals.set(v.name, v.initial);
@@ -244,7 +268,8 @@ export class GameWorld {
         else if (unitOf.has(e.id) && brushData.role !== 'subtract') unitBrushes.get(unitOf.get(e.id)!)!.push(brush);
         else level.push({ id: e.id, role: brushData.role === 'subtract' ? 'subtract' : 'solid', brush });
         if (e.components.conveyor && !unitOf.has(e.id)) conveyors.set(e.id, readComponent<ConveyorData>('conveyor', e.components.conveyor));
-      } else if (e.components.rigidBody) {
+      } else if (e.components.rigidBody || e.components.collider || this.modelShape(e)) {
+        // (A Collision shape or a colliding model without Physics stays put.)
         this.addPointBody(e, doc.worldMatrix(e.id));
       }
     }
@@ -265,6 +290,11 @@ export class GameWorld {
       const p = new Player(this.world, { x: m[12]!, y: m[13]!, z: m[14]! }, yaw, doc.settings.gravity ?? 800);
       this.owner.set(p.collider.handle, 'player');
       p.beltOf = (h) => this.belts.get(h) ?? null;
+      p.surroundings = {
+        // (Plain lookups only: this runs inside the physics engine's own query.)
+        blocks: (c) => this.standInOf.has(c.handle) || (!this.triggers.has(c.handle) && !this.standIns.has(c.handle)),
+        carry: (h, at) => this.carry(h, at),
+      };
       this.player = p;
       let low = m[13]!;
       for (const b of level) for (const v of vertices(b.brush)) low = Math.min(low, v[1]!);
@@ -299,6 +329,7 @@ export class GameWorld {
       stopSound: (target) => this.bus.emit({ type: 'sound.stop', source: target, time: this.time }),
       playAnimation: (target, name, loop) => this.bus.emit({ type: 'anim', target, name, loop, time: this.time }),
       spawn: (template, place) => this.spawn(template, place),
+      isInside: (zone, what) => this.isInside(zone, what),
       setText: (target, text) => {
         if (!this.signs.has(target) || this.signs.get(target) === text) return;
         this.signs.set(target, text);
@@ -316,7 +347,7 @@ export class GameWorld {
     const body = this.world.createRigidBody(RAPIER.RigidBodyDesc.kinematicPositionBased().setTranslation(...pivot).setRotation(quatFromMatrix(placement)));
     for (const b of brushes) {
       const pts = new Float32Array(vertices(b).flatMap((v) => transformPoint(toLocal, v)));
-      const desc = RAPIER.ColliderDesc.convexHull(pts);
+      const desc = hull(pts);
       if (!desc) continue;
       const c = this.world.createCollider(desc.setFriction(0.6), body);
       this.owner.set(c.handle, id);
@@ -330,7 +361,7 @@ export class GameWorld {
     for (const s of buildWorld(brushes).solids) {
       for (const piece of s.pieces) {
         // Edited meshes (G4) may have dents: collide with their actual triangles.
-        const desc = piece.mesh ? trimesh(piece) : RAPIER.ColliderDesc.convexHull(hullPoints(piece));
+        const desc = piece.mesh ? trimesh(piece) : hull(hullPoints(piece));
         if (!desc) continue;
         desc.setFriction(0.6);
         const c = this.world.createCollider(desc, body);
@@ -371,7 +402,7 @@ export class GameWorld {
     const c = [0, 0, 0];
     for (const v of vs) for (let i = 0; i < 3; i++) c[i]! += v[i]! / vs.length;
     const pts = new Float32Array(vs.flatMap((v) => [v[0] - c[0]!, v[1] - c[1]!, v[2] - c[2]!]));
-    const desc = RAPIER.ColliderDesc.convexHull(pts);
+    const desc = hull(pts);
     if (!desc) return;
     const body = this.world.createRigidBody(this.bodyDesc(rb).setTranslation(c[0]!, c[1]!, c[2]!));
     const col = this.world.createCollider(this.material(desc, rb), body);
@@ -380,29 +411,37 @@ export class GameWorld {
     this.bodies.get(e.id)!.rb = rb;
   }
 
-  /** A point object (empty, light, …) with a collision shape. */
+  /** The model an object collides by: it has a Model with Collision set, no Collision shape, and the triangles. */
+  private modelShape(e: EntityData): { data: ModelData; mesh: ModelMesh } | null {
+    if (!e.components.model || e.components.collider) return null;
+    const data = readComponent<ModelData>('model', e.components.model);
+    const mesh = data.collision !== 'none' ? this.models.get(data.model) : undefined;
+    return mesh && mesh.positions.length >= 9 ? { data, mesh } : null;
+  }
+
+  /**
+   * A point object (empty, light, model …) with a collision shape: a Collision shape component, or its model's
+   * shape. Without Physics it stays put.
+   */
   private addPointBody(e: EntityData, world: number[]): void {
-    const rb = readComponent<RigidBodyData>('rigidBody', e.components.rigidBody);
-    const shape = readComponent<ColliderData>('collider', e.components.collider);
+    const rb = e.components.rigidBody ? readComponent<RigidBodyData>('rigidBody', e.components.rigidBody) : { ...readComponent<RigidBodyData>('rigidBody', {}), motion: 'fixed' as const };
     const t = decomposeMat4(world);
-    const s = t.scale.map(Math.abs);
-    const size = [shape.size[0] * s[0]!, shape.size[1] * s[1]!, shape.size[2] * s[2]!];
-    let desc: RAPIER.ColliderDesc;
-    if (shape.shape === 'sphere') desc = RAPIER.ColliderDesc.ball(Math.max(0.5, size[0]! / 2));
-    else if (shape.shape === 'capsule') {
-      const r = Math.max(0.5, size[0]! / 2);
-      desc = RAPIER.ColliderDesc.capsule(Math.max(0, size[1]! / 2 - r), r);
-    } else desc = RAPIER.ColliderDesc.cuboid(Math.max(0.25, size[0]! / 2), Math.max(0.25, size[1]! / 2), Math.max(0.25, size[2]! / 2));
-    desc.setTranslation(shape.offset[0] * s[0]!, shape.offset[1] * s[1]!, shape.offset[2] * s[2]!);
+    const scale = t.scale.map(Math.abs) as Q3;
+    const model = this.modelShape(e);
+    const shape = model ? null : readComponent<ColliderData>('collider', e.components.collider);
+    const descs = model ? modelColliders(model.data, model.mesh, scale, rb.motion === 'dynamic') : [pointCollider(shape!, scale)];
     // Body placement: position and rotation only (scale went into the shape).
     const placement = composeTransform({ position: t.position, rotation: t.rotation, scale: [1, 1, 1] });
     const q = quatFromMatrix(placement);
     const body = this.world.createRigidBody(this.bodyDesc(rb).setTranslation(...t.position).setRotation(q));
-    const col = this.world.createCollider(this.material(desc, rb), body);
-    this.owner.set(col.handle, e.id);
+    for (const desc of descs) {
+      const col = this.world.createCollider(this.material(desc, rb), body);
+      this.owner.set(col.handle, e.id);
+    }
     this.track(e.id, 'point', rb.motion, body);
     const b = this.bodies.get(e.id)!;
-    b.shape = { collider: shape, matrix: world };
+    if (model) b.model = { ...model, matrix: world };
+    else b.shape = { collider: shape!, matrix: world };
     b.rb = rb;
   }
 
@@ -430,7 +469,7 @@ export class GameWorld {
     if (scripted) this.track(e.id, 'zone', 'kinematic', body);
     const c = this.world.createCollider(desc, body);
     this.owner.set(c.handle, e.id);
-    this.triggers.set(c.handle, { id: e.id, data: readComponent<TriggerData>('trigger', e.components.trigger), fired: false, inside: new Set() });
+    this.triggers.set(c.handle, { id: e.id, data: readComponent<TriggerData>('trigger', e.components.trigger), fired: false, inside: new Set(), present: new Set() });
     this.stats.triggers++;
   }
 
@@ -462,6 +501,7 @@ export class GameWorld {
       }
       this.useQueued = false;
       this.carryOnBelts();
+      this.syncStandIns();
       this.world.step(this.events);
       this.accumulator -= STEP;
       this.time += STEP;
@@ -609,12 +649,14 @@ export class GameWorld {
         const [dist, dx, dy, dz, sec] = args.map(n) as [number, number, number, number, number];
         return this.tween(target, b, now, { p: [now.p[0] + dx * dist, now.p[1] + dy * dist, now.p[2] + dz * dist], q: now.q }, sec);
       }
-      case 'turn': {
+      case 'turn':
+      case 'turnTo': {
         const axis = args[0] === 'north' ? [0, 0, -1] : args[0] === 'east' ? [1, 0, 0] : [0, 1, 0];
         const deg = n(args[1] ?? 0), sec = n(args[2] ?? 0);
         const half = (deg * Math.PI) / 360;
         const rq = { x: axis[0]! * Math.sin(half), y: axis[1]! * Math.sin(half), z: axis[2]! * Math.sin(half), w: Math.cos(half) };
-        return this.tween(target, b, now, { p: now.p, q: qmul(rq, now.q) }, sec);
+        // “Turn by” adds to where it is now; “turn to” is measured from how it started.
+        return this.tween(target, b, now, { p: now.p, q: qmul(rq, name === 'turn' ? now.q : b.start.q) }, sec);
       }
       case 'return':
         return this.tween(target, b, now, b.start, n(args[0] ?? 0));
@@ -756,7 +798,7 @@ export class GameWorld {
           unitBrushes.push(brush);
           this.unitOf.set(id, copyId);
         }
-      } else if (e.components.rigidBody) this.addPointBody(copy, world);
+      } else if (e.components.rigidBody || e.components.collider || this.modelShape(e)) this.addPointBody(copy, world);
       if (e.components.breakable) this.breakHealth.set(id, readComponent<BreakableData>('breakable', e.components.breakable).health);
       if (e.components.sign) this.signs.set(id, String((e.components.sign as { text?: unknown }).text ?? ''));
       if (e.components.sound) sounds.push([id, readComponent<SoundData>('sound', e.components.sound), world]);
@@ -805,7 +847,11 @@ export class GameWorld {
       if (b.info.kind !== 'zone') this.stats.bodies--;
       this.removedIds.push(x);
     }
-    for (const z of this.triggers.values()) for (const x of gone) z.inside.delete(x);
+    for (const z of this.triggers.values())
+      for (const x of gone) {
+        z.inside.delete(x);
+        z.present.delete(x);
+      }
     for (const x of gone) this.bus.emit({ type: 'sound.stop', source: x, time: this.time });
     this.runner.removeOwners(gone);
   }
@@ -908,21 +954,14 @@ export class GameWorld {
       this.owner.set(c.handle, b.info.id);
     };
     if (b.shape) {
-      const s = decomposeMat4(b.shape.matrix).scale.map((x) => Math.abs(x) * k);
-      const size = b.shape.collider.size.map((x, i) => x * s[i]!);
-      const off = b.shape.collider.offset.map((x, i) => x * s[i]!) as Q3;
-      const sh = b.shape.collider.shape;
-      const desc =
-        sh === 'sphere'
-          ? RAPIER.ColliderDesc.ball(Math.max(0.5, size[0]! / 2))
-          : sh === 'capsule'
-            ? RAPIER.ColliderDesc.capsule(Math.max(0, size[1]! / 2 - size[0]! / 2), Math.max(0.5, size[0]! / 2))
-            : RAPIER.ColliderDesc.cuboid(Math.max(0.25, size[0]! / 2), Math.max(0.25, size[1]! / 2), Math.max(0.25, size[2]! / 2));
-      make(desc.setTranslation(...off));
+      make(pointCollider(b.shape.collider, decomposeMat4(b.shape.matrix).scale.map((x) => Math.abs(x) * k) as Q3));
+    } else if (b.model) {
+      const scale = decomposeMat4(b.model.matrix).scale.map((x) => Math.abs(x) * k) as Q3;
+      for (const d of modelColliders(b.model.data, b.model.mesh, scale, b.body.isDynamic())) make(d);
     } else {
       for (const br of b.brushes) {
         const pts = new Float32Array(vertices(br).flatMap((v) => transformPoint(b.startInverse, v).map((x) => x * k)));
-        make(RAPIER.ColliderDesc.convexHull(pts));
+        make(hull(pts));
       }
     }
     for (const c of old) {
@@ -1024,6 +1063,8 @@ export class GameWorld {
     const moving = !!motion && motion !== 'fixed';
     const ok = zone.data.detects === 'anything' ? moving || isPlayer : zone.data.detects === 'physics' ? motion === 'dynamic' : isPlayer;
     if (!ok) return;
+    if (started) zone.present.add(other);
+    else zone.present.delete(other);
     if (started) {
       if (zone.data.once && zone.fired) return;
       zone.fired = true;
@@ -1035,6 +1076,62 @@ export class GameWorld {
     this.pending.push({ kind: started ? 'enter' : 'exit', trigger: zone.id, other, time: this.time });
     this.runner.dispatch({ type: started ? 'enter' : 'leave', zone: zone.id, other });
     this.bus.emit({ type: started ? 'trigger.enter' : 'trigger.exit', trigger: zone.id, other, time: this.time });
+  }
+
+  /** Put every moving object's stand-ins where it will be after this step (see `standIns`). */
+  private syncStandIns(): void {
+    this.standInBody ??= this.world.createRigidBody(RAPIER.RigidBodyDesc.fixed());
+    const seen = new Set<number>();
+    for (const b of this.bodies.values()) {
+      const body = b.body;
+      if (b.info.kind === 'zone' || !body.isKinematic()) continue;
+      const t = body.nextTranslation(), q = body.nextRotation();
+      for (let i = 0; i < body.numColliders(); i++) {
+        const real = body.collider(i);
+        if (real.isSensor()) continue;
+        seen.add(real.handle);
+        let twin = this.standIns.get(real.handle);
+        if (!twin) {
+          twin = this.world.createCollider(new RAPIER.ColliderDesc(real.shape).setSensor(true), this.standInBody);
+          this.standIns.set(real.handle, twin);
+          this.standInOf.set(twin.handle, real);
+        }
+        // Where the real collider sits on its body, carried to the body's next place.
+        const lt = real.translationWrtParent() ?? { x: 0, y: 0, z: 0 };
+        const lq = real.rotationWrtParent() ?? { x: 0, y: 0, z: 0, w: 1 };
+        const off = qrot(q, [lt.x, lt.y, lt.z]);
+        twin.setTranslationWrtParent({ x: t.x + off[0], y: t.y + off[1], z: t.z + off[2] });
+        twin.setRotationWrtParent(qmul(q, lq));
+        // Shown or hidden (hiding switches the collision groups off), switched on or off.
+        if (twin.collisionGroups() !== real.collisionGroups()) twin.setCollisionGroups(real.collisionGroups());
+        if (twin.isEnabled() !== real.isEnabled()) twin.setEnabled(real.isEnabled());
+      }
+    }
+    for (const [h, twin] of this.standIns) {
+      if (seen.has(h)) continue;
+      this.standInOf.delete(twin.handle);
+      this.world.removeCollider(twin, false);
+      this.standIns.delete(h);
+    }
+  }
+
+  /** Where a point riding on the object of collider `h` (a stand-in) will be after this step; null if it stays put. */
+  private carry(h: number, at: { x: number; y: number; z: number }): { x: number; y: number; z: number } | null {
+    const body = this.standInOf.get(h)?.parent();
+    if (!body || !body.isKinematic()) return null;
+    const t0 = body.translation(), q0 = body.rotation(), t1 = body.nextTranslation(), q1 = body.nextRotation();
+    const moved = Math.abs(t1.x - t0.x) + Math.abs(t1.y - t0.y) + Math.abs(t1.z - t0.z) > 1e-5 || Math.abs(q1.x * q0.x + q1.y * q0.y + q1.z * q0.z + q1.w * q0.w) < 1 - 1e-9;
+    if (!moved) return null;
+    // Into the body's own space at its place now, then back out at its next place.
+    const local = qrot({ x: -q0.x, y: -q0.y, z: -q0.z, w: q0.w }, [at.x - t0.x, at.y - t0.y, at.z - t0.z]);
+    const w = qrot(q1, local);
+    return { x: t1.x + w[0], y: t1.y + w[1], z: t1.z + w[2] };
+  }
+
+  /** Whether `what` (an object id or 'player') is in the trigger zone `zone` now. */
+  isInside(zone: string, what: string): boolean {
+    for (const z of this.triggers.values()) if (z.id === zone) return z.present.has(what);
+    return false;
   }
 
   /** Trigger events since the last call. */
@@ -1066,6 +1163,17 @@ export class GameWorld {
   positionOf(id: string): [number, number, number] | null {
     const t = this.bodies.get(id)?.body.translation();
     return t ? [t.x, t.y, t.z] : null;
+  }
+
+  /** How far a body has turned about the up axis since the start, in degrees (for tests). */
+  yawOf(id: string): number | null {
+    const b = this.bodies.get(id);
+    if (!b) return null;
+    const q = b.body.rotation(), s = b.start.q;
+    // relative = q * conj(start)
+    const w = q.w * s.w + q.x * s.x + q.y * s.y + q.z * s.z;
+    const y = -q.w * s.y + q.y * s.w - q.z * s.x + q.x * s.z;
+    return (Math.atan2(y, w) * 360) / Math.PI;
   }
 
   /** Move a kinematic body (scripts use this in Phase 5). */
@@ -1144,6 +1252,13 @@ function transformPoint(m: number[], v: readonly number[]): [number, number, num
   ];
 }
 
+/** Rotate a vector by a unit quaternion. */
+function qrot(q: Quat, v: [number, number, number]): [number, number, number] {
+  const [x, y, z] = v;
+  const tx = 2 * (q.y * z - q.z * y), ty = 2 * (q.z * x - q.x * z), tz = 2 * (q.x * y - q.y * x);
+  return [x + q.w * tx + (q.y * tz - q.z * ty), y + q.w * ty + (q.z * tx - q.x * tz), z + q.w * tz + (q.x * ty - q.y * tx)];
+}
+
 function qmul(a: Quat, b: Quat): Quat {
   return {
     w: a.w * b.w - a.x * b.x - a.y * b.y - a.z * b.z,
@@ -1168,6 +1283,55 @@ function slerp(a: Quat, b0: Quat, t: number): Quat {
   const th = Math.acos(cos), s = Math.sin(th);
   const ka = Math.sin((1 - t) * th) / s, kb = Math.sin(t * th) / s;
   return { x: a.x * ka + b.x * kb, y: a.y * ka + b.y * kb, z: a.z * ka + b.z * kb, w: a.w * ka + b.w * kb };
+}
+
+/** A Collision shape component's collider, at an object's scale. */
+function pointCollider(shape: ColliderData, s: Q3): RAPIER.ColliderDesc {
+  const size = [shape.size[0] * s[0], shape.size[1] * s[1], shape.size[2] * s[2]];
+  let desc: RAPIER.ColliderDesc;
+  if (shape.shape === 'sphere') desc = RAPIER.ColliderDesc.ball(Math.max(0.5, size[0]! / 2));
+  else if (shape.shape === 'capsule') {
+    const r = Math.max(0.5, size[0]! / 2);
+    desc = RAPIER.ColliderDesc.capsule(Math.max(0, size[1]! / 2 - r), r);
+  } else desc = RAPIER.ColliderDesc.cuboid(Math.max(0.25, size[0]! / 2), Math.max(0.25, size[1]! / 2), Math.max(0.25, size[2]! / 2));
+  return desc.setTranslation(shape.offset[0] * s[0], shape.offset[1] * s[1], shape.offset[2] * s[2]);
+}
+
+/**
+ * A model's colliders at an object's scale (and the model's units): its bounding box, its convex hull, or its
+ * triangles. Things that move use the hull instead of the triangles (moving triangle meshes collide badly).
+ */
+function modelColliders(data: ModelData, mesh: ModelMesh, scale: Q3, moves: boolean): RAPIER.ColliderDesc[] {
+  const k = data.units === 'units' ? 1 : UNITS_PER_METRE;
+  const pts = new Float32Array(mesh.positions.length);
+  for (let i = 0; i < pts.length; i++) pts[i] = mesh.positions[i]! * k * scale[i % 3]!;
+  if (data.collision === 'box') {
+    const min = [Infinity, Infinity, Infinity], max = [-Infinity, -Infinity, -Infinity];
+    for (let i = 0; i < pts.length; i++) {
+      min[i % 3] = Math.min(min[i % 3]!, pts[i]!);
+      max[i % 3] = Math.max(max[i % 3]!, pts[i]!);
+    }
+    const half = [0, 1, 2].map((a) => Math.max(0.25, (max[a]! - min[a]!) / 2));
+    return [RAPIER.ColliderDesc.cuboid(half[0]!, half[1]!, half[2]!).setTranslation((min[0]! + max[0]!) / 2, (min[1]! + max[1]!) / 2, (min[2]! + max[2]!) / 2)];
+  }
+  if (data.collision === 'exact' && !moves && mesh.indices.length >= 3) return [RAPIER.ColliderDesc.trimesh(pts, mesh.indices)];
+  const h = hull(pts);
+  return h ? [h] : [];
+}
+
+/**
+ * Where a hull's own origin sits, off every grid. The physics engine's shape casts go wrong when the player is
+ * exactly above a hull's origin (they pass through it): with origins at the level's 0,0,0 or an object's middle,
+ * that's exactly where people put Player starts. Nobody stands at a spot like this one by chance.
+ */
+const HULL_ORIGIN = [0.3183, 0.1414, 0.2718] as const;
+
+/** A convex hull collider whose own origin is HULL_ORIGIN (the points stay where they are). */
+function hull(pts: Float32Array): RAPIER.ColliderDesc | null {
+  const shifted = new Float32Array(pts.length);
+  for (let i = 0; i < pts.length; i++) shifted[i] = pts[i]! - HULL_ORIGIN[i % 3]!;
+  const desc = RAPIER.ColliderDesc.convexHull(shifted);
+  return desc ? desc.setTranslation(...HULL_ORIGIN) : null;
 }
 
 function trimesh(b: Brush): RAPIER.ColliderDesc | null {

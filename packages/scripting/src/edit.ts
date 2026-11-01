@@ -2,7 +2,7 @@
  * Editing scripts without mutating them: every function returns a new Script. Statement lists are named by a
  * list key: a handler id for its body, or `${statementId}:then`, `:otherwise`, `:body` for nested lists.
  */
-import { EXPR_KEYS, type EventBlock, type Expr, type Handler, type Script, type Statement } from './model';
+import { EXPR_KEYS, innerLists, type EventBlock, type Expr, type Handler, type Script, type Statement } from './model';
 
 type Node = Statement | Expr | EventBlock;
 
@@ -22,7 +22,7 @@ export function replaceBlock(script: Script, id: string, fn: (b: Node) => Node):
       c.then = s.then.map(st);
       c.otherwise = s.otherwise ? s.otherwise.map(st) : null;
     }
-    if (s.kind === 'repeat' || s.kind === 'forever') c.body = s.body.map(st);
+    if (s.kind === 'repeat' || s.kind === 'forever' || s.kind === 'while') c.body = s.body.map(st);
     return c as Statement;
   };
   return {
@@ -43,7 +43,7 @@ export function editList(script: Script, key: string, fn: (list: Statement[]) =>
     const s = b as Statement;
     if (s.kind === 'if' && branch === 'then') return { ...s, then: fn(s.then) };
     if (s.kind === 'if' && branch === 'otherwise') return { ...s, otherwise: fn(s.otherwise ?? []) };
-    if ((s.kind === 'repeat' || s.kind === 'forever') && branch === 'body') return { ...s, body: fn(s.body) };
+    if ((s.kind === 'repeat' || s.kind === 'forever' || s.kind === 'while') && branch === 'body') return { ...s, body: fn(s.body) };
     return s;
   });
 }
@@ -54,13 +54,10 @@ export function locate(script: Script, id: string): { key: string; index: number
     for (let i = 0; i < list.length; i++) {
       const s = list[i]!;
       if (s.id === id) return { key, index: i };
-      const sub =
-        s.kind === 'if'
-          ? (search(`${s.id}:then`, s.then) ?? (s.otherwise ? search(`${s.id}:otherwise`, s.otherwise) : null))
-          : s.kind === 'repeat' || s.kind === 'forever'
-            ? search(`${s.id}:body`, s.body)
-            : null;
-      if (sub) return sub;
+      for (const [branch, inner] of innerLists(s)) {
+        const sub = search(`${s.id}:${branch}`, inner);
+        if (sub) return sub;
+      }
     }
     return null;
   };

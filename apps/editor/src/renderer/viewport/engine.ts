@@ -1371,7 +1371,66 @@ export class ViewportEngine {
     if (mode === 'look') this.cb.setFlying(true);
   };
 
-  private heightAnchor: { y: number; h: number } | null = null;
+  /** Height stage: the height and the cursor's height on the measuring plane when the stage began. */
+  private heightAnchor: { at: number; h: number } | null = null;
+
+  /**
+   * How high the cursor is over the footprint: where the mouse ray meets an upright plane through the middle of
+   * the footprint, turned to face the camera. The top of the brush then stays under the cursor, however far
+   * away the camera is.
+   */
+  private cursorHeight(e: { clientX: number; clientY: number }): number | null {
+    const d = this.draft;
+    if (!d) return null;
+    const { min, max } = d.bounds();
+    const centre = new THREE.Vector3((min[0] + max[0]) / 2, (min[1] + max[1]) / 2, (min[2] + max[2]) / 2);
+    const cam = this.rig.camera;
+    const forward = cam.getWorldDirection(new THREE.Vector3());
+    const normal = new THREE.Vector3(forward.x, 0, forward.z);
+    // Looking straight down there is no upright plane facing the camera; use the screen's up direction.
+    if (normal.lengthSq() < 1e-4) normal.set(0, 0, 1).applyQuaternion(cam.quaternion).setY(0);
+    if (normal.lengthSq() < 1e-8) return null;
+    normal.normalize();
+    this.raycaster.setFromCamera(this.ndc(e), cam);
+    const ray = this.raycaster.ray;
+    const denom = ray.direction.dot(normal);
+    if (Math.abs(denom) < 1e-4) return null;
+    const t = centre.clone().sub(ray.origin).dot(normal) / denom;
+    if (t <= 0) return null;
+    return ray.origin.y + ray.direction.y * t;
+  }
+
+  /** The brush height follows the cursor, even over panels and toolbars (perspective view). */
+  private onWindowPointerMove = (e: PointerEvent): void => {
+    const d = this.draft;
+    if (this.drag || this.play || !d || d.stage !== 'height' || this.rig.kind !== 'perspective') return;
+    const at = this.cursorHeight(e);
+    if (at === null) return;
+    if (!this.heightAnchor) this.heightAnchor = { at, h: d.height };
+    const g = this.snap ? this.gridSize : 1;
+    let h = Math.round((this.heightAnchor.h + at - this.heightAnchor.at) / g) * g;
+    if (Math.abs(h) < g) h = h < 0 ? -g : g;
+    if (h === d.height) return;
+    d.height = h;
+    d.update(this.shapeOpts, this.brushRole);
+    this.cb.draft(d.state());
+    this.invalidate();
+  };
+
+  /**
+   * While choosing the height, a click anywhere finishes the brush, also over a panel or toolbar the cursor
+   * wandered onto (the brush panel itself still works: its fields and buttons).
+   */
+  private onWindowPointerDown = (e: PointerEvent): void => {
+    const d = this.draft;
+    if (this.play || !d || d.stage !== 'height' || e.button !== 0) return;
+    const t = e.target as HTMLElement | null;
+    if (!t || t === this.renderer.domElement) return; // the viewport's own handler confirms
+    if (t.closest('[data-brush-panel], .cw-modal, [role="menu"]')) return;
+    e.preventDefault();
+    e.stopPropagation();
+    this.confirmDraft();
+  };
 
   /** Polygon brushes: each click places a corner; clicking the first corner finishes the outline. */
   private polygonClick(e: PointerEvent): void {
@@ -1432,21 +1491,8 @@ export class ViewportEngine {
       this.invalidate();
       return;
     }
-    // Height stage follows the mouse without a button held (perspective only; ortho views type the depth).
-    if (!this.drag && this.draft?.stage === 'height' && this.rig.kind === 'perspective') {
-      if (!this.heightAnchor) this.heightAnchor = { y: e.clientY, h: this.draft.height };
-      const dh = (this.heightAnchor.y - e.clientY) * this.rig.unitsPerPixel;
-      const g = this.snap ? this.gridSize : 1;
-      let h = Math.round((this.heightAnchor.h + dh) / g) * g;
-      if (Math.abs(h) < g) h = h < 0 ? -g : g;
-      if (h !== this.draft.height) {
-        this.draft.height = h;
-        this.draft.update(this.shapeOpts, this.brushRole);
-        this.cb.draft(this.draft.state());
-        this.invalidate();
-      }
-      return;
-    }
+    // (The height stage follows the mouse everywhere: see onWindowPointerMove.)
+    if (!this.drag && this.draft?.stage === 'height' && this.rig.kind === 'perspective') return;
     if (!this.drag && this.editTool === 'loopcut' && !this.play) {
       this.updateLoop(e);
       return;
@@ -1682,6 +1728,8 @@ export class ViewportEngine {
     window.addEventListener('blur', this.onBlur);
     document.addEventListener('pointerlockchange', this.onLockChange);
     document.addEventListener('mousemove', this.onMouseMove);
+    window.addEventListener('pointermove', this.onWindowPointerMove, true);
+    window.addEventListener('pointerdown', this.onWindowPointerDown, true);
   }
 
   private unbindInput(): void {
@@ -1699,6 +1747,8 @@ export class ViewportEngine {
     window.removeEventListener('blur', this.onBlur);
     document.removeEventListener('pointerlockchange', this.onLockChange);
     document.removeEventListener('mousemove', this.onMouseMove);
+    window.removeEventListener('pointermove', this.onWindowPointerMove, true);
+    window.removeEventListener('pointerdown', this.onWindowPointerDown, true);
   }
 }
 

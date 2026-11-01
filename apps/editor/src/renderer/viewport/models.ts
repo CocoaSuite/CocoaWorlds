@@ -35,6 +35,36 @@ export function loadModel(path: string): Promise<LoadedModel> {
   return p;
 }
 
+/**
+ * A model's triangles in the file's own units (every mesh, placed as the file places it), for collisions.
+ * Cached with the model.
+ */
+export async function modelGeometry(path: string): Promise<{ positions: Float32Array; indices: Uint32Array }> {
+  const m = await loadModel(path);
+  const hit = geometryCache.get(m);
+  if (hit) return hit;
+  const pos: number[] = [], idx: number[] = [];
+  m.scene.updateMatrixWorld(true);
+  const v = new THREE.Vector3();
+  m.scene.traverse((o) => {
+    const mesh = o as THREE.Mesh;
+    if (!mesh.isMesh || !mesh.geometry.attributes.position) return;
+    const g = mesh.geometry;
+    const p = g.attributes.position!;
+    const base = pos.length / 3;
+    for (let i = 0; i < p.count; i++) {
+      v.fromBufferAttribute(p, i).applyMatrix4(mesh.matrixWorld);
+      pos.push(v.x, v.y, v.z);
+    }
+    if (g.index) for (let i = 0; i < g.index.count; i++) idx.push(base + g.index.getX(i));
+    else for (let i = 0; i < p.count; i++) idx.push(base + i);
+  });
+  const out = { positions: new Float32Array(pos), indices: new Uint32Array(idx) };
+  geometryCache.set(m, out);
+  return out;
+}
+const geometryCache = new WeakMap<LoadedModel, { positions: Float32Array; indices: Uint32Array }>();
+
 /** Forget every loaded model (another project was opened). */
 export function forgetModels(): void {
   cache.clear();

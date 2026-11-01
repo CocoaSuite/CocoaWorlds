@@ -25,6 +25,10 @@ function apply(id: string, target: EntityData, min: Vec3, max: Vec3): EntityData
     const z = r.zone(t);
     zone = brush(z.name, z.min, z.max, { trigger: { detects: z.detects, once: z.once } });
   }
+  if (r.pivot) {
+    const p = r.pivot(t);
+    target.components.pivot = { point: [0, 1, 2].map((k) => p[k]! - (min[k]! + max[k]!) / 2) } as never;
+  }
   const out = r.build(t, zone?.id ?? null);
   const script: Script = { version: 1, variables: out.variables, handlers: out.handlers };
   target.components.script = script as never;
@@ -120,6 +124,62 @@ describe('recipes', () => {
     w.use();
     run(w, 1.3);
     expect(w.positionOf(door.id)![1]).toBeCloseTo(192, 0);
+    w.dispose();
+  });
+});
+
+describe('hinged doors and held messages', () => {
+  it('pressure plate keeps sending “open” while stood on; a swinging door opens, then shuts when the player steps off', () => {
+    const plate = brush('plate', [-32, 0, -96], [32, 4, -32]);
+    const door = brush('door', [200, 0, 0], [264, 128, 8]);
+    const parts = [...apply('pressure-plate', plate, [-32, 0, -96], [32, 4, -32]), ...apply('swing-held', door, [200, 0, 0], [264, 128, 8])];
+    const w = GameWorld.create(scene(floor(), spawn(), ...parts));
+    run(w, 0.3);
+    expect(Math.abs(w.yawOf(door.id)!)).toBeLessThan(1);
+    // Turning on its hinge: the pivot is at the door's west end.
+    expect(w.positionOf(door.id)![0]).toBeCloseTo(200, 0);
+    w.setPlayerInput({ forward: 1 });
+    run(w, 0.35);
+    w.setPlayerInput({ forward: 0 });
+    run(w, 1.5);
+    expect(w.isInside(parts[1]!.id, 'player')).toBe(true);
+    expect(w.yawOf(door.id)!).toBeCloseTo(90, 0);
+    // Still open a while later: the message keeps coming.
+    run(w, 1);
+    expect(w.yawOf(door.id)!).toBeCloseTo(90, 0);
+    // Step off: the message stops and the door shuts.
+    w.setPlayerInput({ forward: -1 });
+    run(w, 0.6);
+    w.setPlayerInput({ forward: 0 });
+    run(w, 1.5);
+    expect(w.isInside(parts[1]!.id, 'player')).toBe(false);
+    expect(Math.abs(w.yawOf(door.id)!)).toBeLessThan(1);
+    // And again: the plate is not once-only.
+    w.setPlayerInput({ forward: 1 });
+    run(w, 0.6);
+    w.setPlayerInput({ forward: 0 });
+    run(w, 1.5);
+    expect(w.yawOf(door.id)!).toBeCloseTo(90, 0);
+    w.dispose();
+  });
+
+  it('swinging door used with E opens, and E again shuts it', () => {
+    const door = brush('door', [-64, 0, -80], [64, 128, -72]);
+    const w = GameWorld.create(scene(floor(), spawn(), ...apply('swing-use', door, [-64, 0, -80], [64, 128, -72])));
+    run(w, 0.2);
+    expect(w.usePrompt()).toBe('Open');
+    w.use();
+    run(w, 1.2);
+    expect(w.yawOf(door.id)!).toBeCloseTo(90, 0);
+    // Turned around its west end, so it now stands off to the left: look at it there.
+    w.setPlayerInput({ yaw: Math.atan2(64, 140), forward: 1 });
+    run(w, 0.25);
+    w.setPlayerInput({ forward: 0 });
+    run(w, 0.4);
+    expect(w.usePrompt()).toBe('Open');
+    w.use();
+    run(w, 1.2);
+    expect(Math.abs(w.yawOf(door.id)!)).toBeLessThan(1);
     w.dispose();
   });
 });

@@ -37,6 +37,8 @@ export interface Recipe {
   name: L;
   description: L;
   group: 'doors' | 'moving' | 'gameplay';
+  /** Where the object should turn around (world space), when the recipe needs a particular pivot (a hinge). */
+  pivot?: (t: RecipeTarget) => V3;
   /** The zone this recipe needs, worked out from the object's bounds. */
   zone?: (t: RecipeTarget) => RecipeZone;
   /** The blocks. `zone` is the id of the zone the editor created (when the recipe asked for one). */
@@ -52,11 +54,13 @@ const ev = {
   enter: (zone: string): EventBlock => ({ id: id(), kind: 'enter', zone: { entity: zone } }),
   leave: (zone: string): EventBlock => ({ id: id(), kind: 'leave', zone: { entity: zone } }),
   message: (message: string): EventBlock => ({ id: id(), kind: 'message', message }),
+  messageStop: (message: string): EventBlock => ({ id: id(), kind: 'messageStop', message }),
 };
 const st = {
   moveUp: (distance: number, seconds: number): Statement => ({ id: id(), kind: 'move', target: self, direction: 'up', distance: num(distance), seconds: num(seconds) }),
   return: (seconds: number): Statement => ({ id: id(), kind: 'return', target: self, seconds: num(seconds) }),
   turn: (degrees: number, seconds: number): Statement => ({ id: id(), kind: 'turn', target: self, axis: 'up', degrees: num(degrees), seconds: num(seconds) }),
+  turnTo: (degrees: number, seconds: number): Statement => ({ id: id(), kind: 'turnTo', target: self, axis: 'up', degrees: num(degrees), seconds: num(seconds) }),
   wait: (seconds: number): Statement => ({ id: id(), kind: 'wait', seconds: num(seconds) }),
   hide: (): Statement => ({ id: id(), kind: 'hide', target: self }),
   show: (): Statement => ({ id: id(), kind: 'show', target: self }),
@@ -70,6 +74,14 @@ const st = {
   stop: (): Statement => ({ id: id(), kind: 'stop' }),
 };
 const isNot = (name: string): Expr => ({ id: id(), kind: 'not', a: variable(name) });
+const playerInside = (zone: string): Expr => ({ id: id(), kind: 'inside', what: { player: true }, zone: { entity: zone } });
+
+/** The hinge of a door: one end of its long side, at mid height. */
+function hinge(t: RecipeTarget): V3 {
+  const mid = (k: number) => (t.min[k]! + t.max[k]!) / 2;
+  return t.max[0] - t.min[0] >= t.max[2] - t.min[2] ? [t.min[0], mid(1), mid(2)] : [mid(0), mid(1), t.min[2]];
+}
+const SWING = 90;
 
 /** A box around the object, grown sideways by `side` and up by `up`. */
 function around(t: RecipeTarget, side: number, up = 0, down = 0): { min: V3; max: V3 } {
@@ -118,12 +130,71 @@ export const RECIPES: Recipe[] = [
   {
     id: 'open-on-message',
     group: 'doors',
-    name: { en: 'Opens when it gets the message “open”', ru: 'Открывается по сообщению «open»' },
+    name: { en: 'Opens on the message “open”, closes on “close”', ru: 'Открывается по «open», закрывается по «close»' },
     description: {
-      en: 'Slides up when any script sends the message “open” (for example a button). Pair it with “Button”.',
-      ru: 'Уезжает вверх, когда любой скрипт отправляет сообщение «open» (например, кнопка). Используйте вместе с «Кнопкой».',
+      en: 'Slides up when any script sends the message “open” (for example a button) and comes back down on “close”. Pair it with “Button”.',
+      ru: 'Уезжает вверх по сообщению «open» (например, от кнопки) и возвращается по «close». Используйте вместе с «Кнопкой».',
     },
-    build: (t) => ({ variables: [], handlers: [handler(ev.message('open'), [st.moveUp(height(t), 1)])] }),
+    build: (t) => ({
+      variables: [{ name: 'open', type: 'boolean', initial: false }],
+      handlers: [
+        handler(ev.message('open'), [{ id: id(), kind: 'if', condition: isNot('open'), then: [st.set('open', true), st.moveUp(height(t), 1)], otherwise: null }]),
+        handler(ev.message('close'), [st.set('open', false), st.return(1)]),
+      ],
+    }),
+  },
+  {
+    id: 'swing-near',
+    group: 'doors',
+    name: { en: 'Swinging door that opens when the player comes near', ru: 'Распашная дверь, которая открывается, когда игрок рядом' },
+    description: {
+      en: 'Turns on a hinge at one end. Adds a zone around the door: it swings open when the player walks in and shuts when they leave.',
+      ru: 'Поворачивается на петле с одного края. Добавляет зону вокруг двери: дверь распахивается, когда игрок входит, и закрывается, когда выходит.',
+    },
+    pivot: hinge,
+    zone: (t) => ({ name: `${t.name}_zone`, ...around(t, 96), detects: 'player', once: false }),
+    build: (_t, zone) => ({
+      variables: [],
+      handlers: [handler(ev.enter(zone!), [st.turnTo(SWING, 0.8)]), handler(ev.leave(zone!), [st.turnTo(0, 0.8)])],
+    }),
+  },
+  {
+    id: 'swing-use',
+    group: 'doors',
+    name: { en: 'Swinging door: E opens and closes it', ru: 'Распашная дверь: E открывает и закрывает' },
+    description: {
+      en: 'Turns on a hinge at one end. The player looks at it and presses E to swing it open; E again shuts it.',
+      ru: 'Поворачивается на петле с одного края. Игрок смотрит на дверь и нажимает E — она распахивается; ещё раз E — закрывается.',
+    },
+    pivot: hinge,
+    build: () => ({
+      variables: [{ name: 'open', type: 'boolean', initial: false }],
+      handlers: [
+        handler(ev.use('Open'), [
+          {
+            id: id(),
+            kind: 'if',
+            condition: isNot('open'),
+            then: [st.set('open', true), st.turnTo(SWING, 0.8)],
+            otherwise: [st.set('open', false), st.turnTo(0, 0.8)],
+          },
+        ]),
+      ],
+    }),
+  },
+  {
+    id: 'swing-held',
+    group: 'doors',
+    name: { en: 'Swinging door that stays open while it gets “open”', ru: 'Распашная дверь, открытая, пока приходит «open»' },
+    description: {
+      en: 'Turns on a hinge at one end. Swings open when the message “open” starts coming and shuts when it stops. Pair it with “Pressure plate”.',
+      ru: 'Поворачивается на петле с одного края. Открывается, когда начинает приходить сообщение «open», и закрывается, когда оно перестаёт приходить. Используйте с «Нажимной плитой».',
+    },
+    pivot: hinge,
+    build: () => ({
+      variables: [],
+      handlers: [handler(ev.message('open'), [st.turnTo(SWING, 0.8)]), handler(ev.messageStop('open'), [st.turnTo(0, 0.8)])],
+    }),
   },
   {
     id: 'button',
@@ -138,13 +209,16 @@ export const RECIPES: Recipe[] = [
   {
     id: 'pressure-plate',
     group: 'gameplay',
-    name: { en: 'Pressure plate that sends “open”', ru: 'Нажимная плита, отправляющая «open»' },
+    name: { en: 'Pressure plate: sends “open” while stood on', ru: 'Нажимная плита: шлёт «open», пока на ней стоят' },
     description: {
-      en: 'Adds a zone on top. Stepping on it sends the message “open” to everything, once.',
-      ru: 'Добавляет зону сверху. Когда игрок наступает на неё, всем один раз отправляется сообщение «open».',
+      en: 'Adds a zone on top. While the player stands on it, it keeps sending the message “open”; when they step off, the message stops. Doors that stay open “while they get open” close again.',
+      ru: 'Добавляет зону сверху. Пока игрок стоит на ней, она всё время отправляет сообщение «open»; когда он сходит, сообщение перестаёт приходить, и двери, открытые «пока приходит open», закрываются.',
     },
-    zone: (t) => ({ name: `${t.name}_zone`, min: [t.min[0], t.max[1], t.min[2]], max: [t.max[0], t.max[1] + 32, t.max[2]], detects: 'player', once: true }),
-    build: (_t, zone) => ({ variables: [], handlers: [handler(ev.enter(zone!), [st.send('open'), st.log('Plate pressed')])] }),
+    zone: (t) => ({ name: `${t.name}_zone`, min: [t.min[0], t.max[1], t.min[2]], max: [t.max[0], t.max[1] + 32, t.max[2]], detects: 'player', once: false }),
+    build: (_t, zone) => ({
+      variables: [],
+      handlers: [handler(ev.enter(zone!), [st.log('Plate pressed'), { id: id(), kind: 'while', condition: playerInside(zone!), body: [st.send('open')] }])],
+    }),
   },
   {
     id: 'lift',

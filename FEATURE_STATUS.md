@@ -100,7 +100,11 @@ Last updated: 2026-11-01 (Phase 2, first slice).
 | Game event bus (trigger enter/exit now; “use” and messages reserved for scripts) | **Done** (Phase 4) |
 | Visual scripting (S1, S2): Script component, block editor in the Visual script tab (plain-language rows, palette, ▾ value kinds, variables), checker with problems under blocks and in the Problems tab | **Done** (Phase 5). See docs/scripting.md. |
 | Script VM in Play: waits, moves/turns over time, messages, every-N-seconds, zone events, “the thing that entered”; step budget stops runaway loops; running blocks highlighted; Write and errors in the console | **Done** (Phase 5) |
-| Recipes (Recipes… in the Inspector or the Visual script tab): doors (near, use, on message), lift, spinner, button, pressure plate, vanishing platform, pickup; zones made where needed; ordinary editable blocks; one undo step | **Done** (Phase 5) |
+| Recipes (Recipes… in the Inspector or the Visual script tab): sliding doors (near, use, on message), swinging doors on a hinge (near, use, while it gets “open”), lift, spinner, button, pressure plate (while stood on), vanishing platform, pickup; zones and hinges made where needed; ordinary editable blocks; one undo step | **Done** (Phase 5) |
+| Blocks: Repeat while, “is inside a zone”, Turn to an angle, When a message stops coming (messages sent every frame count as one) | **Done** |
+| Copy and paste blocks and stacks (buttons, Ctrl+C / X / V / D, Delete), also between objects | **Done** |
+| Lifts and moving platforms carry the player (standing or crouched; no jumping while moving); the player slides round pillars and balls | **Done** |
+| Models collide by their own shape: box, hull or exact triangles | **Done** (B3) |
 | The optional graph view (V3), drag-and-drop of blocks, watching values and breakpoints | Planned (rest of Phase 5) |
 | Standalone runtime and Play as built (Phase 8) | Planned |
 | Desktop and web export (Phase 9) | Planned |

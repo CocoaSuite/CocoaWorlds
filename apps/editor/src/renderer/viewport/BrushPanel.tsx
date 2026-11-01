@@ -47,7 +47,7 @@ export function BrushPanel({ draft, onBounds, onCreate, onCancel }: { draft: Dra
         : t('brush.hintHeight');
 
   return (
-    <div className="cw-brush-panel" role="group" aria-label={t('brush.panel')} onPointerDown={(e) => e.stopPropagation()}>
+    <div className="cw-brush-panel" data-brush-panel role="group" aria-label={t('brush.panel')} onPointerDown={(e) => e.stopPropagation()}>
       <div className="cw-brush-row">
         <Segmented<BrushShape>
           label={t('brush.shape')}

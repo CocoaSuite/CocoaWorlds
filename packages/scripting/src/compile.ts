@@ -46,7 +46,7 @@ export type Op =
   | { op: 'jmpf'; to: number }
   /**
    * Pops `argc` arguments then a target ref; asks the host to act; waits if the action takes time.
-   * Arguments: move [distance, dx, dy, dz, seconds] · turn [axis, degrees, seconds] · return [seconds] ·
+   * Arguments: move [distance, dx, dy, dz, seconds] · turn, turnTo [axis, degrees, seconds] · return [seconds] ·
    * scale [factor, seconds] · push [dx, dy, dz, strength] · moveTo [place, seconds, gap] · teleport [place] ·
    * damage [amount] · others none.
    */
@@ -78,17 +78,19 @@ export type Op =
   | { op: 'stopsound' }
   /** Pops an object: play its model's animation. */
   | { op: 'anim'; name: string; loop: boolean }
+  /** Pops the zone, then the thing: pushes whether it is inside the zone now. */
+  | { op: 'inside' }
   | { op: 'halt' };
 
 export type GameAction = 'hurt' | 'heal' | 'addScore';
 export type GameValue = 'health' | 'score';
 
-export type ActionName = 'move' | 'turn' | 'return' | 'show' | 'hide' | 'turnOn' | 'turnOff' | 'remove' | 'scale' | 'physical' | 'push' | 'moveTo' | 'teleport' | 'damage';
+export type ActionName = 'move' | 'turn' | 'turnTo' | 'return' | 'show' | 'hide' | 'turnOn' | 'turnOff' | 'remove' | 'scale' | 'physical' | 'push' | 'moveTo' | 'teleport' | 'damage';
 
 export type CompiledEvent =
   | { kind: 'start' }
   | { kind: 'enter' | 'leave'; zone: string }
-  | { kind: 'message'; message: string }
+  | { kind: 'message' | 'messageStop'; message: string }
   | { kind: 'use'; prompt: string }
   | { kind: 'die' }
   | { kind: 'breaks' }
@@ -199,9 +201,9 @@ class HandlerCompiler {
     else if (ev.kind === 'enter' || ev.kind === 'leave') {
       const zone = this.resolveRef(ev.zone, ev.id, true);
       if (zone) event = { kind: ev.kind, zone };
-    } else if (ev.kind === 'message') {
+    } else if (ev.kind === 'message' || ev.kind === 'messageStop') {
       if (!ev.message.trim()) this.problem(ev.id, 'Give the message a name.');
-      else event = { kind: 'message', message: ev.message.trim() };
+      else event = { kind: ev.kind, message: ev.message.trim() };
     } else if (ev.kind === 'every') {
       if (ev.seconds.kind !== 'number' || !(ev.seconds.value > 0)) this.problem(ev.seconds.id, '“Every” needs a number of seconds above 0.');
       else event = { kind: 'every', seconds: Math.max(0.05, ev.seconds.value) };
@@ -294,6 +296,7 @@ class HandlerCompiler {
     switch (s.kind) {
       case 'move':
       case 'turn':
+      case 'turnTo':
       case 'return': {
         this.actTarget(s.target, s.id);
         let argc = 1;
@@ -303,7 +306,7 @@ class HandlerCompiler {
           this.expect(s.distance, 'number', 'The distance must be a number.');
           for (const c of d ?? [0, 0, 0]) this.emit({ op: 'push', v: c });
           argc = 4;
-        } else if (s.kind === 'turn') {
+        } else if (s.kind === 'turn' || s.kind === 'turnTo') {
           this.emit({ op: 'push', v: s.axis });
           this.expect(s.degrees, 'number', 'The angle must be a number.');
           argc = 2;
@@ -417,6 +420,20 @@ class HandlerCompiler {
         this.waits = this.waits || before;
         this.stmt = s.id;
         this.emit({ op: 'jmp', to: top });
+        break;
+      }
+      case 'while': {
+        // Checks the condition, runs the blocks, then waits for the next frame: it can never freeze the game.
+        const top = this.code.length;
+        this.expect(s.condition, 'boolean', 'The condition must be yes-or-no (a comparison, “is inside”, “and”, “or”, “not”).');
+        const jf = this.emit({ op: 'jmpf', to: -1 });
+        this.statements(s.body);
+        this.stmt = s.id;
+        this.emit({ op: 'push', v: 0 });
+        this.emit({ op: 'wait' });
+        this.emit({ op: 'jmp', to: top });
+        (this.code[jf] as { to: number }).to = this.code.length;
+        this.waits = true;
         break;
       }
       case 'stop':
@@ -569,6 +586,14 @@ class HandlerCompiler {
         this.pushRef(e.of, e.id);
         this.emit({ op: 'varof', name: e.variable.trim() });
         return 'unknown';
+      case 'inside': {
+        if (!('player' in e.what)) this.pushRef(e.what, e.id);
+        else this.emit({ op: 'ref', ref: e.what });
+        const zone = this.resolveRef(e.zone, e.id, true);
+        this.emit(zone === null ? { op: 'push', v: null } : { op: 'ref', ref: e.zone });
+        this.emit({ op: 'inside' });
+        return 'boolean';
+      }
       case 'health':
       case 'score':
         this.ruleOff(e.kind, e.id);

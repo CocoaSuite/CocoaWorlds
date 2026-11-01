@@ -43,9 +43,12 @@ object when it needs one, in one undo step. Change the blocks afterwards like an
 |---|---|
 | Door that opens when the player comes near | A zone 96 u around the door; enters → move up by the door's height; leaves → return |
 | Door that opens when used (E) | When the player uses this → move up, wait 3 s, return (an `open` variable stops it restarting) |
-| Opens when it gets the message “open” | When this gets the message “open” → move up by its height |
+| Opens on the message “open”, closes on “close” | “open” → move up by its height (once, while open); “close” → return |
+| Swinging door that opens when the player comes near | Pivot on its hinge; a zone 96 u around; enters → turn to 90°; leaves → turn to 0° |
+| Swinging door: E opens and closes it | Pivot on its hinge; when the player uses this → turn to 90°, or back to 0° if open |
+| Swinging door that stays open while it gets “open” | Pivot on its hinge; “open” starts coming → turn to 90°; “open” stops coming → turn to 0° |
 | Button that sends “open” when used (E) | When the player uses this → send “open” to everyone |
-| Pressure plate that sends “open” | A zone on top (once) → send “open” to everyone |
+| Pressure plate: sends “open” while stood on | A zone on top → while the player is inside the zone: send “open” |
 | Lift that goes up and down | Game starts → repeat forever: up 128 over 2 s, wait 1, return over 2 s, wait 1 |
 | Keeps spinning | Game starts → repeat forever: turn 360° over 4 s |
 | Platform that vanishes when stepped on | A zone on top → wait 0.5 s, hide, wait 3 s, show |
@@ -54,6 +57,32 @@ object when it needs one, in one undo step. Change the blocks afterwards like an
 | Health pack: +25 health | A zone around it → if not taken and health < 100: heal 25, hide |
 | Hurts the player who stands in it | A zone over it → 10 damage every 0.5 s while the player is inside |
 | Deadly: touching it kills the player | A zone over it → hurt the player by 1000 |
+
+Swinging doors turn on a **hinge**: the recipe sets the door's pivot at one end of its long side, at mid
+height, and uses **Turn [object] to [angle]° from its start**, which turns to an angle measured from how the
+object started (90 open, 0 shut), however far it had turned. Move the pivot (O) to hinge it at the other end.
+
+## While, “is inside”, and messages that keep coming
+
+- **Repeat while [condition]** runs the blocks inside again and again while the condition holds, then goes on
+  to the next block. It runs at most once a frame, so it never freezes the game (no Wait needed).
+- **[the player / an object] is inside [zone]** is a yes-or-no value: whether it is in the trigger zone now
+  (also for zones marked Only once).
+- A message sent again and again without a break, such as from a “while” loop, **counts as one**: “When this gets
+  the message” starts once when it begins, and **When the message [name] stops coming** starts when it hasn't come
+  for 0.1 s. Messages with a pause between them each start “When this gets the message” as before.
+
+So a plate that holds a door open is two short scripts: the plate says *when something enters → repeat while the
+player is inside the zone: send “open”*, and the door says *when this gets “open” → turn to 90°; when “open” stops
+coming → turn to 0°*. Messages can go to everyone or to one object (“to”).
+
+## Copy and paste
+
+The ⧉ button on a block copies it with everything inside it; on a stack's “When…” row it copies the whole stack.
+Paste from **+ Add a block** (or the + after a block) and from **+ When…**. With the keyboard, click a block's
+words to pick it, then **Ctrl+C**, **Ctrl+X**, **Ctrl+V** (pastes after it), **Ctrl+D** (duplicate) and
+**Delete**. Copied blocks stay on the clipboard while the editor is open, so they paste into other objects'
+scripts too.
 
 ## Health and score
 

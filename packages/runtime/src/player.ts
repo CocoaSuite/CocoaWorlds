@@ -67,6 +67,17 @@ type V = { x: number; y: number; z: number };
 /** Query groups that skip hidden and switched-off objects (their collision groups are 0). */
 const SOLID = 0xffffffff;
 
+/** The player's shape, for “does it fit here” checks. */
+const playerShape = (height: number) => new RAPIER.Cylinder(height / 2, PLAYER.radius);
+
+/** What the world tells the player about moving things (lifts, doors, platforms). */
+export interface PlayerSurroundings {
+  /** Which colliders the movement may bump into (moving objects take part through stand-ins). */
+  blocks(c: RAPIER.Collider): boolean;
+  /** Where a point riding on what this collider belongs to will be after this step, or null if it isn't moving. */
+  carry(collider: number, at: V): V | null;
+}
+
 export class Player {
   readonly body: RAPIER.RigidBody;
   readonly collider: RAPIER.Collider;
@@ -80,6 +91,12 @@ export class Player {
   landingSpeed = 0;
   /** What the floor under the player moves at (a conveyor), given a collider handle; set by the world. */
   beltOf: ((collider: number) => { x: number; z: number } | null) | null = null;
+  /** Moving things (set by the world). */
+  surroundings: PlayerSurroundings | null = null;
+  /** Physics steps since the feet were last on the ground. */
+  private sinceGround = 0;
+  /** True while standing on something that moves (a lift): no jumping, and the feet stay on it. */
+  riding = false;
   /** The conveyor speed under the player at the last step. */
   private belt = { x: 0, z: 0 };
   /** Feet position at the previous and current physics step (for smooth drawing between steps). */
@@ -102,7 +119,9 @@ export class Player {
     feet = { x: feet.x, y: feet.y + 1, z: feet.z };
     this.spawn = { feet: { ...feet }, yaw };
     this.body = world.createRigidBody(RAPIER.RigidBodyDesc.kinematicPositionBased().setTranslation(feet.x, feet.y + PLAYER.height / 2, feet.z));
-    this.collider = world.createCollider(RAPIER.ColliderDesc.cuboid(PLAYER.radius, PLAYER.height / 2, PLAYER.radius).setFriction(0), this.body);
+    // An upright cylinder: a flat bottom (stands firmly on floors and edges and climbs steps like Source's box)
+    // and round sides, so it slides around pillars, balls and corners instead of catching on their facets.
+    this.collider = world.createCollider(RAPIER.ColliderDesc.cylinder(PLAYER.height / 2, PLAYER.radius).setFriction(0), this.body);
     this.controller = world.createCharacterController(0.5);
     this.controller.enableAutostep(PLAYER.stepHeight, 4, false);
     this.controller.enableSnapToGround(PLAYER.stepHeight / 2);
@@ -157,7 +176,7 @@ export class Player {
    * optionally facing a new way.
    */
   teleport(feet: V, yaw?: number): void {
-    const shape = new RAPIER.Cuboid(PLAYER.radius, this.height / 2, PLAYER.radius);
+    const shape = playerShape(this.height);
     let y = feet.y + 1;
     for (let i = 0; i < 64; i++, y += 8) {
       const hit = this.world.intersectionWithShape({ x: feet.x, y: y + this.height / 2, z: feet.z }, { x: 0, y: 0, z: 0, w: 1 }, shape, RAPIER.QueryFilterFlags.EXCLUDE_SENSORS, SOLID, this.collider);
@@ -214,7 +233,7 @@ export class Player {
 
     if (this.onGround) {
       // Jump (pressing again each time; holding doesn't repeat).
-      if (inp.jump && !this.jumpHeld) {
+      if (inp.jump && !this.jumpHeld && !this.riding) {
         this.velocity.y = PLAYER.jumpSpeed;
         this.onGround = false;
       } else {
@@ -230,7 +249,9 @@ export class Player {
 
     const desired = { x: (this.velocity.x + this.belt.x) * dt, y: this.velocity.y * dt, z: (this.velocity.z + this.belt.z) * dt };
     // (Walking down slopes and steps: the controller's snap-to-ground keeps the player on the floor.)
-    this.controller.computeColliderMovement(this.collider, desired, RAPIER.QueryFilterFlags.EXCLUDE_SENSORS, SOLID);
+    const s = this.surroundings;
+    if (s) this.controller.computeColliderMovement(this.collider, desired, undefined, SOLID, (c) => s.blocks(c));
+    else this.controller.computeColliderMovement(this.collider, desired, RAPIER.QueryFilterFlags.EXCLUDE_SENSORS, SOLID);
     const moved = this.controller.computedMovement();
     const grounded = this.controller.computedGrounded();
 
@@ -269,14 +290,49 @@ export class Player {
     const t = this.body.translation();
     let next = { x: t.x + moved.x, y: t.y + moved.y, z: t.z + moved.z };
     // Source-style step-up when the physics engine's own didn't happen: stand on the step if the box fits.
-    if (blocked && this.onGround) {
+    // (Also just after leaving the ground, not rising: between steps on tight stairs the feet are briefly off
+    // them, and the next riser mustn't stop the player.)
+    if (this.onGround) this.sinceGround = 0;
+    else this.sinceGround++;
+    if (blocked && (this.onGround || (this.sinceGround <= 6 && this.velocity.y <= 0))) {
       const up = this.stepUp(t, desired);
-      if (up) next = up;
+      if (up) {
+        next = up;
+        this.onGround = true;
+        this.sinceGround = 0;
+        if (this.velocity.y < 0) this.velocity.y = 0;
+      }
+    }
+    // Standing on something that moves (a lift, a turning platform): go with it, crouched or not, feet on it.
+    // (Everything is still where it was this step: what is under the feet now is what carries them.)
+    const under = this.onGround || this.riding ? this.groundUnder(next) : null;
+    const carried = under ? (s?.carry(under.handle, { ...next, y: Math.max(next.y, under.top + this.height / 2 + 0.5) }) ?? null) : null;
+    this.riding = !!carried;
+    if (carried) {
+      next = carried;
+      if (this.velocity.y < 0) this.velocity.y = 0;
+      this.onGround = true;
     }
     this.body.setNextKinematicTranslation(next);
     this.prevFeet = this.feet;
     this.feet = { x: next.x, y: next.y - this.height / 2, z: next.z };
     this.smoothView(dt);
+  }
+
+  /** The collider just under the feet at a position (what the player stands on) and the top of it, or null. */
+  private groundUnder(at: V): { handle: number; top: number } | null {
+    const s = this.surroundings;
+    if (!s) return null;
+    const footY = at.y - this.height / 2;
+    // The middle and the edge of the feet (standing at the edge of a lift still counts). From a step above
+    // the feet (still inside the player), in case they have sunk into it.
+    const r = PLAYER.radius * 0.9;
+    for (const [ox, oz] of [[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1]] as const) {
+      const from = { x: at.x + ox * r, y: footY + Math.min(PLAYER.stepHeight, this.height - 1), z: at.z + oz * r };
+      const hit = this.world.castRay(new RAPIER.Ray(from, { x: 0, y: -1, z: 0 }), from.y - footY + 4, false, undefined, SOLID, this.collider, undefined, (c) => s.blocks(c));
+      if (hit) return { handle: hit.collider.handle, top: from.y - hit.timeOfImpact };
+    }
+    return null;
   }
 
   /** Ease the view over steps and bumps while on the ground, and between standing and crouching. */
@@ -302,7 +358,7 @@ export class Player {
     const top = this.stepAhead(desired.x, desired.z);
     if (top === null) return null;
     const up = { x: t.x + desired.x, y: top + this.height / 2 + 0.5, z: t.z + desired.z };
-    const shape = new RAPIER.Cuboid(PLAYER.radius, this.height / 2, PLAYER.radius);
+    const shape = playerShape(this.height);
     return this.world.intersectionWithShape(up, { x: 0, y: 0, z: 0, w: 1 }, shape, RAPIER.QueryFilterFlags.EXCLUDE_SENSORS, SOLID, this.collider) ? null : up;
   }
 
@@ -355,19 +411,21 @@ export class Player {
     const t = this.body.translation();
     if (want) {
       this.crouched = true;
-      this.collider.setHalfExtents({ x: PLAYER.radius, y: PLAYER.crouchHeight / 2, z: PLAYER.radius });
+      this.collider.setHalfHeight(PLAYER.crouchHeight / 2);
       // Keep the feet where they are.
       this.body.setTranslation({ x: t.x, y: t.y - (PLAYER.height - PLAYER.crouchHeight) / 2, z: t.z }, true);
+      this.collider.setTranslation(this.body.translation());
       return;
     }
     const lift = PLAYER.height - PLAYER.crouchHeight;
-    const shape = new RAPIER.Cuboid(PLAYER.radius, PLAYER.height / 2, PLAYER.radius);
+    const shape = playerShape(PLAYER.height);
     const pos = { x: t.x, y: t.y + lift / 2, z: t.z };
     const blocked = this.world.intersectionWithShape(pos, { x: 0, y: 0, z: 0, w: 1 }, shape, RAPIER.QueryFilterFlags.EXCLUDE_SENSORS, SOLID, this.collider);
     if (blocked) return;
     this.crouched = false;
-    this.collider.setHalfExtents({ x: PLAYER.radius, y: PLAYER.height / 2, z: PLAYER.radius });
+    this.collider.setHalfHeight(PLAYER.height / 2);
     this.body.setTranslation(pos, true);
+    this.collider.setTranslation(pos);
   }
 
   /** What the player is pointing at within reach (the collider), for “use”. */
