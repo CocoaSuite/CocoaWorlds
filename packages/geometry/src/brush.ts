@@ -60,6 +60,12 @@ export interface BrushPolygon {
 
 export const DEFAULT_MATERIAL = 'dev/grid';
 
+/** COL: an invisible collider. Faces with it collide in the game but are never drawn there (the editor shows them). */
+export const COLLIDER_MATERIAL = 'tool/col';
+
+/** Materials that are not drawn in the game. */
+export const isInvisibleMaterial = (material: string): boolean => material === COLLIDER_MATERIAL;
+
 export const defaultSurface = (material = DEFAULT_MATERIAL): FaceSurface => ({
   material,
   offset: [0, 0],

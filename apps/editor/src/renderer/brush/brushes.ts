@@ -13,6 +13,7 @@ import {
 import {
   box,
   bounds,
+  COLLIDER_MATERIAL,
   cylinder,
   extrudePolygon,
   defaultSurface,
@@ -145,11 +146,11 @@ export function worldBrushes(doc: SceneDoc): WorldBrush[] {
 }
 
 /** The brushes for a shape spanning min–max. Stairs produce one brush per step. */
-/** What the brush tool draws: level geometry, a live cutter, or a trigger zone. */
-export type DrawRole = BrushRole | 'trigger';
+/** What the brush tool draws: level geometry, a live cutter, a trigger zone, or an invisible collider (COL). */
+export type DrawRole = BrushRole | 'trigger' | 'collider';
 
 export function shapeBrushes(o: ShapeOptions, min: V3, max: V3, role: DrawRole, outline?: Outline): Brush[] {
-  const surface = defaultSurface(role === 'subtract' ? 'dev/subtract' : role === 'trigger' ? 'dev/trigger' : 'dev/grid');
+  const surface = defaultSurface(role === 'subtract' ? 'dev/subtract' : role === 'trigger' ? 'dev/trigger' : role === 'collider' ? COLLIDER_MATERIAL : 'dev/grid');
   switch (o.shape) {
     case 'polygon':
       if (!outline) return [];

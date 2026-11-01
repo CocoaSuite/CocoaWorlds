@@ -2,7 +2,7 @@
  * Render and collision data from brushes. Plain typed arrays, no renderer imports, so this runs in a worker
  * and in the game runtime as well as in the editor.
  */
-import { bounds, polygons, vertices, type Brush, type BrushPolygon } from './brush';
+import { bounds, isInvisibleMaterial, polygons, vertices, type Brush, type BrushPolygon } from './brush';
 import { AabbTree, type Aabb } from './spatial';
 import { EPS, samePlane, flip } from './plane';
 import { uvAt, uvAxes } from './uv';
@@ -103,6 +103,8 @@ function isCovered(poly: BrushPolygon, self: number, perBrush: BrushPolygon[][],
     if (bi === self) continue;
     for (const other of perBrush[bi]!) {
       if (!samePlane(other.plane, opposite)) continue;
+      // An invisible collider never hides a visible face behind it (the game would show a hole).
+      if (isInvisibleMaterial(other.surface.material) && !isInvisibleMaterial(poly.surface.material)) continue;
       if (poly.points.every((p) => insideConvex(p, other))) return true;
     }
   }

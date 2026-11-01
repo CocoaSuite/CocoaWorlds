@@ -500,7 +500,7 @@ export const useEditor = create<State & Actions>()((set, get) => ({
       get().notify(`The brush is too small to build (${problems[0]}).`);
       return;
     }
-    const base = brushRole === 'subtract' ? 'cut' : brushRole === 'trigger' ? 'trigger' : shapeName[brushOptions.shape];
+    const base = brushRole === 'subtract' ? 'cut' : brushRole === 'trigger' ? 'trigger' : brushRole === 'collider' ? 'col' : shapeName[brushOptions.shape];
     const ents = brushes.map((b) => {
       const ent = newBrushEntity(uniqueName(doc, base), b, brushRole === 'subtract' ? 'subtract' : 'solid');
       // A trigger zone is a brush with a trigger component; it never becomes level geometry.

@@ -6,14 +6,15 @@ import { buildMesh, edges, polygons, samePlane, type Brush, type BrushMesh, type
 import { buildLevel, type WorldResult } from './world-build';
 import WorldWorker from './world-worker?worker&inline';
 import * as THREE from 'three';
-import { DEV_TEXTURE_SIZE, devMaterial, paintDevTexture } from '../brush/materials';
+import { DEV_TEXTURE_SIZE, devMaterial, paintDevTexture, paintToolTexture } from '../brush/materials';
 
 const TEX_SIZE = DEV_TEXTURE_SIZE;
 
-function devTexture(base: string): THREE.CanvasTexture {
+function devTexture(base: string, tool?: string): THREE.CanvasTexture {
   const c = document.createElement('canvas');
   c.width = c.height = TEX_SIZE;
-  paintDevTexture(c.getContext('2d')!, base, TEX_SIZE);
+  if (tool) paintToolTexture(c.getContext('2d')!, base, tool, TEX_SIZE);
+  else paintDevTexture(c.getContext('2d')!, base, TEX_SIZE);
   const t = new THREE.CanvasTexture(c);
   t.wrapS = t.wrapT = THREE.RepeatWrapping;
   t.colorSpace = THREE.SRGBColorSpace;
@@ -90,7 +91,10 @@ export class WorldRenderer {
     let m = this.materials.get(name);
     if (m) return m;
     const dev = devMaterial(name);
-    if (dev) {
+    if (dev?.tool) {
+      // See-through in the editor so what's behind stays visible; hidden in the game.
+      m = new THREE.MeshBasicMaterial({ map: devTexture(dev.base, 'COL'), transparent: true, opacity: 0.45, depthWrite: false, side: THREE.DoubleSide });
+    } else if (dev) {
       m = new THREE.MeshStandardMaterial({ map: devTexture(dev.base), roughness: 0.9, metalness: 0 });
     } else {
       m = new THREE.MeshStandardMaterial({ color: hashColor(name), roughness: 0.9 });

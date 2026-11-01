@@ -11,6 +11,8 @@ export interface DevMaterial {
   id: string;
   base: string;
   label: Record<Lang, string>;
+  /** Tool materials (COL): drawn see-through and striped in the editor, not drawn in the game. */
+  tool?: boolean;
 }
 
 export const DEV_MATERIALS: DevMaterial[] = [
@@ -23,7 +25,27 @@ export const DEV_MATERIALS: DevMaterial[] = [
   { id: 'dev/red', base: '#b4574c', label: { en: 'Red', ru: 'Красный' } },
   { id: 'dev/green', base: '#7c9a48', label: { en: 'Green', ru: 'Зелёный' } },
   { id: 'dev/blue', base: '#5a84b6', label: { en: 'Blue', ru: 'Синий' } },
+  { id: 'tool/col', base: '#c04ad0', label: { en: 'COL — invisible collider', ru: 'COL — невидимый коллайдер' }, tool: true },
 ];
+
+/** Paint a tool texture: diagonal stripes and the material's short name (COL). */
+export function paintToolTexture(g: CanvasRenderingContext2D, base: string, name: string, size = DEV_TEXTURE_SIZE): void {
+  g.fillStyle = shade(base, 0.55);
+  g.fillRect(0, 0, size, size);
+  g.strokeStyle = base;
+  g.lineWidth = size / 16;
+  for (let i = -size; i < size * 2; i += size / 4) {
+    g.beginPath();
+    g.moveTo(i, 0);
+    g.lineTo(i + size, size);
+    g.stroke();
+  }
+  g.fillStyle = '#ffffff';
+  g.font = `bold ${size / 5}px sans-serif`;
+  g.textAlign = 'center';
+  g.textBaseline = 'middle';
+  g.fillText(name, size / 2, size / 2);
+}
 
 const byId = new Map(DEV_MATERIALS.map((m) => [m.id, m]));
 
@@ -53,6 +75,7 @@ export function paintDevTexture(g: CanvasRenderingContext2D, base: string, size 
 /** A small CSS swatch for the material picker. */
 export function swatchStyle(id: string): { background: string } {
   const m = devMaterial(id);
+  if (m?.tool) return { background: `repeating-linear-gradient(45deg, ${m.base} 0 4px, ${shade(m.base, 0.55)} 4px 8px)` };
   const base = m?.base ?? '#777777';
   const line = shade(base, 0.8);
   return {

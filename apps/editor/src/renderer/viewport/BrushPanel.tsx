@@ -69,6 +69,7 @@ export function BrushPanel({ draft, onBounds, onCreate, onCancel }: { draft: Dra
             { value: 'solid', label: t('brush.solid') },
             { value: 'subtract', label: t('brush.subtract') },
             { value: 'trigger', label: t('brush.trigger') },
+            { value: 'collider', label: t('brush.collider') },
           ]}
         />
         {opts.shape === 'cylinder' && (

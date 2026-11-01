@@ -106,3 +106,10 @@ alignment, the vertex tool, moving, rotating, scaling, saving) treats both kinds
 - **Physics.** Still edited meshes collide with their exact triangles; moving ones use their convex hull.
 - **Saving.** Brush data gains `mesh` (corners rounded to 1/1024 unit, like face points). `faces` keeps three
   points per face as before. Scene format 3; older scenes have no meshes and open unchanged.
+
+## COL, the invisible collider
+
+`tool/col` (`COLLIDER_MATERIAL`) is a material for faces that collide in the game but aren't drawn there, for
+invisible walls, smoothing stairs into a ramp for the player, or blocking off ledges. A whole brush can be COL
+(Brush tool → COL) or only some faces (paint them). Hidden-face removal never lets a COL face hide a visible
+face it touches (`isInvisibleMaterial`), so a COL block against a wall leaves no hole in the game.

@@ -83,6 +83,7 @@ Last updated: 2026-11-01 (Phase 2, first slice).
 | Play in the editor (F5 / Play): from a snapshot of the scene; trigger events and uses in the console; Stop returns with the scene untouched | **Done** (Phase 4). Lights are not drawn yet (Phase 7). |
 | Play as the player: first person at the Player start, Source-style movement (run 190 like Half-Life 2, Shift walk, Space jump, Ctrl/C crouch, steps up to 18 u, air strafing, pushes physics objects), click to capture the mouse, Esc frees it, E uses; falls out of the world → back to the start. Without a Player start, a free-camera physics preview | **Done** (start of Phase 6) |
 | “When the player uses this” script event | **Done** |
+| COL material (invisible collider): in the material picker and as a brush kind (Brush tool → COL); striped purple and see-through in the editor, not drawn in the game, still solid; never hides the visible faces it touches | **Done** |
 | Pivots: shown and set in the Inspector (numbers, Middle, Bottom), dragged in the view in Edit pivot mode (O, snaps to corners); the gizmo rotates and scales around it; scripts turn objects around it; saved and undoable | **Done** |
 | Plain-language block scripting, graph view, VM (Phase 5) | Planned |
 | Gameplay entities: health, damage, pickups, ready-made doors/buttons/lifts, ladders (rest of Phase 6) | Planned |

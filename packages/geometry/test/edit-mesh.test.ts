@@ -152,3 +152,15 @@ describe('loop cut', () => {
     expect(volume(r!.brush)).toBeCloseTo(volume(dented.brush), 3);
   });
 });
+
+describe('COL (invisible collider)', () => {
+  it('never hides a visible face pressed against it, but hides COL against COL', async () => {
+    const { buildMesh: build, box: mk, defaultSurface: surf, COLLIDER_MATERIAL } = await import('../src');
+    const wall = mk([0, 0, 0], [64, 64, 64], surf('dev/grid'));
+    const col = mk([64, 0, 0], [128, 64, 64], surf(COLLIDER_MATERIAL));
+    // Wall's +X face touches COL's −X face: the wall face stays (6), COL's face is still hidden by the wall (5).
+    expect(build([wall, col], { cullTouchingFaces: true }).indices.length / 3).toBe((6 + 5) * 2);
+    const col2 = mk([128, 0, 0], [192, 64, 64], surf(COLLIDER_MATERIAL));
+    expect(build([col, col2], { cullTouchingFaces: true }).indices.length / 3).toBe((5 + 5) * 2);
+  });
+});

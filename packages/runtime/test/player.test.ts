@@ -1,6 +1,6 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import { newEntity, newScene, type EntityData, type SceneFile, type Vec3 } from '@cocoaworlds/core';
-import { box, toData } from '@cocoaworlds/geometry';
+import { COLLIDER_MATERIAL, box, defaultSurface, toData } from '@cocoaworlds/geometry';
 import { GameWorld, PLAYER, initPhysics } from '../src';
 
 beforeAll(async () => {
@@ -164,6 +164,21 @@ describe('Player', () => {
     w.use();
     run(w, 0.1);
     expect(uses).toHaveLength(1);
+    w.dispose();
+  });
+});
+
+describe('COL', () => {
+  it('the player stands on an invisible collider floor', () => {
+    const s = newScene('t');
+    s.entities = [
+      newEntity('col', { brush: { role: 'solid', faces: toData(box([-256, -16, -256], [256, 0, 256], defaultSurface(COLLIDER_MATERIAL))).faces } as never }),
+      newEntity('start', { playerSpawn: {} }),
+    ];
+    const w = GameWorld.create(s);
+    run(w, 1);
+    expect(w.player!.onGround).toBe(true);
+    expect(w.player!.feetPosition.y).toBeGreaterThan(-1);
     w.dispose();
   });
 });

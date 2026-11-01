@@ -31,6 +31,8 @@ Details and trade-offs for each: [ARCHITECTURE.md](ARCHITECTURE.md).
 
 ## Log
 
+- **2026-11-01** — Routine choices for COL (reversible): an invisible collider is a material (`tool/col`, like Hammer's tool textures), so single faces or whole brushes can be COL and it survives carving and clipping; the brush tool offers COL as a kind for drawing collision-only blocks; in the editor it is see-through with purple stripes and the letters COL; in Play its faces are skipped when drawing and kept for physics; a COL face never hides a visible face pressed against it.
+
 - **2026-11-01** — Routine choices for pivots (reversible, at the user's request after “turn” spun objects around the world origin): every object has a pivot, by default the middle of a brush, the middle of a group's brushes, or a point object's position; a set pivot is an internal `pivot` component, stored for brushes as an offset from the brush's middle (so moving or reshaping keeps it on the brush) and for other objects as a point in their own space. The gizmo sits on the pivot of a single selection; scripts' move and turn act around it. Edit pivot mode (O) makes the move gizmo move only the pivot, snapping to any corner. Player speeds lowered to Half-Life 2's: run 190, walk 100, crouch 64 u/s (Source's 320 is a sprint).
 
 - **2026-11-01** — Routine choices for recipes (V2, reversible): a recipe only ever adds ordinary blocks (plus a trigger zone beside the object when it needs one), merged into the object's script as one undo step; doors open by their own height; the use-door closes by itself after 3 seconds, because an open door is above the player's reach; buttons and plates talk to doors with the message “open”. Hidden and switched-off objects no longer block or catch the player.

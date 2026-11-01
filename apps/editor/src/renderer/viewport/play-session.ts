@@ -6,7 +6,7 @@
  * preview watched with the free camera.
  */
 import { SceneDoc, readComponent, type ColliderData, type SceneFile } from '@cocoaworlds/core';
-import { buildMesh, type WorldBrush } from '@cocoaworlds/geometry';
+import { buildMesh, isInvisibleMaterial, type WorldBrush } from '@cocoaworlds/geometry';
 import { GameWorld, initPhysics, type PlayerInput, type ScriptLog, type TriggerEvent } from '@cocoaworlds/runtime';
 import type { Problem, ScriptError } from '@cocoaworlds/scripting';
 import * as THREE from 'three';
@@ -43,7 +43,9 @@ export class PlaySession {
 
   static async start(scene: SceneFile, material: (name: string) => THREE.Material): Promise<PlaySession> {
     await initPhysics();
-    return new PlaySession(scene, material);
+    // Invisible colliders (COL) collide but aren't drawn in the game.
+    const hidden = new THREE.MeshBasicMaterial({ visible: false });
+    return new PlaySession(scene, (name) => (isInvisibleMaterial(name) ? hidden : material(name)));
   }
 
   private constructor(scene: SceneFile, material: (name: string) => THREE.Material) {
