@@ -62,6 +62,13 @@ Swinging doors turn on a **hinge**: the recipe sets the door's pivot at one end 
 height, and uses **Turn [object] to [angle]° from its start**, which turns to an angle measured from how the
 object started (90 open, 0 shut), however far it had turned. Move the pivot (O) to hinge it at the other end.
 
+## Moves that cut each other short
+
+A new move or turn on an object replaces the one it is in the middle of. **Move by** and **Turn by** add to where
+the unfinished one was *going*, not to where the object happens to be, so nothing is lost: a plate that goes
+“down 6” when stepped on and “up 6” when left always comes back to the same height, however quickly the player
+steps on and off. (**Move to**, **Turn to** and **Return** aim at a fixed place anyway.)
+
 ## While, “is inside”, and messages that keep coming
 
 - **Repeat while [condition]** runs the blocks inside again and again while the condition holds, then goes on

@@ -759,7 +759,8 @@ export class GameWorld {
     switch (name) {
       case 'move': {
         const [dist, dx, dy, dz, sec] = args.map(n) as [number, number, number, number, number];
-        return this.tween(target, b, now, { p: [now.p[0] + dx * dist, now.p[1] + dy * dist, now.p[2] + dz * dist], q: now.q }, sec);
+        const goal = this.goalOf(target, now);
+        return this.tween(target, b, now, { p: [goal.p[0] + dx * dist, goal.p[1] + dy * dist, goal.p[2] + dz * dist], q: goal.q }, sec);
       }
       case 'turn':
       case 'turnTo': {
@@ -767,8 +768,9 @@ export class GameWorld {
         const deg = n(args[1] ?? 0), sec = n(args[2] ?? 0);
         const half = (deg * Math.PI) / 360;
         const rq = { x: axis[0]! * Math.sin(half), y: axis[1]! * Math.sin(half), z: axis[2]! * Math.sin(half), w: Math.cos(half) };
-        // “Turn by” adds to where it is now; “turn to” is measured from how it started.
-        return this.tween(target, b, now, { p: now.p, q: qmul(rq, name === 'turn' ? now.q : b.start.q) }, sec);
+        // “Turn by” adds to where it was turning to; “turn to” is measured from how it started.
+        const goal = this.goalOf(target, now);
+        return this.tween(target, b, now, { p: goal.p, q: qmul(rq, name === 'turn' ? goal.q : b.start.q) }, sec);
       }
       case 'return':
         return this.tween(target, b, now, b.start, n(args[0] ?? 0));
@@ -1090,6 +1092,16 @@ export class GameWorld {
   private setColliders(b: Body, on: boolean): void {
     for (let i = 0; i < b.body.numColliders(); i++) b.body.collider(i).setCollisionGroups(on ? 0xffffffff : 0);
     b.body.wakeUp();
+  }
+
+  /**
+   * Where an object is headed: the end of the move or turn it is in the middle of, or where it is. “Move by” and
+   * “turn by” add to this, so a move cut short by the next one isn't lost: “down 6” then “up 6” always comes
+   * back to the same place, however quickly they follow each other.
+   */
+  private goalOf(id: string, now: { p: Q3; q: Quat }): { p: Q3; q: Quat } {
+    const tw = this.tweens.get(id);
+    return tw && !tw.done && tw.t1 > this.time ? { p: tw.to.p, q: tw.to.q } : now;
   }
 
   private tween(id: string, b: Body, from: Tween['from'], to: Tween['to'], seconds: number): () => boolean {
