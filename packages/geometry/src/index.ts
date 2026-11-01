@@ -7,3 +7,4 @@ export * from './uv';
 export * from './vertex-edit';
 export * from './mesh';
 export * from './world';
+export * from './surface';

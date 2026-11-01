@@ -56,7 +56,9 @@ Last updated: 2026-11-01 (Phase 2, first slice).
 | Level rendering: dev grid texture, editor lighting, hidden-face removal, selection outlines | **Done** | Rebuilt on the main thread for now. |
 | Brushes saved in scenes (three points per face, exact integers on the grid) | **Done** | |
 | Geometry engine: carve/intersect/merge, vertex editing, validation, meshes, hulls | **Done** | Library and tests; see docs/geometry.md. |
-| Face selection, per-face materials, UV offset/scale/rotation | Planned | Next. |
+| Face tool (T): select faces (Ctrl+click add/remove, Shift+click whole brush), per-face material, World/Face alignment, offset/scale/rotation, Fit, Reset, line up left/right/top/bottom/centre | **Done** | Several faces at once; differing values show as blank. Faces made by a live cut follow the wall and are painted after Apply cut. |
+| Paint tool (P): click a face to apply a material, Shift+click paints the whole brush, Ctrl+click picks up a material | **Done** | |
+| Built-in development materials (9 colours with a 16-unit grid) | **Done** | Placeholders until material assets in Phase 7. |
 | Vertex and edge editing tools | Planned | Engine support done (G2: bent faces split into triangles). |
 | Clip tool | Planned | Engine support done. |
 | Polygon prism (custom footprint) | Planned | Engine support done. |

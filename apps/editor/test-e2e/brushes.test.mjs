@@ -3,26 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
-import { launch, newProject, quit, setField, shot, tempDirs, until } from './helpers.mjs';
-
-async function drawBrush(page) {
-  const box = await page.getByTestId('viewport').boundingBox();
-  const cx = box.x + box.width / 2;
-  const cy = box.y + box.height / 2;
-  await page.mouse.move(cx - 60, cy - 40);
-  await page.mouse.down();
-  await page.mouse.move(cx + 40, cy + 40, { steps: 8 });
-  await page.mouse.up();
-  await page.getByRole('group', { name: 'Brush tool' }).getByRole('button', { name: 'Create' }).waitFor();
-}
-
-async function setDraft(page, size, corner) {
-  const panel = page.getByRole('group', { name: 'Brush tool' });
-  for (const [i, a] of ['X', 'Y', 'Z'].entries()) {
-    await setField(panel, `Size ${a}`, size[i]);
-    await setField(panel, `Corner ${a}`, corner[i]);
-  }
-}
+import { drawBrush, launch, newProject, quit, setDraft, setField, shot, tempDirs, until } from './helpers.mjs';
 
 test('room from brushes, live doorway, apply cut, save', async () => {
   const { tmp, userData, projectsDir } = await tempDirs();

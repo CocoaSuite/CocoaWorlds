@@ -3,7 +3,7 @@
  * and the brush tool. Renders on demand (only after something changes) so an idle editor costs no GPU time.
  */
 import type { EntityData, SceneDoc, Transform, Vec3 } from '@cocoaworlds/core';
-import { bounds, center, composeM4, transform as transformBrush, translate, type Brush, type V3 } from '@cocoaworlds/geometry';
+import { bounds, center, composeM4, faceAt, transform as transformBrush, translate, type Brush, type V3 } from '@cocoaworlds/geometry';
 import * as THREE from 'three';
 import { TransformControls } from 'three/addons/controls/TransformControls.js';
 import { brushOf, worldBrushes, type ShapeOptions } from '../brush/brushes';
@@ -11,7 +11,7 @@ import { BrushDraft, draftAxes, type DraftState } from './brush-draft';
 import { CameraRig, type ViewKind } from './camera';
 import { EditorGrid } from './grid';
 import { buildMarker, disposeMarker, markerKey, setMarkerSelected, type Marker } from './markers';
-import { WorldRenderer } from './world-render';
+import { WorldRenderer, type FaceRef } from './world-render';
 
 export interface ViewportCallbacks {
   select(ids: string[], mode: 'replace' | 'toggle'): void;
@@ -25,6 +25,8 @@ export interface ViewportCallbacks {
   draft(state: DraftState | null): void;
   createBrush(min: V3, max: V3): void;
   cancelTool(): void;
+  /** Face tool click: `null` clicks empty space; `cut` is a surface made by a live cut (not editable). */
+  selectFace(ref: FaceRef | null, mode: 'replace' | 'toggle' | 'brush', cut?: boolean): void;
 }
 
 export interface ViewportStats {
@@ -65,6 +67,7 @@ export class ViewportEngine {
   private snap = true;
   private gizmoMode: GizmoMode = 'none';
   private brushTool = false;
+  private faceTool = false;
   private shapeOpts: ShapeOptions = { shape: 'box', sides: 16, steps: 8, facing: 0 };
   private brushRole: 'solid' | 'subtract' = 'solid';
   private draft: BrushDraft | null = null;
@@ -185,6 +188,20 @@ export class ViewportEngine {
   setGizmoMode(mode: GizmoMode): void {
     this.gizmoMode = mode;
     this.applySelection();
+    this.invalidate();
+  }
+
+  setFaceTool(active: boolean): void {
+    if (this.faceTool === active) return;
+    this.faceTool = active;
+    if (!active) this.world.setFaceSelection([]);
+    this.renderer.domElement.style.cursor = active ? 'pointer' : '';
+    this.applySelection();
+    this.invalidate();
+  }
+
+  setFaceSelection(refs: FaceRef[]): void {
+    this.world.setFaceSelection(this.faceTool ? refs : []);
     this.invalidate();
   }
 
@@ -330,7 +347,7 @@ export class ViewportEngine {
     const id = this.selection.length === 1 ? this.selection[0]! : null;
     const ent = id ? this.doc?.get(id) : undefined;
     let target: THREE.Object3D | null = null;
-    if (ent && ent.visible && !ent.locked && this.gizmoMode !== 'none' && !this.brushTool) {
+    if (ent && ent.visible && !ent.locked && this.gizmoMode !== 'none' && !this.brushTool && !this.faceTool) {
       if (ent.components.brush) {
         if (!this.brushDrag) this.placeBrushProxy();
         target = this.brushProxy;
@@ -510,6 +527,18 @@ export class ViewportEngine {
     return w?.entityId ?? null;
   }
 
+  /** The brush face under the cursor (level brushes only; markers are ignored in the face tool). */
+  private pickFace(e: { clientX: number; clientY: number }): { ref: FaceRef | null; cut: boolean } | null {
+    this.raycaster.setFromCamera(this.ndc(e), this.rig.camera);
+    // Subtract volumes never appear in the level, so the face tools click straight through them.
+    const hit = this.world.pick(this.raycaster, true);
+    if (!hit || this.doc?.get(hit.entityId)?.locked) return null;
+    const wb = this.world.brush(hit.entityId);
+    if (!wb) return null;
+    const face = faceAt(wb.brush, [hit.point.x, hit.point.y, hit.point.z], [hit.normal.x, hit.normal.y, hit.normal.z], 0.05);
+    return face < 0 ? { ref: null, cut: true } : { ref: { id: hit.entityId, face }, cut: false };
+  }
+
   private onPointerDown = (e: PointerEvent): void => {
     const el = this.renderer.domElement;
     el.focus();
@@ -611,7 +640,11 @@ export class ViewportEngine {
       return;
     }
     if (d.moved) return;
-    if (d.mode === 'click') {
+    if (d.mode === 'click' && this.faceTool) {
+      const mode = e.shiftKey ? 'brush' : e.ctrlKey || e.metaKey ? 'toggle' : 'replace';
+      const hit = this.pickFace(e);
+      this.cb.selectFace(hit?.ref ?? null, mode, hit?.cut);
+    } else if (d.mode === 'click') {
       const id = this.pick(e);
       const additive = e.ctrlKey || e.metaKey || e.shiftKey;
       this.cb.select(id ? [id] : [], additive ? 'toggle' : 'replace');

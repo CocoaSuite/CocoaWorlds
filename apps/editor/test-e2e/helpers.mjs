@@ -63,3 +63,23 @@ export async function setField(page, label, value) {
   await f.fill(String(value));
   await f.press('Enter');
 }
+
+/** Drag out a brush footprint in the middle of the viewport (brush tool must be active). */
+export async function drawBrush(page) {
+  const box = await page.getByTestId('viewport').boundingBox();
+  const cx = box.x + box.width / 2;
+  const cy = box.y + box.height / 2;
+  await page.mouse.move(cx - 60, cy - 40);
+  await page.mouse.down();
+  await page.mouse.move(cx + 40, cy + 40, { steps: 8 });
+  await page.mouse.up();
+  await page.getByRole('group', { name: 'Brush tool' }).getByRole('button', { name: 'Create' }).waitFor();
+}
+
+export async function setDraft(page, size, corner) {
+  const panel = page.getByRole('group', { name: 'Brush tool' });
+  for (const [i, a] of ['X', 'Y', 'Z'].entries()) {
+    await setField(panel, `Size ${a}`, size[i]);
+    await setField(panel, `Corner ${a}`, corner[i]);
+  }
+}

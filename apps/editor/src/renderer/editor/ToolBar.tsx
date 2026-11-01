@@ -41,11 +41,11 @@ export function ToolBar() {
       {B('stairs', 'stairs', t('tool.stairs'))}
       <Divider />
       <ToolButton icon="vertex" label={later('tool.vertex')} disabled />
-      <ToolButton icon="face" label={later('tool.face')} disabled />
+      {T('face', 'face', t('tool.face'), 'T')}
       <ToolButton icon="clip" label={later('tool.clip')} disabled />
       <Divider />
       <ToolButton icon="trigger" label={`${t('tool.trigger')} — ${t('soon')}`} disabled />
-      <ToolButton icon="paint" label={later('tool.material')} disabled />
+      {T('paint', 'paint', t('tool.paint'), 'P')}
       <Divider />
       <button type="button" className={`cw-snap${snap ? ' on' : ''}`} aria-pressed={snap} title="Grid snapping (G)" onClick={() => toggle('snap')}>
         {t('grid.snap')} {snap ? `${grid}u` : t('grid.off')}

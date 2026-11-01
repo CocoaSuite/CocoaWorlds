@@ -21,6 +21,10 @@ import {
 import {
   bakeSubtract,
   bounds,
+  fitSurface,
+  justifySurface,
+  setSurface,
+  type SurfacePatch,
   hollowBox,
   type HollowDirection,
   mergeAll,
@@ -33,9 +37,13 @@ import { create } from 'zustand';
 import { brushComponent, brushOf, newBrushEntity, shapeBrushes, shapeName, worldBrushes, type ShapeOptions } from './brush/brushes';
 import { useShallow } from 'zustand/react/shallow';
 import type { OpenedProject } from '../shared/api';
+import { DEV_TEXTURE_SIZE } from './brush/materials';
+import type { FaceRef } from './viewport/world-render';
 import { getLang, setLang, t, type Lang } from './i18n';
 
-export type Tool = 'select' | 'move' | 'rotate' | 'scale' | 'brush';
+export type Tool = 'select' | 'move' | 'rotate' | 'scale' | 'brush' | 'face' | 'paint';
+export type { FaceRef };
+export type Justify = 'left' | 'right' | 'top' | 'bottom' | 'center';
 export type ViewMode = 'perspective' | 'top' | 'front' | 'side';
 export type AddKind = 'empty' | 'pointLight' | 'spotLight' | 'sun' | 'spawn';
 export interface LogEntry {
@@ -74,6 +82,10 @@ interface State {
   /** Settings for the brush tool. */
   brushOptions: ShapeOptions;
   brushRole: BrushRole;
+  /** Faces chosen with the face tool. */
+  faceSelection: FaceRef[];
+  /** Material the paint tool applies. */
+  paintMaterial: string;
 }
 
 interface Actions {
@@ -112,6 +124,13 @@ interface Actions {
   applySubtract(ids: string[]): void;
   makeHollow(id: string, thickness: number, direction?: HollowDirection): void;
   mergeSelection(): void;
+  // faces
+  selectFace(ref: FaceRef | null, mode?: 'replace' | 'toggle' | 'brush', cut?: boolean): void;
+  selectAllFaces(): void;
+  setFaces(patch: SurfacePatch, mergeKey?: string, label?: string): void;
+  fitFaces(repeat?: [number, number]): void;
+  justifyFaces(side: Justify): void;
+  setPaintMaterial(id: string): void;
 }
 
 const now = () => new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
@@ -150,6 +169,8 @@ export const useEditor = create<State & Actions>()((set, get) => ({
   focusRequest: 0,
   brushOptions: { shape: 'box', sides: 16, steps: 8, facing: 0 },
   brushRole: 'solid',
+  faceSelection: [],
+  paintMaterial: 'dev/wall',
 
   setLang(l) {
     setLang(l);
@@ -164,6 +185,10 @@ export const useEditor = create<State & Actions>()((set, get) => ({
     unsubDoc = doc.subscribe((c) => {
       // Drop selected ids that no longer exist.
       if (c.kind === 'removed') set((s) => ({ selection: s.selection.filter((id) => doc.get(id)) }));
+      set((s) => {
+        const keep = s.faceSelection.filter((r) => r.face < (brushOf(doc.get(r.id))?.brush.faces.length ?? 0));
+        return keep.length === s.faceSelection.length ? {} : { faceSelection: keep };
+      });
       set((s) => ({ rev: s.rev + 1 }));
     });
     unsubHist = history.subscribe(() => {
@@ -176,6 +201,8 @@ export const useEditor = create<State & Actions>()((set, get) => ({
       doc,
       history,
       selection: [],
+      faceSelection: [],
+      tool: 'select',
       dirty: false,
       recovery: o.recovery,
       rev: get().rev + 1,
@@ -192,7 +219,7 @@ export const useEditor = create<State & Actions>()((set, get) => ({
     unsubDoc = unsubHist = null;
     window.cocoa.window.setDirty(false);
     window.cocoa.window.setTitle('CocoaWorlds');
-    set({ session: null, doc: null, selection: [], dirty: false, recovery: null, history: new History() });
+    set({ session: null, doc: null, selection: [], faceSelection: [], dirty: false, recovery: null, history: new History() });
   },
 
   log(level, source, text) {
@@ -217,7 +244,7 @@ export const useEditor = create<State & Actions>()((set, get) => ({
     if (doc) set({ selection: doc.entities.filter((e) => e.visible && !e.locked).map((e) => e.id) });
   },
 
-  setTool: (tool) => set({ tool }),
+  setTool: (tool) => set((s) => (tool === 'face' || s.tool !== 'face' ? { tool } : { tool, faceSelection: [] })),
   setView: (view) => set({ view }),
   toggle: (k) => set((s) => ({ [k]: !s[k] }) as Partial<State>),
 
@@ -487,6 +514,74 @@ export const useEditor = create<State & Actions>()((set, get) => ({
     set({ selection: ents.map((e) => e.id) });
     get().log('info', 'Brush', `Merged ${solids.length} brushes into ${merged.length}`);
   },
+
+  selectFace(ref, mode = 'replace', cut = false) {
+    const st = get();
+    const doc = st.doc;
+    if (!doc) return;
+    if (st.tool === 'paint') {
+      if (!ref) {
+        if (cut) st.notify(t('face.cutSurface'));
+        return;
+      }
+      const b = brushOf(doc.get(ref.id));
+      if (!b) return;
+      if (mode === 'toggle') {
+        // Ctrl+click picks up the material under the cursor.
+        const m = b.brush.faces[ref.face]?.surface.material;
+        if (m) set({ paintMaterial: m });
+        return;
+      }
+      st.setBrush(ref.id, setSurface(b.brush, { material: st.paintMaterial }, mode === 'brush' ? undefined : [ref.face]), undefined, 'Paint');
+      return;
+    }
+    if (!ref) {
+      if (cut) st.notify(t('face.cutSurface'));
+      if (mode === 'replace') set({ faceSelection: [], selection: [] });
+      return;
+    }
+    const same = (a: FaceRef, b: FaceRef) => a.id === b.id && a.face === b.face;
+    let next: FaceRef[];
+    if (mode === 'brush') {
+      const n = brushOf(doc.get(ref.id))?.brush.faces.length ?? 0;
+      const all = Array.from({ length: n }, (_, face) => ({ id: ref.id, face }));
+      next = [...st.faceSelection.filter((r) => r.id !== ref.id), ...all];
+    } else if (mode === 'toggle') {
+      next = st.faceSelection.some((r) => same(r, ref)) ? st.faceSelection.filter((r) => !same(r, ref)) : [...st.faceSelection, ref];
+    } else {
+      next = [ref];
+    }
+    set({ faceSelection: next, selection: [...new Set(next.map((r) => r.id))] });
+  },
+
+  selectAllFaces() {
+    const st = get();
+    const doc = st.doc;
+    if (!doc) return;
+    const ids = st.selection.length ? st.selection : [...new Set(st.faceSelection.map((r) => r.id))];
+    const next: FaceRef[] = [];
+    for (const id of ids) {
+      const b = brushOf(doc.get(id));
+      if (b) for (let face = 0; face < b.brush.faces.length; face++) next.push({ id, face });
+    }
+    set({ faceSelection: next, selection: [...new Set(next.map((r) => r.id))] });
+  },
+
+  setFaces(patch, mergeKey, label = 'Edit faces') {
+    applyToFaces(get, (b, faces) => setSurface(b, patch, faces), label, mergeKey);
+  },
+
+  fitFaces(repeat = [1, 1]) {
+    applyToFaces(get, (b, faces) => fitSurface(b, faces, DEV_TEXTURE_SIZE, repeat), 'Fit texture');
+  },
+
+  justifyFaces(side) {
+    applyToFaces(get, (b, faces) => justifySurface(b, faces, side, DEV_TEXTURE_SIZE), 'Align texture');
+  },
+
+  setPaintMaterial(id) {
+    set({ paintMaterial: id });
+  },
 }));
 
 const selectedEntities = (s: State): EntityData[] =>
@@ -496,4 +591,26 @@ const selectedEntities = (s: State): EntityData[] =>
 export function useSelectedEntities(): EntityData[] {
   useEditor((s) => s.rev);
   return useEditor(useShallow(selectedEntities));
+}
+
+/** Change the selected faces on every brush they belong to, as one undo step (merging with `mergeKey` while scrubbing). */
+function applyToFaces(get: () => State & Actions, fn: (b: Brush, faces: number[]) => Brush, label: string, mergeKey?: string): void {
+  const st = get();
+  const doc = st.doc;
+  if (!doc || !st.faceSelection.length) return;
+  const byId = new Map<string, number[]>();
+  for (const r of st.faceSelection) byId.set(r.id, [...(byId.get(r.id) ?? []), r.face]);
+  const cmds: Command[] = [];
+  for (const [id, faces] of byId) {
+    const cur = brushOf(doc.get(id));
+    if (!cur || doc.get(id)?.locked) continue;
+    cmds.push(setComponentCmd(doc, id, 'brush', brushComponent(fn(cur.brush, faces), cur.role) as never, label));
+  }
+  if (!cmds.length) return;
+  st.execute({
+    label,
+    mergeKey,
+    apply: () => cmds.forEach((c) => c.apply()),
+    revert: () => [...cmds].reverse().forEach((c) => c.revert()),
+  });
 }

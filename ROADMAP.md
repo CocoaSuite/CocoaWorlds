@@ -47,11 +47,13 @@ Order may shift where dependencies require it (for example, the project format f
 - [x] Live subtract brushes, Apply cut (bake), Make hollow, Merge, numeric size and centre, move/rotate/scale brushes with the gizmo (texture lock on move)
 - [ ] Polygon prism drawing (custom footprint)
 - [ ] Move level geometry building into a worker
-- [ ] Vertex, edge and face editing tools; clip tool
-- [ ] Face selection, per-face materials and UV controls
+- [x] Make hollow: walls inward or outward
+- [x] Face tool: face selection, per-face materials, texture alignment (offset, scale, rotation, World/Face, Fit, line up)
+- [x] Paint tool with built-in development materials
+- [ ] Vertex and edge editing tools; clip tool
 - [ ] Subtract/union/intersect commands with undo
 - [ ] Spatial index for picking, culling and fast hidden-face removal
 
 ## Next
 
-Rest of Phase 3: face selection with per-face materials and UV controls, vertex/edge editing, the clip tool, polygon prisms, then the spatial index and worker-based rebuilds. Phase 2 leftovers (multi-object transforms, box selection) come with face selection.
+Rest of Phase 3: vertex/edge editing, the clip tool, polygon prisms, then the spatial index and worker-based rebuilds. Phase 2 leftovers (multi-object transforms, box selection) come next to vertex editing.

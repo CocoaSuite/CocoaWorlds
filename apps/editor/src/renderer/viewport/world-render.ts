@@ -2,31 +2,27 @@
  * Draws level brushes: solids (after live subtract) as one lit mesh per material, subtract brushes as orange
  * see-through volumes, and outlines for selected brushes. Rebuilt whenever brushes change.
  */
-import { buildMesh, buildWorld, edges, type Brush, type BrushMesh, type WorldBrush } from '@cocoaworlds/geometry';
+import { buildMesh, buildWorld, edges, polygons, samePlane, type Brush, type BrushMesh, type WorldBrush } from '@cocoaworlds/geometry';
 import * as THREE from 'three';
+import { DEV_TEXTURE_SIZE, devMaterial, paintDevTexture } from '../brush/materials';
 
-const TEX_SIZE = 256;
+const TEX_SIZE = DEV_TEXTURE_SIZE;
 
-/** The built-in "dev/grid" texture: light grey with a line every 16 units and a stronger edge every 64 (at 0.25 u/texel). */
-function devGridTexture(base: string, minor: string, major: string): THREE.CanvasTexture {
+function devTexture(base: string): THREE.CanvasTexture {
   const c = document.createElement('canvas');
   c.width = c.height = TEX_SIZE;
-  const g = c.getContext('2d')!;
-  g.fillStyle = base;
-  g.fillRect(0, 0, TEX_SIZE, TEX_SIZE);
-  g.fillStyle = minor;
-  for (let i = 0; i < TEX_SIZE; i += 64) {
-    g.fillRect(i, 0, 2, TEX_SIZE);
-    g.fillRect(0, i, TEX_SIZE, 2);
-  }
-  g.fillStyle = major;
-  g.fillRect(0, 0, 4, TEX_SIZE);
-  g.fillRect(0, 0, TEX_SIZE, 4);
+  paintDevTexture(c.getContext('2d')!, base, TEX_SIZE);
   const t = new THREE.CanvasTexture(c);
   t.wrapS = t.wrapT = THREE.RepeatWrapping;
   t.colorSpace = THREE.SRGBColorSpace;
   t.anisotropy = 4;
   return t;
+}
+
+/** A selected face: the brush entity and the index of the face in its saved face list. */
+export interface FaceRef {
+  id: string;
+  face: number;
 }
 
 function hashColor(name: string): THREE.Color {
@@ -48,6 +44,12 @@ export class WorldRenderer {
   private triangleOwner: string[] = [];
   private subtractGroup = new THREE.Group();
   private outlineGroup = new THREE.Group();
+  private faceGroup = new THREE.Group();
+  private faceFillMat = new THREE.MeshBasicMaterial({ color: 0x4b9cff, transparent: true, opacity: 0.28, depthWrite: false, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
+  private faceEdgeMat = new THREE.LineBasicMaterial({ color: 0x4b9cff, transparent: true, opacity: 1, depthTest: false });
+  /** Rendered pieces (after live subtract) of each solid, for highlighting faces as they are seen. */
+  private piecesById = new Map<string, Brush[]>();
+  private faceRefs: FaceRef[] = [];
   private materials = new Map<string, THREE.Material>();
   private subtractMat = new THREE.MeshBasicMaterial({ color: 0xf0a442, transparent: true, opacity: 0.12, depthWrite: false, side: THREE.DoubleSide });
   private subtractEdgeMat = new THREE.LineBasicMaterial({ color: 0xf0a442, transparent: true, opacity: 0.9 });
@@ -60,16 +62,17 @@ export class WorldRenderer {
 
   constructor() {
     this.group.name = 'world';
-    this.group.add(this.subtractGroup, this.outlineGroup);
+    this.group.add(this.subtractGroup, this.outlineGroup, this.faceGroup);
     this.outlineGroup.renderOrder = 10;
+    this.faceGroup.renderOrder = 12;
   }
 
   private material(name: string): THREE.Material {
     let m = this.materials.get(name);
     if (m) return m;
-    if (name === 'dev/grid') {
-      const tex = devGridTexture('#a3a3a3', '#8c8c8c', '#7a7a7a');
-      m = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.9, metalness: 0 });
+    const dev = devMaterial(name);
+    if (dev) {
+      m = new THREE.MeshStandardMaterial({ map: devTexture(dev.base), roughness: 0.9, metalness: 0 });
     } else {
       m = new THREE.MeshStandardMaterial({ color: hashColor(name), roughness: 0.9 });
     }
@@ -83,9 +86,13 @@ export class WorldRenderer {
     const world = buildWorld(brushes);
     const pieces: Brush[] = [];
     const owners: string[] = [];
-    for (const s of world.solids) for (const p of s.pieces) {
-      pieces.push(p);
-      owners.push(s.id);
+    this.piecesById = new Map();
+    for (const s of world.solids) {
+      this.piecesById.set(s.id, s.pieces);
+      for (const p of s.pieces) {
+        pieces.push(p);
+        owners.push(s.id);
+      }
     }
     this.stats = {
       solids: world.solids.length,
@@ -118,6 +125,39 @@ export class WorldRenderer {
       mesh.userData.entityId = b.id;
       this.subtractGroup.add(mesh, edgeLines(b.brush, this.subtractEdgeMat));
     }
+    this.setFaceSelection(this.faceRefs);
+  }
+
+  /** Highlight faces: the parts of each face that are actually visible (a cut wall shows its doorway). */
+  setFaceSelection(refs: FaceRef[]): void {
+    this.faceRefs = refs;
+    clear(this.faceGroup);
+    for (const r of refs) {
+      const wb = this.brushById.get(r.id);
+      const face = wb?.brush.faces[r.face];
+      if (!wb || !face) continue;
+      const sources = wb.role === 'solid' ? (this.piecesById.get(r.id) ?? [wb.brush]) : [wb.brush];
+      for (const piece of sources) {
+        for (const poly of polygons(piece)) {
+          if (!samePlane(poly.plane, face.plane)) continue;
+          const pts = poly.points;
+          const pos = new Float32Array(pts.length * 3);
+          pts.forEach((p, i) => pos.set(p, i * 3));
+          const idx: number[] = [];
+          for (let i = 1; i + 1 < pts.length; i++) idx.push(0, i, i + 1);
+          const g = new THREE.BufferGeometry();
+          g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+          g.setIndex(idx);
+          const fill = new THREE.Mesh(g, this.faceFillMat);
+          fill.renderOrder = 12;
+          const lg = new THREE.BufferGeometry();
+          lg.setAttribute('position', new THREE.BufferAttribute(pos.slice(), 3));
+          const line = new THREE.LineLoop(lg, this.faceEdgeMat);
+          line.renderOrder = 13;
+          this.faceGroup.add(fill, line);
+        }
+      }
+    }
   }
 
   setSelection(ids: string[]): void {
@@ -130,8 +170,8 @@ export class WorldRenderer {
     }
   }
 
-  /** Nearest brush under the ray (solids and subtract volumes). */
-  pick(ray: THREE.Raycaster): WorldPick | null {
+  /** Nearest brush under the ray (solids and, unless `solidsOnly`, subtract volumes). */
+  pick(ray: THREE.Raycaster, solidsOnly = false): WorldPick | null {
     let best: WorldPick | null = null;
     if (this.solidMesh) {
       const hit = ray.intersectObject(this.solidMesh, false)[0];
@@ -140,7 +180,7 @@ export class WorldRenderer {
         if (id) best = { entityId: id, point: hit.point, normal: hit.face?.normal.clone() ?? new THREE.Vector3(0, 1, 0), distance: hit.distance };
       }
     }
-    for (const o of this.subtractGroup.children) {
+    if (!solidsOnly) for (const o of this.subtractGroup.children) {
       if (!(o instanceof THREE.Mesh)) continue;
       const hit = ray.intersectObject(o, false)[0];
       if (hit && (!best || hit.distance < best.distance)) {
@@ -162,6 +202,7 @@ export class WorldRenderer {
     this.solidMesh?.geometry.dispose();
     clear(this.subtractGroup);
     clear(this.outlineGroup);
+    clear(this.faceGroup);
     for (const m of this.materials.values()) {
       (m as THREE.MeshStandardMaterial).map?.dispose();
       m.dispose();
@@ -200,6 +241,6 @@ export function edgeLines(b: Brush, mat: THREE.LineBasicMaterial, onTop = false)
 function clear(g: THREE.Group): void {
   for (const c of [...g.children]) {
     g.remove(c);
-    if (c instanceof THREE.Mesh || c instanceof THREE.LineSegments) c.geometry.dispose();
+    if (c instanceof THREE.Mesh || c instanceof THREE.Line) c.geometry.dispose();
   }
 }

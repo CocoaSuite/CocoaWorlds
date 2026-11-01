@@ -38,6 +38,7 @@ Each face is saved as **three points on its plane** plus its surface (the same i
 | **Subtract (carve)** | `carve` / `carveDetailed` | See below. |
 | Intersect | `intersect` | The shared volume. |
 | Union | `mergeConvex`, `mergeAll` | Merges only when the result is convex; otherwise brushes stay a group. |
+| Face surfaces | `faceAt`, `setSurface`, `fitSurface`, `justifySurface` | Find the face under a point; change material and texture alignment of chosen faces; fit a texture to a face; line it up with an edge or the centre. Planes are never touched, so the shape can't change. |
 | Validation | `validate` | too few faces, not closed, thinner than 0.5 u, beyond ±65 536 u, non-finite. |
 
 ### How carve works

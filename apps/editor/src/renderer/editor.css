@@ -114,3 +114,16 @@ code { font: 12px var(--mono); color: var(--fg); }
 .cw-brush-hint { color: var(--mute); font-size: 12px; }
 .cw-brush-actions { align-items: center; justify-content: space-between; margin-top: 4px; }
 .cw-insp .cw-seg { justify-self: start; }
+
+/* Face tool and materials */
+.cw-f2 { display: grid; grid-template-columns: 72px repeat(2, minmax(0, 1fr)); gap: 6px; align-items: center; }
+.cw-f2 > span:first-child { color: var(--mute); }
+.cw-mat-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(30px, 1fr)); gap: 5px; }
+.cw-mat { padding: 2px; border-radius: 6px; border: 1px solid var(--line); background: var(--bg); aspect-ratio: 1; min-width: 0; }
+.cw-mat:hover { border-color: var(--mute); }
+.cw-mat.on { border-color: var(--sel); box-shadow: 0 0 0 1px var(--sel); }
+.cw-mat-sw { display: block; width: 100%; height: 100%; border-radius: 4px; }
+.cw-face-actions, .cw-face-justify { flex-wrap: wrap; gap: 5px; }
+.cw-face-justify > button { padding: 4px 7px; font-size: 12px; }
+.cw-paint-panel { width: min(520px, calc(100% - 24px)); }
+.cw-paint-panel .cw-mat-grid { grid-template-columns: repeat(9, 34px); }

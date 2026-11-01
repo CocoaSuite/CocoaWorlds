@@ -3,19 +3,22 @@ import type { EntityData, Transform, Vec3 } from '@cocoaworlds/core';
 import { Field, NumberField, PanelHeader, Section, Switch } from '@cocoaworlds/ui';
 import { t } from '../i18n';
 import { BrushInspector, MultiBrushActions } from './BrushInspector';
+import { FaceInspector } from './FaceInspector';
 import { useSelectedEntities, useEditor } from '../store';
 
 export function Inspector() {
   useEditor((s) => s.rev);
   const sel = useSelectedEntities();
+  const faceTool = useEditor((s) => s.tool === 'face');
   const kind = sel.length === 1 ? componentLabel(sel[0]!) : sel.length > 1 ? `${sel.length}` : '';
   return (
     <aside className="cw-side cw-right" aria-label={t('insp.title')}>
       <PanelHeader title={t('insp.title')}>{kind && <span className="cw-ph-note">{kind}</span>}</PanelHeader>
       <div className="cw-insp cw-scroll">
-        {sel.length === 0 && <SceneSettings />}
-        {sel.length === 1 && (sel[0]!.components.brush ? <BrushEntity e={sel[0]!} /> : <EntityInspector e={sel[0]!} />)}
-        {sel.length > 1 && (
+        {faceTool && <FaceInspector />}
+        {!faceTool && sel.length === 0 && <SceneSettings />}
+        {!faceTool && sel.length === 1 && (sel[0]!.components.brush ? <BrushEntity e={sel[0]!} /> : <EntityInspector e={sel[0]!} />)}
+        {!faceTool && sel.length > 1 && (
           <>
             <p className="cw-empty">
               {sel.length} {t('insp.multi')}

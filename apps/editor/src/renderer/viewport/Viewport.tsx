@@ -7,6 +7,7 @@ import { t } from '../i18n';
 import { useSelectedEntities, useEditor, type ViewMode } from '../store';
 import type { DraftState } from './brush-draft';
 import { BrushPanel } from './BrushPanel';
+import { PaintPanel } from './PaintPanel';
 import { ViewportEngine, type ViewportStats } from './engine';
 
 export function Viewport() {
@@ -22,6 +23,7 @@ export function Viewport() {
   const doc = useEditor((s) => s.doc);
   const rev = useEditor((s) => s.rev);
   const selection = useEditor((s) => s.selection);
+  const faceSelection = useEditor((s) => s.faceSelection);
   const tool = useEditor((s) => s.tool);
   const view = useEditor((s) => s.view);
   const snap = useEditor((s) => s.snap);
@@ -44,6 +46,7 @@ export function Viewport() {
         draft: setDraft,
         createBrush: (min, max) => useEditor.getState().createBrushes(min, max),
         cancelTool: () => useEditor.getState().setTool('select'),
+        selectFace: (ref, mode, cut) => useEditor.getState().selectFace(ref, mode, cut),
         endEdit: () => useEditor.getState().commit(),
         contextMenu: (x, y, ground) => setCtx({ x, y, ground }),
         stats: setStats,
@@ -73,11 +76,17 @@ export function Viewport() {
     engine.current?.setSelection(selection);
   }, [selection]);
   useEffect(() => {
-    engine.current?.setGizmoMode(tool === 'select' || tool === 'brush' ? 'none' : tool === 'move' ? 'translate' : tool);
+    engine.current?.setGizmoMode(tool === 'select' || tool === 'brush' || tool === 'face' || tool === 'paint' ? 'none' : tool === 'move' ? 'translate' : tool);
   }, [tool]);
   useEffect(() => {
     engine.current?.setBrushTool(tool === 'brush', brushOptions, brushRole);
   }, [tool, brushOptions, brushRole]);
+  useEffect(() => {
+    engine.current?.setFaceTool(tool === 'face' || tool === 'paint');
+  }, [tool]);
+  useEffect(() => {
+    engine.current?.setFaceSelection(faceSelection);
+  }, [faceSelection, tool]);
   useEffect(() => {
     engine.current?.setView(view);
   }, [view]);
@@ -158,6 +167,7 @@ export function Viewport() {
           onCancel={() => engine.current?.cancelDraft()}
         />
       )}
+      {tool === 'paint' && <PaintPanel />}
       {ctx && <ContextMenu x={ctx.x} y={ctx.y} items={ctxItems} onClose={() => setCtx(null)} />}
     </div>
   );

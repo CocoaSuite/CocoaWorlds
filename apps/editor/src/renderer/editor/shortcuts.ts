@@ -13,6 +13,10 @@ export const SHORTCUTS: { label: string; keys: string[] }[] = [
   { label: 'Rotate tool', keys: ['E'] },
   { label: 'Scale tool', keys: ['R'] },
   { label: 'Brush tool (draw, set height, click or Enter)', keys: ['B'] },
+  { label: 'Face tool (select faces, edit texture alignment)', keys: ['T'] },
+  { label: 'Faces: add or remove / whole brush', keys: [`${mod}+click`, 'Shift+click'] },
+  { label: 'Paint tool (click faces to apply a material)', keys: ['P'] },
+  { label: 'Paint: pick up a material', keys: [`${mod}+click`] },
   { label: 'Perspective / Top / Front / Side', keys: ['1', '2', '3', '4'] },
   { label: 'Frame selected', keys: ['F'] },
   { label: 'Look around (perspective)', keys: ['Right-drag', 'W A S D'] },
@@ -56,7 +60,7 @@ export function useShortcuts(openKeys: () => void): void {
         if (k === 'y') return run(s.redo);
         if (k === 's') return run(() => void s.save());
         if (k === 'd') return run(s.duplicateSelection);
-        if (k === 'a') return run(s.selectAll);
+        if (k === 'a') return run(s.tool === 'face' ? s.selectAllFaces : s.selectAll);
         return;
       }
       if (flyState.active) return;
@@ -73,6 +77,10 @@ export function useShortcuts(openKeys: () => void): void {
         case 'KeyB':
           s.setBrushOptions({ shape: 'box' });
           return s.setTool('brush');
+        case 'KeyT':
+          return s.setTool('face');
+        case 'KeyP':
+          return s.setTool('paint');
         case 'KeyF':
           return s.frameSelection();
         case 'KeyG':
@@ -94,8 +102,11 @@ export function useShortcuts(openKeys: () => void): void {
         case 'Delete':
         case 'Backspace':
           e.preventDefault();
+          // Faces can't be deleted on their own; don't delete the whole brush by surprise.
+          if (s.tool === 'face' || s.tool === 'paint') return;
           return s.deleteSelection();
         case 'Escape':
+          if (s.tool === 'face' && s.faceSelection.length) return s.selectFace(null);
           if (s.tool !== 'select') return s.setTool('select');
           return s.select([]);
       }

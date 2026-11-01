@@ -186,7 +186,8 @@ export function Field({ label, children }: { label: string; children: ReactNode 
   );
 }
 
-const fmt = (v: number) => String(Math.round(v * 1000) / 1000);
+/** Non-finite values (e.g. several objects that disagree) show as an empty field with a dash placeholder. */
+const fmt = (v: number) => (Number.isFinite(v) ? String(Math.round(v * 1000) / 1000) : '');
 
 /**
  * Number input with a draggable label (CocoaCanvas `.nf`). Dragging the label scrubs the value;
@@ -223,7 +224,7 @@ export function NumberField({
     lastCommitted.current = value;
   }, [value]);
   const commitText = () => {
-    const n = Number(text.replace(',', '.'));
+    const n = text.trim() === '' ? NaN : Number(text.replace(',', '.'));
     if (Number.isFinite(n) && n !== lastCommitted.current) {
       lastCommitted.current = n;
       onCommit(n);
@@ -233,7 +234,7 @@ export function NumberField({
   const scrub = (e: RPointerEvent<HTMLSpanElement>) => {
     e.preventDefault();
     const start = e.clientX;
-    const v0 = value;
+    const v0 = Number.isFinite(value) ? value : 0;
     let last = v0;
     onBegin?.();
     const el = e.currentTarget;
@@ -261,6 +262,7 @@ export function NumberField({
         className="cw-input"
         aria-label={ariaLabel}
         inputMode="decimal"
+        placeholder="—"
         value={text}
         onFocus={(e) => {
           setFocused(true);
