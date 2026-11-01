@@ -4,7 +4,7 @@
  *
  * Layout is in reference pixels of a 720-high screen, scaled to the real height (see core/ui.ts).
  */
-import { UI_REF_H, fillText, uiOffset, uiRect, type ItemDef, type UiElement, type UiSettings } from '@cocoaworlds/core';
+import { UI_REF_H, fillText, uiOffset, uiRects, uiShown, type ItemDef, type UiElement, type UiSettings } from '@cocoaworlds/core';
 import { useEffect, useRef, useState, type CSSProperties, type PointerEvent as RPointerEvent } from 'react';
 import { assetUrl } from '../assets';
 
@@ -13,6 +13,7 @@ export interface UiLive {
   shown: string[];
   hidden: string[];
   texts: Record<string, string>;
+  lists: Record<string, string[]>;
   inventory: { item: string; count: number }[];
   slot: number;
 }
@@ -59,6 +60,7 @@ export function UiLayer({
   values,
   edit,
   onClick,
+  onRow,
   className = '',
 }: {
   ui: UiSettings;
@@ -67,6 +69,8 @@ export function UiLayer({
   values: Record<string, unknown>;
   edit?: UiEditing;
   onClick?: (id: string) => void;
+  /** The player picked a row of a list. */
+  onRow?: (list: string, row: string) => void;
   className?: string;
 }) {
   const host = useRef<HTMLDivElement>(null);
@@ -78,29 +82,19 @@ export function UiLayer({
     <div ref={host} className={`cw-ui${edit ? ' editing' : ''} ${className}`} data-testid={edit ? 'ui-stage' : 'ui-layer'} onPointerDown={edit ? () => edit.onSelect(null) : undefined}>
       {w > 0 &&
         screens.map((s) => (
-          <div key={s.id} className="cw-ui-screen" role="group" aria-label={s.name}>
-            {s.elements
-              .filter((e) => (live ? !live.hidden.includes(e.id) : edit || e.visible))
-              .map((e) => (
-                <Element key={e.id} e={e} k={k} refW={refW} items={ui.items} live={live} values={values} edit={edit} onClick={onClick} />
-              ))}
-          </div>
+          <ScreenView key={s.id} name={s.name} elements={s.elements} k={k} refW={refW} items={ui.items} live={live} values={values} edit={edit} onClick={onClick} onRow={onRow} />
         ))}
     </div>
   );
 }
 
-function Element({
-  e,
-  k,
-  refW,
-  items,
-  live,
-  values,
-  edit,
-  onClick,
+function ScreenView({
+  name,
+  elements,
+  ...rest
 }: {
-  e: UiElement;
+  name: string;
+  elements: UiElement[];
   k: number;
   refW: number;
   items: ItemDef[];
@@ -108,9 +102,59 @@ function Element({
   values: Record<string, unknown>;
   edit?: UiEditing;
   onClick?: (id: string) => void;
+  onRow?: (list: string, row: string) => void;
 }) {
-  const r = uiRect(e, refW, UI_REF_H);
-  const style: CSSProperties = { left: r.left * k, top: r.top * k, width: r.width * k, height: r.height * k, fontSize: e.size * k, color: e.color };
+  const rects = uiRects(elements, rest.refW, UI_REF_H);
+  const hidden = (id: string) => (rest.live ? rest.live.hidden.includes(id) : !rest.edit && !elements.find((e) => e.id === id)?.visible);
+  return (
+    <div className="cw-ui-screen" role="group" aria-label={name}>
+      {elements
+        .filter((e) => uiShown(e, elements, hidden))
+        .map((e) => {
+          const p = e.parent ? rects.get(e.parent) : undefined;
+          return <Element key={e.id} e={e} r={rects.get(e.id)!} space={p ?? { left: 0, top: 0, width: rest.refW, height: UI_REF_H }} {...rest} />;
+        })}
+    </div>
+  );
+}
+
+type Box = { left: number; top: number; width: number; height: number };
+
+function Element({
+  e,
+  r,
+  space,
+  k,
+  items,
+  live,
+  values,
+  edit,
+  onClick,
+  onRow,
+}: {
+  e: UiElement;
+  /** Its box, and the box it sits in (its parent's, or the screen). */
+  r: Box;
+  space: Box;
+  k: number;
+  refW: number;
+  items: ItemDef[];
+  live: UiLive | null;
+  values: Record<string, unknown>;
+  edit?: UiEditing;
+  onClick?: (id: string) => void;
+  onRow?: (list: string, row: string) => void;
+}) {
+  const style: CSSProperties = {
+    left: r.left * k,
+    top: r.top * k,
+    width: r.width * k,
+    height: r.height * k,
+    fontSize: e.size * k,
+    color: e.color,
+    justifyContent: e.align === 'left' ? 'flex-start' : e.align === 'right' ? 'flex-end' : 'center',
+    textAlign: e.align,
+  };
   if (e.fill && e.kind !== 'bar' && e.kind !== 'hotbar') style.background = e.fill;
   const text = fillText(live?.texts[e.id] ?? e.text, values);
   const selected = edit?.selected === e.id;
@@ -128,13 +172,15 @@ function Element({
     const snap = (v: number) => (ev.altKey ? v : Math.round(v / 4) * 4);
     const move = (m: PointerEvent) => {
       const dx = (m.clientX - sx) / k, dy = (m.clientY - sy) / k;
+      // (Offsets are within the box it sits in.)
+      const sl = start.left - space.left, st = start.top - space.top;
       if (mode === 'move') {
-        const off = uiOffset(e, snap(start.left + dx), snap(start.top + dy), refW, UI_REF_H);
+        const off = uiOffset(e, snap(sl + dx), snap(st + dy), space.width, space.height);
         edit.onChange(e.id, { x: Math.round(off.x), y: Math.round(off.y) }, key);
       } else {
         const nw = Math.max(8, snap(start.width + dx)), nh = Math.max(8, snap(start.height + dy));
         // Keep the top-left corner where it is.
-        const off = uiOffset({ ...e, w: nw, h: nh }, start.left, start.top, refW, UI_REF_H);
+        const off = uiOffset({ ...e, w: nw, h: nh }, sl, st, space.width, space.height);
         edit.onChange(e.id, { w: nw, h: nh, x: Math.round(off.x), y: Math.round(off.y) }, key);
       }
     };
@@ -196,6 +242,48 @@ function Element({
       return (
         <div {...common} role="meter" aria-label={e.name} aria-valuenow={v} aria-valuemin={0} aria-valuemax={e.max}>
           <span className="cw-ui-bar-fill" style={{ width: `${frac * 100}%`, background: e.fill || '#d94b3d' }} />
+          {handle}
+        </div>
+      );
+    }
+    case 'list': {
+      const inv = e.source === 'inventory';
+      const rows = inv ? (live?.inventory ?? []).map((x) => x.item) : (live?.lists[e.id] ?? e.rows);
+      const counts = new Map((live?.inventory ?? []).map((x) => [x.item, x.count]));
+      const cols = Math.max(1, Math.min(8, Math.round(e.columns)));
+      const held = inv && live ? (live.inventory[live.slot]?.item ?? '') : '';
+      return (
+        <div {...common} role="listbox" aria-label={e.name} onWheel={(ev) => ev.stopPropagation()}>
+          <div className="cw-ui-rows" style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`, gridAutoRows: e.rowHeight * k }}>
+            {rows.map((row, i) => {
+              const def = inv ? (items.find((x) => x.name === row) ?? { name: row, icon: '' }) : null;
+              return (
+                <button
+                  key={`${row}-${i}`}
+                  type="button"
+                  role="option"
+                  aria-selected={held === row}
+                  aria-label={inv ? `${row} ${counts.get(row) ?? 0}` : fillText(row, values)}
+                  className={`cw-ui-row${cols > 1 ? ' tile' : ''}${held === row ? ' on' : ''}`}
+                  tabIndex={edit ? -1 : 0}
+                  style={{ justifyContent: cols > 1 ? 'center' : style.justifyContent }}
+                  onClick={
+                    edit
+                      ? undefined
+                      : (ev) => {
+                          ev.stopPropagation();
+                          onRow?.(e.id, row);
+                        }
+                  }
+                >
+                  {def && <ItemIcon item={def} />}
+                  <span className="cw-ui-row-text">{inv ? row : fillText(row, values)}</span>
+                  {inv && (counts.get(row) ?? 0) > 1 && <span className="cw-ui-row-count">{counts.get(row)}</span>}
+                </button>
+              );
+            })}
+            {inv && edit && <span className="cw-ui-row placeholder">{e.name}</span>}
+          </div>
           {handle}
         </div>
       );

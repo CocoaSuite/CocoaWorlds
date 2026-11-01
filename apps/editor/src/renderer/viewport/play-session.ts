@@ -365,6 +365,16 @@ export class PlaySession {
     this.world.clickUi(id);
   }
 
+  /** The player picked a row of a list on screen. */
+  pickRow(list: string, row: string): void {
+    this.world.pickRow(list, row);
+  }
+
+  /** The player pressed a key the game doesn't use itself. */
+  pressKey(code: string): void {
+    this.world.pressKey(code);
+  }
+
   /** The player clicked with the item in their hand. */
   useItem(): void {
     this.world.useItem();

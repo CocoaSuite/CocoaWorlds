@@ -26,6 +26,7 @@ import {
   type ModelData,
   type UiSettings,
   uiOf,
+  uiShown,
 } from '@cocoaworlds/core';
 import { EventBus } from './events';
 import { DIRECTIONS, ScriptRunner, compileScript, type ActionName, type GameValueDef, type Problem, type Program, type SceneInfo, type Script, type Value } from '@cocoaworlds/scripting';
@@ -43,6 +44,8 @@ export interface UiState {
   hidden: string[];
   /** Texts changed by scripts, by element id. */
   texts: Record<string, string>;
+  /** The rows of lists with their own rows, by element id. */
+  lists: Record<string, string[]>;
   /** What the player carries, in hotbar order. */
   inventory: { item: string; count: number }[];
   /** The picked hotbar slot. */
@@ -227,6 +230,8 @@ export class GameWorld {
   private uiShown = new Set<string>();
   private uiHidden = new Set<string>();
   private uiText = new Map<string, string>();
+  /** The rows of every list that has its own rows (scripts add and remove them). */
+  private uiRows = new Map<string, string[]>();
   /** What the player carries, in the order it was first picked up (the hotbar's order). */
   private inventory = new Map<string, number>();
   /** The hotbar slot the player has picked. */
@@ -240,7 +245,10 @@ export class GameWorld {
     this.ui = uiOf(scene.settings);
     for (const sc of this.ui.screens) {
       if (sc.shownAtStart) this.uiShown.add(sc.id);
-      for (const e of sc.elements) if (!e.visible) this.uiHidden.add(e.id);
+      for (const e of sc.elements) {
+        if (!e.visible) this.uiHidden.add(e.id);
+        if (e.kind === 'list' && e.source === 'rows') this.uiRows.set(e.id, [...e.rows]);
+      }
     }
     this.rules = rules;
     this.valueDefs = values;
@@ -364,10 +372,23 @@ export class GameWorld {
       spawn: (template, place) => this.spawn(template, place),
       isInside: (zone, what) => this.isInside(zone, what),
       showUi: (what, id, show) => {
-        const set = what === 'screen' ? this.uiShown : this.uiHidden;
-        if (show === (what === 'screen')) set.add(id);
-        else set.delete(id);
+        if (what === 'screen') {
+          const on = show === 'toggle' ? !this.uiShown.has(id) : show;
+          if (on) this.uiShown.add(id);
+          else this.uiShown.delete(id);
+        } else if (show === 'toggle' ? this.uiHidden.has(id) : show) this.uiHidden.delete(id);
+        else this.uiHidden.add(id);
       },
+      listRow: (id, text, add) => {
+        const rows = this.uiRows.get(id);
+        if (!rows) return;
+        if (add) rows.push(text);
+        else {
+          const i = rows.indexOf(text);
+          if (i >= 0) rows.splice(i, 1);
+        }
+      },
+      clearList: (id) => void this.uiRows.get(id)?.splice(0),
       setUiText: (id, text) => void this.uiText.set(id, text),
       giveItem: (name, amount) => this.giveItem(name, amount),
       itemCount: (name) => this.inventory.get(name) ?? 0,
@@ -1189,12 +1210,38 @@ export class GameWorld {
     this.slot = ((Math.round(slot) % n) + n) % n;
   }
 
-  /** The player clicked a button on screen: its “When the player clicks” stacks start (if it is shown). */
-  clickUi(element: string): void {
+  /** An element as the player sees it now: on a shown screen, and neither it nor what it is inside hidden. */
+  private uiVisible(element: string): { kind: string; source: string } | null {
     for (const sc of this.ui.screens) {
       const e = sc.elements.find((x) => x.id === element);
-      if (e && e.kind === 'button' && this.uiShown.has(sc.id) && !this.uiHidden.has(e.id)) this.runner.dispatch({ type: 'uiClick', element });
+      if (e && this.uiShown.has(sc.id) && uiShown(e, sc.elements, (id) => this.uiHidden.has(id))) return e;
     }
+    return null;
+  }
+
+  /** The player clicked a button on screen: its “When the player clicks” stacks start (if it is shown). */
+  clickUi(element: string): void {
+    if (this.uiVisible(element)?.kind === 'button') this.runner.dispatch({ type: 'uiClick', element });
+  }
+
+  /**
+   * The player picked a row of a list on screen. In a list of the inventory the row is an item: it is also
+   * taken in hand (its hotbar slot is picked).
+   */
+  pickRow(list: string, row: string): void {
+    const e = this.uiVisible(list);
+    if (e?.kind !== 'list') return;
+    if (e.source === 'inventory') {
+      const i = [...this.inventory.keys()].indexOf(row);
+      if (i < 0) return;
+      this.slot = i;
+    } else if (!this.uiRows.get(list)?.includes(row)) return;
+    this.runner.dispatch({ type: 'listPick', list, row });
+  }
+
+  /** The player pressed a key the game doesn't use itself (letters, Tab): “When the player presses” starts. */
+  pressKey(code: string): void {
+    this.runner.dispatch({ type: 'key', key: code });
   }
 
   /** The player clicked with the item in the picked hotbar slot. */
@@ -1207,10 +1254,13 @@ export class GameWorld {
   uiState(): UiState {
     const texts: Record<string, string> = {};
     for (const [k, v] of this.uiText) texts[k] = v;
+    const lists: Record<string, string[]> = {};
+    for (const [k, v] of this.uiRows) lists[k] = [...v];
     return {
       shown: [...this.uiShown],
       hidden: [...this.uiHidden],
       texts,
+      lists,
       inventory: [...this.inventory].map(([item, count]) => ({ item, count })),
       slot: this.slot,
       freesMouse: this.ui.screens.some((sc) => sc.freesMouse && this.uiShown.has(sc.id)),

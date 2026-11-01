@@ -1,5 +1,5 @@
 import { beforeAll, describe, expect, it } from 'vitest';
-import { fillText, newEntity, newScene, newUiElement, newUiScreen, uiOffset, uiRect, type EntityData, type SceneFile, type UiSettings } from '@cocoaworlds/core';
+import { fillText, newEntity, newScene, newUiElement, newUiScreen, uiOffset, uiRect, uiRects, type EntityData, type SceneFile, type UiSettings } from '@cocoaworlds/core';
 import { compileScript, type Handler, type Script } from '@cocoaworlds/scripting';
 import { GameWorld, initPhysics } from '../src';
 
@@ -138,7 +138,73 @@ describe('screen UI and the inventory', () => {
       'Cash is not a button.',
       'The screen this block points at no longer exists. Pick another one.',
       'There is no item called “Gem”.',
-      'Pick something on a screen (make it in the Screens tab).',
+      'Pick something on a screen (make it in the Screens workspace).',
     ]);
+  });
+
+  it('nesting: an element inside a panel is placed in its box', () => {
+    const panel = { ...newUiElement('panel'), anchor: 'top-left' as const, x: 100, y: 50, w: 400, h: 300 };
+    const close = { ...newUiElement('button'), anchor: 'top-right' as const, x: 10, y: 10, w: 40, h: 40, parent: panel.id };
+    const loop = { ...newUiElement('text'), parent: 'nope' };
+    const r = uiRects([panel, close, loop]);
+    expect(r.get(close.id)).toEqual({ left: 100 + 400 - 50, top: 60, width: 40, height: 40 });
+    expect(r.get(loop.id)!.left).toBe((1280 - loop.w) / 2);
+  });
+
+  it('lists, toggles, keys and nesting while playing', () => {
+    const screen = { ...newUiScreen('Bag'), shownAtStart: false, freesMouse: true };
+    const panel = newUiElement('panel');
+    const pets = { ...newUiElement('list'), name: 'Pets', parent: panel.id, rows: ['Cat'] };
+    const bag = { ...newUiElement('list'), name: 'Bag', source: 'inventory' as const, parent: panel.id };
+    const close = { ...newUiElement('button'), name: 'Close', parent: panel.id };
+    screen.elements.push(panel, pets, bag, close);
+    const ui: UiSettings = { screens: [screen], items: [{ name: 'Seed', icon: '' }, { name: 'Gem', icon: '' }] };
+    const script: Script = {
+      version: 1,
+      variables: [],
+      handlers: [
+        h({ id: 'k', kind: 'key', key: 'KeyI' }, { id: 't', kind: 'toggleScreen', screen: screen.id }),
+        h({ id: 's', kind: 'start' }, { id: 'a', kind: 'addRow', list: pets.id, text: tx('Dog') }, { id: 'a2', kind: 'addRow', list: pets.id, text: tx('Owl') }, { id: 'r', kind: 'removeRow', list: pets.id, text: tx('Cat') }),
+        h({ id: 'p', kind: 'listPick', list: pets.id }, { id: 'say', kind: 'say', text: { id: 'pr', kind: 'pickedRow' }, seconds: n(5) }),
+        h({ id: 'c', kind: 'uiClick', element: close.id }, { id: 'hs', kind: 'hideScreen', screen: screen.id }),
+      ],
+    };
+    const w = GameWorld.create(scene(ui, script));
+    w.giveItem('Seed', 2);
+    w.giveItem('Gem', 1);
+    run(w, 0.1);
+    expect(w.uiState().lists[pets.id]).toEqual(['Dog', 'Owl']);
+    expect(w.uiState().shown).toEqual([]);
+    // Nothing on a hidden screen can be picked.
+    w.pickRow(pets.id, 'Dog');
+    run(w, 0.1);
+    expect(w.screenMessages()).toEqual([]);
+    w.pressKey('KeyI');
+    run(w, 0.1);
+    expect(w.uiState().shown).toEqual([screen.id]);
+    expect(w.uiState().freesMouse).toBe(true);
+    w.pickRow(pets.id, 'Owl');
+    run(w, 0.1);
+    expect(w.screenMessages()).toEqual(['Owl']);
+    // Picking an item in a list of the inventory takes it in hand.
+    expect(w.selectedItem()).toBe('Seed');
+    w.pickRow(bag.id, 'Gem');
+    expect(w.selectedItem()).toBe('Gem');
+    // Close (inside the panel) hides the screen; I opens it again and closes it.
+    w.clickUi(close.id);
+    run(w, 0.1);
+    expect(w.uiState().shown).toEqual([]);
+    w.pressKey('KeyI');
+    run(w, 0.1);
+    expect(w.uiState().shown).toEqual([screen.id]);
+    w.pressKey('KeyI');
+    run(w, 0.1);
+    expect(w.uiState().shown).toEqual([]);
+    w.dispose();
+  });
+
+  it('“the picked row” only works where a row was picked', () => {
+    const script: Script = { version: 1, variables: [], handlers: [h({ id: 's', kind: 'start' }, { id: 'l', kind: 'log', text: { id: 'pr', kind: 'pickedRow' } })] };
+    expect(compileScript('me', script, { objects: new Map() }).problems.map((p) => p.message)).toEqual(['“The picked row” only works inside “When the player picks a row”.']);
   });
 });

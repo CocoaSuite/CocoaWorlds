@@ -28,6 +28,7 @@ const KIND_KEYS: Record<UiKind, Parameters<typeof t>[0]> = {
   image: 'ui.kind.image',
   bar: 'ui.kind.bar',
   hotbar: 'ui.kind.hotbar',
+  list: 'ui.kind.list',
 };
 
 /** A unique name: base, base_2, … */
@@ -71,7 +72,7 @@ export function ScreensPanel() {
       if (!element || !screen || tgt?.closest('input, textarea, select, [contenteditable="true"]') || document.querySelector('.cw-modal')) return;
       if (ev.key === 'Delete' || ev.key === 'Backspace') {
         ev.preventDefault();
-        editScreen(screen.id, (s) => ({ ...s, elements: s.elements.filter((x) => x.id !== element.id) }), 'Remove screen element');
+        editScreen(screen.id, (s) => ({ ...s, elements: withoutElement(s.elements, element.id) }), 'Remove screen element');
         setSelected(null);
         return;
       }
@@ -97,7 +98,20 @@ export function ScreensPanel() {
   const addElement = (kind: UiKind) => {
     if (!screen) return;
     const all = ui.screens.flatMap((s) => s.elements.map((e) => e.name));
-    const e = { ...newUiElement(kind), name: unique(t(KIND_KEYS[kind]), all) };
+    // Added inside the picked panel or list's panel, if one is picked.
+    const inside = element && element.kind === 'panel' ? element.id : element?.parent ?? '';
+    const e = { ...newUiElement(kind), name: unique(t(KIND_KEYS[kind]), all), parent: kind === 'hotbar' ? '' : inside };
+    if (inside && kind !== 'hotbar') {
+      // Stacked from the top of the panel, below what is already in it, as wide as the panel allows.
+      const box = screen.elements.find((x) => x.id === inside);
+      if (box) {
+        const below = screen.elements.filter((x) => x.parent === inside && x.anchor === 'top').reduce((y, x) => Math.max(y, x.y + x.h), 0);
+        const y = below + 8;
+        const w = kind === 'image' ? Math.min(e.w, box.w - 16) : box.w - 16;
+        const h = Math.max(24, Math.min(e.h, box.h - y - 8));
+        Object.assign(e, { anchor: 'top', x: 0, y, w, h });
+      }
+    }
     editScreen(screen.id, (s) => ({ ...s, elements: [...s.elements, e] }), `Add ${kind}`);
     setSelected(e.id);
   };
@@ -129,6 +143,24 @@ export function ScreensPanel() {
                     <Switch label={t('ui.freesMouse')} checked={s.freesMouse} onChange={(v) => editScreen(s.id, (x) => ({ ...x, freesMouse: v }), 'Screen frees the mouse')} />
                     {t('ui.freesMouse')}
                   </label>
+                  <Outline
+                    elements={s.elements}
+                    selected={selected}
+                    onSelect={setSelected}
+                    onMove={(id, by) =>
+                      editScreen(
+                        s.id,
+                        (x) => {
+                          const i = x.elements.findIndex((e) => e.id === id), j = i + by;
+                          if (i < 0 || j < 0 || j >= x.elements.length) return x;
+                          const next = [...x.elements];
+                          [next[i], next[j]] = [next[j]!, next[i]!];
+                          return { ...x, elements: next };
+                        },
+                        'Reorder screen elements',
+                      )
+                    }
+                  />
                   <Button
                     size="sm"
                     onClick={() => {
@@ -148,7 +180,7 @@ export function ScreensPanel() {
 
       <div className="cw-screens-main">
         <div className="cw-screens-tools" role="toolbar" aria-label={t('ui.add')}>
-          {(['text', 'button', 'panel', 'image', 'bar', 'hotbar'] as UiKind[]).map((k) => (
+          {(['text', 'button', 'panel', 'image', 'bar', 'list', 'hotbar'] as UiKind[]).map((k) => (
             <Button key={k} size="sm" disabled={!screen} onClick={() => addElement(k)}>
               + {t(KIND_KEYS[k])}
             </Button>
@@ -180,6 +212,7 @@ export function ScreensPanel() {
         {element && screen ? (
           <ElementProps
             e={element}
+            others={screen.elements.filter((x) => x.id !== element.id && x.kind === 'panel' && !insideOf(screen.elements, x.id, element.id))}
             values={Object.keys(values)}
             textures={textures.map((x) => ({ path: x.path, name: x.name }))}
             set={(patch, label, key) => editElement(element.id, patch, label, key)}
@@ -189,7 +222,7 @@ export function ScreensPanel() {
               setSelected(copy.id);
             }}
             onRemove={() => {
-              editScreen(screen.id, (s) => ({ ...s, elements: s.elements.filter((x) => x.id !== element.id) }), 'Remove screen element');
+              editScreen(screen.id, (s) => ({ ...s, elements: withoutElement(s.elements, element.id) }), 'Remove screen element');
               setSelected(null);
             }}
           />
@@ -201,7 +234,54 @@ export function ScreensPanel() {
   );
 }
 
-function TextInput({ label, value, onCommit, multiline }: { label: string; value: string; onCommit: (v: string) => void; multiline?: boolean }) {
+/** Elements without one and everything inside it. */
+function withoutElement(list: UiElement[], id: string): UiElement[] {
+  const gone = new Set([id]);
+  for (let grew = true; grew; ) {
+    grew = false;
+    for (const e of list) if (e.parent && gone.has(e.parent) && !gone.has(e.id)) (gone.add(e.id), (grew = true));
+  }
+  return list.filter((e) => !gone.has(e.id));
+}
+
+/** Whether `id` sits (somewhere) inside `outer`. */
+function insideOf(list: UiElement[], id: string, outer: string): boolean {
+  const byId = new Map(list.map((e) => [e.id, e]));
+  const seen = new Set<string>();
+  for (let x = byId.get(id); x && !seen.has(x.id); x = x.parent ? byId.get(x.parent) : undefined) {
+    if (x.id === outer) return true;
+    seen.add(x.id);
+  }
+  return false;
+}
+
+/** The screen's elements in drawing order (later ones on top), indented by what they sit inside. */
+function Outline({ elements, selected, onSelect, onMove }: { elements: UiElement[]; selected: string | null; onSelect: (id: string) => void; onMove: (id: string, by: -1 | 1) => void }) {
+  const depth = (e: UiElement) => {
+    let d = 0;
+    const byId = new Map(elements.map((x) => [x.id, x]));
+    for (let p = e.parent ? byId.get(e.parent) : undefined; p && d < 8; p = p.parent ? byId.get(p.parent) : undefined) d++;
+    return d;
+  };
+  if (!elements.length) return null;
+  return (
+    <ul className="cw-screens-outline" role="list" aria-label={t('ui.elements')}>
+      {elements.map((e) => (
+        <li key={e.id} className={e.id === selected ? 'on' : ''} aria-label={e.name}>
+          <button type="button" className="cw-screens-pick" style={{ paddingLeft: 6 + depth(e) * 12 }} onClick={() => onSelect(e.id)}>
+            {e.name}
+            {!e.visible && <span className="cw-muted"> ({t('ui.hiddenTag')})</span>}
+          </button>
+          <IconButton icon="up" label={`${t('ui.back2')} ${e.name}`} onClick={() => onMove(e.id, -1)} />
+          <IconButton icon="down" label={`${t('ui.front')} ${e.name}`} onClick={() => onMove(e.id, 1)} />
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/** A text box that saves when left. `lines`: Enter starts a new line (one row per line). */
+function TextInput({ label, value, onCommit, multiline, lines }: { label: string; value: string; onCommit: (v: string) => void; multiline?: boolean; lines?: boolean }) {
   const props = {
     className: 'cw-input',
     'aria-label': label,
@@ -209,14 +289,14 @@ function TextInput({ label, value, onCommit, multiline }: { label: string; value
     key: value,
     onKeyDown: (e: React.KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>) => {
       e.stopPropagation();
-      if (e.key === 'Enter' && !(multiline && e.shiftKey)) {
+      if (e.key === 'Enter' && !lines && !(multiline && e.shiftKey)) {
         e.preventDefault();
         e.currentTarget.blur();
       }
     },
     onBlur: (e: React.FocusEvent<HTMLInputElement | HTMLTextAreaElement>) => e.currentTarget.value !== value && onCommit(e.currentTarget.value),
   };
-  return multiline ? <textarea rows={2} {...props} /> : <input {...props} />;
+  return multiline || lines ? <textarea rows={lines ? 5 : 2} {...props} /> : <input {...props} />;
 }
 
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
@@ -231,6 +311,7 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
 /** The picked element's settings. */
 function ElementProps({
   e,
+  others,
   values,
   textures,
   set,
@@ -238,13 +319,15 @@ function ElementProps({
   onRemove,
 }: {
   e: UiElement;
+  /** Panels it can sit inside. */
+  others: UiElement[];
   values: string[];
   textures: { path: string; name: string }[];
   set: (patch: Partial<UiElement>, label: string, mergeKey?: string) => void;
   onDuplicate: () => void;
   onRemove: () => void;
 }) {
-  const num = (key: 'x' | 'y' | 'w' | 'h' | 'size' | 'max' | 'slots', label: string, step = 1) => (
+  const num = (key: 'x' | 'y' | 'w' | 'h' | 'size' | 'max' | 'slots' | 'columns' | 'rowHeight', label: string, step = 1) => (
     <NumberField label={label} ariaLabel={`${t('ui.element')} ${label}`} value={e[key]} step={step} onChange={(v) => set({ [key]: v }, 'Edit screen element', `ui-${e.id}-${key}`)} onCommit={(v) => set({ [key]: v }, 'Edit screen element', `ui-${e.id}-${key}`)} />
   );
   const hasText = e.kind === 'text' || e.kind === 'button';
@@ -261,6 +344,18 @@ function ElementProps({
       <Row label={t('ui.name')}>
         <TextInput label={t('ui.name')} value={e.name} onCommit={(name) => name.trim() && set({ name: name.trim() }, 'Rename screen element')} />
       </Row>
+      {e.kind !== 'hotbar' && (
+        <Row label={t('ui.inside')}>
+          <select className="cw-input" aria-label={t('ui.inside')} value={e.parent} onChange={(ev) => set({ parent: ev.target.value, x: 0, y: 0 }, 'Put screen element inside')}>
+            <option value="">{t('ui.theScreen')}</option>
+            {others.map((x) => (
+              <option key={x.id} value={x.id}>
+                {x.name}
+              </option>
+            ))}
+          </select>
+        </Row>
+      )}
       <Row label={t('ui.anchor')}>
         <span className="cw-anchor" role="radiogroup" aria-label={t('ui.anchor')}>
           {UI_ANCHORS.map((a: UiAnchor) => (
@@ -280,6 +375,39 @@ function ElementProps({
           {num('h', 'H')}
         </span>
       </Row>
+      {(hasText || e.kind === 'list') && (
+        <Row label={t('ui.align')}>
+          <span className="cw-anchor row" role="radiogroup" aria-label={t('ui.align')}>
+            {(['left', 'center', 'right'] as const).map((a) => (
+              <button key={a} type="button" role="radio" aria-checked={e.align === a} aria-label={a} className={e.align === a ? 'on' : ''} onClick={() => set({ align: a }, 'Align screen element')}>
+                {a === 'left' ? '⇤' : a === 'right' ? '⇥' : '↔'}
+              </button>
+            ))}
+          </span>
+        </Row>
+      )}
+      {e.kind === 'list' && (
+        <>
+          <Row label={t('ui.listShows')}>
+            <select className="cw-input" aria-label={t('ui.listShows')} value={e.source} onChange={(ev) => set({ source: ev.target.value as UiElement['source'] }, 'List source')}>
+              <option value="rows">{t('ui.listRows')}</option>
+              <option value="inventory">{t('ui.listInventory')}</option>
+            </select>
+          </Row>
+          {e.source === 'rows' && (
+            <Row label={t('ui.rows')}>
+              <TextInput label={t('ui.rows')} value={e.rows.join('\n')} lines onCommit={(v) => set({ rows: v.split('\n').map((x) => x.trim()).filter(Boolean) }, 'List rows')} />
+            </Row>
+          )}
+          <p className="cw-muted cw-screens-note">{e.source === 'rows' ? t('ui.rowsHint') : t('ui.inventoryHint')}</p>
+          <Row label={t('ui.columns')}>{num('columns', '')}</Row>
+          <Row label={t('ui.rowHeight')}>{num('rowHeight', 'px')}</Row>
+          <Row label={t('ui.textSize')}>{num('size', 'px')}</Row>
+          <Row label={t('ui.textColor')}>
+            <ColorField label={t('ui.textColor')} value={e.color} onChange={(color) => set({ color }, 'Screen element colour', `ui-${e.id}-color`)} />
+          </Row>
+        </>
+      )}
       {hasText && (
         <>
           <Row label={t('ui.text')}>

@@ -500,16 +500,27 @@ export class ViewportEngine {
 
   /** “Click to play”. */
   capturePlayer(): void {
-    if (this.asPlayer && !this.uiFree) this.lockPointer();
+    if (this.uiFree) {
+      // Back from the pause Esc gave a menu.
+      if (this.uiPaused) {
+        this.uiPaused = false;
+        this.cb.uiMouse(true);
+      }
+      return;
+    }
+    if (this.asPlayer) this.lockPointer();
   }
 
   /** A shown screen has freed the mouse for its buttons (the view stops turning; keys still move). */
   private uiFree = false;
+  /** Esc was pressed while a screen had freed the mouse: paused (“Click to play”); Esc again stops. */
+  private uiPaused = false;
 
   /** Free the mouse when a screen asks for it, and take it back when no screen does. */
   private followUiMouse(free: boolean): void {
     if (!this.asPlayer || free === this.uiFree) return;
     this.uiFree = free;
+    this.uiPaused = false;
     this.cb.uiMouse(free);
     if (free) {
       if (this.locked) document.exitPointerLock();
@@ -519,6 +530,11 @@ export class ViewportEngine {
   /** The player clicked a button on screen. */
   clickUi(id: string): void {
     this.play?.clickUi(id);
+  }
+
+  /** The player picked a row of a list on screen. */
+  pickRow(list: string, row: string): void {
+    this.play?.pickRow(list, row);
   }
 
   private lockPointer(): void {
@@ -570,9 +586,19 @@ export class ViewportEngine {
 
   /** Returns true when the key was the game's. */
   private gameKey(e: KeyboardEvent, down: boolean): boolean {
-    if (!this.asPlayer || !(this.locked || (this.uiFree && this.play))) return false;
-    // (With the mouse freed by a screen, typing into nothing else is possible, so the keys stay the game's.)
-    if (e.key === 'Escape' && !this.locked) return false;
+    if (!this.asPlayer || !(this.locked || (this.uiFree && !this.uiPaused && this.play))) return false;
+    // (With the mouse freed by a screen there is nothing else to type into, so the keys stay the game's.)
+    if (e.key === 'Escape' && !this.locked) {
+      // In a menu: the first Esc pauses (as it frees the mouse when it is captured); the next one stops.
+      if (!down) return true;
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      this.uiPaused = true;
+      this.gameKeys.clear();
+      this.sendInput();
+      this.cb.uiMouse(false);
+      return true;
+    }
     if (e.key === 'Escape') {
       // First Esc lets go of the mouse; the next one (or Stop) ends the game.
       e.preventDefault();
@@ -590,7 +616,11 @@ export class ViewportEngine {
       this.play?.selectSlot(Number(e.code.slice(5)) - 1);
       return true;
     }
-    if (!ViewportEngine.GAME_KEYS.has(e.code)) return true;
+    if (!ViewportEngine.GAME_KEYS.has(e.code)) {
+      // Other letters and Tab are for “When the player presses”.
+      if (down && !e.repeat && /^(Key[A-Z]|Tab)$/.test(e.code)) this.play?.pressKey(e.code);
+      return true;
+    }
     if (down && e.code === 'KeyE' && !e.repeat) this.play?.use();
     if (down) this.gameKeys.add(e.code);
     else this.gameKeys.delete(e.code);

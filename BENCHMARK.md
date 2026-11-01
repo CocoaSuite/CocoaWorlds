@@ -95,7 +95,7 @@ Break coins and chests to collect currency, buy eggs that hatch random pets, pet
 | Several currencies | ✅ game values | — |
 | Eggs: random pet by rarity | ✅ random + copies | — |
 | Pets follow the player | ✅ Move to the player in a loop (tested) | — |
-| Pet inventory, equip | 🟡 items and hotbar; no scrolling list of pets yet | B5 |
+| Pet inventory, equip | ✅ a grid list of items, picking one takes it in hand | B5 |
 | Gates to new zones that open when paid | ✅ door recipe + score check | — |
 | Third-person camera ✅; saving ❌ | 🟡 | B4 |
 | Trading and seeing other players | ❌ | M1 |
@@ -152,7 +152,7 @@ A first-person shooter built from brush levels (the kind CocoaWorlds is designed
 | Tycoon | ~60% | looks (B3), export and saving (B4), several players (M1) |
 | Natural Disaster Survival | ~55% | water, looks and sound (B3), export (B4), several players (M1) |
 | Grow a Garden | ~60% | saving and real-time growth (B4), weather and particles |
-| Pet Simulator | ~55% | a scrolling pet list, saving (B4) |
+| Pet Simulator | ~60% | saving (B4), trading (M1) |
 | Half-Life 1 | ~35% | weapons, NPCs and AI, models, level changes, lighting and sound |
 | Slime Rancher | ~15% | terrain, creatures with behaviour, vacuum tool, models |
 

@@ -35,6 +35,10 @@ export function newEvent(kind: EventKind, zone: Ref = self): EventBlock {
       return { id: id(), kind, element: '' };
     case 'useItem':
       return { id: id(), kind, item: '' };
+    case 'listPick':
+      return { id: id(), kind, list: '' };
+    case 'key':
+      return { id: id(), kind, key: 'KeyI' };
   }
 }
 
@@ -106,7 +110,13 @@ export function newStatement(kind: StatementKind, opts: { target?: Ref; variable
       return { id: id(), kind, target, name: '', loop: true };
     case 'showScreen':
     case 'hideScreen':
+    case 'toggleScreen':
       return { id: id(), kind, screen: '' };
+    case 'addRow':
+    case 'removeRow':
+      return { id: id(), kind, list: '', text: text('Row') };
+    case 'clearList':
+      return { id: id(), kind, list: '' };
     case 'showUi':
     case 'hideUi':
       return { id: id(), kind, element: '' };
@@ -154,6 +164,7 @@ export function newExpr(kind: ExprKind, opts: { variable?: string } = {}): Expr 
     case 'itemCount':
       return { id: id(), kind, item: '' };
     case 'selectedItem':
+    case 'pickedRow':
       return { id: id(), kind };
   }
 }

@@ -48,7 +48,10 @@ export interface ScriptHost {
   /** Play an animation of an object's model. */
   playAnimation?(target: string, name: string, loop: boolean): void;
   /** Show or hide a screen, or one element of a screen. */
-  showUi?(what: 'screen' | 'element', id: string, show: boolean): void;
+  showUi?(what: 'screen' | 'element', id: string, show: boolean | 'toggle'): void;
+  /** Add a row to a list, or remove the first row with this text; empty a list. */
+  listRow?(id: string, text: string, add: boolean): void;
+  clearList?(id: string): void;
   /** Change what a text or button says. */
   setUiText?(id: string, text: string): void;
   /** Give (or with a minus, take) some of an item. */
@@ -91,6 +94,8 @@ interface Thread {
   loop: string | null;
   /** The copy this stack made last (“the new copy”). */
   copy: string | null;
+  /** The row picked (in “When the player picks a row”). */
+  pick: string;
 }
 
 export type RunnerEvent =
@@ -105,7 +110,11 @@ export type RunnerEvent =
   /** The player clicked a button on screen. */
   | { type: 'uiClick'; element: string }
   /** The player used an item from the hotbar. */
-  | { type: 'useItem'; item: string };
+  | { type: 'useItem'; item: string }
+  /** The player picked a row of a list on screen. */
+  | { type: 'listPick'; list: string; row: string }
+  /** The player pressed a key. */
+  | { type: 'key'; key: string };
 
 export class ScriptRunner {
   private instances: Instance[];
@@ -176,6 +185,10 @@ export class ScriptRunner {
           if (ev.kind === 'uiClick' && ev.element === e.element) this.spawn(inst, h, null);
         } else if (e.type === 'useItem') {
           if (ev.kind === 'useItem' && (!ev.item || ev.item === e.item)) this.spawn(inst, h, null);
+        } else if (e.type === 'listPick') {
+          if (ev.kind === 'listPick' && ev.list === e.list) this.spawn(inst, h, null, e.row);
+        } else if (e.type === 'key') {
+          if (ev.kind === 'key' && ev.key === e.key) this.spawn(inst, h, null);
         } else if (e.type === 'breaks') {
           if (ev.kind === 'breaks' && inst.program.owner === e.target) this.spawn(inst, h, null);
         } else if (e.type === 'die') {
@@ -253,11 +266,11 @@ export class ScriptRunner {
     return `${inst.program.owner}:${h.id}`;
   }
 
-  private spawn(inst: Instance, handler: CompiledHandler, other: string | null): void {
+  private spawn(inst: Instance, handler: CompiledHandler, other: string | null, pick = ''): void {
     const k = this.key(inst, handler);
     if (this.running.has(k)) return;
     this.running.add(k);
-    this.threads.push({ inst, handler, pc: 0, stack: [], temps: new Array(handler.temps).fill(0), other, waitUntil: 0, waitFor: null, loop: null, copy: null });
+    this.threads.push({ inst, handler, pc: 0, stack: [], temps: new Array(handler.temps).fill(0), other, waitUntil: 0, waitFor: null, loop: null, copy: null, pick });
   }
 
   private runAll(): void {
@@ -493,6 +506,15 @@ export class ScriptRunner {
           break;
         case 'selitem':
           s.push(this.host.selectedItem?.() ?? '');
+          break;
+        case 'row':
+          this.host.listRow?.(op.id, this.text(s.pop() ?? null), op.add);
+          break;
+        case 'clearlist':
+          this.host.clearList?.(op.id);
+          break;
+        case 'picked':
+          s.push(t.pick);
           break;
         case 'halt':
           return this.finish(t);

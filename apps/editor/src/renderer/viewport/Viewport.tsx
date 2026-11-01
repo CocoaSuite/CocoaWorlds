@@ -294,7 +294,7 @@ export function Viewport() {
         </div>
       )}
       {playing && lock === true && <div className="cw-crosshair" aria-hidden="true" />}
-      {playing && hud && playScene && <UiLayer ui={uiOf(playScene.settings)} live={hud.ui} values={hud.allValues} onClick={(id) => engine.current?.clickUi(id)} />}
+      {playing && hud && playScene && <UiLayer ui={uiOf(playScene.settings)} live={hud.ui} values={hud.allValues} onClick={(id) => engine.current?.clickUi(id)} onRow={(list, row) => engine.current?.pickRow(list, row)} />}
       {playing && hud && <HudView hud={hud} />}
       {playing && lock === false && !uiMouse && (
         <button type="button" className="cw-ov cw-click-play" data-testid="click-to-play" onClick={() => engine.current?.capturePlayer()}>

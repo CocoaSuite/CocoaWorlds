@@ -75,6 +75,37 @@ test('screen UI: a shop with a button, a value text and a hotbar', async () => {
     await stage.locator('[data-ui="Panel"]').waitFor();
     await page.keyboard.press('Delete');
     await until(() => stage.locator('[data-ui="Panel"]').count(), 0);
+    // A second screen, the bag: hidden at start, a panel with a list of pets, a grid of the player's items and a
+    // Close button inside it.
+    await page.getByRole('button', { name: '+ Screen' }).click();
+    const bagName = screens.getByLabel('Screen name');
+    await bagName.fill('Bag');
+    await bagName.press('Enter');
+    const bagItem = screens.getByRole('listitem', { name: 'Bag' });
+    await bagItem.getByRole('switch', { name: 'Shown at start' }).click({ force: true });
+    await bagItem.getByRole('switch', { name: 'Frees the mouse' }).click({ force: true });
+    await tools.getByRole('button', { name: '+ Panel' }).click();
+    const outline = bagItem.getByRole('list', { name: 'Elements on this screen' });
+    await outline.getByRole('listitem', { name: 'Panel' }).waitFor();
+    // With the panel picked, new elements go inside it.
+    await tools.getByRole('button', { name: '+ List' }).click();
+    await setText('Name', 'Pets');
+    const rows = props().getByLabel('Rows', { exact: true });
+    await rows.fill('Cat\nDog\nOwl');
+    await rows.blur();
+    assert.equal(await props().getByLabel('Inside', { exact: true }).locator('option:checked').textContent(), 'Panel');
+    await outline.getByRole('listitem', { name: 'Panel' }).getByRole('button', { name: 'Panel', exact: true }).click();
+    await tools.getByRole('button', { name: '+ List' }).click();
+    await setText('Name', 'BagList');
+    await props().getByLabel('Shows', { exact: true }).selectOption({ label: 'the player’s items' });
+    await outline.getByRole('listitem', { name: 'Panel' }).getByRole('button', { name: 'Panel', exact: true }).click();
+    await tools.getByRole('button', { name: '+ Button' }).click();
+    await setText('Name', 'Close');
+    await setText('Text', 'Close');
+    assert.deepEqual(await outline.getByRole('listitem').evaluateAll((li) => li.map((x) => x.getAttribute('aria-label'))), ['Panel', 'Pets', 'BagList', 'Close']);
+    await stage.locator('[data-ui="Pets"]').getByRole('option', { name: 'Dog' }).waitFor();
+    await shot(page, 'ui01b-bag');
+
     await ws.getByRole('tab', { name: 'Scene' }).click();
     await page.getByTestId('viewport').waitFor();
     assert.equal(await page.getByRole('toolbar', { name: 'Tools' }).getByRole('button', { name: /Select/ }).first().getAttribute('aria-pressed'), 'true');
@@ -101,6 +132,29 @@ test('screen UI: a shop with a button, a value text and a hotbar', async () => {
     const use = panel.getByRole('group', { name: 'When the player uses an item (click)' });
     await use.getByRole('button', { name: '+ Add a block' }).click();
     await page.getByRole('menuitem', { name: 'Inventory › Take an item from the player' }).click();
+    // I opens and closes the bag; picking a pet says it; Close hides the bag.
+    await panel.getByRole('button', { name: '+ When…' }).click();
+    await page.getByRole('menuitem', { name: 'When the player presses a key' }).click();
+    const key = panel.getByRole('group', { name: 'When the player presses a key' });
+    assert.equal(await key.getByLabel('When the player presses', { exact: true }).inputValue(), 'KeyI');
+    await key.getByRole('button', { name: '+ Add a block' }).click();
+    await page.getByRole('menuitem', { name: 'Screen and signs › Show or hide a screen (toggle)' }).click();
+    await key.getByLabel('Show or hide the screen', { exact: true }).selectOption({ label: 'Bag' });
+    await panel.getByRole('button', { name: '+ When…' }).click();
+    await page.getByRole('menuitem', { name: 'When the player picks a row in a list' }).click();
+    const pick = panel.getByRole('group', { name: 'When the player picks a row in a list' });
+    assert.equal(await pick.getByLabel('When the player picks a row in', { exact: true }).locator('option:checked').textContent(), 'Bag › Pets');
+    await pick.getByRole('button', { name: '+ Add a block' }).click();
+    await page.getByRole('menuitem', { name: 'Screen and signs › Show a message on screen' }).click();
+    await pick.getByLabel('Show on screen: use another kind of value').click();
+    await page.getByRole('menuitem', { name: 'The picked row (of a list)' }).click();
+    await panel.getByRole('button', { name: '+ When…' }).click();
+    await page.getByRole('menuitem', { name: 'When the player clicks a button on screen' }).click();
+    const close = panel.getByRole('group', { name: 'When the player clicks a button on screen' }).last();
+    await close.getByLabel('When the player clicks', { exact: true }).selectOption({ label: 'Bag › Close' });
+    await close.getByRole('button', { name: '+ Add a block' }).click();
+    await page.getByRole('menuitem', { name: 'Screen and signs › Hide a screen' }).click();
+    await close.getByLabel('Hide the screen', { exact: true }).selectOption({ label: 'Bag' });
     assert.equal(await page.getByRole('tab', { name: /Problems \d/ }).count(), 0, 'no problems');
     await shot(page, 'ui02-blocks');
 
@@ -128,8 +182,25 @@ test('screen UI: a shop with a button, a value text and a hotbar', async () => {
     // Number keys pick a slot.
     await page.evaluate(() => window.__cwViewport.play.selectSlot(2));
     await until(() => layer.locator('.cw-ui-slot.on').getAttribute('aria-label'), 'slot 3');
+    // The bag: I opens it; pick a pet; pick seeds in the item grid (taken in hand); Close.
+    await page.keyboard.press('i');
+    const bag = layer.getByRole('group', { name: 'Bag' });
+    await bag.getByRole('listbox', { name: 'Pets' }).waitFor();
+    await bag.getByRole('option', { name: 'Owl' }).click();
+    await page.getByTestId('hud-messages').getByText('Owl').waitFor();
+    await bag.getByRole('listbox', { name: 'BagList' }).getByRole('option', { name: 'Seed 2' }).click();
+    await until(() => layer.locator('.cw-ui-slot.on').getAttribute('aria-label'), 'Seed 2');
+    await shot(page, 'ui04-bag');
+    await bag.getByRole('button', { name: 'Close' }).click();
+    await until(() => layer.getByRole('group', { name: 'Bag' }).count(), 0);
+    // Esc in a menu pauses (“click to play”); clicking goes back; Esc twice stops.
     await page.keyboard.press('Escape');
-    if (await page.getByTestId('play-banner').count()) await page.keyboard.press('Escape');
+    await page.getByTestId('click-to-play').waitFor();
+    assert.equal(await page.getByTestId('play-banner').count(), 1);
+    await page.getByTestId('click-to-play').click();
+    await until(() => page.getByTestId('click-to-play').count(), 0);
+    await page.keyboard.press('Escape');
+    await page.keyboard.press('Escape');
     await until(() => page.getByTestId('play-banner').count(), 0);
     assert.equal(await page.getByTestId('ui-layer').count(), 0);
   } catch (e) {

@@ -41,7 +41,9 @@ export type Expr =
   /** How many of an item the player carries. */
   | { id: string; kind: 'itemCount'; item: string }
   /** The item in the hotbar slot the player has picked ('' when that slot is empty). */
-  | { id: string; kind: 'selectedItem' };
+  | { id: string; kind: 'selectedItem' }
+  /** The row the player picked in a list (in “When the player picks a row”). */
+  | { id: string; kind: 'pickedRow' };
 
 export type Direction = 'up' | 'down' | 'north' | 'south' | 'east' | 'west';
 export type Axis = 'up' | 'north' | 'east';
@@ -98,7 +100,10 @@ export type Statement =
   /** Play one of a model's animations by name, looping or once. */
   | { id: string; kind: 'playAnim'; target: Ref; name: string; loop: boolean }
   /** Show or hide a whole screen of the screen UI (by id). */
-  | { id: string; kind: 'showScreen' | 'hideScreen'; screen: string }
+  | { id: string; kind: 'showScreen' | 'hideScreen' | 'toggleScreen'; screen: string }
+  /** Add a row to a list, remove the first row with that text, or empty it. */
+  | { id: string; kind: 'addRow' | 'removeRow'; list: string; text: Expr }
+  | { id: string; kind: 'clearList'; list: string }
   /** Show or hide one element of a screen (by id). */
   | { id: string; kind: 'showUi' | 'hideUi'; element: string }
   /** Change what a text or button says. */
@@ -129,7 +134,11 @@ export type EventBlock =
   /** The player clicked a button of the screen UI (by id). */
   | { id: string; kind: 'uiClick'; element: string }
   /** The player used (clicked with) an item from the hotbar; '' for any item. */
-  | { id: string; kind: 'useItem'; item: string };
+  | { id: string; kind: 'useItem'; item: string }
+  /** The player picked a row of a list on screen (“the picked row” says which). */
+  | { id: string; kind: 'listPick'; list: string }
+  /** The player pressed a key (a KeyboardEvent code: 'KeyI', 'Tab', 'KeyQ' …). */
+  | { id: string; kind: 'key'; key: string };
 
 export interface Handler {
   id: string;

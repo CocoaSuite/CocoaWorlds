@@ -13,8 +13,8 @@ export const UI_REF_H = 720;
 export type UiAnchor = 'top-left' | 'top' | 'top-right' | 'left' | 'center' | 'right' | 'bottom-left' | 'bottom' | 'bottom-right';
 export const UI_ANCHORS: UiAnchor[] = ['top-left', 'top', 'top-right', 'left', 'center', 'right', 'bottom-left', 'bottom', 'bottom-right'];
 
-export type UiKind = 'panel' | 'text' | 'image' | 'button' | 'bar' | 'hotbar';
-export const UI_KINDS: UiKind[] = ['text', 'button', 'panel', 'image', 'bar', 'hotbar'];
+export type UiKind = 'panel' | 'text' | 'image' | 'button' | 'bar' | 'hotbar' | 'list';
+export const UI_KINDS: UiKind[] = ['text', 'button', 'panel', 'image', 'bar', 'list', 'hotbar'];
 
 export interface UiElement {
   id: string;
@@ -42,6 +42,19 @@ export interface UiElement {
   slots: number;
   /** Shown when the screen is (scripts can hide and show it). */
   visible: boolean;
+  /**
+   * The element it sits inside ('' for the screen itself): it is placed within that element's box, as if the
+   * box were the screen, and hidden with it.
+   */
+  parent: string;
+  /** Texts, buttons and lists: where the words sit. */
+  align: 'left' | 'center' | 'right';
+  /** Lists: their own rows (scripts can add and remove), or the player's inventory (an item per row). */
+  source: 'rows' | 'inventory';
+  rows: string[];
+  /** Lists: rows side by side (2 or more makes a grid of tiles), and each row's height. */
+  columns: number;
+  rowHeight: number;
 }
 
 export interface UiScreen {
@@ -85,21 +98,79 @@ export function newUiScreen(name: string): UiScreen {
 
 /** A new element of a kind, with sensible defaults (in the middle of the screen). */
 export function newUiElement(kind: UiKind, id = `u_${rid()}`): UiElement {
-  const base: UiElement = { id, name: kind, kind, anchor: 'center', x: 0, y: 0, w: 240, h: 48, text: '', size: 22, color: '#ffffff', fill: '', image: '', value: '', max: 100, slots: 9, visible: true };
+  const base: UiElement = {
+    id,
+    name: kind,
+    kind,
+    anchor: 'center',
+    x: 0,
+    y: 0,
+    w: 240,
+    h: 48,
+    text: '',
+    size: 22,
+    color: '#ffffff',
+    fill: '',
+    image: '',
+    value: '',
+    max: 100,
+    slots: 9,
+    visible: true,
+    parent: '',
+    align: 'center',
+    source: 'rows',
+    rows: [],
+    columns: 1,
+    rowHeight: 40,
+  };
   switch (kind) {
     case 'text':
       return { ...base, text: 'Text', w: 320, h: 40 };
     case 'button':
       return { ...base, text: 'Button', fill: '#637f2a', w: 200, h: 48 };
     case 'panel':
-      return { ...base, fill: '#000000aa', w: 400, h: 300 };
+      return { ...base, fill: '#000000aa', w: 480, h: 400 };
     case 'image':
       return { ...base, w: 128, h: 128 };
     case 'bar':
       return { ...base, fill: '#d94b3d', w: 240, h: 20, value: 'health', max: 100 };
     case 'hotbar':
       return { ...base, anchor: 'bottom', y: 16, w: 9 * 60, h: 60, slots: 9, size: 14 };
+    case 'list':
+      return { ...base, w: 320, h: 160, fill: '#000000aa', size: 18, align: 'left', rows: ['First', 'Second', 'Third'], rowHeight: 40 };
   }
+}
+
+/**
+ * Every element's box on a screen of `w` × `h`, with elements inside others placed within their parent's box
+ * (a parent that is missing, or a loop of parents, counts as the screen).
+ */
+export function uiRects(elements: UiElement[], w = UI_REF_W, h = UI_REF_H): Map<string, { left: number; top: number; width: number; height: number }> {
+  const byId = new Map(elements.map((e) => [e.id, e]));
+  const out = new Map<string, { left: number; top: number; width: number; height: number }>();
+  const place = (e: UiElement, seen: Set<string>): { left: number; top: number; width: number; height: number } => {
+    const done = out.get(e.id);
+    if (done) return done;
+    const p = e.parent && !seen.has(e.parent) ? byId.get(e.parent) : undefined;
+    const space = p ? place(p, new Set([...seen, e.id])) : { left: 0, top: 0, width: w, height: h };
+    const r = uiRect(e, space.width, space.height);
+    const box = { left: space.left + r.left, top: space.top + r.top, width: r.width, height: r.height };
+    out.set(e.id, box);
+    return box;
+  };
+  for (const e of elements) place(e, new Set([e.id]));
+  return out;
+}
+
+/** Whether an element shows, given which elements are hidden: it and everything it sits inside. */
+export function uiShown(e: UiElement, elements: UiElement[], hidden: (id: string) => boolean): boolean {
+  const byId = new Map(elements.map((x) => [x.id, x]));
+  const seen = new Set<string>();
+  for (let x: UiElement | undefined = e; x && !seen.has(x.id); x = x.parent ? byId.get(x.parent) : undefined) {
+    if (hidden(x.id)) return false;
+    seen.add(x.id);
+  }
+  return true;
 }
 
 /** Where an element sits on a screen of `w` × `h` reference pixels: its left, top, width and height. */

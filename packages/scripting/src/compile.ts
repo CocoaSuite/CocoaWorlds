@@ -85,7 +85,12 @@ export type Op =
   /** Pops the zone, then the thing: pushes whether it is inside the zone now. */
   | { op: 'inside' }
   /** Show or hide a screen or one element of the screen UI. */
-  | { op: 'ui'; what: 'screen' | 'element'; id: string; show: boolean }
+  | { op: 'ui'; what: 'screen' | 'element'; id: string; show: boolean | 'toggle' }
+  /** Pops text: add it to a list, or remove the first row with it. */
+  | { op: 'row'; id: string; add: boolean }
+  | { op: 'clearlist'; id: string }
+  /** Pushes the row picked in “When the player picks a row”. */
+  | { op: 'picked' }
   /** Pops text: change what an element says. */
   | { op: 'uitext'; id: string }
   /** Pops an amount: give (or with a minus, take) some of an item. */
@@ -110,7 +115,9 @@ export type CompiledEvent =
   | { kind: 'breaks' }
   | { kind: 'every'; seconds: number }
   | { kind: 'uiClick'; element: string }
-  | { kind: 'useItem'; item: string };
+  | { kind: 'useItem'; item: string }
+  | { kind: 'listPick'; list: string }
+  | { kind: 'key'; key: string };
 
 export interface CompiledHandler {
   id: string;
@@ -222,6 +229,11 @@ class HandlerCompiler {
       else event = { kind: ev.kind, message: ev.message.trim() };
     } else if (ev.kind === 'uiClick') {
       if (this.checkElement(ev.element, ev.id, 'button')) event = { kind: 'uiClick', element: ev.element };
+    } else if (ev.kind === 'listPick') {
+      if (this.checkElement(ev.list, ev.id, 'list')) event = { kind: 'listPick', list: ev.list };
+    } else if (ev.kind === 'key') {
+      if (!/^(Key[A-Z]|Tab|Digit0)$/.test(ev.key)) this.problem(ev.id, 'Pick a key.');
+      else event = { kind: 'key', key: ev.key };
     } else if (ev.kind === 'useItem') {
       if (!ev.item || this.checkItem(ev.item, ev.id)) event = { kind: 'useItem', item: ev.item };
     } else if (ev.kind === 'every') {
@@ -275,23 +287,24 @@ class HandlerCompiler {
 
   /** A screen picked in a block: it must exist. */
   private checkScreen(id: string, block: string): boolean {
-    if (!id) return this.problem(block, 'Pick a screen (make screens in the Screens tab).'), false;
+    if (!id) return this.problem(block, 'Pick a screen (make screens in the Screens workspace).'), false;
     if (this.scene.ui && !this.scene.ui.screens.has(id)) return this.problem(block, 'The screen this block points at no longer exists. Pick another one.'), false;
     return true;
   }
 
   /** An element picked in a block: it must exist (and be a button, for clicks). */
   private checkElement(id: string, block: string, kind?: string): boolean {
-    if (!id) return this.problem(block, kind === 'button' ? 'Pick a button (make them in the Screens tab).' : 'Pick something on a screen (make it in the Screens tab).'), false;
+    if (!id)
+      return this.problem(block, kind === 'button' ? 'Pick a button (make them in the Screens workspace).' : kind === 'list' ? 'Pick a list (make them in the Screens workspace).' : 'Pick something on a screen (make it in the Screens workspace).'), false;
     const e = this.scene.ui?.elements.get(id);
     if (this.scene.ui && !e) return this.problem(block, 'The screen element this block points at no longer exists. Pick another one.'), false;
-    if (e && kind && e.kind !== kind) return this.problem(block, `${e.name} is not a button.`), false;
+    if (e && kind && e.kind !== kind) return this.problem(block, `${e.name} is not a ${kind === 'list' ? 'list' : 'button'}.`), false;
     return true;
   }
 
   /** An item named in a block: it must be one of the scene's items. */
   private checkItem(name: string, block: string): boolean {
-    if (!name) return this.problem(block, 'Pick an item (make items in the Screens tab).'), false;
+    if (!name) return this.problem(block, 'Pick an item (make items in the Screens workspace).'), false;
     if (this.scene.items && !this.scene.items.has(name)) return this.problem(block, `There is no item called “${name}”.`), false;
     return true;
   }
@@ -484,7 +497,17 @@ class HandlerCompiler {
         break;
       case 'showScreen':
       case 'hideScreen':
-        if (this.checkScreen(s.screen, s.id)) this.emit({ op: 'ui', what: 'screen', id: s.screen, show: s.kind === 'showScreen' });
+      case 'toggleScreen':
+        if (this.checkScreen(s.screen, s.id)) this.emit({ op: 'ui', what: 'screen', id: s.screen, show: s.kind === 'toggleScreen' ? 'toggle' : s.kind === 'showScreen' });
+        break;
+      case 'addRow':
+      case 'removeRow':
+        this.checkElement(s.list, s.id, 'list');
+        this.value(s.text);
+        this.emit({ op: 'row', id: s.list, add: s.kind === 'addRow' });
+        break;
+      case 'clearList':
+        if (this.checkElement(s.list, s.id, 'list')) this.emit({ op: 'clearlist', id: s.list });
         break;
       case 'showUi':
       case 'hideUi':
@@ -666,6 +689,10 @@ class HandlerCompiler {
         return 'number';
       case 'selectedItem':
         this.emit({ op: 'selitem' });
+        return 'text';
+      case 'pickedRow':
+        if (this.h.event.kind !== 'listPick') this.problem(e.id, '“The picked row” only works inside “When the player picks a row”.');
+        this.emit({ op: 'picked' });
         return 'text';
       case 'health':
       case 'score':
