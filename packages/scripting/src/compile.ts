@@ -83,7 +83,7 @@ export type CompiledEvent =
   | { kind: 'start' }
   | { kind: 'enter' | 'leave'; zone: string }
   | { kind: 'message'; message: string }
-  | { kind: 'use' }
+  | { kind: 'use'; prompt: string }
   | { kind: 'die' }
   | { kind: 'breaks' }
   | { kind: 'every'; seconds: number };
@@ -184,7 +184,7 @@ class HandlerCompiler {
     let event: CompiledEvent | null = null;
     this.stmt = ev.id;
     if (ev.kind === 'start') event = { kind: 'start' };
-    else if (ev.kind === 'use') event = { kind: 'use' };
+    else if (ev.kind === 'use') event = { kind: 'use', prompt: (ev.prompt ?? '').trim() };
     else if (ev.kind === 'breaks') event = { kind: 'breaks' };
     else if (ev.kind === 'die') {
       event = { kind: 'die' };

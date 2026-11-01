@@ -116,6 +116,19 @@ export class ScriptRunner {
     this.instances = this.instances.filter((i) => !ids.has(i.program.owner));
   }
 
+  /**
+   * What the player would do by pressing Use at `targets` (the object looked at and what it is inside): the
+   * first “When the player uses this” prompt found, '' for one without a word, or null if nothing listens.
+   */
+  usePrompt(targets: string[]): string | null {
+    for (const id of targets)
+      for (const inst of this.instances) {
+        if (inst.program.owner !== id) continue;
+        for (const h of inst.program.handlers) if (h.event.kind === 'use') return h.event.prompt;
+      }
+    return null;
+  }
+
   /** Run every "When the game starts" stack. */
   start(): void {
     if (this.started) return;

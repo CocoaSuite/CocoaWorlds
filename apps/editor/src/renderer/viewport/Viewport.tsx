@@ -304,6 +304,12 @@ function HudView({ hud }: { hud: Hud }) {
   const low = hud.showHealth && hud.health <= 25;
   return (
     <>
+      {hud.use !== null && (
+        <div className="cw-ov cw-use-prompt" data-testid="use-prompt" role="status">
+          <kbd>E</kbd>
+          <span>{hud.use || t('hud.use')}</span>
+        </div>
+      )}
       {hud.messages.length > 0 && (
         <div className="cw-ov cw-hud-messages" data-testid="hud-messages" role="status">
           {hud.messages.slice(-3).map((m, i) => (

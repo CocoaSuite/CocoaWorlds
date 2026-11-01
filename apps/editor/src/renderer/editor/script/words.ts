@@ -48,6 +48,7 @@ const W = {
   heal: ['Heal the player by', 'Вылечить игрока на'],
   addScore: ['Change the score by', 'Изменить счёт на'],
   say: ['Show on screen', 'Показать на экране'],
+  usePrompt: ['showing', 'с подсказкой'],
   breaks: ['When this breaks', 'Когда это ломается'],
   spawn: ['Make a copy of', 'Создать копию'],
   at: ['at', 'в месте:'],

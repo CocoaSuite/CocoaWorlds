@@ -15,6 +15,7 @@ import {
   bounds,
   COLLIDER_MATERIAL,
   cylinder,
+  sphere,
   extrudePolygon,
   defaultSurface,
   fromData,
@@ -37,7 +38,7 @@ export interface BrushComponent {
   mesh?: BrushData['mesh'];
 }
 
-export type BrushShape = 'box' | 'cylinder' | 'wedge' | 'stairs' | 'polygon';
+export type BrushShape = 'box' | 'cylinder' | 'sphere' | 'wedge' | 'stairs' | 'polygon';
 
 /** A polygon brush's outline: corners on axes `a`/`b` of the view it was drawn in; depth runs along `e`. */
 export interface Outline {
@@ -157,6 +158,8 @@ export function shapeBrushes(o: ShapeOptions, min: V3, max: V3, role: DrawRole, 
       return [extrudePolygon(outline.points, outline.axes, min[outline.axes.e]!, max[outline.axes.e]!, surface)];
     case 'cylinder':
       return [cylinder(min, max, o.sides, surface)];
+    case 'sphere':
+      return [sphere(min, max, o.sides, surface)];
     case 'wedge':
       return [wedge(min, max, o.facing, surface)];
     case 'stairs':
@@ -166,7 +169,7 @@ export function shapeBrushes(o: ShapeOptions, min: V3, max: V3, role: DrawRole, 
   }
 }
 
-export const shapeName: Record<BrushShape, string> = { box: 'block', cylinder: 'cylinder', wedge: 'wedge', stairs: 'stairs', polygon: 'prism' };
+export const shapeName: Record<BrushShape, string> = { box: 'block', cylinder: 'cylinder', sphere: 'sphere', wedge: 'wedge', stairs: 'stairs', polygon: 'prism' };
 
 /** Bounds of a brush entity in its own space (for pivots), null for other objects. */
 export const brushBounds = (e: EntityData) => {

@@ -56,6 +56,7 @@ export function BrushPanel({ draft, onBounds, onCreate, onCancel }: { draft: Dra
           options={[
             { value: 'box', label: t('brush.box') },
             { value: 'cylinder', label: t('brush.cylinder') },
+            { value: 'sphere', label: t('brush.sphere') },
             { value: 'wedge', label: t('brush.wedge') },
             { value: 'stairs', label: t('brush.stairs') },
             { value: 'polygon', label: t('brush.polygon') },
@@ -72,7 +73,7 @@ export function BrushPanel({ draft, onBounds, onCreate, onCancel }: { draft: Dra
             { value: 'collider', label: t('brush.collider') },
           ]}
         />
-        {opts.shape === 'cylinder' && (
+        {(opts.shape === 'cylinder' || opts.shape === 'sphere') && (
           <label className="cw-brush-opt">
             {t('brush.sides')}
             <span className="cw-brush-num">

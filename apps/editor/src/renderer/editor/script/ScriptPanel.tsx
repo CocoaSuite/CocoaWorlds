@@ -316,7 +316,13 @@ function EventRow({ ev, onRemove }: { ev: EventBlock; onRemove: () => void }) {
   const set = (patch: Partial<EventBlock>) => c.update((s) => replaceBlock(s, ev.id, (b) => ({ ...b, ...patch }) as EventBlock), 'Edit block');
   let content: ReactNode;
   if (ev.kind === 'start') content = w('start');
-  else if (ev.kind === 'use') content = w('use');
+  else if (ev.kind === 'use')
+    content = (
+      <>
+        {w('use')}, {w('usePrompt')} <kbd className="cw-key">E</kbd>{' '}
+        <TextSlot value={ev.prompt ?? ''} label={w('usePrompt')} onChange={(prompt) => set({ prompt } as Partial<EventBlock>)} />
+      </>
+    );
   else if (ev.kind === 'die') content = w('die');
   else if (ev.kind === 'breaks') content = w('breaks');
   else if (ev.kind === 'enter' || ev.kind === 'leave')

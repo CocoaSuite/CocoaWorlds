@@ -41,6 +41,7 @@ export function ToolBar() {
       <Divider />
       {B('box', 'block', t('tool.block'), 'B')}
       {B('cylinder', 'cylinder', t('tool.cylinder'))}
+      {B('sphere', 'sphere', t('tool.sphere'))}
       {B('wedge', 'wedge', t('tool.wedge'))}
       {B('stairs', 'stairs', t('tool.stairs'))}
       {B('polygon', 'polygon', t('tool.polygon'))}

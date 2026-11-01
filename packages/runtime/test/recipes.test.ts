@@ -123,3 +123,35 @@ describe('recipes', () => {
     w.dispose();
   });
 });
+
+describe('use prompts', () => {
+  it('looking at a door with “Door that opens when used” shows “Open”; looking away shows nothing', () => {
+    const door = brush('door', [-64, 0, -80], [64, 128, -64]);
+    const w = GameWorld.create(scene(floor(), spawn(), ...apply('door-use', door, [-64, 0, -80], [64, 128, -64])));
+    run(w, 0.2);
+    expect(w.usePrompt()).toBe('Open');
+    w.setPlayerInput({ yaw: Math.PI });
+    run(w, 0.05);
+    expect(w.usePrompt()).toBeNull();
+    // Out of reach: nothing either.
+    w.setPlayerInput({ yaw: 0, forward: -1 });
+    run(w, 1);
+    w.setPlayerInput({ forward: 0 });
+    run(w, 0.3);
+    expect(w.usePrompt()).toBeNull();
+    w.dispose();
+  });
+
+  it('a plain “When the player uses this” prompts with no word (shown as Use); the button says Press', () => {
+    const button = brush('button', [-16, 32, -80], [16, 96, -64]);
+    const w = GameWorld.create(scene(floor(), spawn(), ...apply('button', button, [-16, 32, -80], [16, 96, -64])));
+    run(w, 0.2);
+    expect(w.usePrompt()).toBe('Press');
+    w.dispose();
+    const box2 = brush('box', [-16, 32, -80], [16, 96, -64], { script: { version: 1, variables: [], handlers: [{ id: 'h', event: { id: 'e', kind: 'use' }, body: [] }] } });
+    const w2 = GameWorld.create(scene(floor(), spawn(), box2));
+    run(w2, 0.2);
+    expect(w2.usePrompt()).toBe('');
+    w2.dispose();
+  });
+});

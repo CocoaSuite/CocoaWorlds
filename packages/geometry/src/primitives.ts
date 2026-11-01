@@ -75,6 +75,35 @@ export function cylinder(min: V3, max: V3, sides = 16, surface: FaceSurface = de
  * Wedge (ramp): a box whose top slopes down from the back (−Z side) to the front (+Z side).
  * `facing` rotates which side is low: 0 = +Z, 90 = +X, 180 = −Z, 270 = −X.
  */
+/**
+ * A sphere (an ellipsoid when the box isn't a cube) fitting the box: `sides` faces around, half as many rings
+ * from pole to pole. Each band of a latitude–longitude sphere is a flat trapezoid, so it is an exact convex
+ * brush; the poles are fans of triangles.
+ */
+export function sphere(min: V3, max: V3, sides = 16, surface: FaceSurface = defaultSurface()): Brush {
+  const n = Math.max(4, Math.min(48, Math.round(sides)));
+  const rings = Math.max(2, Math.round(n / 2));
+  const c: V3 = [(min[0] + max[0]) / 2, (min[1] + max[1]) / 2, (min[2] + max[2]) / 2];
+  const r: V3 = [Math.abs(max[0] - min[0]) / 2, Math.abs(max[1] - min[1]) / 2, Math.abs(max[2] - min[2]) / 2];
+  const at = (ring: number, seg: number): V3 => {
+    const lat = -Math.PI / 2 + (ring / rings) * Math.PI;
+    const lon = (seg / n) * Math.PI * 2 + Math.PI / n;
+    return [c[0] + Math.cos(lat) * Math.cos(lon) * r[0], c[1] + Math.sin(lat) * r[1], c[2] + Math.cos(lat) * Math.sin(lon) * r[2]];
+  };
+  const faces: BrushFace[] = [];
+  for (let i = 0; i < rings; i++)
+    for (let j = 0; j < n; j++) {
+      // Three distinct corners of the band piece (at a pole two corners meet).
+      const a = at(i, j), b = at(i + 1, j), d = at(i, j + 1), e = at(i + 1, j + 1);
+      const pts = i === 0 ? [a, b, e] : [a, b, d];
+      let plane = planeFromPoints(pts[0]!, pts[1]!, pts[2]!);
+      if (!plane) continue;
+      if (signedDist(plane, c) > 0) plane = flip(plane);
+      faces.push({ plane, surface: cloneSurface(surface) });
+    }
+  return { faces };
+}
+
 export function wedge(min: V3, max: V3, facing: 0 | 90 | 180 | 270 = 0, surface: FaceSurface = defaultSurface()): Brush {
   const [x0, y0, z0] = min, [x1, y1, z1] = max;
   // Profile in the plane perpendicular to the slope, then extruded.

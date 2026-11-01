@@ -87,8 +87,11 @@ export type EventBlock =
   | { id: string; kind: 'enter'; zone: Ref }
   | { id: string; kind: 'leave'; zone: Ref }
   | { id: string; kind: 'message'; message: string }
-  /** The player pressed Use (E) while looking at this object (or anything inside it). */
-  | { id: string; kind: 'use' }
+  /**
+   * The player pressed Use (E) while looking at this object (or anything inside it). `prompt` is the word shown
+   * under the crosshair when the player looks at it (“E  Open”); empty shows “Use”.
+   */
+  | { id: string; kind: 'use'; prompt?: string }
   | { id: string; kind: 'every'; seconds: Expr }
   /** The player's health reached 0 (they start again at the Player start). */
   | { id: string; kind: 'die' }

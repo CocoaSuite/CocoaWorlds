@@ -48,7 +48,7 @@ const height = (t: RecipeTarget) => Math.max(1, Math.round(t.max[1] - t.min[1]))
 const handler = (event: EventBlock, body: Statement[]): Handler => ({ id: id(), event, body });
 const ev = {
   start: (): EventBlock => ({ id: id(), kind: 'start' }),
-  use: (): EventBlock => ({ id: id(), kind: 'use' }),
+  use: (prompt = ''): EventBlock => ({ id: id(), kind: 'use', prompt }),
   enter: (zone: string): EventBlock => ({ id: id(), kind: 'enter', zone: { entity: zone } }),
   leave: (zone: string): EventBlock => ({ id: id(), kind: 'leave', zone: { entity: zone } }),
   message: (message: string): EventBlock => ({ id: id(), kind: 'message', message }),
@@ -102,7 +102,7 @@ export const RECIPES: Recipe[] = [
     build: (t) => ({
       variables: [{ name: 'open', type: 'boolean', initial: false }],
       handlers: [
-        handler(ev.use(), [
+        handler(ev.use('Open'), [
           {
             id: id(),
             kind: 'if',
@@ -133,7 +133,7 @@ export const RECIPES: Recipe[] = [
       en: 'Press E on it to send the message “open” to everything. Doors with “Opens when it gets the message” react.',
       ru: 'Нажмите E на ней, чтобы отправить всем сообщение «open». Двери с рецептом «Открывается по сообщению» откроются.',
     },
-    build: () => ({ variables: [], handlers: [handler(ev.use(), [st.send('open'), st.log('Button pressed')])] }),
+    build: () => ({ variables: [], handlers: [handler(ev.use('Press'), [st.send('open'), st.log('Button pressed')])] }),
   },
   {
     id: 'pressure-plate',

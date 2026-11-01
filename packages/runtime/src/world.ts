@@ -471,6 +471,19 @@ export class GameWorld {
     if (this.player) Object.assign(this.player.input, input);
   }
 
+  /**
+   * What pressing Use would do right now: the prompt of what the player is looking at within reach ('' for
+   * no word), or null when there's nothing to use.
+   */
+  usePrompt(): string | null {
+    const hit = this.player?.aim();
+    const id = hit ? this.owner.get(hit.handle) : undefined;
+    if (!id || id === 'player') return null;
+    const targets: string[] = [];
+    for (let x: string | null | undefined = id; x; x = this.parentOf.get(x)) targets.push(x);
+    return this.runner.usePrompt(targets);
+  }
+
   /** The player pressed Use: on the next step, whatever they look at within reach gets “When the player uses this”. */
   use(): void {
     this.useQueued = true;

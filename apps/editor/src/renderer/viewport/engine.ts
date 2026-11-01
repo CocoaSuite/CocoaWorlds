@@ -35,6 +35,8 @@ export interface Hud {
   values: { name: string; value: string }[];
   /** Messages in the middle of the screen, oldest first. */
   messages: string[];
+  /** Looking at something usable: its prompt word ('' for plain “Use”), else null. */
+  use: string | null;
 }
 
 function formatValue(v: unknown): string {
@@ -1079,6 +1081,7 @@ export class ViewportEngine {
           hurt: (status?.sinceHurt ?? Infinity) < 0.35,
           values: screen.values.filter((v) => v.show).map((v) => ({ name: v.name, value: formatValue(v.value) })),
           messages: screen.messages,
+          use: this.locked ? this.play.usePrompt() : null,
         };
         const key = JSON.stringify(hud);
         if (key !== this.hudKey) {

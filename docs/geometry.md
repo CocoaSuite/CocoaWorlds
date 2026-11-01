@@ -113,3 +113,10 @@ alignment, the vertex tool, moving, rotating, scaling, saving) treats both kinds
 invisible walls, smoothing stairs into a ramp for the player, or blocking off ledges. A whole brush can be COL
 (Brush tool → COL) or only some faces (paint them). Hidden-face removal never lets a COL face hide a visible
 face it touches (`isInvisibleMaterial`), so a COL block against a wall leaves no hole in the game.
+
+## Sphere
+
+The Sphere brush (tool bar, or Sphere in the Brush tool) fits the drawn box, so a non-cube box makes an
+ellipsoid. **Sides** sets how many faces go around (4–48); there are half as many rings from pole to pole.
+Every band is a flat face, so a sphere is an ordinary convex brush: it can be cut, clipped, painted and
+vertex-edited like any other.

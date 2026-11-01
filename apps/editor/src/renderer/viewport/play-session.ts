@@ -194,6 +194,11 @@ export class PlaySession {
     return { values: this.world.gameValues(), messages: this.world.screenMessages() };
   }
 
+  /** What pressing Use would do now (see GameWorld.usePrompt). */
+  usePrompt(): string | null {
+    return this.world.usePrompt();
+  }
+
   /** What a text sign says now. */
   signText(id: string): string | undefined {
     return this.world.signText(id);

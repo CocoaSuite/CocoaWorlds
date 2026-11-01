@@ -274,3 +274,22 @@ describe('mesh', () => {
     expect(buildMesh([a, c], { cullTouchingFaces: true }).indices.length / 3).toBe(22);
   });
 });
+
+describe('sphere primitive', () => {
+  it('fits its box, is a valid convex brush, and gets rounder with more sides', async () => {
+    const { sphere, bounds, validate, volume, vertices } = await import('../src');
+    const s = sphere([-64, 0, -64], [64, 128, 64], 16);
+    expect(validate(s)).toEqual([]);
+    const b = bounds(s)!;
+    expect(b.max[1]).toBeCloseTo(128, 3);
+    expect(b.min[1]).toBeCloseTo(0, 3);
+    expect(b.max[0]).toBeLessThanOrEqual(64.001);
+    // 16 around × 8 rings.
+    expect(s.faces.length).toBe(16 * 8);
+    for (const v of vertices(s)) expect(Math.hypot(v[0], v[1] - 64, v[2])).toBeLessThan(64.01);
+    const ideal = (4 / 3) * Math.PI * 64 ** 3;
+    const v8 = volume(sphere([-64, 0, -64], [64, 128, 64], 8)), v24 = volume(sphere([-64, 0, -64], [64, 128, 64], 24));
+    expect(v8).toBeLessThan(v24);
+    expect(v24 / ideal).toBeGreaterThan(0.95);
+  });
+});
