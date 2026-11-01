@@ -252,3 +252,16 @@ export function duplicateCmd(doc: SceneDoc, ids: string[], offset: [number, numb
   }
   return { cmd: addEntitiesCmd(doc, copies, 'Duplicate'), newIds: roots };
 }
+
+/** Set (or remove, with `undefined`) one component's data. Consecutive edits with the same merge key collapse into one undo step. */
+export function setComponentCmd(doc: SceneDoc, id: string, name: string, data: ComponentData | undefined, label = 'Edit', mergeKey?: string): Command {
+  const prev = doc.get(id)?.components[name];
+  const before = prev === undefined ? undefined : clone(prev);
+  const after = data === undefined ? undefined : clone(data);
+  const put = (v: ComponentData | undefined) =>
+    doc.patch(id, (e) => {
+      if (v === undefined) delete e.components[name];
+      else e.components[name] = clone(v);
+    });
+  return { label, mergeKey, apply: () => put(after), revert: () => put(before) };
+}

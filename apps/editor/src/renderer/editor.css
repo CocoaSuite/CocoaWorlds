@@ -103,3 +103,14 @@ code { font: 12px var(--mono); color: var(--fg); }
   .cw-mid { grid-template-columns: 210px minmax(0, 1fr) 240px; }
   .cw-crumbs { display: none; }
 }
+
+/* Brush tool panel (floats at the bottom of the viewport) */
+.cw-brush-panel { position: absolute; left: 50%; bottom: 12px; transform: translateX(-50%); z-index: 3; display: flex; flex-direction: column; gap: 8px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5); width: min(760px, calc(100% - 24px)); }
+.cw-brush-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.cw-brush-dims { display: grid; grid-template-columns: auto repeat(3, 72px); gap: 6px; align-items: center; }
+.cw-brush-k { color: var(--mute); font-size: 12px; }
+.cw-brush-opt { display: flex; align-items: center; gap: 6px; color: var(--mute); font-size: 12px; }
+.cw-brush-num { width: 64px; display: block; }
+.cw-brush-hint { color: var(--mute); font-size: 12px; }
+.cw-brush-actions { align-items: center; justify-content: space-between; margin-top: 4px; }
+.cw-insp .cw-seg { justify-self: start; }

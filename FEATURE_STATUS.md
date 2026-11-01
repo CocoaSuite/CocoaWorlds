@@ -42,12 +42,31 @@ Last updated: 2026-11-01 (Phase 2, first slice).
 | Parent transforms affect children in the viewport | Planned | Parenting is stored; world placement arrives with the runtime scene graph (Phase 4). |
 | Multi-object transform | Planned | |
 
+## Brushes (Phase 3)
+
+| Feature | Status | Notes |
+|---|---|---|
+| Brush tool: block, cylinder (3–64 sides), wedge/ramp, stairs | **Done** | Draw footprint, pull up height (perspective) or type depth (top/front/side), preview, confirm. |
+| Exact sizes while drawing (size and corner fields) | **Done** | e.g. a 512 × 256 × 512 room. |
+| Solid and subtract brushes; live subtract (doorways stay movable) | **Done** | |
+| Apply cut (make a subtract permanent) | **Done** | Wall becomes separate convex brushes; undoable. |
+| Make hollow (room from a block) | **Done** | Six walls of a chosen thickness, grouped. |
+| Merge brushes whose union is convex | **Done** | |
+| Move/rotate/scale brushes with the gizmo; numeric size and centre | **Done** | Texture lock on move. |
+| Level rendering: dev grid texture, editor lighting, hidden-face removal, selection outlines | **Done** | Rebuilt on the main thread for now. |
+| Brushes saved in scenes (three points per face, exact integers on the grid) | **Done** | |
+| Geometry engine: carve/intersect/merge, vertex editing, validation, meshes, hulls | **Done** | Library and tests; see docs/geometry.md. |
+| Face selection, per-face materials, UV offset/scale/rotation | Planned | Next. |
+| Vertex and edge editing tools | Planned | Engine support done (G2: bent faces split into triangles). |
+| Clip tool | Planned | Engine support done. |
+| Polygon prism (custom footprint) | Planned | Engine support done. |
+
 ## Later phases
 
 | Area | Status |
 |---|---|
 | Brush geometry engine: primitives, carve/intersect/merge, vertex/face editing, meshes, collision hulls (Phase 3) | **Done** (library and tests; see docs/geometry.md) |
-| Brush tools in the editor, face materials UI (Phase 3) | Planned |
+
 | Entities, components, physics, triggers (Phase 4) | Planned |
 | Plain-language block scripting, graph view, VM (Phase 5) | Planned |
 | Source-style player controller, gameplay entities (Phase 6) | Planned |

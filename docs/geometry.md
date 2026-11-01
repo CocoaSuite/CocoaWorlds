@@ -52,6 +52,10 @@ Results are ordinary brushes: still convex, closed, editable, with materials and
 
 Tested cases include: doorway (3 pieces), window (4 pieces), cutter flush with both wall faces (coplanar), rotated cutter, cylindrical cutter, off-grid coordinates, overlaps smaller than the tolerance (treated as touching), cutter larger than the target (nothing left), and carve-then-merge restoring the original wall. A 2,000-point sampling test checks the hole is empty and the rest solid.
 
+## Live subtract in the level (decision G1)
+
+`buildWorld` takes every visible brush in the scene. Solid brushes are kept exactly as authored; each subtract brush that overlaps a solid cuts it while the level is being built, so moving or resizing a doorway re-cuts the wall without changing the saved wall brush. `bakeSubtract` ("Apply cut" in the editor) makes a cut permanent: the affected solids are replaced by their pieces and the cutter is removed, in one undoable step. `hollowBox` ("Make hollow") turns a block into six walls.
+
 ## Precision
 
 Distances under 0.001 u count as "on the plane". Generated coordinates are rounded to 1/1024 u. All maths is in 64-bit floats.

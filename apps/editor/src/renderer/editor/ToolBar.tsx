@@ -1,5 +1,6 @@
 /** Centred tool bar under the viewport (CocoaCanvas #tbar). Tools from later phases are shown disabled with a note. */
-import { Divider, ToolButton } from '@cocoaworlds/ui';
+import { Divider, ToolButton, type IconName } from '@cocoaworlds/ui';
+import type { BrushShape } from '../brush/brushes';
 import { t } from '../i18n';
 import { useEditor, type Tool } from '../store';
 
@@ -8,10 +9,24 @@ export function ToolBar() {
   const setTool = useEditor((s) => s.setTool);
   const snap = useEditor((s) => s.snap);
   const toggle = useEditor((s) => s.toggle);
+  const shape = useEditor((s) => s.brushOptions.shape);
+  const setBrushOptions = useEditor((s) => s.setBrushOptions);
   const grid = useEditor((s) => s.session?.project.settings.gridSize ?? 16);
   const later = (k: Parameters<typeof t>[0]) => `${t(k)} — ${t('tool.later')}`;
-  const T = (id: Tool, icon: Parameters<typeof ToolButton>[0]['icon'], label: string, key: string) => (
+  const T = (id: Tool, icon: IconName, label: string, key: string) => (
     <ToolButton icon={icon} label={label} shortcut={key} active={tool === id} onClick={() => setTool(id)} />
+  );
+  const B = (s: BrushShape, icon: IconName, label: string, key?: string) => (
+    <ToolButton
+      icon={icon}
+      label={label}
+      shortcut={key}
+      active={tool === 'brush' && shape === s}
+      onClick={() => {
+        setBrushOptions({ shape: s });
+        setTool('brush');
+      }}
+    />
   );
   return (
     <div className="cw-tbar" role="toolbar" aria-label="Tools">
@@ -20,16 +35,16 @@ export function ToolBar() {
       {T('rotate', 'rotate', t('tool.rotate'), 'E')}
       {T('scale', 'scale', t('tool.scale'), 'R')}
       <Divider />
-      <ToolButton icon="block" label={later('tool.block')} disabled />
-      <ToolButton icon="cylinder" label={later('tool.cylinder')} disabled />
-      <ToolButton icon="wedge" label={later('tool.wedge')} disabled />
-      <ToolButton icon="stairs" label={later('tool.stairs')} disabled />
+      {B('box', 'block', t('tool.block'), 'B')}
+      {B('cylinder', 'cylinder', t('tool.cylinder'))}
+      {B('wedge', 'wedge', t('tool.wedge'))}
+      {B('stairs', 'stairs', t('tool.stairs'))}
       <Divider />
       <ToolButton icon="vertex" label={later('tool.vertex')} disabled />
       <ToolButton icon="face" label={later('tool.face')} disabled />
       <ToolButton icon="clip" label={later('tool.clip')} disabled />
       <Divider />
-      <ToolButton icon="trigger" label={later('tool.trigger')} disabled />
+      <ToolButton icon="trigger" label={`${t('tool.trigger')} — ${t('soon')}`} disabled />
       <ToolButton icon="paint" label={later('tool.material')} disabled />
       <Divider />
       <button type="button" className={`cw-snap${snap ? ' on' : ''}`} aria-pressed={snap} title="Grid snapping (G)" onClick={() => toggle('snap')}>

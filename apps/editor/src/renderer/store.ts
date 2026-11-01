@@ -10,6 +10,7 @@ import {
   duplicateCmd,
   newEntity,
   renameCmd,
+  setComponentCmd,
   setFlagCmd,
   setTransformCmd,
   type Command,
@@ -17,12 +18,23 @@ import {
   type ProjectFile,
   type Transform,
 } from '@cocoaworlds/core';
+import {
+  bakeSubtract,
+  bounds,
+  hollowBox,
+  mergeAll,
+  translate,
+  validate,
+  type Brush,
+  type BrushRole,
+} from '@cocoaworlds/geometry';
 import { create } from 'zustand';
+import { brushComponent, brushOf, newBrushEntity, shapeBrushes, shapeName, worldBrushes, type ShapeOptions } from './brush/brushes';
 import { useShallow } from 'zustand/react/shallow';
 import type { OpenedProject } from '../shared/api';
 import { getLang, setLang, t, type Lang } from './i18n';
 
-export type Tool = 'select' | 'move' | 'rotate' | 'scale';
+export type Tool = 'select' | 'move' | 'rotate' | 'scale' | 'brush';
 export type ViewMode = 'perspective' | 'top' | 'front' | 'side';
 export type AddKind = 'empty' | 'pointLight' | 'spotLight' | 'sun' | 'spawn';
 export interface LogEntry {
@@ -58,6 +70,9 @@ interface State {
   recovery: OpenedProject['recovery'];
   renaming: string | null;
   focusRequest: number;
+  /** Settings for the brush tool. */
+  brushOptions: ShapeOptions;
+  brushRole: BrushRole;
 }
 
 interface Actions {
@@ -87,12 +102,30 @@ interface Actions {
   save(): Promise<boolean>;
   autosave(): Promise<void>;
   recover(accept: boolean): Promise<void>;
+  // brushes
+  setBrushOptions(o: Partial<ShapeOptions>): void;
+  setBrushRole(r: BrushRole): void;
+  createBrushes(min: [number, number, number], max: [number, number, number]): void;
+  setBrush(id: string, brush: Brush, mergeKey?: string, label?: string): void;
+  changeBrushRole(id: string, role: BrushRole): void;
+  applySubtract(ids: string[]): void;
+  makeHollow(id: string, thickness: number): void;
+  mergeSelection(): void;
 }
 
 const now = () => new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 
 let unsubDoc: (() => void) | null = null;
 let unsubHist: (() => void) | null = null;
+
+/** A short name for new brush entities: block, block_2, … */
+function uniqueName(doc: SceneDoc, base: string): string {
+  const names = new Set(doc.entities.map((e) => e.name));
+  if (!names.has(base)) return base;
+  let i = 2;
+  while (names.has(`${base}_${i}`)) i++;
+  return `${base}_${i}`;
+}
 
 export const useEditor = create<State & Actions>()((set, get) => ({
   lang: getLang(),
@@ -114,6 +147,8 @@ export const useEditor = create<State & Actions>()((set, get) => ({
   recovery: null,
   renaming: null,
   focusRequest: 0,
+  brushOptions: { shape: 'box', sides: 16, steps: 8, facing: 0 },
+  brushRole: 'solid',
 
   setLang(l) {
     setLang(l);
@@ -237,7 +272,18 @@ export const useEditor = create<State & Actions>()((set, get) => ({
     // Skip children whose ancestor is also selected; they come along with it.
     const roots = selection.filter((id) => !selection.some((o) => o !== id && doc.isAncestor(o, id)));
     const { cmd, newIds } = duplicateCmd(doc, roots, [g, 0, g]);
-    get().execute(cmd);
+    const h = get().history;
+    h.begin('Duplicate');
+    h.execute(cmd);
+    // Brush geometry is stored in world space, so copies move their faces rather than their transform.
+    for (const id of newIds) {
+      const e = doc.get(id);
+      const b = brushOf(e);
+      if (!e || !b) continue;
+      h.execute(setTransformCmd(doc, id, { ...e.transform, position: [0, 0, 0] }));
+      h.execute(setComponentCmd(doc, id, 'brush', brushComponent(translate(b.brush, [g, 0, g]), b.role) as never, 'Duplicate'));
+    }
+    h.commit();
     set({ selection: newIds });
   },
 
@@ -313,6 +359,132 @@ export const useEditor = create<State & Actions>()((set, get) => ({
       get().log('info', 'Recovery', 'Autosave discarded');
     }
     set({ recovery: null });
+  },
+
+  setBrushOptions(o) {
+    set((s) => ({ brushOptions: { ...s.brushOptions, ...o } }));
+  },
+  setBrushRole: (brushRole) => set({ brushRole }),
+
+  createBrushes(min, max) {
+    const { doc, brushOptions, brushRole } = get();
+    if (!doc) return;
+    const brushes = shapeBrushes(brushOptions, min, max, brushRole);
+    const problems = brushes.flatMap((b) => validate(b));
+    if (problems.length) {
+      get().notify(`The brush is too small to build (${problems[0]}).`);
+      return;
+    }
+    const base = brushRole === 'subtract' ? 'cut' : shapeName[brushOptions.shape];
+    const ents = brushes.map((b) => newBrushEntity(uniqueName(doc, base), b, brushRole));
+    // Give each a unique name even within one batch (stairs).
+    const used = new Set(doc.entities.map((e) => e.name));
+    for (const e of ents) {
+      let n = e.name, i = 2;
+      while (used.has(n)) n = `${base}_${i++}`;
+      e.name = n;
+      used.add(n);
+    }
+    get().execute(addEntitiesCmd(doc, ents, `Create ${base}`));
+    set({ selection: ents.map((e) => e.id) });
+    const [x, y, z] = [max[0] - min[0], max[1] - min[1], max[2] - min[2]].map((n) => Math.abs(Math.round(n * 100) / 100));
+    get().log('info', 'Brush', `Created ${ents.length > 1 ? `${ents.length} ${base} brushes` : ents[0]!.name} (${x} × ${y} × ${z})`);
+  },
+
+  setBrush(id, brush, mergeKey, label = 'Edit brush') {
+    const doc = get().doc;
+    const cur = brushOf(doc?.get(id));
+    if (!doc || !cur) return;
+    get().execute(setComponentCmd(doc, id, 'brush', brushComponent(brush, cur.role) as never, label, mergeKey));
+  },
+
+  changeBrushRole(id, role) {
+    const doc = get().doc;
+    const cur = brushOf(doc?.get(id));
+    if (!doc || !cur || cur.role === role) return;
+    get().execute(setComponentCmd(doc, id, 'brush', brushComponent(cur.brush, role) as never, role === 'subtract' ? 'Make subtract' : 'Make solid'));
+  },
+
+  applySubtract(ids) {
+    const doc = get().doc;
+    if (!doc) return;
+    const subs = ids.filter((id) => brushOf(doc.get(id))?.role === 'subtract');
+    if (!subs.length) return;
+    const { replace } = bakeSubtract(worldBrushes(doc), subs);
+    const h = get().history;
+    h.begin('Apply cut');
+    const added: string[] = [];
+    for (const [solidId, pieces] of replace) {
+      const src = doc.get(solidId)!;
+      const ents = pieces.map((p, i) => {
+        const e = newBrushEntity(`${src.name}${pieces.length > 1 ? `_${i + 1}` : ''}`, p, 'solid');
+        e.parent = src.parent;
+        return e;
+      });
+      h.execute(deleteEntitiesCmd(doc, [solidId]));
+      h.execute(addEntitiesCmd(doc, ents));
+      added.push(...ents.map((e) => e.id));
+    }
+    h.execute(deleteEntitiesCmd(doc, subs));
+    h.commit();
+    set({ selection: added });
+    get().log('info', 'Brush', `Applied ${subs.length} cut(s): ${replace.size} brush(es) replaced by ${added.length} piece(s)`);
+  },
+
+  makeHollow(id, thickness) {
+    const doc = get().doc;
+    const e = doc?.get(id);
+    const b = brushOf(e);
+    if (!doc || !e || !b || b.role !== 'solid') return;
+    const bb = bounds(b.brush);
+    if (!bb) return;
+    let walls: Brush[];
+    try {
+      walls = hollowBox(bb.min, bb.max, thickness, b.brush.faces[0]?.surface);
+    } catch (err) {
+      get().notify((err as Error).message);
+      return;
+    }
+    const names = ['floor', 'ceiling', 'wall_west', 'wall_east', 'wall_north', 'wall_south'];
+    const group = newEntity(e.name, {});
+    group.parent = e.parent;
+    const ents = walls.map((w, i) => {
+      const x = newBrushEntity(names[i] ?? `wall_${i}`, w, 'solid');
+      x.parent = group.id;
+      return x;
+    });
+    const h = get().history;
+    h.begin('Make hollow');
+    h.execute(deleteEntitiesCmd(doc, [id]));
+    h.execute(addEntitiesCmd(doc, [group, ...ents]));
+    h.commit();
+    set({ selection: ents.map((x) => x.id) });
+    get().log('info', 'Brush', `Hollowed ${e.name} into 6 walls ${thickness} units thick`);
+  },
+
+  mergeSelection() {
+    const { doc, selection } = get();
+    if (!doc) return;
+    const solids = selection.map((id) => ({ id, b: brushOf(doc.get(id)) })).filter((x) => x.b?.role === 'solid');
+    if (solids.length < 2) return;
+    const merged = mergeAll(solids.map((x) => x.b!.brush));
+    if (merged.length === solids.length) {
+      get().notify('These brushes don’t form a convex shape together, so they stay separate.');
+      return;
+    }
+    const first = doc.get(solids[0]!.id)!;
+    const ents = merged.map((m, i) => {
+      const e = newBrushEntity(merged.length > 1 ? `${first.name}_${i + 1}` : first.name, m, 'solid');
+      e.parent = first.parent;
+      return e;
+    });
+    const h = get().history;
+    h.begin('Merge');
+    h.execute(deleteEntitiesCmd(doc, solids.map((x) => x.id)));
+    h.execute(addEntitiesCmd(doc, ents));
+    h.commit();
+    set({ selection: ents.map((e) => e.id) });
+    get().log('info', 'Brush', `Merged ${solids.length} brushes into ${merged.length}`);
   },
 }));
 

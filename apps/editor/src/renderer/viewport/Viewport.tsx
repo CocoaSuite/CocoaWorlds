@@ -5,6 +5,8 @@ import { useEffect, useRef, useState } from 'react';
 import { flyState } from '../editor/shortcuts';
 import { t } from '../i18n';
 import { useSelectedEntities, useEditor, type ViewMode } from '../store';
+import type { DraftState } from './brush-draft';
+import { BrushPanel } from './BrushPanel';
 import { ViewportEngine, type ViewportStats } from './engine';
 
 export function Viewport() {
@@ -13,6 +15,9 @@ export function Viewport() {
   const [stats, setStats] = useState<ViewportStats | null>(null);
   const [ctx, setCtx] = useState<{ x: number; y: number; ground: Vec3 | null } | null>(null);
   const [glError, setGlError] = useState<string | null>(null);
+  const [draft, setDraft] = useState<DraftState | null>(null);
+  const brushOptions = useEditor((s) => s.brushOptions);
+  const brushRole = useEditor((s) => s.brushRole);
 
   const doc = useEditor((s) => s.doc);
   const rev = useEditor((s) => s.rev);
@@ -35,6 +40,10 @@ export function Viewport() {
         select: (ids, mode) => useEditor.getState().select(ids, mode),
         beginEdit: (label) => useEditor.getState().begin(label),
         liveTransform: (id, tr) => useEditor.getState().setTransform(id, tr, 'gizmo'),
+        liveBrush: (id, b) => useEditor.getState().setBrush(id, b, 'gizmo', 'Transform brush'),
+        draft: setDraft,
+        createBrush: (min, max) => useEditor.getState().createBrushes(min, max),
+        cancelTool: () => useEditor.getState().setTool('select'),
         endEdit: () => useEditor.getState().commit(),
         contextMenu: (x, y, ground) => setCtx({ x, y, ground }),
         stats: setStats,
@@ -64,8 +73,11 @@ export function Viewport() {
     engine.current?.setSelection(selection);
   }, [selection]);
   useEffect(() => {
-    engine.current?.setGizmoMode(tool === 'select' ? 'none' : tool === 'move' ? 'translate' : tool);
+    engine.current?.setGizmoMode(tool === 'select' || tool === 'brush' ? 'none' : tool === 'move' ? 'translate' : tool);
   }, [tool]);
+  useEffect(() => {
+    engine.current?.setBrushTool(tool === 'brush', brushOptions, brushRole);
+  }, [tool, brushOptions, brushRole]);
   useEffect(() => {
     engine.current?.setView(view);
   }, [view]);
@@ -137,6 +149,14 @@ export function Viewport() {
         <div className="cw-ov cw-ov-br mono" data-testid="viewport-stats">
           {stats.frameMs.toFixed(1)} ms · {stats.draws} draws · {stats.triangles.toLocaleString()} tris
         </div>
+      )}
+      {tool === 'brush' && (
+        <BrushPanel
+          draft={draft}
+          onBounds={(min, max) => engine.current?.setDraftBounds(min, max)}
+          onCreate={() => engine.current?.confirmDraft()}
+          onCancel={() => engine.current?.cancelDraft()}
+        />
       )}
       {ctx && <ContextMenu x={ctx.x} y={ctx.y} items={ctxItems} onClose={() => setCtx(null)} />}
     </div>

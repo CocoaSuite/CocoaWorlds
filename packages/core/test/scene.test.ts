@@ -9,6 +9,7 @@ import {
   newScene,
   renameCmd,
   reparentCmd,
+  setComponentCmd,
   setFlagCmd,
   setTransformCmd,
 } from '../src/scene-doc';
@@ -94,5 +95,23 @@ describe('SceneDoc commands', () => {
     const file = doc.toFile();
     h.execute(renameCmd(doc, room.id, 'changed'));
     expect(file.entities.find((e) => e.id === room.id)?.name).toBe('room');
+  });
+});
+
+describe('setComponentCmd', () => {
+  it('sets, merges and removes component data with undo', () => {
+    const { doc, h, room } = setup();
+    h.begin('Drag');
+    h.execute(setComponentCmd(doc, room.id, 'brush', { size: 1 }, 'Resize', 'k'));
+    h.execute(setComponentCmd(doc, room.id, 'brush', { size: 2 }, 'Resize', 'k'));
+    h.commit();
+    expect(doc.get(room.id)?.components.brush).toEqual({ size: 2 });
+    h.undo();
+    expect(doc.get(room.id)?.components.brush).toBeUndefined();
+    h.redo();
+    h.execute(setComponentCmd(doc, room.id, 'brush', undefined));
+    expect(doc.get(room.id)?.components.brush).toBeUndefined();
+    h.undo();
+    expect(doc.get(room.id)?.components.brush).toEqual({ size: 2 });
   });
 });

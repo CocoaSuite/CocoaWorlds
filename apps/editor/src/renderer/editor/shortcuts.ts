@@ -12,6 +12,7 @@ export const SHORTCUTS: { label: string; keys: string[] }[] = [
   { label: 'Move tool', keys: ['W'] },
   { label: 'Rotate tool', keys: ['E'] },
   { label: 'Scale tool', keys: ['R'] },
+  { label: 'Brush tool (draw, set height, click or Enter)', keys: ['B'] },
   { label: 'Perspective / Top / Front / Side', keys: ['1', '2', '3', '4'] },
   { label: 'Frame selected', keys: ['F'] },
   { label: 'Look around (perspective)', keys: ['Right-drag', 'W A S D'] },
@@ -69,6 +70,9 @@ export function useShortcuts(openKeys: () => void): void {
           return s.setTool('rotate');
         case 'KeyR':
           return s.setTool('scale');
+        case 'KeyB':
+          s.setBrushOptions({ shape: 'box' });
+          return s.setTool('brush');
         case 'KeyF':
           return s.frameSelection();
         case 'KeyG':

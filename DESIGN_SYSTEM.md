@@ -116,7 +116,7 @@ CocoaWorlds keeps this frame exactly and adds one thing: a collapsible **bottom 
 
 - **Keyboard:** Space held = temporary pan. Esc steps out one level (exit sub-mode → leave group → back to Select tool → clear selection). Enter steps in. F2 renames. Delete/Backspace deletes. Arrows nudge (Shift = larger step). `?` opens the shortcut sheet.
 - **Modifier shortcuts:** Ctrl/⌘ + Z undo, Shift+Z / Y redo, D duplicate, G group, Shift+G ungroup, A select all, S save, Shift+S save as, O open, `[` `]` reorder, `=` `-` `0` zoom.
-- **Tool letters:** CocoaCanvas uses V move, H hand, R rect, O ellipse, L line, P pen, T text. CocoaWorlds keeps V (select). Implemented: W move, E rotate, R scale, F frame selected, G toggle snapping, 1–4 switch views, Space+drag pan. Reserved for Phase 3: B block brush, C clip, X vertex edit. The editor's `?` sheet lists the current set.
+- **Tool letters:** CocoaCanvas uses V move, H hand, R rect, O ellipse, L line, P pen, T text. CocoaWorlds keeps V (select). Implemented: W move, E rotate, R scale, F frame selected, G toggle snapping, 1–4 switch views, Space+drag pan. B brush tool (Enter confirms, Esc cancels a brush in progress). Reserved: C clip, X vertex edit. The editor's `?` sheet lists the current set.
 - **Fields never steal shortcuts:** keydown inside inputs stops propagation; Enter commits, Esc cancels.
 - **Shortcut keys are read by physical layout** (CocoaCanvas' `latKey`), so shortcuts work with a Russian keyboard layout.
 - **Inline rename:** double-click or F2 swaps the row label for a 22px input.

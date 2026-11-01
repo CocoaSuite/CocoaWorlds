@@ -18,11 +18,15 @@ Status values: **Approved** (signed off by the product owner), **Proposed** (rec
 | D9 | Desktop export | Electron runtime shell via electron-builder | Tauri runtime shell (smaller) | **Approved** (2026-11-01) |
 | D10 | Web export | Same runtime bundled as static site | Separate web-only runtime | **Approved** (2026-11-01) |
 | D11 | Custom JS scripting | Deferred; later in a Worker with a capability API | Unrestricted scripts | **Approved — deferred past v1** (2026-11-01) |
+| G1 | Subtract behaviour | Live subtract brushes: a doorway stays an editable brush and solids re-cut instantly; Apply bakes to plain brushes; destructive carve also offered | Destructive carve only (Hammer) | **Approved** (2026-11-01) |
+| G2 | Vertex edits that bend a face | Split the bent face into flat triangles; dents still refused | Refuse the move | **Approved** (2026-11-01) |
 | D12 | Editor UI stack | React + TypeScript + Zustand + Vite, CocoaCanvas CSS copied into a UI package | Vanilla TS like CocoaCanvas; Svelte | **Approved** (2026-11-01) |
 
 Details and trade-offs for each: [ARCHITECTURE.md](ARCHITECTURE.md).
 
 ## Log
+
+- **2026-11-01** — Approved G1 (live subtract brushes) and G2 (split bent faces) after reviewing the geometry engine.
 
 - **2026-11-01** — Routine choices made during Phase 2 (reversible, recorded for reference): Y-up coordinates with degrees in YXZ order; esbuild for the main/preload bundles and Vite for the UI; the editor grid is a shader rather than line geometry; editor-only overlays use Three.js directly while game content will go through the render adapter.
 

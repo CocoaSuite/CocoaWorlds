@@ -8,7 +8,10 @@
 - **No box selection** in the viewport yet.
 - **Lights are markers only.** They don't light the scene until materials and lighting land (Phase 7).
 - **One scene per project in the UI.** The format supports a scene list; scene management UI comes later.
-- **Brush, script, play and build tools are visible but disabled**, each labelled with the phase that adds it.
+- **Some tools are visible but disabled** (vertex, face, clip, materials, triggers, Play, Build), each labelled with when it arrives.
+- **Level geometry rebuilds on the main thread.** Fine for hundreds of brushes; very large levels may stutter while editing until the rebuild moves to a worker. Hidden-face removal is O(n²) for now.
+- **Brush rotation re-projects textures** (world alignment). Texture lock is exact for moves only.
+- **Carving can drop hair-thin slivers** (< 0.5 u thick, ≤ 8 cubic units) left by cutters at very shallow angles; the count is reported.
 - **Automated end-to-end tests run on a software renderer** (SwiftShader). Real-GPU behaviour is covered by manual testing only so far.
 
 ## Expected limitations of the approved architecture

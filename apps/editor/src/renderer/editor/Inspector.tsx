@@ -2,6 +2,7 @@
 import type { EntityData, Transform, Vec3 } from '@cocoaworlds/core';
 import { Field, NumberField, PanelHeader, Section, Switch } from '@cocoaworlds/ui';
 import { t } from '../i18n';
+import { BrushInspector, MultiBrushActions } from './BrushInspector';
 import { useSelectedEntities, useEditor } from '../store';
 
 export function Inspector() {
@@ -13,18 +14,54 @@ export function Inspector() {
       <PanelHeader title={t('insp.title')}>{kind && <span className="cw-ph-note">{kind}</span>}</PanelHeader>
       <div className="cw-insp cw-scroll">
         {sel.length === 0 && <SceneSettings />}
-        {sel.length === 1 && <EntityInspector e={sel[0]!} />}
+        {sel.length === 1 && (sel[0]!.components.brush ? <BrushEntity e={sel[0]!} /> : <EntityInspector e={sel[0]!} />)}
         {sel.length > 1 && (
-          <p className="cw-empty">
-            {sel.length} {t('insp.multi')}
-          </p>
+          <>
+            <p className="cw-empty">
+              {sel.length} {t('insp.multi')}
+            </p>
+            <MultiBrushActions count={sel.filter((e) => (e.components.brush as { role?: string } | undefined)?.role === 'solid').length} />
+          </>
         )}
       </div>
     </aside>
   );
 }
 
+/** Brushes: name, brush settings, visibility. Their transform lives in the geometry, so no transform rows. */
+function BrushEntity({ e }: { e: EntityData }) {
+  const s = useEditor.getState();
+  return (
+    <>
+      <input
+        className="cw-input"
+        aria-label={t('insp.name')}
+        key={`${e.id}-${e.name}`}
+        defaultValue={e.name}
+        onKeyDown={(ev) => {
+          ev.stopPropagation();
+          if (ev.key === 'Enter') ev.currentTarget.blur();
+        }}
+        onBlur={(ev) => s.rename(e.id, ev.currentTarget.value)}
+      />
+      <BrushInspector e={e} />
+      <Section title={t('insp.display')}>
+        <div className="cw-flagrow">
+          <span>{t('insp.visible')}</span>
+          <Switch label={t('insp.visible')} checked={e.visible} onChange={(v) => s.setFlag(e.id, 'visible', v)} />
+        </div>
+        <div className="cw-flagrow">
+          <span>{t('insp.locked')}</span>
+          <Switch label={t('insp.locked')} checked={e.locked} onChange={(v) => s.setFlag(e.id, 'locked', v)} />
+        </div>
+      </Section>
+    </>
+  );
+}
+
 function componentLabel(e: EntityData): string {
+  const brush = e.components.brush as { role?: string } | undefined;
+  if (brush) return brush.role === 'subtract' ? t('brush.subtract') : t('insp.brush');
   const light = e.components.light as { kind?: string } | undefined;
   if (light) return `${light.kind ?? ''} light`;
   if (e.components.playerSpawn) return 'Player spawn';
