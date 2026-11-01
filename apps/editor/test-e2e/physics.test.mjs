@@ -39,10 +39,10 @@ test('components, trigger zone, play and stop', async () => {
     assert.equal(await physics.getByLabel('Moves', { exact: true }).inputValue(), 'dynamic');
     await physics.getByLabel('Bounce', { exact: true }).fill('0');
     await physics.getByLabel('Bounce', { exact: true }).press('Enter');
-    // Only Breakable and a Script still fit a moving brush (a trigger zone or conveyor can't move; lights and
+    // Only Breakable, a Script and a Sound still fit a moving brush (a trigger zone or conveyor can't move; lights and
     // shapes are for point objects).
     await insp().getByRole('button', { name: 'Add component' }).click();
-    assert.deepEqual((await page.getByRole('menuitem').allTextContents()).map((x) => x.split(' — ')[0]), ['Breakable', 'Script']);
+    assert.deepEqual((await page.getByRole('menuitem').allTextContents()).map((x) => x.split(' — ')[0]), ['Breakable', 'Script', 'Sound']);
     await page.keyboard.press('Escape');
 
     // 2. The trigger zone notices physics objects.
