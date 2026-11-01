@@ -70,3 +70,19 @@ full health (the score is kept). A project that doesn't want health or a score s
 | Change the score by *n* | Adds *n* to the score (the score appears on screen the first time a script uses it) |
 | the player's health, the score | Values for comparisons and text (“If the player's health < 30 …”) |
 | When the player dies | Runs when health reaches 0, after the player has started again |
+
+## Game values, messages and signs
+
+**Game values** are shared by every script in the project: Cash, Gems, Round. Add them with **+ Game value**
+in the Visual script tab: a name, a type (number, yes/no, text), a starting value, and whether it is shown
+**on screen** while playing. They are saved in the project file straight away. In the blocks they appear in
+every variable menu marked “(game)”; a script's own variable with the same name hides the game value.
+
+| Block | What it does |
+|---|---|
+| Show on screen *text* for *n* seconds | A message in the middle of the screen (the last three stay up); doesn't wait |
+| Set the text of *sign* to *text* | Changes what a Text sign says while playing |
+
+A **Text sign** (Add › Text sign, or the Text sign component on any point object) shows text in the world:
+the text (several lines allowed), letter height, colour, a dark background, and whether it always faces the
+camera. Otherwise it is a flat plaque, read from its front (+Z) side; turn the object to aim it.

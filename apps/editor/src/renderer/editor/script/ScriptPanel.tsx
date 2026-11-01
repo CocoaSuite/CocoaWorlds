@@ -30,20 +30,23 @@ import {
   type StatementKind,
   type VariableDef,
 } from '@cocoaworlds/scripting';
-import { gameRules } from '@cocoaworlds/core';
+import type { GameValue } from '@cocoaworlds/core';
 import { Button, ContextMenu, IconButton, type MenuEntry } from '@cocoaworlds/ui';
 import { createContext, useContext, useMemo, useState, type ReactNode } from 'react';
 import { t } from '../../i18n';
 import { useEditor } from '../../store';
+import { sceneInfo } from './scene-info';
 import { STATEMENT_GROUPS, VALUES_FOR, axisLabel, directionLabel, eventName, groupTitle, statementName, valueName, w } from './words';
 
 interface Ctx {
   owner: string;
   script: Script;
+  /** Game values shared by every script (from the project). */
+  globals: GameValue[];
   update: (fn: (s: Script) => Script, label: string, mergeKey?: string) => void;
   problems: Map<string, Problem[]>;
   active: Set<string>;
-  objects: { id: string; name: string; isZone: boolean }[];
+  objects: { id: string; name: string; isZone: boolean; isSign: boolean }[];
   menu: (x: number, y: number, items: MenuEntry[]) => void;
   /** The handler being drawn (for “the thing that entered”). */
   otherAllowed: boolean;
@@ -64,19 +67,20 @@ export function ScriptPanel() {
 
   const owner = selection.length === 1 ? doc?.get(selection[0]!) : undefined;
   const script = owner?.components.script as unknown as Script | undefined;
+  const project = useEditor((s) => s.session?.project);
+  const globals = useMemo(() => project?.settings.values ?? [], [project]);
   const objects = useMemo(
-    () => (doc ? doc.entities.map((e) => ({ id: e.id, name: e.name, isZone: !!e.components.trigger })) : []),
+    () => (doc ? doc.entities.map((e) => ({ id: e.id, name: e.name, isZone: !!e.components.trigger, isSign: !!e.components.sign })) : []),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [doc, useEditor.getState().rev],
   );
   const problems = useMemo(() => {
     const m = new Map<string, Problem[]>();
     if (!owner || !script) return m;
-    const info = { objects: new Map(objects.map((o) => [o.id, { name: o.name, isZone: o.isZone }])), rules: gameRules(useEditor.getState().session?.project.settings) };
+    const info = sceneInfo(doc!, project);
     for (const p of compileScript(owner.id, script, info).problems) m.set(p.block, [...(m.get(p.block) ?? []), p]);
     return m;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [owner, script, objects, useEditor.getState().session?.project]);
+  }, [owner, script, objects, project, globals]);
 
   if (!owner) return <div className="cw-muted cw-script-empty">{t('script.selectObject')}</div>;
   if (!script)
@@ -93,6 +97,7 @@ export function ScriptPanel() {
   const ctx: Ctx = {
     owner: owner.id,
     script,
+    globals,
     update: (fn, label, mergeKey) => st.updateScript(owner.id, fn, label, mergeKey),
     problems,
     active: new Set(active.get(owner.id) ?? []),
@@ -119,6 +124,7 @@ export function ScriptPanel() {
         <div className="cw-script-head">
           <span className="cw-script-owner">{t('script.title').replace('{name}', owner.name)}</span>
           <Variables />
+          <GameValues />
           <span className="cw-sp" />
           <Button onClick={() => st.openDialog('recipes')}>{t('recipe.open')}</Button>
           <Button onClick={addStack}>{t('script.addStack')}</Button>
@@ -201,6 +207,72 @@ function Variables() {
       ))}
       <Button size="sm" onClick={add}>
         {t('script.addVariable')}
+      </Button>
+    </div>
+  );
+}
+
+/** Game values: shared by every script in the project, saved in the project file. */
+function GameValues() {
+  const c = useC();
+  const save = useEditor((s) => s.setGameValues);
+  const playing = useEditor((s) => !!s.playing);
+  const list = c.globals;
+  const put = (next: GameValue[], label: string) => !playing && void save(next, label);
+  const add = () => {
+    let n = 1;
+    const base = list.length ? 'Value' : 'Cash';
+    let name = base;
+    while (list.some((v) => v.name === name)) name = `${base}${++n}`;
+    put([...list, { name, type: 'number', initial: 0, show: true }], `Added the game value ${name}`);
+  };
+  const edit = (i: number, next: GameValue) => put(list.map((v, j) => (j === i ? next : v)), `Changed the game value ${next.name}`);
+  return (
+    <div className="cw-vars" aria-label={t('script.gameValues')}>
+      <span className="cw-muted" title={t('script.gameValuesHint')}>
+        {t('script.gameValues')}
+      </span>
+      {list.map((v, i) => (
+        <span key={v.name} className="cw-var game">
+          <input
+            className="cw-input cw-var-name"
+            aria-label={t('script.gameValueName')}
+            defaultValue={v.name}
+            onKeyDown={(e) => {
+              e.stopPropagation();
+              if (e.key === 'Enter') e.currentTarget.blur();
+            }}
+            onBlur={(e) => {
+              const name = e.currentTarget.value.trim();
+              if (!name || name === v.name) return void (e.currentTarget.value = v.name);
+              if (list.some((x) => x.name === name)) return void (e.currentTarget.value = v.name);
+              edit(i, { ...v, name });
+            }}
+          />
+          <select
+            className="cw-input cw-mini"
+            aria-label={`${v.name} ${t('script.varType')}`}
+            value={v.type}
+            onChange={(e) => {
+              const type = e.target.value as GameValue['type'];
+              edit(i, { ...v, type, initial: type === 'number' ? 0 : type === 'boolean' ? false : '' });
+            }}
+          >
+            <option value="number">{t('script.typeNumber')}</option>
+            <option value="boolean">{t('script.typeBoolean')}</option>
+            <option value="text">{t('script.typeText')}</option>
+          </select>
+          <span className="cw-muted">=</span>
+          <InlineValue type={v.type} value={v.initial} label={`${v.name} ${t('script.startsAt')}`} onChange={(initial) => edit(i, { ...v, initial })} />
+          <label className="cw-var-show">
+            <input type="checkbox" checked={v.show} aria-label={`${v.name}: ${t('script.showOnScreen')}`} onChange={(e) => edit(i, { ...v, show: e.target.checked })} />
+            {t('script.showOnScreen')}
+          </label>
+          <IconButton icon="close" label={`${t('comp.remove')} ${v.name}`} className="cw-var-x" onClick={() => put(list.filter((_, j) => j !== i), `Removed the game value ${v.name}`)} />
+        </span>
+      ))}
+      <Button size="sm" onClick={add}>
+        {t('script.addGameValue')}
       </Button>
     </div>
   );
@@ -442,6 +514,19 @@ function statementWords(s: Statement, set: (patch: Record<string, unknown>, merg
       return w('forever');
     case 'stop':
       return w('stop');
+    case 'say':
+      return (
+        <>
+          {w('say')} <ExprSlot expr={s.text} type="text" label={w('say')} /> {w('forWord')} <ExprSlot expr={s.seconds} type="number" label={`${w('say')} ${w('forWord')}`} /> {w('seconds')}
+        </>
+      );
+    case 'setText':
+      return (
+        <>
+          {w('setText')} <RefSlot value={s.target} signsOnly onChange={(target) => set({ target })} label={w('setText')} /> {w('setTo')}{' '}
+          <ExprSlot expr={s.text} type="text" label={`${w('setText')} ${w('setTo')}`} />
+        </>
+      );
     case 'hurt':
     case 'heal':
     case 'addScore':
@@ -470,11 +555,11 @@ function BlockProblems({ id }: { id: string }) {
 
 // ── Slots ──
 
-function RefSlot({ value, onChange, label, zonesOnly, allowNone }: { value: Ref | null; onChange: (r: Ref | null) => void; label: string; zonesOnly?: boolean; allowNone?: boolean }) {
+function RefSlot({ value, onChange, label, zonesOnly, signsOnly, allowNone }: { value: Ref | null; onChange: (r: Ref | null) => void; label: string; zonesOnly?: boolean; signsOnly?: boolean; allowNone?: boolean }) {
   const c = useC();
   const enc = (r: Ref | null) => (r === null ? 'none' : 'self' in r ? 'self' : 'other' in r ? 'other' : `e:${r.entity}`);
   const dec = (v: string): Ref | null => (v === 'none' ? null : v === 'self' ? { self: true } : v === 'other' ? { other: true } : { entity: v.slice(2) });
-  const objs = c.objects.filter((o) => o.id !== c.owner && (!zonesOnly || o.isZone));
+  const objs = c.objects.filter((o) => o.id !== c.owner && (!zonesOnly || o.isZone) && (!signsOnly || o.isSign));
   const current = enc(value);
   const missing = value && 'entity' in value && !c.objects.some((o) => o.id === value.entity);
   return (
@@ -511,12 +596,19 @@ function TextSlot({ value, onChange, label }: { value: string; onChange: (v: str
 function VariableSlot({ value, onChange, label, numbersOnly }: { value: string; onChange: (v: string) => void; label: string; numbersOnly?: boolean }) {
   const c = useC();
   const vars = c.script.variables.filter((v) => !numbersOnly || v.type === 'number');
+  // Game values the script's own variables don't hide.
+  const games = c.globals.filter((g) => (!numbersOnly || g.type === 'number') && !c.script.variables.some((v) => v.name === g.name));
   return (
     <select className="cw-input cw-var-slot" aria-label={label} value={value} onChange={(e) => onChange(e.target.value)}>
-      {!vars.some((v) => v.name === value) && <option value={value}>{value || w('pickVariable')}</option>}
+      {!vars.some((v) => v.name === value) && !games.some((g) => g.name === value) && <option value={value}>{value || w('pickVariable')}</option>}
       {vars.map((v) => (
         <option key={v.name} value={v.name}>
           {v.name}
+        </option>
+      ))}
+      {games.map((g) => (
+        <option key={`g:${g.name}`} value={g.name}>
+          {g.name} ({w('gameValue')})
         </option>
       ))}
     </select>

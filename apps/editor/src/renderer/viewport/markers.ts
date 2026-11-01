@@ -2,8 +2,9 @@
  * Editor-only visuals for entities that have no geometry of their own yet (spawn points, lights, empties).
  * Each marker has an invisible pick volume so it can be clicked.
  */
-import type { EntityData } from '@cocoaworlds/core';
+import { readComponent, type EntityData, type SignData } from '@cocoaworlds/core';
 import * as THREE from 'three';
+import { buildSign } from './sign';
 
 export const COLORS = {
   idle: 0xb8b8b8,
@@ -76,7 +77,24 @@ export function buildMarker(e: EntityData): Marker {
   let baseColor = COLORS.idle;
   const light = e.components.light as { kind?: string; range?: number; angle?: number } | undefined;
 
-  if (e.components.playerSpawn) {
+  if (e.components.sign) {
+    // The sign itself, plus a small cross at the object's origin for selection colour.
+    const sign = buildSign(readComponent<SignData>('sign', e.components.sign));
+    group.add(sign.object);
+    group.userData.dispose = sign.dispose;
+    lines.push(
+      segs(
+        [
+          [-6, 0, 0],
+          [6, 0, 0],
+          [0, -6, 0],
+          [0, 6, 0],
+        ],
+        baseColor,
+      ),
+    );
+    pick = new THREE.Mesh(new THREE.BoxGeometry(Math.max(8, sign.width), Math.max(8, sign.height), 4), pickMat);
+  } else if (e.components.playerSpawn) {
     baseColor = COLORS.spawn;
     lines.push(segs(spawnLines(), baseColor));
     pick = new THREE.Mesh(new THREE.BoxGeometry(32, 72, 32).translate(0, 36, 0), pickMat);
@@ -147,7 +165,9 @@ export function setMarkerSelected(m: Marker, selected: boolean): void {
 }
 
 export function disposeMarker(m: Marker): void {
+  (m.group.userData.dispose as (() => void) | undefined)?.();
   m.group.traverse((o) => {
+    if (o.name === 'sign') return;
     if (o instanceof THREE.Mesh || o instanceof THREE.LineSegments) {
       o.geometry.dispose();
       const mat = o.material as THREE.Material;
@@ -158,5 +178,5 @@ export function disposeMarker(m: Marker): void {
 
 /** Stable key for "does this marker need rebuilding" (shape-affecting data only). */
 export function markerKey(e: EntityData): string {
-  return JSON.stringify([e.components.light ?? null, !!e.components.playerSpawn]);
+  return JSON.stringify([e.components.light ?? null, !!e.components.playerSpawn, e.components.sign ?? null]);
 }

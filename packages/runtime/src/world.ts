@@ -22,7 +22,7 @@ import {
   type GameRules,
 } from '@cocoaworlds/core';
 import { EventBus } from './events';
-import { ScriptRunner, compileScript, type ActionName, type Problem, type Program, type Script, type Value } from '@cocoaworlds/scripting';
+import { ScriptRunner, compileScript, type ActionName, type GameValueDef, type Problem, type Program, type Script, type Value } from '@cocoaworlds/scripting';
 import { scriptTargets } from './script-targets';
 import { PLAYER, Player, fallDamage, type PlayerInput } from './player';
 import { bounds, brushToWorld, buildMesh, buildWorld, fromData, hullPoints, vertices, type Brush, type BrushData, type WorldBrush } from '@cocoaworlds/geometry';
@@ -144,17 +144,26 @@ export class GameWorld {
   private usesScore = false;
   private hurtAt = -Infinity;
   private deaths = 0;
+  private valueDefs: GameValueDef[];
+  private globals = new Map<string, Value>();
+  private messages: { text: string; until: number; from: string }[] = [];
+  /** What each text sign says now (changed by blocks). */
+  private signs = new Map<string, string>();
+  /** Goes up whenever a sign's text changes, so the screen knows to redraw. */
+  signVersion = 0;
 
   /** Which built-in game systems are on (from the project settings). */
   readonly rules: GameRules;
 
   /** Build a world from a scene snapshot. Call `initPhysics()` first. */
-  static create(scene: SceneFile, options: { rules?: Partial<GameRules> } = {}): GameWorld {
-    return new GameWorld(scene, gameRules({ game: options.rules }));
+  static create(scene: SceneFile, options: { rules?: Partial<GameRules>; values?: GameValueDef[] } = {}): GameWorld {
+    return new GameWorld(scene, gameRules({ game: options.rules }), options.values ?? []);
   }
 
-  private constructor(scene: SceneFile, rules: GameRules) {
+  private constructor(scene: SceneFile, rules: GameRules, values: GameValueDef[]) {
     this.rules = rules;
+    this.valueDefs = values;
+    for (const v of values) this.globals.set(v.name, v.initial);
     const doc = new SceneDoc(structuredClone(scene));
     this.world = new RAPIER.World({ x: 0, y: -(doc.settings.gravity ?? 800), z: 0 });
     this.world.lengthUnit = UNITS_PER_METRE;
@@ -172,12 +181,14 @@ export class GameWorld {
 
     // Scripts (decision S1): every visible object with a Script component.
     const objects = new Map(doc.entities.map((e) => [e.id, { name: e.name, isZone: !!e.components.trigger }]));
+    for (const e of doc.entities) if (e.components.sign) this.signs.set(e.id, String((e.components.sign as { text?: unknown }).text ?? ''));
+    const info = { objects, rules, globals: values.map((v) => ({ name: v.name, type: v.type })), signs: new Set(this.signs.keys()) };
     const programs: Program[] = [];
     const scripts: [string, Script][] = [];
     for (const e of doc.entities) {
       const script = e.components.script as unknown as Script | undefined;
       if (!script?.handlers || !shown(e)) continue;
-      const r = compileScript(e.id, script, { objects, rules });
+      const r = compileScript(e.id, script, info);
       programs.push(r.program);
       scripts.push([e.id, script]);
       this.scriptProblems.push(...r.problems);
@@ -244,6 +255,14 @@ export class GameWorld {
         else this.heal(amount);
       },
       read: (name) => (name === 'health' ? this.health : this.score),
+      getGlobal: (name) => this.globals.get(name) ?? null,
+      setGlobal: (name, value) => void this.globals.set(name, value),
+      say: (text, seconds, from) => this.say(text, seconds, from),
+      setText: (target, text) => {
+        if (!this.signs.has(target) || this.signs.get(target) === text) return;
+        this.signs.set(target, text);
+        this.signVersion++;
+      },
     });
     this.usesScore = rules.score && scripts.some(([, s]) => /"kind":"(score|addScore)"/.test(JSON.stringify(s.handlers)));
   }
@@ -465,6 +484,30 @@ export class GameWorld {
     this.player.respawn();
     this.bus.emit({ type: 'player.die', cause, time: this.time });
     this.runner.dispatch({ type: 'die' });
+  }
+
+  // ── Game values, messages and signs ──
+
+  /** Show a message on screen (the newest is shown; each lasts its own time). */
+  say(text: string, seconds: number, from = ''): void {
+    this.messages.push({ text, until: this.time + seconds, from });
+    if (this.messages.length > 8) this.messages.shift();
+  }
+
+  /** The messages on screen now, oldest first. */
+  screenMessages(): string[] {
+    this.messages = this.messages.filter((m) => m.until > this.time);
+    return this.messages.map((m) => m.text);
+  }
+
+  /** Every game value with its current value, and whether it's shown on screen. */
+  gameValues(): { name: string; value: Value; show: boolean }[] {
+    return this.valueDefs.map((d) => ({ name: d.name, value: this.globals.get(d.name) ?? null, show: d.show }));
+  }
+
+  /** What a text sign says now (undefined if the object isn't a sign). */
+  signText(id: string): string | undefined {
+    return this.signs.get(id);
   }
 
   playerStatus(): PlayerStatus | null {

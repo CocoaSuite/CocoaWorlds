@@ -33,6 +33,21 @@ export function validateProject(data: unknown): Result<ProjectFile> {
     const g = s.game;
     need(p, isObj(g) && ['health', 'score'].every((k) => g[k] === undefined || typeof g[k] === 'boolean'), 'settings.game', 'Game rules must be on or off (true or false).');
   }
+  if (isObj(s) && s.values !== undefined) {
+    const vs = s.values;
+    const ok =
+      Array.isArray(vs) &&
+      vs.every(
+        (v) =>
+          isObj(v) &&
+          isStr(v.name) &&
+          v.name.trim() !== '' &&
+          typeof v.show === 'boolean' &&
+          ((v.type === 'number' && isNum(v.initial)) || (v.type === 'boolean' && typeof v.initial === 'boolean') || (v.type === 'text' && isStr(v.initial))),
+      );
+    need(p, ok, 'settings.values', 'Each game value needs a name, a type (number, yes/no or text), a starting value of that type, and whether it is shown.');
+    if (ok) need(p, new Set((vs as { name: string }[]).map((v) => v.name)).size === vs.length, 'settings.values', 'Two game values have the same name.');
+  }
   if (Array.isArray(data.scenes) && isStr(data.startScene)) {
     need(p, data.scenes.includes(data.startScene), 'startScene', 'Start scene is not in the scene list.');
   }

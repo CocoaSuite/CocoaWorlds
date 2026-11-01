@@ -27,6 +27,13 @@ export interface ScriptHost {
   game?(name: GameAction, amount: number, owner: string): void;
   /** The player's health or the score. */
   read?(name: GameValue): number;
+  /** Game values shared by all scripts. */
+  getGlobal?(name: string): Value;
+  setGlobal?(name: string, value: Value): void;
+  /** Show a message on screen for `seconds`. */
+  say?(text: string, seconds: number, owner: string): void;
+  /** Change what a text sign says. */
+  setText?(target: string, text: string): void;
 }
 
 export interface ScriptError {
@@ -313,6 +320,23 @@ export class ScriptRunner {
         case 'read':
           s.push(this.host.read?.(op.name) ?? 0);
           break;
+        case 'gvar':
+          s.push(this.host.getGlobal?.(op.name) ?? null);
+          break;
+        case 'setgvar':
+          this.host.setGlobal?.(op.name, s.pop() ?? null);
+          break;
+        case 'say': {
+          const sec = num(s.pop() ?? 0);
+          this.host.say?.(this.text(s.pop() ?? null), Math.max(0, sec), t.inst.program.owner);
+          break;
+        }
+        case 'settext': {
+          const txt = this.text(s.pop() ?? null);
+          const target = s.pop();
+          if (target && typeof target === 'object') this.host.setText?.(target.ref, txt);
+          break;
+        }
         case 'halt':
           return this.finish(t);
       }

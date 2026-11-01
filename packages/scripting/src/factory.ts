@@ -69,6 +69,10 @@ export function newStatement(kind: StatementKind, opts: { target?: Ref; variable
       return { id: id(), kind, amount: num(25) };
     case 'addScore':
       return { id: id(), kind, amount: num(1) };
+    case 'say':
+      return { id: id(), kind, text: text('Hello!'), seconds: num(3) };
+    case 'setText':
+      return { id: id(), kind, target, text: text('Text') };
   }
 }
 

@@ -28,8 +28,18 @@ export interface Hud {
   showScore: boolean;
   /** Just hurt: flash red. */
   hurt: boolean;
+  /** Game values shown on screen. */
+  values: { name: string; value: string }[];
+  /** Messages in the middle of the screen, oldest first. */
+  messages: string[];
 }
-import type { GameRules, SceneFile } from '@cocoaworlds/core';
+
+function formatValue(v: unknown): string {
+  if (typeof v === 'number') return String(Math.round(v * 1000) / 1000);
+  if (typeof v === 'boolean') return v ? 'yes' : 'no';
+  return v === null || v === undefined ? '' : String(v);
+}
+import type { GameRules, GameValue, SceneFile } from '@cocoaworlds/core';
 
 export interface ViewportCallbacks {
   select(ids: string[], mode: 'replace' | 'toggle'): void;
@@ -379,12 +389,12 @@ export class ViewportEngine {
   }
 
   /** Build a game world from a scene snapshot and show it instead of the editor's scene. */
-  async startPlay(scene: SceneFile, rules?: GameRules): Promise<PlayInfo> {
+  async startPlay(scene: SceneFile, rules?: GameRules, values?: GameValue[]): Promise<PlayInfo> {
     this.stopPlay();
     const token = ++this.playToken;
     // Physics (and its WebAssembly) loads on first Play, so opening the editor stays quick.
     const { PlaySession } = await import('./play-session');
-    const session = await PlaySession.start(scene, (name) => this.world.material(name), rules);
+    const session = await PlaySession.start(scene, (name) => this.world.material(name), rules, values);
     if (token !== this.playToken || this.disposed) {
       // Stopped while loading.
       session.dispose();
@@ -1052,8 +1062,18 @@ export class ViewportEngine {
       const frame = this.play.tick(dt);
       if (frame.events.length || frame.logs.length || frame.errors.length || frame.uses.length || frame.notes.length) this.cb.playFrame(frame, this.play.info.names);
       const status = this.play.status();
-      if (status) {
-        const hud: Hud = { showHealth: status.showHealth, health: Math.ceil(status.health), maxHealth: status.maxHealth, score: status.score, showScore: status.showScore, hurt: status.sinceHurt < 0.35 };
+      const screen = this.play.screen();
+      {
+        const hud: Hud = {
+          showHealth: !!status?.showHealth,
+          health: Math.ceil(status?.health ?? 0),
+          maxHealth: status?.maxHealth ?? 100,
+          score: status?.score ?? 0,
+          showScore: !!status?.showScore,
+          hurt: (status?.sinceHurt ?? Infinity) < 0.35,
+          values: screen.values.filter((v) => v.show).map((v) => ({ name: v.name, value: formatValue(v.value) })),
+          messages: screen.messages,
+        };
         const key = JSON.stringify(hud);
         if (key !== this.hudKey) {
           this.hudKey = key;

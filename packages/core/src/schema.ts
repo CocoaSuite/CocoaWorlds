@@ -27,6 +27,17 @@ export interface ProjectSettings {
   unitsPerMetre: number;
   /** Which built-in game systems the project uses (missing in older files: everything on). */
   game?: Partial<GameRules>;
+  /** Game values shared by every script (Cash, Gems, Round …). */
+  values?: GameValue[];
+}
+
+/** A value every script in the game shares, defined once for the project. */
+export interface GameValue {
+  name: string;
+  type: 'number' | 'boolean' | 'text';
+  initial: number | boolean | string;
+  /** Shown on screen while playing. */
+  show: boolean;
 }
 
 /** Built-in game systems a project can switch off (a building or farming game may want neither). */

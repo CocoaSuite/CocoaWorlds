@@ -126,6 +126,7 @@ function componentLabel(e: EntityData): string {
   const light = e.components.light as { kind?: string } | undefined;
   if (light) return `${light.kind ?? ''} light`;
   if (e.components.playerSpawn) return 'Player spawn';
+  if (e.components.sign) return t('add.sign');
   if (isGroupEntity(e)) return t('insp.group');
   return 'Object';
 }

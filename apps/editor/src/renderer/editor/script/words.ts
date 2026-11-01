@@ -47,6 +47,10 @@ const W = {
   hurt: ['Hurt the player by', 'Ранить игрока на'],
   heal: ['Heal the player by', 'Вылечить игрока на'],
   addScore: ['Change the score by', 'Изменить счёт на'],
+  say: ['Show on screen', 'Показать на экране'],
+  forWord: ['for', 'на'],
+  setText: ['Set the text of', 'Задать текст'],
+  gameValue: ['game', 'игра'],
   health: ['the player’s health', 'здоровье игрока'],
   score: ['the score', 'счёт'],
   // values
@@ -112,12 +116,15 @@ const PALETTE_STMT: Record<StatementKind, Pair> = {
   hurt: ['Hurt the player', 'Ранить игрока'],
   heal: ['Heal the player', 'Вылечить игрока'],
   addScore: ['Change the score', 'Изменить счёт'],
+  say: ['Show a message on screen', 'Показать сообщение на экране'],
+  setText: ['Set the text of a sign', 'Задать текст таблички'],
 };
 export const statementName = (k: StatementKind) => pick(PALETTE_STMT[k]);
 
 export const STATEMENT_GROUPS: { title: Pair; kinds: StatementKind[] }[] = [
   { title: ['Do', 'Действия'], kinds: ['move', 'turn', 'return', 'show', 'hide', 'turnOn', 'turnOff', 'send', 'log'] },
   { title: ['Player and score', 'Игрок и счёт'], kinds: ['hurt', 'heal', 'addScore'] },
+  { title: ['Screen and signs', 'Экран и таблички'], kinds: ['say', 'setText'] },
   { title: ['Control', 'Управление'], kinds: ['wait', 'if', 'repeat', 'forever', 'stop'] },
   { title: ['Variables', 'Переменные'], kinds: ['set', 'change'] },
 ];

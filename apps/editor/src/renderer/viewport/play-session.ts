@@ -5,7 +5,7 @@
  * With a Player start in the scene you play as the player (first person); without one, Play is a physics
  * preview watched with the free camera.
  */
-import { SceneDoc, readComponent, type ColliderData, type GameRules, type SceneFile } from '@cocoaworlds/core';
+import { SceneDoc, readComponent, type ColliderData, type GameRules, type GameValue, type SceneFile, type SignData } from '@cocoaworlds/core';
 import { buildMesh, isInvisibleMaterial, type WorldBrush } from '@cocoaworlds/geometry';
 import { GameWorld, initPhysics, type PlayerInput, type PlayerStatus, type ScriptLog, type TriggerEvent } from '@cocoaworlds/runtime';
 import type { Problem, ScriptError } from '@cocoaworlds/scripting';
@@ -13,6 +13,7 @@ import * as THREE from 'three';
 import { worldBrushes } from '../brush/brushes';
 import { buildLevel } from './world-build';
 import { toGeometry } from './world-render';
+import { buildSign, type SignObject } from './sign';
 
 export interface PlayInfo {
   moving: number;
@@ -43,17 +44,19 @@ export class PlaySession {
   private shapeMat = new THREE.MeshStandardMaterial({ color: 0xc8c8c8, roughness: 0.8 });
   private uses: string[] = [];
   private notes: string[] = [];
+  private signs = new Map<string, { holder: THREE.Group; sign: SignObject; data: SignData }>();
+  private signVersion = 0;
 
-  static async start(scene: SceneFile, material: (name: string) => THREE.Material, rules?: GameRules): Promise<PlaySession> {
+  static async start(scene: SceneFile, material: (name: string) => THREE.Material, rules?: GameRules, values?: GameValue[]): Promise<PlaySession> {
     await initPhysics();
     // Invisible colliders (COL) collide but aren't drawn in the game.
     const hidden = new THREE.MeshBasicMaterial({ visible: false });
-    return new PlaySession(scene, (name) => (isInvisibleMaterial(name) ? hidden : material(name)), rules);
+    return new PlaySession(scene, (name) => (isInvisibleMaterial(name) ? hidden : material(name)), rules, values);
   }
 
-  private constructor(scene: SceneFile, material: (name: string) => THREE.Material, rules?: GameRules) {
+  private constructor(scene: SceneFile, material: (name: string) => THREE.Material, rules?: GameRules, values?: GameValue[]) {
     this.group.name = 'play';
-    this.world = GameWorld.create(scene, { rules });
+    this.world = GameWorld.create(scene, { rules, values });
     const doc = new SceneDoc(structuredClone(scene));
     const bodies = new Set(this.world.movingBodies().map((b) => b.id));
 
@@ -94,6 +97,23 @@ export class PlaySession {
       this.group.add(obj);
       this.movers.push({ id: b.id, obj, base });
     }
+    // Text signs, where they stand (redrawn when blocks change their text).
+    const shown = (id: string) => {
+      for (let x = doc.get(id); x; x = x.parent ? doc.get(x.parent) : undefined) if (!x.visible) return false;
+      return true;
+    };
+    for (const e of doc.entities) {
+      if (!e.components.sign || !shown(e.id)) continue;
+      const data = readComponent<SignData>('sign', e.components.sign);
+      const holder = new THREE.Group();
+      holder.matrixAutoUpdate = false;
+      holder.matrix.fromArray(doc.worldMatrix(e.id));
+      this.group.add(holder);
+      const sign = buildSign(data);
+      holder.add(sign.object);
+      this.signs.set(e.id, { holder, sign, data });
+    }
+
     this.info = {
       moving: bodies.size,
       triggers: this.world.stats.triggers,
@@ -117,10 +137,32 @@ export class PlaySession {
       m.obj.matrix.copy(motion.fromArray(mm).multiply(m.base));
       m.obj.matrixWorldNeedsUpdate = true;
     }
+    if (this.world.signVersion !== this.signVersion) {
+      this.signVersion = this.world.signVersion;
+      for (const [id, s] of this.signs) {
+        const text = this.world.signText(id) ?? s.data.text;
+        if (text === s.data.text) continue;
+        s.data = { ...s.data, text };
+        s.holder.remove(s.sign.object);
+        s.sign.dispose();
+        s.sign = buildSign(s.data);
+        s.holder.add(s.sign.object);
+      }
+    }
     const uses = this.uses, notes = this.notes;
     this.uses = [];
     this.notes = [];
     return { events: this.world.drainEvents(), logs: this.world.drainLogs(), errors: this.world.drainScriptErrors(), uses, notes };
+  }
+
+  /** Game values (all, with whether each is shown) and the messages on screen now. */
+  screen(): { values: { name: string; value: unknown; show: boolean }[]; messages: string[] } {
+    return { values: this.world.gameValues(), messages: this.world.screenMessages() };
+  }
+
+  /** What a text sign says now. */
+  signText(id: string): string | undefined {
+    return this.world.signText(id);
   }
 
   /** Health and score for the screen (null without a player). */
@@ -168,8 +210,9 @@ export class PlaySession {
 
   dispose(): void {
     this.world.dispose();
+    for (const s of this.signs.values()) s.sign.dispose();
     this.group.traverse((o) => {
-      if (o instanceof THREE.Mesh) o.geometry.dispose();
+      if (o instanceof THREE.Mesh && o.name !== 'sign') o.geometry.dispose();
     });
     this.shapeMat.dispose();
   }

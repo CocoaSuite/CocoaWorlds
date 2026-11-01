@@ -159,7 +159,7 @@ export function Viewport() {
     }
     let cancelled = false;
     const st = useEditor.getState();
-    e.startPlay(playing.scene, playing.rules)
+    e.startPlay(playing.scene, playing.rules, playing.values)
       .then((info) => {
         if (cancelled) return;
         st.log(
@@ -208,6 +208,7 @@ export function Viewport() {
         { label: `${t('add.pointLight')}`, onSelect: () => s.add('pointLight', ctx?.ground ?? undefined) },
         { label: `${t('add.spotLight')}`, onSelect: () => s.add('spotLight', ctx?.ground ?? undefined) },
         { label: `${t('add.spawn')}`, onSelect: () => s.add('spawn', ctx?.ground ?? undefined) },
+        { label: t('add.sign'), onSelect: () => s.add('sign', ctx?.ground ?? undefined) },
         { label: `${t('add.empty')}`, onSelect: () => s.add('empty', ctx?.ground ?? undefined) },
       ];
 
@@ -265,7 +266,7 @@ export function Viewport() {
         </div>
       )}
       {playing && lock === true && <div className="cw-crosshair" aria-hidden="true" />}
-      {playing && hud && (hud.showHealth || hud.showScore) && <HudView hud={hud} />}
+      {playing && hud && <HudView hud={hud} />}
       {playing && lock === false && (
         <button type="button" className="cw-ov cw-click-play" data-testid="click-to-play" onClick={() => engine.current?.capturePlayer()}>
           <strong>{t('play.click')}</strong>
@@ -303,7 +304,17 @@ function HudView({ hud }: { hud: Hud }) {
   const low = hud.showHealth && hud.health <= 25;
   return (
     <>
+      {hud.messages.length > 0 && (
+        <div className="cw-ov cw-hud-messages" data-testid="hud-messages" role="status">
+          {hud.messages.slice(-3).map((m, i) => (
+            <div key={i} className="cw-hud-message">
+              {m}
+            </div>
+          ))}
+        </div>
+      )}
       {hud.hurt && hud.showHealth && <div className="cw-hurt" aria-hidden="true" />}
+      {(hud.showHealth || hud.showScore || hud.values.length > 0) && (
       <div className="cw-ov cw-hud" data-testid="hud">
         {hud.showHealth && (
           <div className={`cw-hud-item${low ? ' low' : ''}`} role="meter" aria-label={t('hud.health')} aria-valuemin={0} aria-valuemax={hud.maxHealth} aria-valuenow={hud.health}>
@@ -316,6 +327,12 @@ function HudView({ hud }: { hud: Hud }) {
             </span>
           </div>
         )}
+        {hud.values.map((v) => (
+          <div key={v.name} className="cw-hud-item" data-testid={`hud-value-${v.name}`}>
+            <span className="cw-hud-label">{v.name}</span>
+            <span className="cw-hud-value">{v.value}</span>
+          </div>
+        ))}
         {hud.showScore && (
           <div className="cw-hud-item">
             <span className="cw-hud-label">{t('hud.score')}</span>
@@ -325,6 +342,7 @@ function HudView({ hud }: { hud: Hud }) {
           </div>
         )}
       </div>
+      )}
     </>
   );
 }

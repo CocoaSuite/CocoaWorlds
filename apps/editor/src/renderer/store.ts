@@ -43,6 +43,7 @@ import {
   type Transform,
   gameRules,
   type GameRules,
+  type GameValue,
 } from '@cocoaworlds/core';
 import {
   bakeSubtract,
@@ -79,7 +80,7 @@ export type Tool = 'select' | 'move' | 'rotate' | 'scale' | 'brush' | 'face' | '
 export type { FaceRef };
 export type Justify = 'left' | 'right' | 'top' | 'bottom' | 'center';
 export type ViewMode = 'perspective' | 'top' | 'front' | 'side';
-export type AddKind = 'empty' | 'pointLight' | 'spotLight' | 'sun' | 'spawn';
+export type AddKind = 'empty' | 'pointLight' | 'spotLight' | 'sun' | 'spawn' | 'sign';
 export interface LogEntry {
   at: string;
   level: 'info' | 'warn' | 'error';
@@ -129,7 +130,7 @@ interface State {
   /** Whether something has been copied (for menu state). */
   canPaste: boolean;
   /** Play mode: a snapshot of the scene being played (the editor's scene is untouched). */
-  playing: { scene: SceneFile; startedAt: number; rules: GameRules } | null;
+  playing: { scene: SceneFile; startedAt: number; rules: GameRules; values: GameValue[] } | null;
   /** The project's prefabs by id, with their file paths. */
   prefabs: Map<string, PrefabEntry>;
   /** Where "place" puts new things: the point the view is looking at (set by the viewport). */
@@ -213,6 +214,8 @@ interface Actions {
   stopPlaying(): void;
   /** Switch a built-in game system on or off for the whole project (saved to the project file at once). */
   setGameRule(rule: keyof GameRules, on: boolean): Promise<void>;
+  /** Replace the project's game values (saved to the project file at once). */
+  setGameValues(values: GameValue[], label: string): Promise<boolean>;
   setBottomTab(tab: State['bottomTab']): void;
   /** Change an object's script (the whole `script` component) as one undo step, merging with `mergeKey`. */
   updateScript(id: string, fn: (s: Script) => Script, label: string, mergeKey?: string): void;
@@ -385,6 +388,7 @@ export const useEditor = create<State & Actions>()((set, get) => ({
       spotLight: () => base('spot_light', { light: { kind: 'spot', color: '#ffffff', intensity: 2, range: 768, angle: 40, castShadows: true } }, 192),
       sun: () => base('sun', { light: { kind: 'directional', color: '#fff4e0', intensity: 2, castShadows: true } }, 512),
       spawn: () => base('player_spawn', { playerSpawn: {} }),
+      sign: () => base('sign', { sign: { text: 'Text', size: 16, color: '#ffffff', background: true, faceCamera: false } }, 64),
     }[kind]();
     get().execute(addEntitiesCmd(doc, [e], `Add ${e.name}`));
     set({ selection: [e.id] });
@@ -1023,13 +1027,26 @@ export const useEditor = create<State & Actions>()((set, get) => ({
     const { doc, playing } = get();
     if (!doc || playing) return;
     get().history.commit();
-    set({ playing: { scene: doc.toFile(), startedAt: Date.now(), rules: gameRules(get().session?.project.settings) }, tool: 'select' });
+    set({ playing: { scene: doc.toFile(), startedAt: Date.now(), rules: gameRules(get().session?.project.settings), values: get().session?.project.settings.values ?? [] }, tool: 'select' });
   },
 
   stopPlaying() {
     if (!get().playing) return;
     set({ playing: null, activeBlocks: new Map() });
     get().log('info', 'Play', 'Stopped. The scene is as it was before Play.');
+  },
+
+  async setGameValues(values, label) {
+    const session = get().session;
+    if (!session) return false;
+    const r = await window.cocoa.projects.saveSettings(session.dir, { ...session.project.settings, values });
+    if (!r.ok) {
+      get().log('error', 'Project', r.error);
+      return false;
+    }
+    set({ session: { ...get().session!, project: r.value }, rev: get().rev + 1 });
+    get().log('info', 'Project', label);
+    return true;
   },
 
   async setGameRule(rule, on) {

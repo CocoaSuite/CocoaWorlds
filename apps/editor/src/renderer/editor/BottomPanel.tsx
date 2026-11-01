@@ -4,6 +4,7 @@ import { ScriptPanel } from './script/ScriptPanel';
 import { compileScript, type Problem, type Script } from '@cocoaworlds/scripting';
 import { useEffect, useMemo, useRef } from 'react';
 import { t } from '../i18n';
+import { sceneInfo } from './script/scene-info';
 import { useEditor } from '../store';
 
 type Tab = 'console' | 'problems' | 'script' | 'assets';
@@ -86,17 +87,18 @@ function AssetsPanel() {
 function useScriptProblems(): Problem[] {
   const doc = useEditor((s) => s.doc);
   const rev = useEditor((s) => s.rev);
+  const project = useEditor((s) => s.session?.project);
   return useMemo(() => {
     if (!doc) return [];
-    const objects = new Map(doc.entities.map((e) => [e.id, { name: e.name, isZone: !!e.components.trigger }]));
+    const info = sceneInfo(doc, project);
     const out: Problem[] = [];
     for (const e of doc.entities) {
       const script = e.components.script as unknown as Script | undefined;
-      if (script?.handlers) out.push(...compileScript(e.id, script, { objects }).problems);
+      if (script?.handlers) out.push(...compileScript(e.id, script, info).problems);
     }
     return out;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [doc, rev]);
+  }, [doc, rev, project]);
 }
 
 function ScriptProblems() {

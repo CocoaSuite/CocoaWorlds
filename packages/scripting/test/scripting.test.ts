@@ -290,3 +290,60 @@ describe('health and score blocks', () => {
     expect(compileScript('me', s, scene).problems.map((p) => p.message)).toEqual(['Health changes by a number.']);
   });
 });
+
+describe('game values, messages and signs', () => {
+  const host = () => {
+    const globals = new Map<string, Value>([['Cash', 10]]);
+    const said: string[] = [];
+    const texts: string[] = [];
+    return {
+      globals,
+      said,
+      texts,
+      h: {
+        now: () => 0,
+        random: () => 0,
+        nameOf: (id: string) => id,
+        act: () => null,
+        send: () => {},
+        log: () => {},
+        getGlobal: (n: string) => globals.get(n) ?? null,
+        setGlobal: (n: string, v: Value) => void globals.set(n, v),
+        say: (t: string, s: number) => void said.push(`${t} ${s}`),
+        setText: (id: string, t: string) => void texts.push(`${id}: ${t}`),
+      },
+    };
+  };
+  const info = { ...scene, globals: [{ name: 'Cash', type: 'number' as const }], signs: new Set(['door']) };
+
+  it('scripts read and change game values; their own variable of the same name hides it', () => {
+    const buy = script([
+      handler(
+        newEvent('start'),
+        { ...newStatement('change', { variable: 'Cash' }), by: num(-3) } as Statement,
+        { ...newStatement('say'), text: { ...newExpr('join'), a: text('Cash: '), b: variable('Cash') } as Expr, seconds: num(2) } as Statement,
+        { ...newStatement('setText', { target: entity('door') }), text: variable('Cash') } as Statement,
+      ),
+    ]);
+    const local = script([handler(newEvent('start'), { ...newStatement('change', { variable: 'Cash' }), by: num(100) } as Statement)], [{ name: 'Cash', type: 'number', initial: 0 }]);
+    const a = compileScript('me', buy, info), b = compileScript('door', local, info);
+    expect([...a.problems, ...b.problems]).toEqual([]);
+    const { globals, said, texts, h } = host();
+    const vm = new ScriptRunner([a.program, b.program], h);
+    vm.start();
+    expect(globals.get('Cash')).toBe(7);
+    expect(vm.variables('door')).toEqual({ Cash: 100 });
+    expect(said).toEqual(['Cash: 7 2']);
+    expect(texts).toEqual(['door: 7']);
+  });
+
+  it('“Set the text of” needs a text sign; unknown game values are reported', () => {
+    const s = script([
+      handler(newEvent('start'), { ...newStatement('setText', { target: entity('zone') }), text: text('x') } as Statement, { ...newStatement('set', { variable: 'Gems' }), value: num(1) } as Statement),
+    ]);
+    expect(compileScript('me', s, info).problems.map((p) => p.message)).toEqual([
+      'Doorway is not a text sign. Add a Text sign to it, or pick a sign.',
+      'There is no variable called “Gems”.',
+    ]);
+  });
+});

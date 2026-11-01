@@ -12,6 +12,8 @@
 - **Play as the player needs a Player start** (new scenes have one). Without it, Play is the physics preview with the free camera. Lights are not drawn yet (Phase 7), the player has no body or weapon model, and there are no ladders or swimming yet (Phase 6).
 - **Pivots apply to one selected object.** With several selected, the gizmo uses the middle of them all; a pivot set on a brush stays put relative to it when moved, but not when it is rotated through its parent group.
 - **Health and score are simple:** one player with 100 health, no armour, lives or game-over screen; dying starts again at the Player start straight away, and nothing that moved is put back. The score isn't saved between plays. The console can only be read after Esc frees the mouse.
+- **Game values:** renaming one doesn't update the blocks that use it (they show a problem until re-picked), and changes to game values are saved at once and can't be undone with Ctrl+Z. There is no countdown or progress widget yet; show a value instead.
+- **Text signs** don't move with an object a script moves, and Show/Hide don't apply to them yet.
 - **Player speeds are fixed** (Half-Life 2's: run 190, walk 100, crouch 64 u/s); a per-scene setting comes later.
 - **Keys while playing are fixed** (WASD, Space, Ctrl or C, Shift, E); rebinding comes later. While the mouse is captured, editor shortcuts are off; F5 still stops.
 - **Scripts: variables belong to each object** (no game-wide variables yet; use messages). Blocks are rearranged with ↑ ↓ for now; drag-and-drop comes later. The graph view (V3) comes later in Phase 5.

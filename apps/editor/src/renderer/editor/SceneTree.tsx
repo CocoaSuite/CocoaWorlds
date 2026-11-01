@@ -146,6 +146,7 @@ export function SceneTree() {
             { label: t('add.sun'), onSelect: () => s.add('sun') },
             'separator',
             { label: t('add.spawn'), onSelect: () => s.add('spawn') },
+            { label: t('add.sign'), onSelect: () => s.add('sign') },
           ]}
         />
       )}

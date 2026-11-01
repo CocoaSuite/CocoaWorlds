@@ -6,6 +6,15 @@
  */
 
 export type Lang = 'en' | 'ru';
+
+/** A text sign's data (component `sign`). */
+export type SignData = {
+  text: string;
+  size: number;
+  color: string;
+  background: boolean;
+  faceCamera: boolean;
+};
 export type Text = Record<Lang, string>;
 
 export type FieldType =
@@ -74,6 +83,25 @@ export const COMPONENTS: ComponentDef[] = [
     description: e('Where the player appears when the game starts.', 'Здесь игрок появляется в начале игры.'),
     appliesTo: 'point',
     fields: [],
+  },
+  {
+    name: 'sign',
+    label: e('Text sign', 'Табличка с текстом'),
+    description: e('Text shown in the world: prices, names, directions. Blocks can change it while playing.', 'Текст в мире: цены, названия, указатели. Блоки могут менять его во время игры.'),
+    appliesTo: 'point',
+    fields: [
+      { key: 'text', label: e('Text', 'Текст'), type: { kind: 'text' }, default: 'Text' },
+      { key: 'size', label: e('Letter height', 'Высота букв'), type: { kind: 'number', min: 1, step: 2, unit: 'u' }, default: 16 },
+      { key: 'color', label: e('Colour', 'Цвет'), type: { kind: 'color' }, default: '#ffffff' },
+      { key: 'background', label: e('Background', 'Фон'), type: { kind: 'boolean' }, default: true },
+      {
+        key: 'faceCamera',
+        label: e('Always face the camera', 'Всегда к камере'),
+        hint: e('Off: the sign faces the way the object faces (−Z), like a plaque on a wall.', 'Выкл.: табличка смотрит туда же, куда объект (−Z), как надпись на стене.'),
+        type: { kind: 'boolean' },
+        default: false,
+      },
+    ],
   },
   {
     name: 'rigidBody',

@@ -87,6 +87,7 @@ Last updated: 2026-11-01 (Phase 2, first slice).
 | Pivots: shown and set in the Inspector (numbers, Middle, Bottom), dragged in the view in Edit pivot mode (O, snaps to corners); the gizmo rotates and scales around it; scripts turn objects around it; saved and undoable | **Done** |
 | Plain-language block scripting, graph view, VM (Phase 5) | Planned |
 | Health and score: 100 health on screen with a red flash when hurt, death and restart at the Player start, fall damage; blocks Hurt / Heal / Change the score, values health and score, “When the player dies”; recipes Coin, Health pack, Hurts the player, Deadly; health and score can each be switched off per project (Game rules in the Inspector) | **Done** (Phase 6) |
+| Game values shared by all scripts (Cash, Round …), shown on screen if wanted; “Show on screen” messages; Text signs in the world, changed by “Set the text of” (benchmark step B1) | **Done** |
 | Ready-made doors/buttons/plates/lifts beyond recipes, ladders, water, key rebinding (rest of Phase 6) | Planned |
 | Assets, materials, lighting, audio (Phase 7) | Planned |
 | Prefabs (P1): Edit › Make prefab…, place copies from the Assets panel, per-copy changes listed in the Inspector with Revert / Apply, Unlink; copies stored in full and synced on Apply and on open | **Done** (Phase 4). See docs/prefabs.md. |

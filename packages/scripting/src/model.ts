@@ -50,7 +50,11 @@ export type Statement =
   /** Hurt or heal the player; change the game's score (all by an amount, which may be negative). */
   | { id: string; kind: 'hurt'; amount: Expr }
   | { id: string; kind: 'heal'; amount: Expr }
-  | { id: string; kind: 'addScore'; amount: Expr };
+  | { id: string; kind: 'addScore'; amount: Expr }
+  /** Show text in the middle of the screen for a while (doesn't wait). */
+  | { id: string; kind: 'say'; text: Expr; seconds: Expr }
+  /** Change what a text sign says. */
+  | { id: string; kind: 'setText'; target: Ref; text: Expr };
 
 export type EventBlock =
   | { id: string; kind: 'start' }
@@ -67,6 +71,18 @@ export interface Handler {
   id: string;
   event: EventBlock;
   body: Statement[];
+}
+
+/**
+ * A game value: like a variable, but shared by every script in the game (Cash, Gems, Round). Defined once for
+ * the whole project; a script's own variable with the same name hides it.
+ */
+export interface GameValueDef {
+  name: string;
+  type: Exclude<ValueType, 'object'>;
+  initial: number | boolean | string;
+  /** Show it on screen while playing (with its name). */
+  show: boolean;
 }
 
 export interface VariableDef {

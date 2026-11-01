@@ -13,7 +13,7 @@ CocoaWorlds is measured by the games it can make. Two tiers:
 
 Each need also notes the roadmap step that delivers it (the B / A steps are in [ROADMAP.md](ROADMAP.md)). The last section lists the decisions that need approval.
 
-Status as of 2026-11-01.
+Status as of 2026-11-01 (after B1).
 
 ## What every target needs
 
@@ -25,8 +25,8 @@ These come up in almost every game, so they come first.
 | First-person player with Source-style movement, use (E) | ✅ | — |
 | Health, damage, death and restart, score (each can be switched off per project) | ✅ | — |
 | Blocks: events, moving, turning, showing and hiding, messages, variables, if/repeat, timers | ✅ | — |
-| **Game-wide values** (Cash, Gems, Round, Wave) that every script shares, shown on screen when wanted | 🟡 one score; variables belong to one object | B1 |
-| **On-screen text and messages** ("Round 3 starts!", "Need $50", "Press E to buy") | ❌ | B1 |
+| **Game-wide values** (Cash, Gems, Round, Wave) that every script shares, shown on screen when wanted | ✅ | B1 |
+| **On-screen text and messages** ("Round 3 starts!", "Need $50", "Press E to buy") | ✅ messages; 🟡 no countdown widget yet (build it from a value) | B1, B5 |
 | **Make copies while playing** (spawn a prefab at a place or object; remove a copy) | ❌ | B2 |
 | **More things blocks can do to objects**: scale, become physical (unanchor), push, spin speed, move toward or follow an object, teleport the player | 🟡 move/turn/show/hide only | B2 |
 | **Textures and materials from image files**, lights that light the level, sky, sound | ❌ dev textures, unlit | B3 (Phase 7) |
@@ -45,12 +45,12 @@ You own a plot. Droppers make parts, conveyors carry them to a collector that pa
 | Need | Now | Step |
 |---|---|---|
 | Plot built from brushes and prefabs | ✅ | — |
-| Buy buttons: step on, pay if you have enough cash, the bought part appears | 🟡 the score can be the cash; parts start hidden and Show reveals them | B1 (Cash value, price text) |
+| Buy buttons: step on, pay if you have enough cash, the bought part appears | ✅ Cash game value + zone + Show (tested in `tycoon.test.ts`) | — |
 | Droppers make a part every few seconds | ❌ | B2 spawn |
 | Conveyor belts carry parts | ❌ | B2 surface speed |
 | Collector removes parts and pays their value | 🟡 a zone can hide a part, but can't remove it or know its value | B2 remove, values on copies |
-| Price signs over buttons | ❌ | B1 text in the world |
-| Cash on screen | 🟡 score | B1 |
+| Price signs over buttons | ✅ Text signs | — |
+| Cash on screen | ✅ | — |
 | Keep progress between sessions | ❌ | B4 |
 | Third-person camera (usual on Roblox) | ❌ first person only | B2 camera |
 | Several players with their own plots | ❌ | M1 |
@@ -61,14 +61,14 @@ Rounds: everyone is put on a map, a random disaster strikes (flood, tornado, met
 
 | Need | Now | Step |
 |---|---|---|
-| Lobby and maps, round timer | 🟡 timers and variables work; no on-screen countdown | B1 |
+| Lobby and maps, round timer | ✅ timers, Round value on screen, messages | — |
 | Teleport the player to the map and back | ❌ | B2 |
 | Random disaster | ✅ random number + if | — |
 | Flood: rising water that kills | 🟡 a rising deadly zone works; no water to see or swim in | A1 water |
 | Buildings that break (parts become physical) | ❌ | B2 become physical |
 | Tornado or wind pushing things | ❌ | B2 push |
 | Meteors | ❌ | B2 spawn |
-| "You survived!" message, survivor count | ❌ | B1 |
+| "You survived!" message | ✅ | — |
 | Several players | ❌ | M1 |
 
 ### Grow a Garden
@@ -81,7 +81,7 @@ Buy seeds, plant them in your plot, wait for them to grow (even while away), har
 | Plants grow over time (get bigger, change stage) | ❌ | B2 scale, swap model |
 | Inventory and hotbar (seeds, tools) | ❌ | B5 inventory |
 | Shop window with buttons | ❌ | B5 screen UI |
-| Sell zone pays for crops | 🟡 zone + score | B1 values |
+| Sell zone pays for crops | 🟡 zone + Cash; can't yet tell which crop | B2 |
 | Growing while you're away, saved garden | ❌ | B4 save, real-time clock |
 | Weather events (rain, gold mutations) | ❌ | B3 particles, B2 |
 
@@ -92,7 +92,7 @@ Break coins and chests to collect currency, buy eggs that hatch random pets, pet
 | Need | Now | Step |
 |---|---|---|
 | Breakable coins and chests with health | ❌ objects don't have health | B2 object health |
-| Several currencies | ❌ | B1 values |
+| Several currencies | ✅ game values | — |
 | Eggs: random pet by rarity | 🟡 random works; can't make the pet | B2 spawn |
 | Pets follow the player | ❌ | B2 follow |
 | Pet inventory, equip | ❌ | B5 inventory |
@@ -115,7 +115,7 @@ A first-person ranch game on large outdoor islands. You suck up slimes and food 
 | **Vacuum gun**: pull physics objects in, hold them in slots, shoot them out | ❌ | A1 held tools |
 | Hundreds of physics objects at once | 🟡 Rapier handles it; not measured | A2 performance check |
 | Corrals, feeders, silos built on plots | 🟡 prefabs; no building while playing | B2 spawn |
-| Market with changing prices, upgrade shop | ❌ | B1 values, B5 UI |
+| Market with changing prices, upgrade shop | 🟡 prices as game values and signs; no shop window | B5 UI |
 | Day and night, sky, lighting, water | ❌ | B3, A1 water |
 | Sound and music | ❌ | B3 |
 | Save the ranch | ❌ | B4 |
@@ -149,17 +149,17 @@ A first-person shooter built from brush levels (the kind CocoaWorlds is designed
 
 | Target | Ready today | Main missing pieces |
 |---|---|---|
-| Tycoon | ~25% | values and text (B1), spawning and conveyors (B2), export and saving (B4) |
-| Natural Disaster Survival | ~25% | B1, teleport and physics actions (B2), water |
+| Tycoon | ~35% | spawning and conveyors (B2), export and saving (B4) |
+| Natural Disaster Survival | ~30% | B1, teleport and physics actions (B2), water |
 | Grow a Garden | ~15% | spawning and scale (B2), inventory and shop UI (B5), saving (B4) |
 | Pet Simulator | ~15% | object health, follow (B2), inventory (B5) |
 | Half-Life 1 | ~30% | weapons, NPCs and AI, models, level changes, lighting and sound |
 | Slime Rancher | ~10% | terrain, creatures with behaviour, vacuum tool, models |
 
-## Decisions that need approval
+## Decisions (approved 2026-11-01)
 
-- **M1 — Multiplayer.** Roblox games are online with other people, so there are three ways forward. (a) Single-player only. (b) Single-player now, but the game runtime is built so networking can be added later: game state kept in one place, input separate from simulation, scripts that don't assume one player. (c) Multiplayer now, with a host or server and replicated objects. **Recommended: (b).** It keeps the Basic tier reachable soon without closing the door. Real multiplayer is a large phase of its own, after export.
-- **T1 — Terrain.** Slime Rancher and most outdoor Roblox maps need ground that isn't made of brushes. The proposal is a heightmap terrain object: sculpt with raise, lower, smooth and flatten; paint with up to 4–8 materials; colliders from the heightfield (Rapier has one). Caves and overhangs stay brush work.
-- **A2 — Models.** Import glTF/GLB files (static and skinned, with animations), shown in the asset browser and placeable as objects with a collision shape. FBX and OBJ would be converted on import.
-- **A2 — Navigation.** Generate a navigation mesh from the level and terrain (recast-navigation, which runs in WebAssembly), so NPCs and creatures can find paths. Half-Life's hand-placed node graph would not be used.
-- **B5 — Screen UI.** A simple screen-layout editor (text, images, buttons, bars, lists placed in anchored boxes), with blocks to show, hide and fill them. This is needed for shops, inventories and menus.
+- **M1 — Multiplayer:** single-player for now; an option to host and join games comes later. The runtime keeps game state in one place and input separate from simulation, so networking can be added.
+- **T1 — Terrain:** voxel terrain that also supports heightmaps: chunked voxels meshed in a worker (caves, overhangs and digging possible), heightmap images can be imported, sculpting includes raise, lower, smooth and flatten, up to 8 painted materials, a collider per chunk.
+- **Models:** glTF/GLB import, static and animated.
+- **Navigation:** navigation meshes generated with recast-navigation (WebAssembly) from the level and terrain.
+- **Screen UI:** a visual UI editor (text, images, buttons, bars, lists in anchored boxes), controlled by blocks.

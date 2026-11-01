@@ -11,6 +11,10 @@ export interface SceneInfo {
   objects: Map<string, { name: string; isZone: boolean }>;
   /** Which built-in game systems the project uses (missing: all on). */
   rules?: { health: boolean; score: boolean };
+  /** Game values shared by every script (Cash, Round …). */
+  globals?: { name: string; type: Exclude<ValueType, 'object'> }[];
+  /** Objects that are text signs (for “Set the text of”). */
+  signs?: Set<string>;
 }
 
 export interface Problem {
@@ -53,6 +57,13 @@ export type Op =
   | { op: 'game'; name: GameAction }
   /** Pushes the player's health or the score. */
   | { op: 'read'; name: GameValue }
+  /** Read or write a game value (shared by all scripts). */
+  | { op: 'gvar'; name: string }
+  | { op: 'setgvar'; name: string }
+  /** Pops seconds, then text: show a message on screen. */
+  | { op: 'say' }
+  /** Pops text, then the target: change a sign's text. */
+  | { op: 'settext' }
   | { op: 'halt' };
 
 export type GameAction = 'hurt' | 'heal' | 'addScore';
@@ -132,6 +143,22 @@ class HandlerCompiler {
     private scene: SceneInfo,
     private problems: Problem[],
   ) {}
+
+  /** A variable by name: the script's own first, then a game value. */
+  private lookup(name: string): { slot: number; type: Kind } | { global: string; type: Kind } | undefined {
+    const own = this.vars.get(name);
+    if (own) return own;
+    const g = this.scene.globals?.find((v) => v.name === name);
+    return g ? { global: g.name, type: g.type } : undefined;
+  }
+
+  private load(v: { slot: number } | { global: string }): void {
+    this.emit('global' in v ? { op: 'gvar', name: v.global } : { op: 'var', slot: v.slot });
+  }
+
+  private store(v: { slot: number } | { global: string }): void {
+    this.emit('global' in v ? { op: 'setgvar', name: v.global } : { op: 'setvar', slot: v.slot });
+  }
 
   private problem(block: string, message: string, severity: 'error' | 'warning' = 'error') {
     this.problems.push({ owner: this.owner, handler: this.h.id, block, severity, message });
@@ -274,26 +301,40 @@ class HandlerCompiler {
         this.emit({ op: 'log' });
         break;
       case 'set': {
-        const v = this.vars.get(s.variable);
+        const v = this.lookup(s.variable);
         if (!v) {
           this.problem(s.id, s.variable ? `There is no variable called “${s.variable}”.` : 'Pick a variable.');
           break;
         }
         this.expect(s.value, v.type, `${s.variable} holds ${article(v.type)}.`);
-        this.emit({ op: 'setvar', slot: v.slot });
+        this.store(v);
         break;
       }
       case 'change': {
-        const v = this.vars.get(s.variable);
+        const v = this.lookup(s.variable);
         if (!v) {
           this.problem(s.id, s.variable ? `There is no variable called “${s.variable}”.` : 'Pick a variable.');
           break;
         }
         if (v.type !== 'number') this.problem(s.id, `Only number variables can be changed by an amount; ${s.variable} holds ${article(v.type)}.`);
-        this.emit({ op: 'var', slot: v.slot });
+        this.load(v);
         this.expect(s.by, 'number', 'Change by needs a number.');
         this.emit({ op: 'maths', f: '+' });
-        this.emit({ op: 'setvar', slot: v.slot });
+        this.store(v);
+        break;
+      }
+      case 'say':
+        this.value(s.text);
+        this.expect(s.seconds, 'number', 'Show for a number of seconds.');
+        this.emit({ op: 'say' });
+        break;
+      case 'setText': {
+        const r = this.resolveRef(s.target, s.id);
+        if (r && r !== 'other' && this.scene.signs && !this.scene.signs.has(r))
+          this.problem(s.id, `${this.scene.objects.get(r)?.name ?? 'This object'} is not a text sign. Add a Text sign to it, or pick a sign.`);
+        this.emit(r === null ? { op: 'push', v: null } : { op: 'ref', ref: s.target });
+        this.value(s.text);
+        this.emit({ op: 'settext' });
         break;
       }
       case 'if': {
@@ -375,13 +416,13 @@ class HandlerCompiler {
         this.emit({ op: 'push', v: String(e.value) });
         return 'text';
       case 'variable': {
-        const v = this.vars.get(e.name);
+        const v = this.lookup(e.name);
         if (!v) {
           this.problem(e.id, e.name ? `There is no variable called “${e.name}”.` : 'Pick a variable.');
           this.emit({ op: 'push', v: null });
           return 'unknown';
         }
-        this.emit({ op: 'var', slot: v.slot });
+        this.load(v);
         return v.type;
       }
       case 'maths':

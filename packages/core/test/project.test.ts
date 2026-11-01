@@ -60,4 +60,17 @@ describe('game rules', () => {
     project.settings.game = { health: 'no' as never };
     expect(() => parseProject(stringify(project))).toThrow(ProjectFormatError);
   });
+
+  it('game values are checked: a name, a matching starting value, no two alike', () => {
+    const { project } = newProject('Tycoon');
+    project.settings.values = [{ name: 'Cash', type: 'number', initial: 0, show: true }];
+    expect(parseProject(stringify(project)).project.settings.values).toEqual(project.settings.values);
+    project.settings.values = [{ name: 'Cash', type: 'number', initial: 'lots' as never, show: true }];
+    expect(() => parseProject(stringify(project))).toThrow(ProjectFormatError);
+    project.settings.values = [
+      { name: 'Cash', type: 'number', initial: 0, show: true },
+      { name: 'Cash', type: 'text', initial: '', show: false },
+    ];
+    expect(() => parseProject(stringify(project))).toThrow(ProjectFormatError);
+  });
 });
