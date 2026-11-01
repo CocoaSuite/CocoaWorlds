@@ -24,6 +24,19 @@ function devTexture(base: string, tool?: string): THREE.CanvasTexture {
 }
 
 /** A selected face: the brush entity and the index of the face in its saved face list. */
+/**
+ * The material for a face's material name: a development colour, a COL face, a project texture (loaded in the
+ * background: `onUpdate` is called when it arrives), or a colour from the name. Used by the editor and the game.
+ */
+export function sceneMaterial(name: string, onUpdate: () => void): THREE.Material {
+  const dev = devMaterial(name);
+  // See-through in the editor so what's behind stays visible; hidden in the game.
+  if (dev?.tool) return new THREE.MeshBasicMaterial({ map: devTexture(dev.base, 'COL'), transparent: true, opacity: 0.45, depthWrite: false, side: THREE.DoubleSide });
+  if (dev) return new THREE.MeshStandardMaterial({ map: devTexture(dev.base), roughness: 0.9, metalness: 0 });
+  if (isTexture(name)) return imageMaterial(name, onUpdate);
+  return new THREE.MeshStandardMaterial({ color: hashColor(name), roughness: 0.9 });
+}
+
 export interface FaceRef {
   id: string;
   face: number;
@@ -91,17 +104,7 @@ export class WorldRenderer {
   material(name: string): THREE.Material {
     let m = this.materials.get(name);
     if (m) return m;
-    const dev = devMaterial(name);
-    if (dev?.tool) {
-      // See-through in the editor so what's behind stays visible; hidden in the game.
-      m = new THREE.MeshBasicMaterial({ map: devTexture(dev.base, 'COL'), transparent: true, opacity: 0.45, depthWrite: false, side: THREE.DoubleSide });
-    } else if (dev) {
-      m = new THREE.MeshStandardMaterial({ map: devTexture(dev.base), roughness: 0.9, metalness: 0 });
-    } else if (isTexture(name)) {
-      m = imageMaterial(name, () => this.onUpdate());
-    } else {
-      m = new THREE.MeshStandardMaterial({ color: hashColor(name), roughness: 0.9 });
-    }
+    m = sceneMaterial(name, () => this.onUpdate());
     this.materials.set(name, m);
     return m;
   }

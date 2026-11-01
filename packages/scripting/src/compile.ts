@@ -91,6 +91,10 @@ export type Op =
   | { op: 'clearlist'; id: string }
   /** Pushes the row picked in “When the player picks a row”. */
   | { op: 'picked' }
+  /** Pushes the real time in seconds since 1970. */
+  | { op: 'clock' }
+  /** Kept values and items back to the start. */
+  | { op: 'forget' }
   /** Pops text: change what an element says. */
   | { op: 'uitext'; id: string }
   /** Pops an amount: give (or with a minus, take) some of an item. */
@@ -509,6 +513,9 @@ class HandlerCompiler {
       case 'clearList':
         if (this.checkElement(s.list, s.id, 'list')) this.emit({ op: 'clearlist', id: s.list });
         break;
+      case 'forgetProgress':
+        this.emit({ op: 'forget' });
+        break;
       case 'showUi':
       case 'hideUi':
         if (this.checkElement(s.element, s.id)) this.emit({ op: 'ui', what: 'element', id: s.element, show: s.kind === 'showUi' });
@@ -690,6 +697,9 @@ class HandlerCompiler {
       case 'selectedItem':
         this.emit({ op: 'selitem' });
         return 'text';
+      case 'clock':
+        this.emit({ op: 'clock' });
+        return 'number';
       case 'pickedRow':
         if (this.h.event.kind !== 'listPick') this.problem(e.id, '“The picked row” only works inside “When the player picks a row”.');
         this.emit({ op: 'picked' });

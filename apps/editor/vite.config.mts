@@ -34,6 +34,10 @@ export default defineConfig({
     emptyOutDir: true,
     target: 'chrome130',
     chunkSizeWarningLimit: 2000,
+    // The editor, and the player that exported games run in (export copies only what the player needs:
+    // see the manifest).
+    manifest: true,
+    rollupOptions: { input: { index: 'src/renderer/index.html', player: 'src/renderer/player.html' } },
   },
   server: { port: 5183, strictPort: false },
 });

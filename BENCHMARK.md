@@ -13,7 +13,7 @@ CocoaWorlds is measured by the games it can make. Two tiers:
 
 Each need also notes the roadmap step that delivers it (the B / A steps are in [ROADMAP.md](ROADMAP.md)). The last section lists the decisions that need approval.
 
-Status as of 2026-11-02 (after B5).
+Status as of 2026-11-02 (after B4).
 
 ## What every target needs
 
@@ -31,8 +31,8 @@ These come up in almost every game, so they come first.
 | **More things blocks can do to objects**: scale, become physical (unanchor), push, spin speed, move toward or follow an object, teleport the player | ✅ | B2 |
 | **Textures and materials from image files**, lights that light the level, sky, sound | ✅ | B3 |
 | **Imported 3D models** (props, creatures), with animations | ✅ GLB/glTF with animations; 🟡 no creature behaviour yet | B3 / A2 |
-| **Standalone export** (Windows, macOS, Linux, web) | ❌ plays only in the editor | B4 (Phases 8–9) |
-| **Saving progress** (in the exported game) | ❌ | B4 |
+| **Standalone export** (Windows, macOS, Linux, web) | ✅ folders (installers and signing later) | B4 (Phase 9 for installers) |
+| **Saving progress** (in the exported game) | ✅ kept game values and items; 🟡 not the state of the world (copies, moved objects) | B4 |
 
 ## Basic: typical Roblox games
 
@@ -51,7 +51,7 @@ You own a plot. Droppers make parts, conveyors carry them to a collector that pa
 | Collector removes parts and pays their value | ✅ Remove + “value of the thing that entered” (tested) | — |
 | Price signs over buttons | ✅ Text signs | — |
 | Cash on screen | ✅ | — |
-| Keep progress between sessions | ❌ | B4 |
+| Keep progress between sessions | ✅ kept Cash; 🟡 bought parts must be shown again from kept values | B4 |
 | Third-person camera (usual on Roblox) | ✅ game rule | — |
 | Several players with their own plots | ❌ | M1 |
 
@@ -82,7 +82,7 @@ Buy seeds, plant them in your plot, wait for them to grow (even while away), har
 | Inventory and hotbar (seeds, tools) | ✅ items, hotbar, “when the player uses” | B5 |
 | Shop window with buttons | ✅ screens that free the mouse, buttons | B5 |
 | Sell zone pays for crops | ✅ zone + “value of the thing that entered” | — |
-| Growing while you're away, saved garden | ❌ | B4 save, real-time clock |
+| Growing while you're away, saved garden | 🟡 real clock and kept values work; planted copies aren't saved | B4; world saving later |
 | Weather events (rain, gold mutations) | ❌ | B3 particles, B2 |
 
 ### Pet Simulator
@@ -97,7 +97,7 @@ Break coins and chests to collect currency, buy eggs that hatch random pets, pet
 | Pets follow the player | ✅ Move to the player in a loop (tested) | — |
 | Pet inventory, equip | ✅ a grid list of items, picking one takes it in hand | B5 |
 | Gates to new zones that open when paid | ✅ door recipe + score check | — |
-| Third-person camera ✅; saving ❌ | 🟡 | B4 |
+| Third-person camera, saving | ✅ (pets as kept items) | B4 |
 | Trading and seeing other players | ❌ | M1 |
 
 ## Advanced: Slime Rancher
@@ -118,7 +118,7 @@ A first-person ranch game on large outdoor islands. You suck up slimes and food 
 | Market with changing prices, upgrade shop | ✅ prices as game values; shop screens with buttons | B5 |
 | Day and night, sky, lighting, water | ❌ | B3, A1 water |
 | Sound and music | ❌ | B3 |
-| Save the ranch | ❌ | B4 |
+| Save the ranch | 🟡 values and items; not the ranch's objects | B4; world saving later |
 
 ## Advanced: Half-Life 1
 
@@ -143,16 +143,16 @@ A first-person shooter built from brush levels (the kind CocoaWorlds is designed
 | Baked lighting, sprites, decals (bullet holes, blood), particles | ❌ | B3, A1 |
 | Sound: footsteps, ambient, voices | ❌ | B3 |
 | HUD: health, armour, ammo | 🟡 health | A1 |
-| Quick save and load anywhere | ❌ | B4 |
+| Quick save and load anywhere | ❌ (values and items only) | world saving later |
 
 ## How far each target is (rough)
 
 | Target | Ready today | Main missing pieces |
 |---|---|---|
-| Tycoon | ~60% | looks (B3), export and saving (B4), several players (M1) |
-| Natural Disaster Survival | ~55% | water, looks and sound (B3), export (B4), several players (M1) |
-| Grow a Garden | ~60% | saving and real-time growth (B4), weather and particles |
-| Pet Simulator | ~60% | saving (B4), trading (M1) |
+| Tycoon | ~80% | saving built parts, several players (M1) |
+| Natural Disaster Survival | ~70% | water (A1), several players (M1) |
+| Grow a Garden | ~70% | saving planted copies, weather and particles |
+| Pet Simulator | ~70% | trading and seeing other players (M1) |
 | Half-Life 1 | ~35% | weapons, NPCs and AI, models, level changes, lighting and sound |
 | Slime Rancher | ~15% | terrain, creatures with behaviour, vacuum tool, models |
 

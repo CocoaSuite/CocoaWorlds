@@ -43,7 +43,9 @@ export type Expr =
   /** The item in the hotbar slot the player has picked ('' when that slot is empty). */
   | { id: string; kind: 'selectedItem' }
   /** The row the player picked in a list (in “When the player picks a row”). */
-  | { id: string; kind: 'pickedRow' };
+  | { id: string; kind: 'pickedRow' }
+  /** The real time now, in seconds since 1970 (for things that grow while the game is closed). */
+  | { id: string; kind: 'clock' };
 
 export type Direction = 'up' | 'down' | 'north' | 'south' | 'east' | 'west';
 export type Axis = 'up' | 'north' | 'east';
@@ -104,6 +106,8 @@ export type Statement =
   /** Add a row to a list, remove the first row with that text, or empty it. */
   | { id: string; kind: 'addRow' | 'removeRow'; list: string; text: Expr }
   | { id: string; kind: 'clearList'; list: string }
+  /** Start over: kept game values go back to their starting values (and kept items are emptied). */
+  | { id: string; kind: 'forgetProgress' }
   /** Show or hide one element of a screen (by id). */
   | { id: string; kind: 'showUi' | 'hideUi'; element: string }
   /** Change what a text or button says. */
@@ -156,6 +160,8 @@ export interface GameValueDef {
   initial: number | boolean | string;
   /** Show it on screen while playing (with its name). */
   show: boolean;
+  /** Kept between sessions (saved progress). */
+  saved?: boolean;
 }
 
 export interface VariableDef {

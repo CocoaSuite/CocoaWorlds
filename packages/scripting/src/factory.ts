@@ -117,6 +117,8 @@ export function newStatement(kind: StatementKind, opts: { target?: Ref; variable
       return { id: id(), kind, list: '', text: text('Row') };
     case 'clearList':
       return { id: id(), kind, list: '' };
+    case 'forgetProgress':
+      return { id: id(), kind };
     case 'showUi':
     case 'hideUi':
       return { id: id(), kind, element: '' };
@@ -165,6 +167,7 @@ export function newExpr(kind: ExprKind, opts: { variable?: string } = {}): Expr 
       return { id: id(), kind, item: '' };
     case 'selectedItem':
     case 'pickedRow':
+    case 'clock':
       return { id: id(), kind };
   }
 }

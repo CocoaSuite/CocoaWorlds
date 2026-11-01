@@ -7,7 +7,7 @@
  */
 import { SceneDoc, readComponent, type ColliderData, type GameRules, type GameValue, type ModelData, type SceneFile, type SignData } from '@cocoaworlds/core';
 import { buildMesh, isInvisibleMaterial, type WorldBrush } from '@cocoaworlds/geometry';
-import { GameWorld, initPhysics, type BodyInfo, type ModelMesh, type UiState, type PlayerInput, type PlayerStatus, type ScriptLog, type TriggerEvent } from '@cocoaworlds/runtime';
+import { GameWorld, initPhysics, type BodyInfo, type ModelMesh, type SavedProgress, type UiState, type PlayerInput, type PlayerStatus, type ScriptLog, type TriggerEvent } from '@cocoaworlds/runtime';
 import type { Problem, ScriptError } from '@cocoaworlds/scripting';
 import * as THREE from 'three';
 import { worldBrushes } from '../brush/brushes';
@@ -49,7 +49,7 @@ export class PlaySession {
   private signs = new Map<string, { holder: THREE.Group; sign: SignObject; data: SignData }>();
   private signVersion = 0;
 
-  static async start(scene: SceneFile, material: (name: string) => THREE.Material, rules?: GameRules, values?: GameValue[]): Promise<PlaySession> {
+  static async start(scene: SceneFile, material: (name: string) => THREE.Material, rules?: GameRules, values?: GameValue[], saved?: SavedProgress | null): Promise<PlaySession> {
     await initPhysics();
     // The triangles of models that collide by their own shape (read from the files, which are loaded already).
     const models = new Map<string, ModelMesh>();
@@ -67,12 +67,12 @@ export class PlaySession {
     );
     // Invisible colliders (COL) collide but aren't drawn in the game.
     const hidden = new THREE.MeshBasicMaterial({ visible: false });
-    return new PlaySession(scene, (name) => (isInvisibleMaterial(name) ? hidden : material(name)), rules, values, models);
+    return new PlaySession(scene, (name) => (isInvisibleMaterial(name) ? hidden : material(name)), rules, values, models, saved ?? null);
   }
 
-  private constructor(scene: SceneFile, material: (name: string) => THREE.Material, rules?: GameRules, values?: GameValue[], models = new Map<string, ModelMesh>()) {
+  private constructor(scene: SceneFile, material: (name: string) => THREE.Material, rules: GameRules | undefined, values: GameValue[] | undefined, models: Map<string, ModelMesh>, saved: SavedProgress | null) {
     this.group.name = 'play';
-    this.world = GameWorld.create(scene, { rules, values, models });
+    this.world = GameWorld.create(scene, { rules, values, models, saved });
     const doc = new SceneDoc(structuredClone(scene));
     const bodies = new Set(this.world.movingBodies().map((b) => b.id));
 
@@ -353,6 +353,11 @@ export class PlaySession {
   /** Game values (all, with whether each is shown) and the messages on screen now. */
   screen(): { values: { name: string; value: unknown; show: boolean }[]; messages: string[] } {
     return { values: this.world.gameValues(), messages: this.world.screenMessages() };
+  }
+
+  /** What is kept between sessions now (null: nothing). */
+  progress(): SavedProgress | null {
+    return this.world.progress();
   }
 
   /** What the screen UI shows now. */

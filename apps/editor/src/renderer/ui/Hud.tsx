@@ -1,0 +1,103 @@
+/** The in-game display (health, score, game values, messages, the use prompt), for Play and exported games. */
+import type { UiState } from '@cocoaworlds/runtime';
+import { t } from '../i18n';
+import type { PlaySession } from '../viewport/play-session';
+
+/** What the in-game display shows. */
+export interface Hud {
+  showHealth: boolean;
+  health: number;
+  maxHealth: number;
+  score: number;
+  showScore: boolean;
+  /** Just hurt: flash red. */
+  hurt: boolean;
+  /** Game values shown on screen. */
+  values: { name: string; value: string }[];
+  /** Messages in the middle of the screen, oldest first. */
+  messages: string[];
+  /** Looking at something usable: its prompt word ('' for plain “Use”), else null. */
+  use: string | null;
+  /** The screen UI now, and every value texts and bars can show ({Cash}, health, score). */
+  ui: UiState;
+  allValues: Record<string, unknown>;
+}
+
+function formatValue(v: unknown): string {
+  if (typeof v === 'number') return String(Math.round(v * 1000) / 1000);
+  if (typeof v === 'boolean') return v ? 'yes' : 'no';
+  return v === null || v === undefined ? '' : String(v);
+}
+
+/** What the display shows now. `locked`: the mouse is captured (the use prompt only shows then). */
+export function hudOf(play: PlaySession, locked: boolean): Hud {
+  const status = play.status();
+  const screen = play.screen();
+  return {
+    showHealth: !!status?.showHealth,
+    health: Math.ceil(status?.health ?? 0),
+    maxHealth: status?.maxHealth ?? 100,
+    score: status?.score ?? 0,
+    showScore: !!status?.showScore,
+    hurt: (status?.sinceHurt ?? Infinity) < 0.35,
+    values: screen.values.filter((v) => v.show).map((v) => ({ name: v.name, value: formatValue(v.value) })),
+    messages: screen.messages,
+    use: locked ? play.usePrompt() : null,
+    ui: play.uiState(),
+    allValues: { ...Object.fromEntries(screen.values.map((v) => [v.name, v.value])), health: Math.ceil(status?.health ?? 0), score: status?.score ?? 0 },
+  };
+}
+
+/** Health (and the score, once a script uses it) in the corner of the game view; red flash when hurt. */
+export function HudView({ hud }: { hud: Hud }) {
+  const low = hud.showHealth && hud.health <= 25;
+  return (
+    <>
+      {hud.use !== null && (
+        <div className="cw-ov cw-use-prompt" data-testid="use-prompt" role="status">
+          <kbd>E</kbd>
+          <span>{hud.use || t('hud.use')}</span>
+        </div>
+      )}
+      {hud.messages.length > 0 && (
+        <div className="cw-ov cw-hud-messages" data-testid="hud-messages" role="status">
+          {hud.messages.slice(-3).map((m, i) => (
+            <div key={i} className="cw-hud-message">
+              {m}
+            </div>
+          ))}
+        </div>
+      )}
+      {hud.hurt && hud.showHealth && <div className="cw-hurt" aria-hidden="true" />}
+      {(hud.showHealth || hud.showScore || hud.values.length > 0) && (
+      <div className="cw-ov cw-hud" data-testid="hud">
+        {hud.showHealth && (
+          <div className={`cw-hud-item${low ? ' low' : ''}`} role="meter" aria-label={t('hud.health')} aria-valuemin={0} aria-valuemax={hud.maxHealth} aria-valuenow={hud.health}>
+            <span className="cw-hud-label">{t('hud.health')}</span>
+            <span className="cw-hud-value" data-testid="hud-health">
+              {hud.health}
+            </span>
+            <span className="cw-hud-bar">
+              <span style={{ width: `${(100 * hud.health) / hud.maxHealth}%` }} />
+            </span>
+          </div>
+        )}
+        {hud.values.map((v) => (
+          <div key={v.name} className="cw-hud-item" data-testid={`hud-value-${v.name}`}>
+            <span className="cw-hud-label">{v.name}</span>
+            <span className="cw-hud-value">{v.value}</span>
+          </div>
+        ))}
+        {hud.showScore && (
+          <div className="cw-hud-item">
+            <span className="cw-hud-label">{t('hud.score')}</span>
+            <span className="cw-hud-value" data-testid="hud-score">
+              {hud.score}
+            </span>
+          </div>
+        )}
+      </div>
+      )}
+    </>
+  );
+}

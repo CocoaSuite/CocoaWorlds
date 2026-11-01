@@ -15,6 +15,13 @@ const MIME: Record<string, string> = {
 };
 
 let projectDir: string | null = null;
+/** Exported games read their assets from files beside them instead of through the editor. */
+let reader: ((path: string) => Promise<ArrayBuffer>) | null = null;
+
+export function setAssetReader(read: (path: string) => Promise<ArrayBuffer>): void {
+  reader = read;
+  urls.clear();
+}
 const urls = new Map<string, Promise<string>>();
 
 /** The open project (assets are read from it). Changing project forgets every cached URL. */
@@ -31,11 +38,13 @@ export function assetUrl(path: string): Promise<string> {
   if (!p) {
     const dir = projectDir;
     p = (async () => {
+      const ext = path.split('.').pop()?.toLowerCase() ?? '';
+      const type = MIME[ext] ?? 'application/octet-stream';
+      if (reader) return URL.createObjectURL(new Blob([await reader(path)], { type }));
       if (!dir) throw new Error('No project is open.');
       const r = await window.cocoa.projects.readAsset(dir, path);
       if (!r.ok) throw new Error(r.error);
-      const ext = path.split('.').pop()?.toLowerCase() ?? '';
-      return URL.createObjectURL(new Blob([r.value as BlobPart], { type: MIME[ext] ?? 'application/octet-stream' }));
+      return URL.createObjectURL(new Blob([r.value as BlobPart], { type }));
     })();
     // A failed read is retried next time.
     p.catch(() => urls.delete(path));

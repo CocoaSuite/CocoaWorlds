@@ -49,6 +49,10 @@ export interface ScriptHost {
   playAnimation?(target: string, name: string, loop: boolean): void;
   /** Show or hide a screen, or one element of a screen. */
   showUi?(what: 'screen' | 'element', id: string, show: boolean | 'toggle'): void;
+  /** The real time in seconds since 1970. */
+  clock?(): number;
+  /** Kept game values and items back to the start. */
+  forgetProgress?(): void;
   /** Add a row to a list, or remove the first row with this text; empty a list. */
   listRow?(id: string, text: string, add: boolean): void;
   clearList?(id: string): void;
@@ -515,6 +519,12 @@ export class ScriptRunner {
           break;
         case 'picked':
           s.push(t.pick);
+          break;
+        case 'clock':
+          s.push(this.host.clock?.() ?? Date.now() / 1000);
+          break;
+        case 'forget':
+          this.host.forgetProgress?.();
           break;
         case 'halt':
           return this.finish(t);

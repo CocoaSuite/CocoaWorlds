@@ -1,0 +1,5 @@
+html, body, #root { margin: 0; height: 100%; background: #000; overflow: hidden; }
+.cw-player { position: fixed; inset: 0; color: #fff; font-family: var(--sans); user-select: none; }
+.cw-player .cw-canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; outline: none; }
+.cw-player .cw-ov { position: absolute; z-index: 5; }
+.cw-player-msg { position: absolute; inset: 0; display: grid; place-items: center; text-align: center; padding: 24px; color: #ddd; font-size: 15px; }

@@ -19,36 +19,14 @@ import { VertexTool } from './vertex-tool';
 import { ClipTool, type ClipKeep, type ClipState } from './clip-tool';
 import type { PlayFrame, PlayInfo, PlaySession } from './play-session';
 import type { UiState } from '@cocoaworlds/runtime';
+import { GAME_KEYS, inputFromKeys, isScriptKey, lookFromMouse } from '../game/controls';
+import { hudOf, type Hud } from '../ui/Hud';
+import { loadProgress, storeProgress } from '../game/progress';
 import { SceneLighting } from './scene-lighting';
 
-/** Larger single mouse movements (pixels) while playing are glitches, not the player. */
-const MAX_MOUSE_STEP = 300;
 
-/** What the in-game display shows. */
-export interface Hud {
-  showHealth: boolean;
-  health: number;
-  maxHealth: number;
-  score: number;
-  showScore: boolean;
-  /** Just hurt: flash red. */
-  hurt: boolean;
-  /** Game values shown on screen. */
-  values: { name: string; value: string }[];
-  /** Messages in the middle of the screen, oldest first. */
-  messages: string[];
-  /** Looking at something usable: its prompt word ('' for plain “Use”), else null. */
-  use: string | null;
-  /** The screen UI now, and every value texts and bars can show ({Cash}, health, score). */
-  ui: UiState;
-  allValues: Record<string, unknown>;
-}
+export type { Hud } from '../ui/Hud';
 
-function formatValue(v: unknown): string {
-  if (typeof v === 'number') return String(Math.round(v * 1000) / 1000);
-  if (typeof v === 'boolean') return v ? 'yes' : 'no';
-  return v === null || v === undefined ? '' : String(v);
-}
 import type { GameRules, GameValue, SceneFile } from '@cocoaworlds/core';
 
 export interface ViewportCallbacks {
@@ -432,12 +410,14 @@ export class ViewportEngine {
   }
 
   /** Build a game world from a scene snapshot and show it instead of the editor's scene. */
-  async startPlay(scene: SceneFile, rules?: GameRules, values?: GameValue[]): Promise<PlayInfo> {
+  async startPlay(scene: SceneFile, rules?: GameRules, values?: GameValue[], saveId?: string): Promise<PlayInfo> {
     this.stopPlay();
     const token = ++this.playToken;
     // Physics (and its WebAssembly) loads on first Play, so opening the editor stays quick.
     const { PlaySession } = await import('./play-session');
-    const session = await PlaySession.start(scene, (name) => this.world.material(name), rules, values);
+    // Saved progress (kept values and items) carries over from the last Play of this project.
+    this.saveId = saveId ?? null;
+    const session = await PlaySession.start(scene, (name) => this.world.material(name), rules, values, saveId ? loadProgress(saveId) : null);
     if (token !== this.playToken || this.disposed) {
       // Stopped while loading.
       session.dispose();
@@ -470,6 +450,7 @@ export class ViewportEngine {
     this.playToken++;
     const p = this.play;
     if (!p) return;
+    this.saveProgress();
     this.play = null;
     this.hudKey = '';
     this.cb.hud(null);
@@ -509,6 +490,21 @@ export class ViewportEngine {
       return;
     }
     if (this.asPlayer) this.lockPointer();
+  }
+
+  /** Where Play keeps saved progress (the project's id), and what was kept last. */
+  private saveId: string | null = null;
+  private savedKey = '';
+  private saveAt = 0;
+
+  private saveProgress(): void {
+    if (!this.play || !this.saveId) return;
+    const p = this.play.progress();
+    const key = JSON.stringify(p);
+    if (key === this.savedKey) return;
+    this.savedKey = key;
+    // (Nothing kept: leave what an earlier Play kept alone, in case a value is switched back on.)
+    if (p) storeProgress(this.saveId, p);
   }
 
   /** A shown screen has freed the mouse for its buttons (the view stops turning; keys still move). */
@@ -560,28 +556,12 @@ export class ViewportEngine {
 
   private onMouseMove = (e: MouseEvent): void => {
     if (!this.asPlayer || !this.locked || !this.play) return;
-    // Browsers sometimes report one huge jump while the mouse is captured (a known pointer-lock glitch);
-    // no hand moves the mouse that far in one event, so ignore it rather than flick the view.
-    if (Math.abs(e.movementX) > MAX_MOUSE_STEP || Math.abs(e.movementY) > MAX_MOUSE_STEP) return;
-    const k = 0.0022;
-    const { yaw, pitch } = this.play.look;
-    const limit = Math.PI / 2 - 0.01;
-    this.play.setInput({ yaw: yaw - e.movementX * k, pitch: Math.max(-limit, Math.min(limit, pitch - e.movementY * k)) });
+    const look = lookFromMouse(this.play.look, e.movementX, e.movementY);
+    if (look) this.play.setInput(look);
   };
 
-  /** Keys the game uses while the mouse is captured (they never reach the editor's shortcuts). */
-  private static GAME_KEYS = new Set(['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space', 'ControlLeft', 'ControlRight', 'KeyC', 'ShiftLeft', 'ShiftRight', 'KeyE']);
-
   private sendInput(): void {
-    const k = this.gameKeys;
-    const on = (...c: string[]) => c.some((x) => k.has(x));
-    this.play?.setInput({
-      forward: (on('KeyW', 'ArrowUp') ? 1 : 0) - (on('KeyS', 'ArrowDown') ? 1 : 0),
-      right: (on('KeyD', 'ArrowRight') ? 1 : 0) - (on('KeyA', 'ArrowLeft') ? 1 : 0),
-      jump: on('Space'),
-      crouch: on('ControlLeft', 'ControlRight', 'KeyC'),
-      walk: on('ShiftLeft', 'ShiftRight'),
-    });
+    this.play?.setInput(inputFromKeys(this.gameKeys));
   }
 
   /** Returns true when the key was the game's. */
@@ -616,9 +596,9 @@ export class ViewportEngine {
       this.play?.selectSlot(Number(e.code.slice(5)) - 1);
       return true;
     }
-    if (!ViewportEngine.GAME_KEYS.has(e.code)) {
+    if (!GAME_KEYS.has(e.code)) {
       // Other letters and Tab are for “When the player presses”.
-      if (down && !e.repeat && /^(Key[A-Z]|Tab)$/.test(e.code)) this.play?.pressKey(e.code);
+      if (down && !e.repeat && isScriptKey(e.code)) this.play?.pressKey(e.code);
       return true;
     }
     if (down && e.code === 'KeyE' && !e.repeat) this.play?.use();
@@ -1168,22 +1148,12 @@ export class ViewportEngine {
     if (this.play) {
       const frame = this.play.tick(dt);
       if (frame.events.length || frame.logs.length || frame.errors.length || frame.uses.length || frame.notes.length) this.cb.playFrame(frame, this.play.info.names);
-      const status = this.play.status();
-      const screen = this.play.screen();
       {
-        const hud: Hud = {
-          showHealth: !!status?.showHealth,
-          health: Math.ceil(status?.health ?? 0),
-          maxHealth: status?.maxHealth ?? 100,
-          score: status?.score ?? 0,
-          showScore: !!status?.showScore,
-          hurt: (status?.sinceHurt ?? Infinity) < 0.35,
-          values: screen.values.filter((v) => v.show).map((v) => ({ name: v.name, value: formatValue(v.value) })),
-          messages: screen.messages,
-          use: this.locked ? this.play.usePrompt() : null,
-          ui: this.play.uiState(),
-          allValues: { ...Object.fromEntries(screen.values.map((v) => [v.name, v.value])), health: Math.ceil(status?.health ?? 0), score: status?.score ?? 0 },
-        };
+        const hud = hudOf(this.play, this.locked);
+        if (now > this.saveAt) {
+          this.saveAt = now + 500;
+          this.saveProgress();
+        }
         this.followUiMouse(hud.ui.freesMouse);
         const key = JSON.stringify(hud);
         if (key !== this.hudKey) {

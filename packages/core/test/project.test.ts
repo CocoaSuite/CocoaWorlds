@@ -53,10 +53,10 @@ describe('game rules', () => {
   it('older projects have everything on; rules round-trip; bad values are refused', async () => {
     const { gameRules } = await import('../src/schema');
     const { project } = newProject('Farm');
-    expect(gameRules(project.settings)).toEqual({ health: true, score: true, thirdPerson: false });
+    expect(gameRules(project.settings)).toEqual({ health: true, score: true, thirdPerson: false, saveItems: false });
     project.settings.game = { health: false };
     const back = parseProject(stringify(project)).project;
-    expect(gameRules(back.settings)).toEqual({ health: false, score: true, thirdPerson: false });
+    expect(gameRules(back.settings)).toEqual({ health: false, score: true, thirdPerson: false, saveItems: false });
     project.settings.game = { health: 'no' as never };
     expect(() => parseProject(stringify(project))).toThrow(ProjectFormatError);
   });

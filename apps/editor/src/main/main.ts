@@ -8,6 +8,8 @@ import { IPC, type Result } from '../shared/api';
 import { listAssets, readAsset, writeAsset } from './assets-fs';
 import { ProjectError, autosaveScene, createProject, discardRecovery, listPrefabs, openProject, savePrefab, saveProjectSettings, saveScene } from './project-fs';
 import { SettingsStore } from './settings';
+import { downloadRuntime, gameData, gameFileName, ownRuntime, writeDesktopGame, writeWebGame, type ExportTarget } from './export';
+import { spawn } from 'node:child_process';
 
 if (process.env.CW_USER_DATA) app.setPath('userData', process.env.CW_USER_DATA);
 
@@ -120,6 +122,66 @@ function handleRaw<T>(channel: string, fn: (...args: unknown[]) => Promise<T>): 
   });
 }
 
+/** Games exported in this session (only these can be shown or started from the UI). */
+const exported = new Set<string>();
+
+const TARGET_LABEL: Record<ExportTarget, string> = { web: 'Web', win32: 'Windows', darwin: 'macOS', linux: 'Linux' };
+
+function registerExport(): void {
+  handle(IPC.exportGame, async (dirArg, targetArg) => {
+    const dir = str(dirArg);
+    const target = String(targetArg) as ExportTarget;
+    if (!(target in TARGET_LABEL)) throw new Error('Unknown export target.');
+    const say = (text: string) => win?.webContents.send(IPC.exportProgress, text);
+    const { project } = await gameData(dir);
+    let parent = process.env.CW_EXPORT_DIR ?? null;
+    if (!parent) {
+      if (!win) return null;
+      const r = await dialog.showOpenDialog(win, {
+        title: 'Export the game to…',
+        defaultPath: path.join(app.getPath('documents'), 'CocoaWorlds Exports'),
+        properties: ['openDirectory', 'createDirectory'],
+      });
+      if (r.canceled || !r.filePaths[0]) return null;
+      parent = r.filePaths[0];
+    }
+    const folder = path.join(parent, `${gameFileName(project.name)} (${TARGET_LABEL[target]})`);
+    const rendererDir = path.join(__dirname, '../renderer');
+    let result;
+    if (target === 'web') {
+      say('Writing the web game…');
+      result = await writeWebGame(dir, rendererDir, folder);
+    } else {
+      let runtime: string;
+      if (target === process.platform) runtime = ownRuntime(process.execPath, process.platform);
+      else {
+        say(`Getting the ${TARGET_LABEL[target]} runtime (once, about 100 MB)…`);
+        let shown = -1;
+        runtime = await downloadRuntime(process.versions.electron, target, path.join(app.getPath('userData'), 'runtimes'), (f) => {
+          const pct = Math.round(f * 100);
+          if (pct !== shown) say(`Getting the ${TARGET_LABEL[target]} runtime… ${(shown = pct)}%`);
+        });
+      }
+      say(`Writing the ${TARGET_LABEL[target]} game…`);
+      result = await writeDesktopGame(dir, rendererDir, path.join(__dirname, 'game-shell.cjs'), runtime, target, folder);
+    }
+    exported.add(result.start);
+    exported.add(result.folder);
+    say('Done.');
+    return result;
+  });
+  handleRaw(IPC.revealGame, async (p) => {
+    if (exported.has(str(p))) shell.showItemInFolder(str(p));
+  });
+  handle(IPC.launchGame, async (p) => {
+    const start = str(p);
+    if (!exported.has(start)) throw new Error('That is not a game exported here.');
+    const child = process.platform === 'darwin' ? spawn('open', [start], { detached: true, stdio: 'ignore' }) : spawn(start, [], { detached: true, stdio: 'ignore', cwd: path.dirname(start) });
+    child.unref();
+    return true as const;
+  });
+}
+
 function registerIpc(): void {
   handleRaw(IPC.defaultLocation, async () => process.env.CW_PROJECTS_DIR ?? path.join(app.getPath('documents'), 'CocoaWorlds'));
   handleRaw(IPC.pickFolder, async (title, defaultPath) => {
@@ -150,6 +212,7 @@ function registerIpc(): void {
   handle(IPC.listAssets, async (dir) => listAssets(str(dir)));
   handle(IPC.writeAsset, async (dir, kind, name, bytes) => writeAsset(str(dir), kind, name, bytes));
   handle(IPC.readAsset, async (dir, rel) => readAsset(str(dir), rel));
+  registerExport();
   handle(IPC.savePrefab, async (dir, prefab, rel) => savePrefab(str(dir), prefab, rel === undefined ? undefined : str(rel)));
   handleRaw(IPC.discardRecovery, async (dir, scenePath) => discardRecovery(str(dir), str(scenePath)));
   handleRaw(IPC.reveal, async (dir) => {

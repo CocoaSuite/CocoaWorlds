@@ -37,6 +37,8 @@ export interface AssetEntry {
   bytes: number;
 }
 
+export type ExportTarget = 'web' | 'win32' | 'darwin' | 'linux';
+
 export type Result<T> = { ok: true; value: T } | { ok: false; error: string; details?: string[] };
 
 export interface CocoaApi {
@@ -61,6 +63,17 @@ export interface CocoaApi {
     /** Copy a file the user picked into the project's assets. */
     writeAsset(dir: string, kind: AssetKind, name: string, bytes: Uint8Array): Promise<Result<AssetEntry>>;
     readAsset(dir: string, path: string): Promise<Result<Uint8Array>>;
+  };
+  game: {
+    /**
+     * Export the project's game (saved files) for a target: asks where (unless a folder is given in tests),
+     * reports progress, and returns where it was written.
+     */
+    export(dir: string, target: ExportTarget): Promise<Result<{ folder: string; start: string; bytes: number } | null>>;
+    /** Show an exported game in the file manager, or start a desktop game built for this computer. */
+    reveal(path: string): Promise<void>;
+    launch(path: string): Promise<Result<true>>;
+    onProgress(fn: (text: string) => void): () => void;
   };
   window: {
     setTitle(title: string): void;
@@ -87,6 +100,10 @@ export const IPC = {
   listAssets: 'assets:list',
   writeAsset: 'assets:write',
   readAsset: 'assets:read',
+  exportGame: 'game:export',
+  exportProgress: 'game:exportProgress',
+  revealGame: 'game:reveal',
+  launchGame: 'game:launch',
   setTitle: 'window:setTitle',
   setDirty: 'window:setDirty',
   saveRequest: 'window:saveRequest',

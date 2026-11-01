@@ -341,3 +341,12 @@ code { font: 12px var(--mono); color: var(--fg); }
 .cw-screens-outline .cw-iconbtn, .cw-screens-outline button[aria-label^="Further"] { opacity: 0.6; }
 .cw-anchor.row { grid-template-columns: repeat(3, 26px); }
 .cw-anchor.row button { width: 26px; color: var(--fg); font-size: 12px; }
+
+/* Build… (export) */
+.cw-export-targets { display: flex; flex-direction: column; gap: 6px; margin: 10px 0; }
+.cw-export-target { display: grid; grid-template-columns: auto 1fr; grid-template-rows: auto auto; column-gap: 10px; align-items: center; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; cursor: pointer; }
+.cw-export-target.on { border-color: var(--sel); }
+.cw-export-target input { grid-row: span 2; }
+.cw-export-target span { font-size: 12px; }
+.cw-export-error { color: var(--bad); }
+.cw-export-done { word-break: break-all; }

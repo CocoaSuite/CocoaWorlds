@@ -37,6 +37,15 @@ import { bounds, brushToWorld, buildMesh, buildWorld, fromData, hullPoints, vert
 /** Units per metre (an inch-based world). */
 export const UNITS_PER_METRE = 39.37;
 
+/**
+ * Saved progress: the kept game values and, when the game keeps them, the player's items. The game saves it
+ * (browser storage) and hands it back to the next session.
+ */
+export interface SavedProgress {
+  values: Record<string, Value>;
+  items?: [string, number][];
+}
+
 /** What the screen UI shows at a moment (see GameWorld.uiState). */
 export interface UiState {
   /** Ids of the screens shown, and of the elements hidden. */
@@ -220,8 +229,46 @@ export class GameWorld {
 
   /** Build a world from a scene snapshot. Call `initPhysics()` first. */
   /** `models`: the triangles of the model files that objects collide by (Model component, Collision). */
-  static create(scene: SceneFile, options: { rules?: Partial<GameRules>; values?: GameValueDef[]; models?: Map<string, ModelMesh> } = {}): GameWorld {
-    return new GameWorld(scene, gameRules({ game: options.rules }), options.values ?? [], options.models ?? new Map());
+  static create(
+    scene: SceneFile,
+    options: { rules?: Partial<GameRules>; values?: GameValueDef[]; models?: Map<string, ModelMesh>; saved?: SavedProgress | null; clock?: () => number } = {},
+  ): GameWorld {
+    const w = new GameWorld(scene, gameRules({ game: options.rules }), options.values ?? [], options.models ?? new Map());
+    if (options.clock) w.clock = options.clock;
+    if (options.saved) w.loadProgress(options.saved);
+    return w;
+  }
+
+  /** The real time in seconds since 1970 (replaceable for tests). */
+  private clock = () => Date.now() / 1000;
+
+  /** Start from saved progress: kept values (of the right type) and, if the game keeps them, items. */
+  private loadProgress(saved: SavedProgress): void {
+    for (const d of this.valueDefs) {
+      if (!d.saved || !(d.name in (saved.values ?? {}))) continue;
+      const v = saved.values[d.name];
+      if (typeof v === (d.type === 'boolean' ? 'boolean' : d.type === 'number' ? 'number' : 'string')) this.globals.set(d.name, v as Value);
+    }
+    if (this.rules.saveItems && Array.isArray(saved.items))
+      for (const [name, n] of saved.items) if (typeof name === 'string' && typeof n === 'number' && n > 0) this.inventory.set(name, Math.round(n));
+  }
+
+  /** What is kept between sessions right now, or null when the game keeps nothing. */
+  progress(): SavedProgress | null {
+    const kept = this.valueDefs.filter((d) => d.saved);
+    if (!kept.length && !this.rules.saveItems) return null;
+    const out: SavedProgress = { values: Object.fromEntries(kept.map((d) => [d.name, this.globals.get(d.name) ?? d.initial])) };
+    if (this.rules.saveItems) out.items = [...this.inventory];
+    return out;
+  }
+
+  /** Start over: kept values back to their starting values, kept items emptied. */
+  forgetProgress(): void {
+    for (const d of this.valueDefs) if (d.saved) this.globals.set(d.name, d.initial);
+    if (this.rules.saveItems) {
+      this.inventory.clear();
+      this.slot = 0;
+    }
   }
 
   // ── Screen UI and the inventory (B5) ──
@@ -389,6 +436,8 @@ export class GameWorld {
         }
       },
       clearList: (id) => void this.uiRows.get(id)?.splice(0),
+      clock: () => this.clock(),
+      forgetProgress: () => this.forgetProgress(),
       setUiText: (id, text) => void this.uiText.set(id, text),
       giveItem: (name, amount) => this.giveItem(name, amount),
       itemCount: (name) => this.inventory.get(name) ?? 0,

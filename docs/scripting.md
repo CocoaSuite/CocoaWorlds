@@ -151,3 +151,8 @@ uses “Open”, the button “Press”.
 | Stop the sounds of *object* | Stops its Sound component and what its scripts played |
 
 See [rendering.md](rendering.md#sound) for the Sound component.
+
+## Saved progress and the real clock
+
+Game values marked **kept** start the next game with their last value; **Forget saved progress** starts over;
+**the time now** is the real clock in seconds since 1970. See [export.md](export.md).

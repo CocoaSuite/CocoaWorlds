@@ -27,6 +27,8 @@ const W = {
   keyEv: ['When the player presses', 'Когда игрок нажимает'],
   pickedRow: ['the picked row', 'выбранная строка'],
   pickList: ['pick a list', 'выберите список'],
+  forgetProgress: ['Forget saved progress (start over)', 'Забыть сохранённый прогресс (начать заново)'],
+  clock: ['the time now (seconds since 1970)', 'текущее время (секунд с 1970)'],
   hideScreen: ['Hide the screen', 'Скрыть экран'],
   showUi: ['Show', 'Показать'],
   hideUi: ['Hide', 'Скрыть'],
@@ -206,6 +208,7 @@ const PALETTE_STMT: Record<StatementKind, Pair> = {
   addRow: ['Add a row to a list', 'Добавить строку в список'],
   removeRow: ['Remove a row from a list', 'Убрать строку из списка'],
   clearList: ['Empty a list', 'Очистить список'],
+  forgetProgress: ['Forget saved progress', 'Забыть сохранённый прогресс'],
   showUi: ['Show something on a screen', 'Показать элемент экрана'],
   hideUi: ['Hide something on a screen', 'Скрыть элемент экрана'],
   setUiText: ['Set the text on a screen', 'Задать текст на экране'],
@@ -223,7 +226,7 @@ export const STATEMENT_GROUPS: { title: Pair; kinds: StatementKind[] }[] = [
   { title: ['Sound', 'Звук'], kinds: ['playSound', 'stopSound'] },
   { title: ['Models', 'Модели'], kinds: ['playAnim'] },
   { title: ['Control', 'Управление'], kinds: ['wait', 'if', 'repeat', 'while', 'forever', 'stop'] },
-  { title: ['Variables', 'Переменные'], kinds: ['set', 'change'] },
+  { title: ['Variables', 'Переменные'], kinds: ['set', 'change', 'forgetProgress'] },
 ];
 export const groupTitle = (p: Pair) => pick(p);
 
@@ -248,13 +251,14 @@ const VALUE: Record<ExprKind, Pair> = {
   itemCount: ['How many of an item the player has', 'Сколько предметов у игрока'],
   selectedItem: ['The item in the player’s hand', 'Предмет в руке игрока'],
   pickedRow: ['The picked row (of a list)', 'Выбранная строка (списка)'],
+  clock: ['The time now (real clock)', 'Текущее время (настоящие часы)'],
 };
 export const valueName = (k: ExprKind) => pick(VALUE[k]);
 
 /** Which value blocks fit a slot of a given type. */
 export const VALUES_FOR: Record<'number' | 'boolean' | 'text' | 'any', ExprKind[]> = {
-  number: ['number', 'variable', 'varOf', 'maths', 'random', 'time', 'health', 'score', 'itemCount'],
+  number: ['number', 'variable', 'varOf', 'maths', 'random', 'time', 'clock', 'health', 'score', 'itemCount'],
   boolean: ['boolean', 'inside', 'variable', 'varOf', 'compare', 'logic', 'not'],
   text: ['text', 'variable', 'varOf', 'join', 'number', 'object', 'score', 'itemCount', 'selectedItem', 'pickedRow'],
-  any: ['number', 'text', 'boolean', 'variable', 'varOf', 'maths', 'compare', 'logic', 'not', 'inside', 'random', 'join', 'time', 'health', 'score', 'itemCount', 'selectedItem', 'pickedRow', 'object', 'copy'],
+  any: ['number', 'text', 'boolean', 'variable', 'varOf', 'maths', 'compare', 'logic', 'not', 'inside', 'random', 'join', 'time', 'clock', 'health', 'score', 'itemCount', 'selectedItem', 'pickedRow', 'object', 'copy'],
 };

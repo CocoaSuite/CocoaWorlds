@@ -1,5 +1,5 @@
 import { Button, Dialog, Divider, Icon, IconButton, MenuBar, Spacer } from '@cocoaworlds/ui';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import logo from '../assets/cocoaworlds-logo.svg';
 import { t } from '../i18n';
 import { useEditor } from '../store';
@@ -14,6 +14,7 @@ export function TopBar({ onShowKeys }: { onShowKeys: () => void }) {
   const status = s.saving ? t('status.saving') : s.dirty ? t('status.edited') : t('status.saved');
 
   const [asking, setAsking] = useState(false);
+  const [building, setBuilding] = useState(false);
   const confirmClose = () => (s.dirty ? setAsking(true) : s.closeSession());
 
   return (
@@ -106,9 +107,10 @@ export function TopBar({ onShowKeys }: { onShowKeys: () => void }) {
       <IconButton icon="undo" label={t('edit.undo')} disabled={!h.canUndo} onClick={s.undo} />
       <IconButton icon="redo" label={t('edit.redo')} disabled={!h.canRedo} onClick={s.redo} />
       <Divider />
-      <Button disabled title={t('soon')}>
+      <Button disabled={!!s.playing} onClick={() => setBuilding(true)}>
         {t('build')}
       </Button>
+      {building && <BuildDialog onClose={() => setBuilding(false)} />}
       {s.playing ? (
         <Button variant="primary" onClick={s.stopPlaying} title={`${t('play.stop')} (Esc, F5)`}>
           <Icon name="stop" size={13} style={{ fill: 'currentColor', stroke: 'none' }} />
@@ -178,5 +180,88 @@ function Workspaces() {
         </button>
       ))}
     </div>
+  );
+}
+
+type Target = 'web' | 'win32' | 'darwin' | 'linux';
+
+/** Build… : export the game for the web or a desktop system (B4). */
+function BuildDialog({ onClose }: { onClose: () => void }) {
+  const here = window.cocoa.platform;
+  const [target, setTarget] = useState<Target>(here === 'win32' || here === 'darwin' || here === 'linux' ? (here as Target) : 'web');
+  const [busy, setBusy] = useState(false);
+  const [progress, setProgress] = useState('');
+  const [done, setDone] = useState<{ folder: string; start: string; bytes: number } | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => window.cocoa.game.onProgress(setProgress), []);
+  const names: Record<Target, string> = { web: t('export.web'), win32: 'Windows', darwin: 'macOS', linux: 'Linux' };
+  const go = async () => {
+    const st = useEditor.getState();
+    const dir = st.session?.dir;
+    if (!dir) return;
+    setBusy(true);
+    setError(null);
+    setDone(null);
+    try {
+      if (st.dirty && !(await st.save())) throw new Error(t('export.failed'));
+      const r = await window.cocoa.game.export(dir, target);
+      if (!r.ok) throw new Error(r.error);
+      if (r.value) {
+        setDone(r.value);
+        st.log('info', 'Build', `${names[target]}: ${r.value.folder} (${(r.value.bytes / 1024 / 1024).toFixed(1)} MB)`);
+      }
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <Dialog title={t('export.title')} onClose={() => !busy && onClose()} width={520}>
+      <p className="cw-hint">{t('export.intro')}</p>
+      <div className="cw-export-targets" role="radiogroup" aria-label={t('export.target')}>
+        {(['web', 'win32', 'darwin', 'linux'] as Target[]).map((x) => (
+          <label key={x} className={`cw-export-target${target === x ? ' on' : ''}`}>
+            <input type="radio" name="target" checked={target === x} disabled={busy} onChange={() => setTarget(x)} aria-label={names[x]} />
+            <strong>{names[x]}</strong>
+            <span className="cw-muted">{x === 'web' ? t('export.webHint') : x === here ? `${t('export.thisComputer')} · ${t('export.desktopHint')}` : `${t('export.download')} · ${t('export.desktopHint')}`}</span>
+          </label>
+        ))}
+      </div>
+      {busy && (
+        <p role="status" className="cw-hint">
+          {progress || t('export.working')}
+        </p>
+      )}
+      {error && (
+        <p role="alert" className="cw-export-error">
+          {t('export.failed')}: {error}
+        </p>
+      )}
+      {done && (
+        <p role="status" className="cw-export-done" data-testid="export-done">
+          {t('export.done')}: <span className="mono">{done.folder}</span>
+        </p>
+      )}
+      <div className="cw-actions">
+        {done && <Button onClick={() => void window.cocoa.game.reveal(done.start)}>{t('export.show')}</Button>}
+        {done && target === here && (
+          <Button
+            onClick={async () => {
+              const r = await window.cocoa.game.launch(done.start);
+              if (!r.ok) setError(r.error);
+            }}
+          >
+            {t('export.play')}
+          </Button>
+        )}
+        <Button onClick={onClose} disabled={busy}>
+          {t('export.close')}
+        </Button>
+        <Button variant="primary" onClick={() => void go()} disabled={busy}>
+          {busy ? t('export.working') : t('export.go')}
+        </Button>
+      </div>
+    </Dialog>
   );
 }

@@ -11,7 +11,8 @@ const common = {
   platform: 'node',
   format: 'cjs',
   target: 'node22',
-  external: ['electron'],
+  // (@electron/get is an ES module that finds its own files: it is loaded from node_modules, not bundled.)
+  external: ['electron', '@electron/get', 'extract-zip'],
   sourcemap: true,
   logLevel: 'info',
   absWorkingDir: root,
@@ -21,6 +22,8 @@ const entries = [
   { entryPoints: ['src/main/main.ts'], outfile: 'dist/main/main.cjs' },
   // Sandboxed preloads must be a single file that only requires 'electron'.
   { entryPoints: ['src/preload/preload.ts'], outfile: 'dist/main/preload.js' },
+  // The main process of exported desktop games (copied into each one; its package.json sits beside it).
+  { entryPoints: ['src/game-shell/main.ts'], outfile: 'dist/main/game-shell.cjs', sourcemap: false, external: ['electron', './package.json'] },
 ];
 
 if (watch) {

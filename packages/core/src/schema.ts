@@ -39,6 +39,8 @@ export interface GameValue {
   initial: number | boolean | string;
   /** Shown on screen while playing. */
   show: boolean;
+  /** Kept between sessions: the game starts with its last value (saved progress). */
+  saved?: boolean;
 }
 
 /** Built-in game systems a project can switch off (a building or farming game may want neither). */
@@ -49,16 +51,18 @@ export interface GameRules {
   score: boolean;
   /** The camera follows behind the player (Roblox-style) instead of looking through their eyes. */
   thirdPerson: boolean;
+  /** The player's items are kept between sessions (saved progress). */
+  saveItems: boolean;
 }
 
-export const defaultGameRules = (): GameRules => ({ health: true, score: true, thirdPerson: false });
+export const defaultGameRules = (): GameRules => ({ health: true, score: true, thirdPerson: false, saveItems: false });
 
 /** A project's game rules with defaults filled in. */
 export function gameRules(settings: Pick<ProjectSettings, 'game'> | undefined): GameRules {
   const g = settings?.game ?? {};
   const d = defaultGameRules();
   const pick = (k: keyof GameRules) => (typeof g[k] === 'boolean' ? (g[k] as boolean) : d[k]);
-  return { health: pick('health'), score: pick('score'), thirdPerson: pick('thirdPerson') };
+  return { health: pick('health'), score: pick('score'), thirdPerson: pick('thirdPerson'), saveItems: pick('saveItems') };
 }
 
 export interface ProjectFile {

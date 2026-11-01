@@ -27,6 +27,16 @@ const api: CocoaApi = {
     writeAsset: (dir, kind, name, bytes) => ipcRenderer.invoke(IPC.writeAsset, dir, kind, name, bytes),
     readAsset: (dir, path) => ipcRenderer.invoke(IPC.readAsset, dir, path),
   },
+  game: {
+    export: (dir, target) => ipcRenderer.invoke(IPC.exportGame, dir, target),
+    reveal: (path) => ipcRenderer.invoke(IPC.revealGame, path),
+    launch: (path) => ipcRenderer.invoke(IPC.launchGame, path),
+    onProgress: (fn) => {
+      const listener = (_e: unknown, text: string) => fn(text);
+      ipcRenderer.on(IPC.exportProgress, listener);
+      return () => ipcRenderer.removeListener(IPC.exportProgress, listener);
+    },
+  },
   window: {
     setTitle: (title) => ipcRenderer.send(IPC.setTitle, title),
     setDirty: (dirty) => ipcRenderer.send(IPC.setDirty, dirty),

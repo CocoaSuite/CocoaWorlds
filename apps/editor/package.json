@@ -28,6 +28,8 @@
     "@cocoaworlds/runtime": "^0.1.0",
     "@cocoaworlds/scripting": "^0.1.0",
     "@cocoaworlds/ui": "^0.1.0",
+    "@electron/get": "^5.1.0",
+    "extract-zip": "^2.0.1",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
     "three": "^0.187.0",

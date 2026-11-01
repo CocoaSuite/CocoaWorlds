@@ -8,7 +8,7 @@
 - **Lights are markers only.** They don't light the scene until materials and lighting land (Phase 7).
 - **One scene per project in the UI.** The format supports a scene list; scene management UI comes later.
 - **The clipboard is inside the editor.** Copy/paste works across projects within one session, but not with other apps or after a restart.
-- **Some tools are visible but disabled** (Build), labelled with when it arrives.
+- **Exported games:** one scene (the start scene); folders rather than installers; programs aren't signed, so Windows SmartScreen and macOS Gatekeeper warn on first start (on macOS: right-click › Open); 64-bit Intel/AMD builds for other systems (Apple Silicon Macs run them through Rosetta); web games need a web server. Exporting for another system needs the internet once. Saved progress holds kept game values and items only, not the world (copies made while playing, moved or removed objects).
 - **Play as the player needs a Player start** (new scenes have one). Without it, Play is the physics preview with the free camera. Lighting is real-time (no baked lightmaps yet) and bulb shadows are costly, so use them sparingly; the player has no body or weapon model, and there are no ladders or swimming yet (Phase 6).
 - **Pivots apply to one selected object.** With several selected, the gizmo uses the middle of them all; a pivot set on a brush stays put relative to it when moved, but not when it is rotated through its parent group.
 - **Health and score are simple:** one player with 100 health, no armour, lives or game-over screen; dying starts again at the Player start straight away, and nothing that moved is put back. The score isn't saved between plays. The console can only be read after Esc frees the mouse.

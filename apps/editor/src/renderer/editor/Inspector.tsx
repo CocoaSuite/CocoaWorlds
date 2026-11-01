@@ -2,6 +2,7 @@
 import { PIVOT, gameRules, pivotOf, sceneSettings, worldBoundsOf, type EntityData, type SceneSettings as SceneSettingsData, type Transform, type Vec3 } from '@cocoaworlds/core';
 import { brushBounds } from '../brush/brushes';
 import { Button, ColorField, Field, NumberField, PanelHeader, Section, Switch } from '@cocoaworlds/ui';
+import { storeProgress } from '../game/progress';
 import { t } from '../i18n';
 import { BrushInspector, MultiBrushActions } from './BrushInspector';
 import { FaceInspector } from './FaceInspector';
@@ -218,6 +219,20 @@ function GameRulesSection() {
       <Field label={t('insp.thirdPerson')}>
         <Switch checked={rules.thirdPerson} label={t('insp.thirdPerson')} onChange={(on) => !playing && void set('thirdPerson', on)} />
       </Field>
+      <Field label={t('insp.saveItems')}>
+        <Switch checked={rules.saveItems} label={t('insp.saveItems')} onChange={(on) => !playing && void set('saveItems', on)} />
+      </Field>
+      <p className="cw-hint">{t('insp.progressHint')}</p>
+      <Button
+        size="sm"
+        disabled={playing}
+        onClick={() => {
+          storeProgress(project.id, null);
+          useEditor.getState().log('info', 'Play', t('insp.progressForgotten'));
+        }}
+      >
+        {t('insp.forgetProgress')}
+      </Button>
     </Section>
   );
 }

@@ -349,6 +349,10 @@ function GameValues() {
             <input type="checkbox" checked={v.show} aria-label={`${v.name}: ${t('script.showOnScreen')}`} onChange={(e) => edit(i, { ...v, show: e.target.checked })} />
             {t('script.showOnScreen')}
           </label>
+          <label className="cw-var-show" title={t('script.keptHint')}>
+            <input type="checkbox" checked={!!v.saved} aria-label={`${v.name}: ${t('script.kept')}`} onChange={(e) => edit(i, { ...v, saved: e.target.checked })} />
+            {t('script.kept')}
+          </label>
           <IconButton icon="close" label={`${t('comp.remove')} ${v.name}`} className="cw-var-x" onClick={() => put(list.filter((_, j) => j !== i), `Removed the game value ${v.name}`)} />
         </span>
       ))}
@@ -706,6 +710,8 @@ function statementWords(s: Statement, set: (patch: Record<string, unknown>, merg
       );
     case 'forever':
       return w('forever');
+    case 'forgetProgress':
+      return w('forgetProgress');
     case 'while':
       return (
         <>
@@ -1122,6 +1128,7 @@ function ExprSlot({ expr, type, label }: { expr: Expr; type: 'number' | 'boolean
       break;
     case 'selectedItem':
     case 'pickedRow':
+    case 'clock':
       body = <span className="cw-pill-text">{w(expr.kind)}</span>;
       break;
     case 'inside':
