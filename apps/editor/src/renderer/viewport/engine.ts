@@ -19,6 +19,9 @@ import { VertexTool } from './vertex-tool';
 import { ClipTool, type ClipKeep, type ClipState } from './clip-tool';
 import type { PlayFrame, PlayInfo, PlaySession } from './play-session';
 
+/** Larger single mouse movements (pixels) while playing are glitches, not the player. */
+const MAX_MOUSE_STEP = 300;
+
 /** What the in-game display shows. */
 export interface Hud {
   showHealth: boolean;
@@ -477,6 +480,9 @@ export class ViewportEngine {
 
   private onMouseMove = (e: MouseEvent): void => {
     if (!this.asPlayer || !this.locked || !this.play) return;
+    // Browsers sometimes report one huge jump while the mouse is captured (a known pointer-lock glitch);
+    // no hand moves the mouse that far in one event, so ignore it rather than flick the view.
+    if (Math.abs(e.movementX) > MAX_MOUSE_STEP || Math.abs(e.movementY) > MAX_MOUSE_STEP) return;
     const k = 0.0022;
     const { yaw, pitch } = this.play.look;
     const limit = Math.PI / 2 - 0.01;

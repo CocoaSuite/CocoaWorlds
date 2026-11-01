@@ -121,9 +121,11 @@ describe('health and score', () => {
     w.setPlayerInput({ forward: 1 });
     run(w, 1.2);
     w.setPlayerInput({ forward: -1 });
-    run(w, 0.6);
+    run(w, 1.4);
     w.setPlayerInput({ forward: 0 });
     run(w, 0.5);
+    // Back behind the pack (it was walked over at full health, and left alone).
+    expect(w.player!.feetPosition.z).toBeGreaterThan(-40);
     expect(w.isVisible(pack.id)).toBe(true);
     w.hurt(50);
     w.setPlayerInput({ forward: 1 });

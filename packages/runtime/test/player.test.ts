@@ -182,3 +182,91 @@ describe('COL', () => {
     w.dispose();
   });
 });
+
+describe('smoothness and grip', () => {
+  /** Walk forward for `seconds`, recording horizontal speed and eye height at each physics step. */
+  function walk(w: GameWorld, seconds: number) {
+    const speed: number[] = [], eye: number[] = [];
+    let prev = w.player!.feetPosition;
+    w.setPlayerInput({ forward: 1 });
+    for (let i = 0; i < seconds * 60; i++) {
+      w.step(1 / 60);
+      const f = w.player!.feetPosition;
+      speed.push(Math.hypot(f.x - prev.x, f.z - prev.z) * 60);
+      eye.push(w.player!.eye()[1]);
+      prev = f;
+    }
+    return { speed, eye };
+  }
+  const stairs = (rise: number, depth: number) => {
+    const out = [floor()];
+    for (let i = 0; i < 8; i++) out.push(brush(`s${i}`, [-128, 0, -100 - (i + 1) * depth], [128, rise * (i + 1), -100 - i * depth]));
+    out.push(brush('landing', [-128, 0, -1000], [128, rise * 8, -100 - 8 * depth]));
+    return out;
+  };
+
+  for (const [rise, depth] of [
+    [16, 32],
+    [8, 12],
+    [16, 16],
+  ] as const) {
+    it(`climbs ${rise}×${depth} stairs without slowing down, and the view rises smoothly`, () => {
+      const w = GameWorld.create(scene(...stairs(rise, depth), spawn()));
+      run(w, 0.3);
+      const { speed, eye } = walk(w, 2);
+      expect(w.player!.feetPosition.y).toBeGreaterThan(rise * 8 - 1);
+      // Up to speed after the first few steps, then never stalled by a step: no frame under half speed, and
+      // never two slow frames in a row.
+      const steady = speed.slice(10, 110);
+      expect(Math.min(...steady)).toBeGreaterThan(90);
+      expect(steady.some((v, i) => i > 0 && v < 150 && steady[i - 1]! < 150)).toBe(false);
+      // No jumps of a whole step in the view from one physics step to the next.
+      const jumps = eye.slice(1).map((y, i) => Math.abs(y - eye[i]!));
+      expect(Math.max(...jumps)).toBeLessThan(rise * 0.4);
+      w.dispose();
+    });
+  }
+
+  it('walks over seams between floor brushes without bobbing the view', () => {
+    const w = GameWorld.create(
+      scene(brush('a', [-512, -16, -512], [512, 0, -100]), brush('b', [-512, -16, -100], [512, 0, -60]), brush('c', [-512, -16, -60], [512, 0, 512]), spawn()),
+    );
+    run(w, 0.3);
+    const { eye } = walk(w, 1.5);
+    expect(Math.max(...eye) - Math.min(...eye)).toBeLessThan(0.75);
+    w.dispose();
+  });
+
+  it('stops quickly: within about 0.2 s and 20 u from a run', () => {
+    const w = GameWorld.create(scene(floor(), spawn()));
+    run(w, 0.2);
+    walk(w, 1);
+    const z0 = w.player!.feetPosition.z;
+    w.setPlayerInput({ forward: 0 });
+    run(w, 0.25);
+    const z1 = w.player!.feetPosition.z;
+    run(w, 0.5);
+    expect(Math.abs(w.player!.feetPosition.z - z1)).toBeLessThan(0.5);
+    expect(Math.abs(z1 - z0)).toBeLessThan(20);
+    w.dispose();
+  });
+
+  it('turns around quickly: running the other way within a quarter of a second', () => {
+    const w = GameWorld.create(scene(floor(), spawn()));
+    run(w, 0.2);
+    walk(w, 1);
+    w.setPlayerInput({ forward: -1 });
+    run(w, 0.25);
+    expect(w.player!.velocity.z).toBeGreaterThan(150);
+    w.dispose();
+  });
+
+  it('crouch-walks at crouch speed', () => {
+    const w = GameWorld.create(scene(floor(), spawn()));
+    run(w, 0.2);
+    w.setPlayerInput({ forward: 1, crouch: true });
+    run(w, 1);
+    expect(Math.hypot(w.player!.velocity.x, w.player!.velocity.z)).toBeGreaterThan(PLAYER.crouchSpeed - 4);
+    w.dispose();
+  });
+});

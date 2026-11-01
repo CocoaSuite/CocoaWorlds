@@ -19,12 +19,19 @@ export const PLAYER = {
   runSpeed: 190,
   walkSpeed: 100,
   crouchSpeed: 64,
-  accelerate: 10,
+  /**
+   * Grip: firmer than Source's (accelerate 10, friction 4), which felt slippery. From a run the player stops in
+   * about 0.2 s and 17 u (Source: 0.4 s and 35 u) and reaches full speed in about 0.1 s. (Friction × stop speed
+   * must stay below acceleration × crouch speed, or crouch-walking can't get going.)
+   */
+  accelerate: 14,
   airAccelerate: 10,
-  /** Air acceleration only adds speed up to this much along the wished direction (Source's 30). */
-  airCap: 30,
-  friction: 4,
+  /** Air acceleration only adds speed up to this much along the wished direction (Source's is 30). */
+  airCap: 60,
+  friction: 8,
   stopSpeed: 100,
+  /** How quickly the view follows steps and crouching (per second; higher is quicker). */
+  viewSmoothing: 16,
   jumpSpeed: 268,
   stepHeight: 18,
   maxSlope: 45.6,
@@ -78,6 +85,12 @@ export class Player {
   /** Feet position at the previous and current physics step (for smooth drawing between steps). */
   private prevFeet: V;
   private feet: V;
+  /**
+   * The view's height: the feet height smoothed over steps, stairs and bumps while walking (not while jumping or
+   * falling), plus the eye height easing between standing and crouching. Previous and current step.
+   */
+  private view = { y: 0, eye: PLAYER.eye as number };
+  private prevView = { y: 0, eye: PLAYER.eye as number };
   readonly spawn: { feet: V; yaw: number };
 
   constructor(
@@ -100,7 +113,13 @@ export class Player {
     this.controller.setUp({ x: 0, y: 1, z: 0 });
     this.feet = { ...feet };
     this.prevFeet = { ...feet };
+    this.resetView();
     this.input.yaw = yaw;
+  }
+
+  private resetView(): void {
+    this.view = { y: this.feet.y, eye: this.crouched ? PLAYER.crouchEye : PLAYER.eye };
+    this.prevView = { ...this.view };
   }
 
   private get height() {
@@ -110,8 +129,9 @@ export class Player {
   /** Eye position between the last two physics steps (`alpha` 0…1). */
   eye(alpha = 1): [number, number, number] {
     const p = this.prevFeet, c = this.feet;
-    const e = this.crouched ? PLAYER.crouchEye : PLAYER.eye;
-    return [p.x + (c.x - p.x) * alpha, p.y + (c.y - p.y) * alpha + e, p.z + (c.z - p.z) * alpha];
+    const pv = this.prevView, v = this.view;
+    const y = pv.y + (v.y - pv.y) * alpha + pv.eye + (v.eye - pv.eye) * alpha;
+    return [p.x + (c.x - p.x) * alpha, y, p.z + (c.z - p.z) * alpha];
   }
 
   get feetPosition(): V {
@@ -145,6 +165,7 @@ export class Player {
     }
     this.feet = { x: feet.x, y, z: feet.z };
     this.prevFeet = { ...this.feet };
+    this.resetView();
     this.velocity = { x: 0, y: 0, z: 0 };
     this.landingSpeed = 0;
     if (yaw !== undefined) {
@@ -168,6 +189,7 @@ export class Player {
     this.prevFeet = { ...this.spawn.feet };
     this.velocity = { x: 0, y: 0, z: 0 };
     this.landingSpeed = 0;
+    this.resetView();
     this.input.yaw = this.spawn.yaw;
     this.input.pitch = 0;
     this.body.setTranslation({ x: this.feet.x, y: this.feet.y + this.height / 2, z: this.feet.z }, true);
@@ -222,6 +244,8 @@ export class Player {
       if (!c) continue;
       const nrm = c.normal1;
       if (nrm.y > 0.7) continue;
+      // A stair riser isn't a wall: keep the speed and let the step-up carry the player over it.
+      if (this.stepAhead(-nrm.x, -nrm.z) !== null) continue;
       const into = v.x * nrm.x + v.y * nrm.y + v.z * nrm.z;
       if (into >= 0) continue;
       v.x -= nrm.x * into;
@@ -243,10 +267,61 @@ export class Player {
     this.onGround = grounded && this.velocity.y <= 0;
 
     const t = this.body.translation();
-    const next = { x: t.x + moved.x, y: t.y + moved.y, z: t.z + moved.z };
+    let next = { x: t.x + moved.x, y: t.y + moved.y, z: t.z + moved.z };
+    // Source-style step-up when the physics engine's own didn't happen: stand on the step if the box fits.
+    if (blocked && this.onGround) {
+      const up = this.stepUp(t, desired);
+      if (up) next = up;
+    }
     this.body.setNextKinematicTranslation(next);
     this.prevFeet = this.feet;
     this.feet = { x: next.x, y: next.y - this.height / 2, z: next.z };
+    this.smoothView(dt);
+  }
+
+  /** Ease the view over steps and bumps while on the ground, and between standing and crouching. */
+  private smoothView(dt: number): void {
+    this.prevView = { ...this.view };
+    const k = 1 - Math.exp(-PLAYER.viewSmoothing * dt);
+    const y = this.feet.y;
+    // Jumping or falling, the view follows exactly (that must feel immediate). Otherwise (walking, including the
+    // moment of a step-up) it eases, never lagging more than a step and a half behind.
+    const flying = !this.onGround && Math.abs(this.velocity.y) > 60;
+    if (flying) this.view.y = y;
+    else {
+      this.view.y += (y - this.view.y) * k;
+      const lag = PLAYER.stepHeight * 1.5;
+      this.view.y = Math.min(y + lag, Math.max(y - lag, this.view.y));
+    }
+    const eye = this.crouched ? PLAYER.crouchEye : PLAYER.eye;
+    this.view.eye += (eye - this.view.eye) * k;
+  }
+
+  /** Stand on the step ahead, if there is one and the box fits on it. */
+  private stepUp(t: V, desired: V): V | null {
+    const top = this.stepAhead(desired.x, desired.z);
+    if (top === null) return null;
+    const up = { x: t.x + desired.x, y: top + this.height / 2 + 0.5, z: t.z + desired.z };
+    const shape = new RAPIER.Cuboid(PLAYER.radius, this.height / 2, PLAYER.radius);
+    return this.world.intersectionWithShape(up, { x: 0, y: 0, z: 0, w: 1 }, shape, RAPIER.QueryFilterFlags.EXCLUDE_SENSORS, SOLID, this.collider) ? null : up;
+  }
+
+  /** The top of a step (a floor no higher than a step) just ahead in direction (dx, dz), or null. */
+  private stepAhead(dx: number, dz: number): number | null {
+    const len = Math.hypot(dx, dz);
+    if (len < 1e-6) return null;
+    const t = this.body.translation();
+    const feet = t.y - this.height / 2;
+    // A few distances past the front of the player's box (the riser may not be touching yet).
+    for (const ahead of [1, 4, 8]) {
+      const reach = PLAYER.radius + ahead;
+      const from = { x: t.x + (dx / len) * reach, y: feet + PLAYER.stepHeight + 1, z: t.z + (dz / len) * reach };
+      const hit = this.world.castRayAndGetNormal(new RAPIER.Ray(from, { x: 0, y: -1, z: 0 }), PLAYER.stepHeight + 1, true, RAPIER.QueryFilterFlags.EXCLUDE_SENSORS, SOLID, this.collider);
+      if (!hit) continue;
+      const top = from.y - hit.timeOfImpact;
+      if (top > feet + 0.25 && top <= feet + PLAYER.stepHeight + 0.5 && hit.normal.y > 0.7) return top;
+    }
+    return null;
   }
 
   private applyFriction(dt: number): void {
