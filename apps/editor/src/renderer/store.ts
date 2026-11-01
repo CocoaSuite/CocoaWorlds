@@ -5,6 +5,8 @@
 import {
   History,
   SceneDoc,
+  componentDef,
+  defaultComponent,
   composeTransform,
   decomposeMat4,
   identityMat4,
@@ -22,6 +24,7 @@ import {
   type Command,
   type EntityData,
   type ProjectFile,
+  type SceneFile,
   type Transform,
 } from '@cocoaworlds/core';
 import {
@@ -42,7 +45,7 @@ import {
   type BrushRole,
 } from '@cocoaworlds/geometry';
 import { create } from 'zustand';
-import { brushComponent, brushOf, isLocked, isShown, newBrushEntity, toLocal, toWorld, worldBrushOf, shapeBrushes, shapeName, worldBrushes, type Outline, type ShapeOptions } from './brush/brushes';
+import { brushComponent, brushOf, isLocked, isShown, newBrushEntity, toLocal, toWorld, worldBrushOf, shapeBrushes, shapeName, worldBrushes, type DrawRole, type Outline, type ShapeOptions } from './brush/brushes';
 import { useShallow } from 'zustand/react/shallow';
 import type { OpenedProject } from '../shared/api';
 import { DEV_TEXTURE_SIZE } from './brush/materials';
@@ -91,7 +94,7 @@ interface State {
   focusRequest: number;
   /** Settings for the brush tool. */
   brushOptions: ShapeOptions;
-  brushRole: BrushRole;
+  brushRole: DrawRole;
   /** Faces chosen with the face tool. */
   faceSelection: FaceRef[];
   /** Material the paint tool applies. */
@@ -102,6 +105,8 @@ interface State {
   enteredGroup: string | null;
   /** Whether something has been copied (for menu state). */
   canPaste: boolean;
+  /** Play mode: a snapshot of the scene being played (the editor's scene is untouched). */
+  playing: { scene: SceneFile; startedAt: number } | null;
 }
 
 interface Actions {
@@ -133,7 +138,7 @@ interface Actions {
   recover(accept: boolean): Promise<void>;
   // brushes
   setBrushOptions(o: Partial<ShapeOptions>): void;
-  setBrushRole(r: BrushRole): void;
+  setBrushRole(r: DrawRole): void;
   createBrushes(min: [number, number, number], max: [number, number, number], outline?: Outline): void;
   /** `brush` is in world space. */
   setBrush(id: string, brush: Brush, mergeKey?: string, label?: string): void;
@@ -160,6 +165,13 @@ interface Actions {
   copySelection(): void;
   cutSelection(): void;
   paste(): void;
+  // play mode
+  play(): void;
+  stopPlaying(): void;
+  // components
+  addComponent(id: string, name: string): void;
+  removeComponent(id: string, name: string): void;
+  setComponentField(id: string, name: string, key: string, value: unknown, mergeKey?: string): void;
 }
 
 const now = () => new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
@@ -205,6 +217,7 @@ export const useEditor = create<State & Actions>()((set, get) => ({
   vertexSnap: true,
   enteredGroup: null,
   canPaste: false,
+  playing: null,
 
   setLang(l) {
     setLang(l);
@@ -254,7 +267,7 @@ export const useEditor = create<State & Actions>()((set, get) => ({
     unsubDoc = unsubHist = null;
     window.cocoa.window.setDirty(false);
     window.cocoa.window.setTitle('CocoaWorlds');
-    set({ session: null, doc: null, selection: [], faceSelection: [], dirty: false, recovery: null, history: new History() });
+    set({ session: null, doc: null, selection: [], faceSelection: [], playing: null, dirty: false, recovery: null, history: new History() });
   },
 
   log(level, source, text) {
@@ -433,8 +446,13 @@ export const useEditor = create<State & Actions>()((set, get) => ({
       get().notify(`The brush is too small to build (${problems[0]}).`);
       return;
     }
-    const base = brushRole === 'subtract' ? 'cut' : shapeName[brushOptions.shape];
-    const ents = brushes.map((b) => newBrushEntity(uniqueName(doc, base), b, brushRole));
+    const base = brushRole === 'subtract' ? 'cut' : brushRole === 'trigger' ? 'trigger' : shapeName[brushOptions.shape];
+    const ents = brushes.map((b) => {
+      const ent = newBrushEntity(uniqueName(doc, base), b, brushRole === 'subtract' ? 'subtract' : 'solid');
+      // A trigger zone is a brush with a trigger component; it never becomes level geometry.
+      if (brushRole === 'trigger') ent.components.trigger = defaultComponent('trigger');
+      return ent;
+    });
     // Give each a unique name even within one batch (stairs).
     const used = new Set(doc.entities.map((e) => e.name));
     for (const e of ents) {
@@ -814,6 +832,43 @@ export const useEditor = create<State & Actions>()((set, get) => ({
     }
     set({ selection: result.filter((id) => doc.get(id)) });
     get().log('info', 'Brush', `Clipped ${cut} brush(es)`);
+  },
+
+  addComponent(id, name) {
+    const doc = get().doc;
+    const e = doc?.get(id);
+    if (!doc || !e || e.components[name]) return;
+    const label = componentDef(name)?.label.en ?? name;
+    get().execute(setComponentCmd(doc, id, name, defaultComponent(name) as never, `Add ${label}`));
+  },
+
+  removeComponent(id, name) {
+    const doc = get().doc;
+    if (!doc?.get(id)?.components[name]) return;
+    const label = componentDef(name)?.label.en ?? name;
+    get().execute(setComponentCmd(doc, id, name, undefined, `Remove ${label}`));
+  },
+
+  setComponentField(id, name, key, value, mergeKey) {
+    const doc = get().doc;
+    const cur = doc?.get(id)?.components[name];
+    if (!doc || !cur) return;
+    if (JSON.stringify(cur[key]) === JSON.stringify(value)) return;
+    const label = componentDef(name)?.label.en ?? name;
+    get().execute(setComponentCmd(doc, id, name, { ...cur, [key]: value } as never, `Edit ${label}`, mergeKey));
+  },
+
+  play() {
+    const { doc, playing } = get();
+    if (!doc || playing) return;
+    get().history.commit();
+    set({ playing: { scene: doc.toFile(), startedAt: Date.now() }, tool: 'select' });
+  },
+
+  stopPlaying() {
+    if (!get().playing) return;
+    set({ playing: null });
+    get().log('info', 'Play', 'Stopped. The scene is as it was before Play.');
   },
 }));
 

@@ -9,3 +9,4 @@ export * from './mesh';
 export * from './world';
 export * from './surface';
 export * from './spatial';
+export * from './space';

@@ -33,15 +33,18 @@ export function BottomPanel() {
       </div>
       <div className="cw-console cw-scroll" role="tabpanel">
         {(tab === 'script' || tab === 'assets') && <div className="cw-muted">{t('panel.notYet')}</div>}
-        {(tab === 'console' || tab === 'problems') &&
-          (tab === 'console' ? logs : problems).map((l, i) => (
-            <div key={i} className={`cw-log ${l.level}`}>
-              <span className="cw-log-t">{l.at}</span>
-              <span className="cw-log-s">{l.source}</span>
-              {l.level !== 'info' && <span className={`cw-log-l ${l.level}`}>{l.level}</span>}
-              <span>{l.text}</span>
-            </div>
-          ))}
+        {(tab === 'console' || tab === 'problems') && (
+          <div role="log" aria-label={tab === 'console' ? t('panel.console') : t('panel.problems')} aria-live="polite">
+            {(tab === 'console' ? logs : problems).map((l, i) => (
+              <div key={i} className={`cw-log ${l.level}`}>
+                <span className="cw-log-t">{l.at}</span>
+                <span className="cw-log-s">{l.source}</span>
+                {l.level !== 'info' && <span className={`cw-log-l ${l.level}`}>{l.level}</span>}
+                <span>{l.text}</span>
+              </div>
+            ))}
+          </div>
+        )}
         {tab === 'problems' && problems.length === 0 && <div className="cw-muted">{t('panel.noProblems')}</div>}
         <div ref={end} />
       </div>

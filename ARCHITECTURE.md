@@ -149,6 +149,7 @@ Built so far:
 apps/editor          Electron main (src/main), preload bridge (src/preload), React UI (src/renderer)
 packages/core        ids, math, file formats, validation, migrations, History, SceneDoc + commands
 packages/geometry    convex brushes, primitives, carve/intersect/merge, vertex editing, mesh + hull output (docs/geometry.md)
+packages/runtime     the game world: Rapier physics built from a scene, fixed-step simulation, trigger events (no rendering)
 packages/ui          CocoaCanvas tokens (styles.css) and React components
 ```
 
@@ -157,7 +158,10 @@ Implementation notes:
 - **Coordinates:** Y-up, right-handed (same as glTF, Three.js and Rapier). Rotations are stored as degrees in YXZ order. Default grid 16 units; a standing player is 72 units.
 - **Editor overlays use Three.js directly** (grid shader, gizmo, markers, camera rig) because they exist only in the editor. Game content will be drawn through the `RenderAdapter` in `@cocoaworlds/engine` when that package arrives (Phase 3–4), so the runtime stays renderer-agnostic.
 - **The UI never touches the file system.** All disk access is in `apps/editor/src/main/project-fs.ts`, which only accepts paths inside the open project.
-- **On-demand rendering:** the viewport draws a frame only after something changes, so an idle editor uses no GPU time.
+- **On-demand rendering:** the viewport draws a frame only after something changes, so an idle editor uses no GPU time (Play mode draws every frame).
+- **Components** are defined once in `packages/core/src/components.ts` (fields, defaults, labels, what they attach to). The Inspector draws from it and the runtime reads data through `readComponent`, which fills defaults.
+- **Physics units:** the world runs in game units (1 u ≈ 1 inch); Rapier's `lengthUnit` is 39.37 so its tolerances match. Gravity comes from the scene settings (800 u/s²).
+- **Security:** the renderer's CSP allows `wasm-unsafe-eval` so Rapier's WebAssembly can compile; JavaScript `eval` stays blocked. Physics loads on the first Play, in its own chunk.
 
 Full planned layout:
 

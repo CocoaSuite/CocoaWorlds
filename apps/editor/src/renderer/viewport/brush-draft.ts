@@ -4,7 +4,7 @@
  */
 import { buildMesh, convexHull2D, type V3 } from '@cocoaworlds/geometry';
 import * as THREE from 'three';
-import { shapeBrushes, type Outline, type ShapeOptions } from '../brush/brushes';
+import { shapeBrushes, type DrawRole, type Outline, type ShapeOptions } from '../brush/brushes';
 import type { ViewKind } from './camera';
 import { edgeLines, toGeometry } from './world-render';
 
@@ -154,12 +154,12 @@ export class BrushDraft {
   }
 
   /** Rebuild the preview for the current shape options and role. */
-  update(opts: ShapeOptions, role: 'solid' | 'subtract'): void {
+  update(opts: ShapeOptions, role: DrawRole): void {
     for (const c of [...this.group.children]) {
       this.group.remove(c);
       (c as THREE.Mesh).geometry.dispose();
     }
-    const color = role === 'subtract' ? 0xf0a442 : 0x4b9cff;
+    const color = role === 'subtract' ? 0xff8a73 : role === 'trigger' ? 0xf0a442 : 0x4b9cff;
     this.fill.color.setHex(color);
     this.line.color.setHex(color);
     const { min, max } = this.bounds();

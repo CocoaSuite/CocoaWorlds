@@ -30,6 +30,7 @@ export function Viewport() {
   const doc = useEditor((s) => s.doc);
   const rev = useEditor((s) => s.rev);
   const selection = useEditor((s) => s.selection);
+  const playing = useEditor((s) => s.playing);
   const faceSelection = useEditor((s) => s.faceSelection);
   const tool = useEditor((s) => s.tool);
   const view = useEditor((s) => s.view);
@@ -56,6 +57,14 @@ export function Viewport() {
         cancelTool: () => useEditor.getState().setTool('select'),
         selectFace: (ref, mode, cut) => useEditor.getState().selectFace(ref, mode, cut),
         boxSelect: (ids, additive) => useEditor.getState().boxSelect(ids, additive),
+        playEvents: (events, names) => {
+          const log = useEditor.getState().log;
+          for (const ev of events) {
+            const what = names.get(ev.other) ?? ev.other;
+            const zone = names.get(ev.trigger) ?? ev.trigger;
+            log('info', 'Trigger', `${ev.time.toFixed(2)} s — ${what} ${ev.kind === 'enter' ? 'entered' : 'left'} ${zone}`);
+          }
+        },
         vertexInfo: setVertexCount,
         clipState: (state, keep) => setClip({ state, keep }),
         clip: (plane, keep) => useEditor.getState().clipSelection(plane, keep),
@@ -113,6 +122,28 @@ export function Viewport() {
   useEffect(() => {
     engine.current?.setVertexSnap(vertexSnap);
   }, [vertexSnap]);
+  useEffect(() => {
+    const e = engine.current;
+    if (!e) return;
+    if (!playing) {
+      e.stopPlay();
+      return;
+    }
+    let cancelled = false;
+    const st = useEditor.getState();
+    e.startPlay(playing.scene)
+      .then((info) => {
+        if (cancelled) return;
+        st.log('info', 'Play', `Playing: ${info.moving} moving object(s), ${info.triggers} trigger zone(s). Esc or Stop returns to editing.`);
+      })
+      .catch((err: Error) => {
+        st.log('error', 'Play', `Could not start the game: ${err.message}`);
+        st.stopPlaying();
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [playing]);
   useEffect(() => {
     engine.current?.setGridVisible(showGrid);
   }, [showGrid]);
@@ -186,7 +217,16 @@ export function Viewport() {
           {stats.frameMs.toFixed(1)} ms · {stats.draws} draws · {stats.triangles.toLocaleString()} tris · {t('stats.build')} {stats.buildMs} ms
         </div>
       )}
-      {tool === 'brush' && (
+      {playing && (
+        <div className="cw-ov cw-play-banner" data-testid="play-banner">
+          <span className="cw-live-dot" />
+          {t('play.banner')}
+          <button type="button" className="cw-play-stop" onClick={() => useEditor.getState().stopPlaying()}>
+            {t('play.stop')}
+          </button>
+        </div>
+      )}
+      {!playing && tool === 'brush' && (
         <BrushPanel
           draft={draft}
           onBounds={(min, max) => engine.current?.setDraftBounds(min, max)}

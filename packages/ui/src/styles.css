@@ -209,3 +209,9 @@ kbd { font: 12px var(--mono); background: var(--panel2); border: 1px solid var(-
 @media (prefers-reduced-motion: reduce) {
   .cw-toast, .cw-sw i, .cw-sw i::after { transition: none; }
 }
+
+/* Colour field (CocoaCanvas .cr) */
+.cw-color { display: inline-flex; align-items: center; gap: 8px; min-width: 0; }
+.cw-color input[type='color'] { width: 22px; height: 22px; padding: 0; border: 1px solid var(--line); border-radius: 5px; background: none; cursor: pointer; }
+.cw-color input[type='color']::-webkit-color-swatch-wrapper { padding: 0; }
+.cw-color input[type='color']::-webkit-color-swatch { border: 0; border-radius: 4px; }

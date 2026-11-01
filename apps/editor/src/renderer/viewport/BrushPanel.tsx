@@ -4,7 +4,7 @@
  */
 import type { V3 } from '@cocoaworlds/geometry';
 import { Button, NumberField, Segmented } from '@cocoaworlds/ui';
-import type { BrushShape, Facing } from '../brush/brushes';
+import type { BrushShape, DrawRole, Facing } from '../brush/brushes';
 import { t } from '../i18n';
 import { useEditor } from '../store';
 import type { DraftState } from './brush-draft';
@@ -61,13 +61,14 @@ export function BrushPanel({ draft, onBounds, onCreate, onCancel }: { draft: Dra
             { value: 'polygon', label: t('brush.polygon') },
           ]}
         />
-        <Segmented<'solid' | 'subtract'>
+        <Segmented<DrawRole>
           label={t('brush.role')}
           value={role}
           onChange={setRole}
           options={[
             { value: 'solid', label: t('brush.solid') },
             { value: 'subtract', label: t('brush.subtract') },
+            { value: 'trigger', label: t('brush.trigger') },
           ]}
         />
         {opts.shape === 'cylinder' && (

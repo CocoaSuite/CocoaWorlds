@@ -1,0 +1,15 @@
+{
+  "name": "@cocoaworlds/runtime",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "The game world: builds physics from a scene, steps it, and reports what happens (trigger events, moving bodies). No rendering or DOM.",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@cocoaworlds/core": "^0.1.0",
+    "@cocoaworlds/geometry": "^0.1.0",
+    "@dimforge/rapier3d-compat": "0.21.0"
+  }
+}

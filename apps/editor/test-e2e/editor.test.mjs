@@ -94,7 +94,7 @@ test('create, edit, undo, save and reopen a project', async () => {
     await posX.fill('128');
     await posX.press('Enter');
     await page.getByTestId('selection-readout').getByText('128').waitFor();
-    await page.getByRole('button', { name: 'Move' }).click(); // move tool shows the gizmo
+    await page.getByRole('button', { name: 'Move', exact: true }).click(); // move tool shows the gizmo
     await shot(page, '03-editor-light-selected');
 
     // Undo the move, redo it (focus the tree so shortcuts aren't typed into a field)

@@ -1,0 +1,118 @@
+import { beforeAll, describe, expect, it } from 'vitest';
+import { applyMat4, newEntity, newScene, type EntityData, type SceneFile, type Vec3 } from '@cocoaworlds/core';
+import { box, toData } from '@cocoaworlds/geometry';
+import { GameWorld, initPhysics } from '../src';
+
+beforeAll(async () => {
+  await initPhysics();
+});
+
+const brush = (name: string, min: Vec3, max: Vec3, extra: Record<string, unknown> = {}, role = 'solid'): EntityData =>
+  newEntity(name, { brush: { role, faces: toData(box(min, max)).faces } as never, ...extra });
+
+function scene(...entities: EntityData[]): SceneFile {
+  const s = newScene('test');
+  s.entities = entities;
+  return s;
+}
+
+const floor = () => brush('floor', [-512, -16, -512], [512, 0, 512]);
+const run = (w: GameWorld, seconds: number) => {
+  for (let t = 0; t < seconds; t += 1 / 60) w.step(1 / 60);
+};
+
+describe('GameWorld', () => {
+  it('a crate brush falls and comes to rest on the floor', () => {
+    const crate = brush('crate', [-16, 200, -16], [16, 232, 16], { rigidBody: { motion: 'dynamic' } });
+    const w = GameWorld.create(scene(floor(), crate));
+    expect(w.stats).toMatchObject({ staticPieces: 1, bodies: 1 });
+    run(w, 3);
+    // Centre ends half its height above the floor.
+    expect(w.positionOf(crate.id)![1]).toBeCloseTo(16, 0);
+    // Motion maps the crate's starting centre to where it is now.
+    const now = applyMat4(w.motionOf(crate.id)!, [0, 216, 0]);
+    expect(now[1]).toBeCloseTo(16, 0);
+    w.dispose();
+  });
+
+  it('fixed bodies stay; kinematic bodies move only when told', () => {
+    const fixedOne = brush('pillar', [100, 100, 0], [132, 132, 32], { rigidBody: { motion: 'fixed' } });
+    const lift = brush('lift', [200, 100, 0], [264, 116, 64], { rigidBody: { motion: 'kinematic' } });
+    const w = GameWorld.create(scene(floor(), fixedOne, lift));
+    run(w, 1);
+    expect(w.positionOf(fixedOne.id)![1]).toBeCloseTo(116);
+    expect(w.positionOf(lift.id)![1]).toBeCloseTo(108);
+    w.moveKinematic(lift.id, [232, 300, 32]);
+    run(w, 0.1);
+    expect(w.positionOf(lift.id)![1]).toBeCloseTo(300);
+    expect(w.movingBodies().map((b) => b.id)).toEqual([lift.id]);
+    w.dispose();
+  });
+
+  it('a ball with a collision shape bounces', () => {
+    const ball = newEntity('ball', { rigidBody: { motion: 'dynamic', bounciness: 0.9 }, collider: { shape: 'sphere', size: [32, 32, 32] } }, { position: [0, 300, 0] });
+    const w = GameWorld.create(scene(floor(), ball));
+    let lowest = Infinity, bouncedTo = 0, wentUp = false;
+    let prev = 300;
+    for (let i = 0; i < 180; i++) {
+      w.step(1 / 60);
+      const y = w.positionOf(ball.id)![1];
+      lowest = Math.min(lowest, y);
+      if (y > prev && lowest < 30) wentUp = true;
+      if (wentUp) bouncedTo = Math.max(bouncedTo, y);
+      prev = y;
+    }
+    expect(lowest).toBeGreaterThan(13); // never sinks into the floor (contact skin aside)
+    expect(bouncedTo).toBeGreaterThan(150);
+    w.dispose();
+  });
+
+  it('a trigger zone reports physics objects entering and leaving', () => {
+    const crate = brush('crate', [-16, 400, -16], [16, 432, 16], { rigidBody: { motion: 'dynamic' } });
+    const zone = brush('zone', [-64, 100, -64], [64, 200, 64], { trigger: { detects: 'physics' } });
+    const w = GameWorld.create(scene(floor(), crate, zone));
+    expect(w.stats.triggers).toBe(1);
+    run(w, 3);
+    const ev = w.drainEvents();
+    expect(ev.map((e) => e.kind)).toEqual(['enter', 'exit']);
+    expect(ev.every((e) => e.trigger === zone.id && e.other === crate.id)).toBe(true);
+    expect(ev[1]!.time).toBeGreaterThan(ev[0]!.time);
+    expect(w.drainEvents()).toEqual([]);
+    w.dispose();
+  });
+
+  it('trigger filters: a player-only zone ignores crates', () => {
+    const crate = brush('crate', [-16, 400, -16], [16, 432, 16], { rigidBody: { motion: 'dynamic' } });
+    const zone = brush('zone', [-64, 100, -64], [64, 200, 64], { trigger: { detects: 'player' } });
+    const w = GameWorld.create(scene(floor(), crate, zone));
+    run(w, 3);
+    expect(w.drainEvents()).toEqual([]);
+    w.dispose();
+  });
+
+  it('a live subtract brush makes a hole that things fall through', () => {
+    const crate = brush('crate', [-16, 100, -16], [16, 132, 16], { rigidBody: { motion: 'dynamic' } });
+    const hole = brush('cut', [-48, -32, -48], [48, 16, 48], {}, 'subtract');
+    const w = GameWorld.create(scene(floor(), crate, hole));
+    expect(w.stats.staticPieces).toBeGreaterThan(1);
+    run(w, 2);
+    expect(w.positionOf(crate.id)![1]).toBeLessThan(-100);
+    w.dispose();
+  });
+
+  it('hidden objects are left out, and groups place their contents', () => {
+    const g = newEntity('room', { group: {} }, { position: [1000, 0, 0] });
+    const f = floor();
+    f.parent = g.id;
+    const crate = brush('crate', [-16, 100, -16], [16, 132, 16], { rigidBody: { motion: 'dynamic' } });
+    crate.parent = g.id;
+    const ghost = brush('ghost', [-512, 50, -512], [512, 60, 512]);
+    ghost.visible = false;
+    const w = GameWorld.create(scene(g, f, crate, ghost));
+    run(w, 2);
+    const p = w.positionOf(crate.id)!;
+    expect(Math.abs(p[0] - 1000)).toBeLessThan(2);
+    expect(p[1]).toBeCloseTo(16, 0);
+    w.dispose();
+  });
+});

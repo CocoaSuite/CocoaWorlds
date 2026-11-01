@@ -105,10 +105,17 @@ export function TopBar({ onShowKeys }: { onShowKeys: () => void }) {
       <Button disabled title={t('soon')}>
         {t('build')}
       </Button>
-      <Button variant="primary" disabled title={t('soon')}>
-        <Icon name="play" size={13} style={{ fill: 'currentColor', stroke: 'none' }} />
-        {t('play')}
-      </Button>
+      {s.playing ? (
+        <Button variant="primary" onClick={s.stopPlaying} title={`${t('play.stop')} (Esc, F5)`}>
+          <Icon name="stop" size={13} style={{ fill: 'currentColor', stroke: 'none' }} />
+          {t('play.stop')}
+        </Button>
+      ) : (
+        <Button variant="primary" onClick={s.play} title={`${t('play')} (F5)`}>
+          <Icon name="play" size={13} style={{ fill: 'currentColor', stroke: 'none' }} />
+          {t('play')}
+        </Button>
+      )}
       {asking && (
         <Dialog title={t('close.title')} onClose={() => setAsking(false)}>
           <p>{t('close.body')}</p>

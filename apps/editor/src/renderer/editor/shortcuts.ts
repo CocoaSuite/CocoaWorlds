@@ -41,6 +41,8 @@ export const SHORTCUTS: { label: string; keys: string[] }[] = [
   { label: 'Toggle grid snapping', keys: ['G'] },
   { label: 'Toggle snapping to corners', keys: ['Shift+G'] },
   { label: 'Deselect / step out', keys: ['Esc'] },
+  { label: 'Play / Stop', keys: ['F5'] },
+  { label: 'Stop playing', keys: ['Esc'] },
   { label: 'This list', keys: ['?'] },
 ];
 
@@ -57,6 +59,15 @@ export function useShortcuts(openKeys: () => void): void {
     const down = (e: KeyboardEvent) => {
       if (inField(e.target) || document.querySelector('.cw-modal')) return;
       const s = useEditor.getState();
+      if (e.code === 'F5') {
+        e.preventDefault();
+        return s.playing ? s.stopPlaying() : s.play();
+      }
+      // While playing, the scene can't be edited: only Esc (stop) and the camera keys work.
+      if (s.playing) {
+        if (e.key === 'Escape' && !flyState.active) s.stopPlaying();
+        return;
+      }
       const m = e.ctrlKey || e.metaKey;
       const code = e.code;
       if (m) {
@@ -89,6 +100,7 @@ export function useShortcuts(openKeys: () => void): void {
           return s.setTool('scale');
         case 'KeyB':
           s.setBrushOptions({ shape: 'box' });
+          if (s.brushRole === 'trigger') s.setBrushRole('solid');
           return s.setTool('brush');
         case 'KeyT':
           return s.setTool('face');

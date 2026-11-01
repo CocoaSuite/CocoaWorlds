@@ -18,6 +18,7 @@ export function BrushInspector({ e }: { e: EntityData }) {
   const [hollowDir, setHollowDir] = useState<'inward' | 'outward'>('inward');
   // Sizes and centres are shown and edited in world space.
   const b = worldBrushOf(doc, e);
+  const trigger = !!e.components.trigger;
   if (!b) return null;
   const bb = bounds(b.brush);
   if (!bb) return null;
@@ -45,6 +46,9 @@ export function BrushInspector({ e }: { e: EntityData }) {
   return (
     <>
       <Section title={t('insp.brush')}>
+        {trigger ? (
+          <p className="cw-hint">{t('insp.triggerHint')}</p>
+        ) : (
         <div className="cw-f">
           <span>{t('insp.kind')}</span>
           <Segmented<'solid' | 'subtract'>
@@ -57,6 +61,7 @@ export function BrushInspector({ e }: { e: EntityData }) {
             ]}
           />
         </div>
+        )}
         <div className="cw-f3">
           <span>{t('insp.size')}</span>
           {(['x', 'y', 'z'] as const).map((a, i) => (
@@ -107,7 +112,7 @@ export function BrushInspector({ e }: { e: EntityData }) {
         )}
       </Section>
 
-      {b.role === 'solid' ? (
+      {trigger ? null : b.role === 'solid' ? (
         <>
           <div className="cw-f">
             <span>{t('insp.hollowDir')}</span>

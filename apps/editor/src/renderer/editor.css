@@ -131,3 +131,20 @@ code { font: 12px var(--mono); color: var(--fg); }
 /* Box selection and tool panels */
 .cw-marquee { position: absolute; z-index: 2; pointer-events: none; border: 1px solid var(--sel); background: rgba(75, 156, 255, 0.12); }
 .cw-tool-panel { width: min(640px, calc(100% - 24px)); }
+
+/* Components in the Inspector */
+.cw-sec-btn { width: 22px; height: 22px; padding: 0; }
+.cw-sec-btn svg { width: 13px; height: 13px; }
+.cw-comp-fields { display: flex; flex-direction: column; gap: 6px; }
+.cw-add-comp { margin-top: 10px; }
+
+/* Play mode */
+.cw-inert-wrap { display: contents; }
+.cw-playing .cw-side, .cw-playing .cw-tbar { opacity: 0.5; transition: opacity 0.2s; }
+.cw-play-banner { top: 12px; left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 8px; background: var(--panel); border: 1px solid var(--line); border-radius: 999px; padding: 5px 6px 5px 12px; box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45); font-size: 12px; white-space: nowrap; }
+.cw-live-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--cw-brand-hi); box-shadow: 0 0 0 3px rgba(143, 176, 74, 0.25); }
+.cw-play-stop { border-radius: 999px; padding: 3px 10px; }
+@media (prefers-reduced-motion: reduce) { .cw-playing .cw-side, .cw-playing .cw-tbar { transition: none; } }
+.cw-select { width: 100%; min-width: 0; cursor: pointer; }
+.cw-select option { background: var(--panel2); color: var(--fg); }
+.cw-insp { overflow-x: hidden; }

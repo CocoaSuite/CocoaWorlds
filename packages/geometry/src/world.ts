@@ -13,9 +13,12 @@ import type { V3 } from './vec';
 
 export type BrushRole = 'solid' | 'subtract';
 
+/** How a brush takes part in the level: solid geometry, a live cutter, or a trigger zone (not geometry). */
+export type WorldRole = BrushRole | 'trigger';
+
 export interface WorldBrush {
   id: string;
-  role: BrushRole;
+  role: WorldRole;
   brush: Brush;
 }
 

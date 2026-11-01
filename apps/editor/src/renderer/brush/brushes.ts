@@ -2,13 +2,10 @@
 import {
   composeTransform,
   identityMat4,
-  invertMat4,
   isIdentityMat4,
-  isTranslationMat4,
   mat4Key,
   multiplyMat4,
   newEntity,
-  translationOf,
   type EntityData,
   type Mat4,
   type SceneDoc,
@@ -21,8 +18,8 @@ import {
   fromData,
   stairs,
   toData,
-  transform as transformBrush,
-  translate,
+  brushToLocal,
+  brushToWorld,
   wedge,
   type Brush,
   type BrushData,
@@ -93,21 +90,10 @@ export function isLocked(doc: SceneDoc, e: EntityData | undefined): boolean {
 // identity). The editor's tools work in world space and convert on the way in and out.
 
 /** Move a brush from its own space into the world. Pure moves keep textures locked to the faces. */
-export function toWorld(local: Brush, space: Mat4): Brush {
-  if (isIdentityMat4(space)) return local;
-  if (isTranslationMat4(space)) return translate(local, translationOf(space));
-  return transformBrush(local, space);
-}
+export const toWorld = (local: Brush, space: Mat4): Brush => brushToWorld(local, space);
 
 /** Move a world-space brush into a space (the inverse of toWorld). */
-export function toLocal(world: Brush, space: Mat4): Brush {
-  if (isIdentityMat4(space)) return world;
-  if (isTranslationMat4(space)) {
-    const t = translationOf(space);
-    return translate(world, [-t[0], -t[1], -t[2]]);
-  }
-  return transformBrush(world, invertMat4(space) ?? identityMat4());
-}
+export const toLocal = (world: Brush, space: Mat4): Brush => brushToLocal(world, space);
 
 /** Every entity's world matrix, computed once top-down. */
 export function worldMatrices(doc: SceneDoc): Map<string, Mat4> {
@@ -148,14 +134,18 @@ export function worldBrushes(doc: SceneDoc): WorldBrush[] {
   for (const e of doc.entities) {
     if (!e.components.brush || !isShown(doc, e)) continue;
     const b = worldBrushOf(doc, e, mats.get(e.id));
-    if (b) out.push({ id: e.id, role: b.role, brush: b.brush });
+    // Trigger zones are brushes too, but they never become level geometry.
+    if (b) out.push({ id: e.id, role: e.components.trigger ? 'trigger' : b.role, brush: b.brush });
   }
   return out;
 }
 
 /** The brushes for a shape spanning min–max. Stairs produce one brush per step. */
-export function shapeBrushes(o: ShapeOptions, min: V3, max: V3, role: 'solid' | 'subtract', outline?: Outline): Brush[] {
-  const surface = defaultSurface(role === 'subtract' ? 'dev/subtract' : 'dev/grid');
+/** What the brush tool draws: level geometry, a live cutter, or a trigger zone. */
+export type DrawRole = BrushRole | 'trigger';
+
+export function shapeBrushes(o: ShapeOptions, min: V3, max: V3, role: DrawRole, outline?: Outline): Brush[] {
+  const surface = defaultSurface(role === 'subtract' ? 'dev/subtract' : role === 'trigger' ? 'dev/trigger' : 'dev/grid');
   switch (o.shape) {
     case 'polygon':
       if (!outline) return [];

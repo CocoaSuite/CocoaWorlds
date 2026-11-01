@@ -5,7 +5,8 @@ import { defineConfig, type Plugin } from 'vite';
 function csp(): Plugin {
   const policy = [
     "default-src 'self'",
-    "script-src 'self'",
+    // Physics (Rapier) compiles WebAssembly; this allows wasm compilation only, not JavaScript eval.
+    "script-src 'self' 'wasm-unsafe-eval'",
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data: blob:",
     "font-src 'self'",

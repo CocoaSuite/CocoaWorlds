@@ -6,7 +6,7 @@ import type { EntityData, SceneDoc, Transform, Vec3 } from '@cocoaworlds/core';
 import { bounds, faceAt, transform as transformBrush, translate, vertices, type Brush, type Plane, type V3 } from '@cocoaworlds/geometry';
 import * as THREE from 'three';
 import { TransformControls } from 'three/addons/controls/TransformControls.js';
-import { brushOf, isLocked, isShown, worldBrushOf, worldBrushes, worldMatrices, type Outline, type ShapeOptions } from '../brush/brushes';
+import { brushOf, isLocked, isShown, worldBrushOf, worldBrushes, worldMatrices, type DrawRole, type Outline, type ShapeOptions } from '../brush/brushes';
 import { rootsOf } from '../scene-ops';
 import { isGroup } from '../scene-ops';
 import { mat4Key, type Mat4 } from '@cocoaworlds/core';
@@ -17,6 +17,9 @@ import { buildMarker, disposeMarker, markerKey, setMarkerSelected, type Marker }
 import { WorldRenderer, type FaceRef } from './world-render';
 import { VertexTool } from './vertex-tool';
 import { ClipTool, type ClipKeep, type ClipState } from './clip-tool';
+import type { PlayInfo, PlaySession } from './play-session';
+import type { TriggerEvent } from '@cocoaworlds/runtime';
+import type { SceneFile } from '@cocoaworlds/core';
 
 export interface ViewportCallbacks {
   select(ids: string[], mode: 'replace' | 'toggle'): void;
@@ -43,6 +46,8 @@ export interface ViewportCallbacks {
   clip(plane: Plane, keep: ClipKeep): void;
   /** A short message for the user (e.g. why a vertex move was refused). */
   message(text: string): void;
+  /** Play mode: trigger events from the game world. */
+  playEvents(events: TriggerEvent[], names: Map<string, string>): void;
 }
 
 /** A live gizmo result: a brush in world space, or an entity's new world placement. */
@@ -116,8 +121,11 @@ export class ViewportEngine {
   private vertexTool = new VertexTool();
   private clipTool = new ClipTool();
   private marquee: HTMLDivElement;
+  private play: PlaySession | null = null;
+  private playToken = 0;
+  private gridWasVisible = true;
   private shapeOpts: ShapeOptions = { shape: 'box', sides: 16, steps: 8, facing: 0 };
-  private brushRole: 'solid' | 'subtract' = 'solid';
+  private brushRole: DrawRole = 'solid';
   private draft: BrushDraft | null = null;
   private lastHeight = 128;
   private worldKey = '';
@@ -272,7 +280,7 @@ export class ViewportEngine {
     this.invalidate();
   }
 
-  setBrushTool(active: boolean, opts: ShapeOptions, role: 'solid' | 'subtract'): void {
+  setBrushTool(active: boolean, opts: ShapeOptions, role: DrawRole): void {
     this.brushTool = active;
     this.shapeOpts = opts;
     this.brushRole = role;
@@ -314,6 +322,54 @@ export class ViewportEngine {
     this.showSnap(null);
     this.cb.draft(null);
     this.invalidate();
+  }
+
+  // ── Play mode ──
+
+  get playing(): boolean {
+    return !!this.play;
+  }
+
+  /** Build a game world from a scene snapshot and show it instead of the editor's scene. */
+  async startPlay(scene: SceneFile): Promise<PlayInfo> {
+    this.stopPlay();
+    const token = ++this.playToken;
+    // Physics (and its WebAssembly) loads on first Play, so opening the editor stays quick.
+    const { PlaySession } = await import('./play-session');
+    const session = await PlaySession.start(scene, (name) => this.world.material(name));
+    if (token !== this.playToken || this.disposed) {
+      // Stopped while loading.
+      session.dispose();
+      return session.info;
+    }
+    this.play = session;
+    this.cancelDraft();
+    this.gizmo.detach();
+    this.world.group.visible = false;
+    this.vertexTool.group.visible = false;
+    this.clipTool.group.visible = false;
+    this.snapMarker.visible = false;
+    for (const { m } of this.markers.values()) m.group.visible = false;
+    this.gridWasVisible = this.grid.object.visible;
+    this.grid.object.visible = false;
+    this.scene.add(session.group);
+    this.lastTick = performance.now();
+    this.invalidate();
+    return session.info;
+  }
+
+  stopPlay(): void {
+    this.playToken++;
+    const p = this.play;
+    if (!p) return;
+    this.play = null;
+    this.scene.remove(p.group);
+    p.dispose();
+    this.world.group.visible = true;
+    this.grid.object.visible = this.gridWasVisible;
+    this.vertexTool.group.visible = this.editTool === 'vertex';
+    this.clipTool.group.visible = this.editTool === 'clip';
+    this.syncAll();
   }
 
   setVertexSnap(enabled: boolean): void {
@@ -380,6 +436,7 @@ export class ViewportEngine {
     this.resizeObs.disconnect();
     this.unbindInput();
     this.cancelDraft();
+    this.stopPlay();
     this.gizmo.detach();
     this.gizmo.dispose();
     for (const { m } of this.markers.values()) disposeMarker(m);
@@ -413,7 +470,7 @@ export class ViewportEngine {
       const m = new THREE.Matrix4().fromArray(this.mats.get(e.id) ?? new THREE.Matrix4().toArray());
       m.decompose(g.position, g.quaternion, g.scale);
     }
-    g.visible = isShown(this.doc!, e);
+    g.visible = !this.play && isShown(this.doc!, e);
     g.userData.locked = isLocked(this.doc!, e);
   }
 
@@ -424,6 +481,10 @@ export class ViewportEngine {
     this.world.setSelection(expanded);
     this.refreshEditTools();
     let target: THREE.Object3D | null = null;
+    if (this.play) {
+      this.gizmo.detach();
+      return;
+    }
     if (this.editTool === 'vertex') {
       if (this.vertexTool.count) {
         if (!this.dragSet) this.placeProxy();
@@ -750,6 +811,11 @@ export class ViewportEngine {
         this.invalidate();
       }
     }
+    if (this.play) {
+      const events = this.play.tick(dt);
+      if (events.length) this.cb.playEvents(events, this.play.info.names);
+      this.needsRender = true;
+    }
     if (!this.needsRender) return;
     this.needsRender = false;
     const t0 = performance.now();
@@ -930,6 +996,7 @@ export class ViewportEngine {
     if (e.button === 1 || (e.button === 0 && this.spaceHeld)) mode = 'pan';
     else if (e.button === 2) mode = persp ? 'look' : 'pan';
     else if (e.button === 0 && e.altKey && persp) mode = 'orbit';
+    else if (this.play && e.button === 0) mode = persp ? 'look' : 'pan'; // nothing to edit while playing
     else if (e.button === 0 && this.brushTool) mode = this.draft?.stage === 'height' ? 'height' : 'draw';
     else if (e.button === 0) mode = 'click';
     else return;
@@ -1009,6 +1076,7 @@ export class ViewportEngine {
   }
 
   private onDoubleClick = (e: MouseEvent): void => {
+    if (this.play) return;
     if (this.brushTool && this.draft?.points && this.draft.stage === 'footprint') return this.closePolygon();
     if (this.brushTool || this.faceTool || e.button !== 0) return;
     const id = this.pick(e);
@@ -1100,6 +1168,7 @@ export class ViewportEngine {
     } catch {
       /* already released */
     }
+    if (this.play) return;
     if (d.mode === 'draw') {
       const dr = this.draft;
       if (!dr || !dr.hasArea) return this.cancelDraft();

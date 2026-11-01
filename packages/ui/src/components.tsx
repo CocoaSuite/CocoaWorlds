@@ -349,3 +349,13 @@ export function Toast({ message, nonce = 0 }: { message: string | null; nonce?: 
     </div>
   );
 }
+
+/** Colour swatch with its hex value (CocoaCanvas `.cr`). The swatch opens the system colour picker. */
+export function ColorField({ value, onChange, label }: { value: string; onChange: (hex: string) => void; label: string }) {
+  return (
+    <span className="cw-color">
+      <input type="color" aria-label={label} value={/^#[0-9a-f]{6}$/i.test(value) ? value : '#ffffff'} onChange={(e) => onChange(e.target.value)} />
+      <span className="mono">{value}</span>
+    </span>
+  );
+}

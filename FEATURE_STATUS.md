@@ -74,11 +74,15 @@ Last updated: 2026-11-01 (Phase 2, first slice).
 |---|---|
 | Brush geometry engine: primitives, carve/intersect/merge, vertex/face editing, meshes, collision hulls (Phase 3) | **Done** (library and tests; see docs/geometry.md) |
 
-| Entities, components, physics, triggers (Phase 4) | Planned |
+| Components in the Inspector: Add component (only what fits the object), remove, edit fields drawn from the component registry; English and Russian | **Done** (Phase 4) |
+| Physics component (fixed / falls and tumbles / moved by scripts; weight, grip, bounce, gravity, stay upright) and collision shapes for point objects (box, ball, capsule) | **Done** (Phase 4) |
+| Trigger zones: tool bar button or Trigger in the brush panel; amber volumes; notice the player, physics objects or anything; once-only option | **Done** (Phase 4). The player arrives in Phase 6, so “The player” zones fire from then on. |
+| Game world (`packages/runtime`): Rapier physics from the scene, the level as convex pieces (live subtract included), fixed 60 Hz steps, trigger enter/exit events | **Done** (Phase 4) |
+| Play in the editor (F5 / Play): physics preview from a snapshot of the scene, free camera, trigger events in the console; Esc/Stop returns with the scene untouched | **Done** (Phase 4). No player yet (Phase 6); lights are not drawn yet (Phase 7). |
 | Plain-language block scripting, graph view, VM (Phase 5) | Planned |
 | Source-style player controller, gameplay entities (Phase 6) | Planned |
 | Assets, materials, lighting, audio (Phase 7) | Planned |
-| Play mode and standalone runtime (Phase 8) | Planned |
+| Standalone runtime and Play as built (Phase 8) | Planned |
 | Desktop and web export (Phase 9) | Planned |
 | Custom JavaScript scripting | Not supported (deferred past v1) |
 | Mobile/tablet layouts | Not supported |

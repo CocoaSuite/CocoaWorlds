@@ -8,7 +8,9 @@
 - **Lights are markers only.** They don't light the scene until materials and lighting land (Phase 7).
 - **One scene per project in the UI.** The format supports a scene list; scene management UI comes later.
 - **The clipboard is inside the editor.** Copy/paste works across projects within one session, but not with other apps or after a restart.
-- **Some tools are visible but disabled** (triggers, Play, Build), each labelled with when it arrives.
+- **Some tools are visible but disabled** (Build), labelled with when it arrives.
+- **Play is a physics preview for now.** There is no player yet (Phase 6) and lights are not drawn (Phase 7); you watch with the free camera. Zones set to notice “The player” stay quiet until then.
+- **Brushes with Physics move as one solid piece** and aren't cut by subtract brushes while playing.
 - **The vertex tool moves corners with the gizmo only;** dragging a corner handle directly is not supported yet.
 - **Materials are built-in development colours** until material assets and textures arrive in Phase 7.
 - **Surfaces made by a live cut** (the inside of a doorway) follow the wall around them and can't be selected until the cut is applied.

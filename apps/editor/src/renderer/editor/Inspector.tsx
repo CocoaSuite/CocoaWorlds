@@ -4,6 +4,7 @@ import { Button, Field, NumberField, PanelHeader, Section, Switch } from '@cocoa
 import { t } from '../i18n';
 import { BrushInspector, MultiBrushActions } from './BrushInspector';
 import { FaceInspector } from './FaceInspector';
+import { ComponentsSection } from './ComponentsSection';
 import { isGroup } from '../scene-ops';
 import { useSelectedEntities, useEditor } from '../store';
 
@@ -49,6 +50,7 @@ function BrushEntity({ e }: { e: EntityData }) {
         onBlur={(ev) => s.rename(e.id, ev.currentTarget.value)}
       />
       <BrushInspector e={e} />
+      <ComponentsSection e={e} />
       <Section title={t('insp.display')}>
         <div className="cw-flagrow">
           <span>{t('insp.visible')}</span>
@@ -236,20 +238,7 @@ function EntityInspector({ e }: { e: EntityData }) {
           <Switch label={t('insp.locked')} checked={e.locked} onChange={(v) => s.setFlag(e.id, 'locked', v)} />
         </div>
       </Section>
-      <Section title={t('insp.components')}>
-        {Object.keys(e.components).length === 0 && <span className="cw-muted">—</span>}
-        {Object.entries(e.components).map(([name, data]) => (
-          <div key={name} className="cw-comp">
-            <b>{name}</b>
-            {Object.entries(data).map(([k, v]) => (
-              <div key={k} className="cw-f">
-                <span>{k}</span>
-                <code>{typeof v === 'object' ? JSON.stringify(v) : String(v)}</code>
-              </div>
-            ))}
-          </div>
-        ))}
-      </Section>
+      <ComponentsSection e={e} />
     </>
   );
 }

@@ -27,6 +27,8 @@ Details and trade-offs for each: [ARCHITECTURE.md](ARCHITECTURE.md).
 
 ## Log
 
+- **2026-11-01** — Routine choices for components and physics (reversible): one component registry in core drives the Inspector and the runtime; long multi-choice fields show as a dropdown so the Inspector never overflows; trigger zones are brushes with a trigger component (amber), and subtract brushes moved to coral so the two never look alike; physics runs in game units with Rapier's `lengthUnit`; an object's own Bounce wins over what it lands on; Rapier 0.21 loads on first Play; the CSP allows WebAssembly compilation only.
+
 - **2026-11-01** — Approved G3 (brushes relative to parent) and the start of Phase 4. Scenes move to format 2: transforms are local to the parent and brush faces are in the parent's space. Format-1 scenes are upgraded on open (with a backup) without moving anything: groups get an identity transform, other children are re-expressed relative to their parent.
 
 - **2026-11-01** — Routine choices for the end of Phase 3 (reversible): polygon outlines are made convex (dents filled in) rather than split into several brushes; levels of 64+ brushes build in a background worker inlined into the bundle as a blob (no extra files to load from disk); while a build runs, only the latest edit is queued. Number fields now derive their text during render instead of copying props into state in an effect, which removed a render loop seen when pasting many objects quickly.

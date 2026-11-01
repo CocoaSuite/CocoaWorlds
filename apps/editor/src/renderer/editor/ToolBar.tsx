@@ -12,6 +12,8 @@ export function ToolBar() {
   const toggle = useEditor((s) => s.toggle);
   const shape = useEditor((s) => s.brushOptions.shape);
   const setBrushOptions = useEditor((s) => s.setBrushOptions);
+  const setBrushRole = useEditor((s) => s.setBrushRole);
+  const role = useEditor((s) => s.brushRole);
   const grid = useEditor((s) => s.session?.project.settings.gridSize ?? 16);
   const T = (id: Tool, icon: IconName, label: string, key: string) => (
     <ToolButton icon={icon} label={label} shortcut={key} active={tool === id} onClick={() => setTool(id)} />
@@ -21,9 +23,10 @@ export function ToolBar() {
       icon={icon}
       label={label}
       shortcut={key}
-      active={tool === 'brush' && shape === s}
+      active={tool === 'brush' && shape === s && role !== 'trigger'}
       onClick={() => {
         setBrushOptions({ shape: s });
+        if (role === 'trigger') setBrushRole('solid');
         setTool('brush');
       }}
     />
@@ -45,7 +48,16 @@ export function ToolBar() {
       {T('face', 'face', t('tool.face'), 'T')}
       {T('clip', 'clip', t('tool.clip'), 'C')}
       <Divider />
-      <ToolButton icon="trigger" label={`${t('tool.trigger')} — ${t('soon')}`} disabled />
+      <ToolButton
+        icon="trigger"
+        label={t('tool.trigger')}
+        active={tool === 'brush' && role === 'trigger'}
+        onClick={() => {
+          setBrushOptions({ shape: 'box' });
+          setBrushRole('trigger');
+          setTool('brush');
+        }}
+      />
       {T('paint', 'paint', t('tool.paint'), 'P')}
       <Divider />
       <button type="button" className={`cw-snap${snap ? ' on' : ''}`} aria-pressed={snap} title="Grid snapping (G)" onClick={() => toggle('snap')}>

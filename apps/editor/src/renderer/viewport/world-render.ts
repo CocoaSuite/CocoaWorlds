@@ -53,8 +53,11 @@ export class WorldRenderer {
   private piecesById = new Map<string, Brush[]>();
   private faceRefs: FaceRef[] = [];
   private materials = new Map<string, THREE.Material>();
-  private subtractMat = new THREE.MeshBasicMaterial({ color: 0xf0a442, transparent: true, opacity: 0.12, depthWrite: false, side: THREE.DoubleSide });
-  private subtractEdgeMat = new THREE.LineBasicMaterial({ color: 0xf0a442, transparent: true, opacity: 0.9 });
+  // Subtract brushes are coral (they remove); trigger zones are amber (DESIGN_SYSTEM.md: --cw-warn).
+  private subtractMat = new THREE.MeshBasicMaterial({ color: 0xff8a73, transparent: true, opacity: 0.12, depthWrite: false, side: THREE.DoubleSide });
+  private subtractEdgeMat = new THREE.LineBasicMaterial({ color: 0xff8a73, transparent: true, opacity: 0.9 });
+  private triggerMat = new THREE.MeshBasicMaterial({ color: 0xf0a442, transparent: true, opacity: 0.16, depthWrite: false, side: THREE.DoubleSide });
+  private triggerEdgeMat = new THREE.LineBasicMaterial({ color: 0xf0a442, transparent: true, opacity: 0.95 });
   private selectedEdgeMat = new THREE.LineBasicMaterial({ color: 0x4b9cff, transparent: true, opacity: 0.95 });
   private selectedHiddenMat = new THREE.LineBasicMaterial({ color: 0x4b9cff, transparent: true, opacity: 0.3, depthTest: false });
   private brushes: WorldBrush[] = [];
@@ -82,7 +85,8 @@ export class WorldRenderer {
     this.faceGroup.renderOrder = 12;
   }
 
-  private material(name: string): THREE.Material {
+  /** The Three.js material for a material name (shared with Play mode). */
+  material(name: string): THREE.Material {
     let m = this.materials.get(name);
     if (m) return m;
     const dev = devMaterial(name);
@@ -169,11 +173,12 @@ export class WorldRenderer {
   private rebuildSubtracts(brushes: WorldBrush[]): void {
     clear(this.subtractGroup);
     for (const b of brushes) {
-      if (b.role !== 'subtract') continue;
+      if (b.role === 'solid') continue;
+      const trigger = b.role === 'trigger';
       const m = buildMesh([b.brush]);
-      const mesh = new THREE.Mesh(toGeometry(m), this.subtractMat);
+      const mesh = new THREE.Mesh(toGeometry(m), trigger ? this.triggerMat : this.subtractMat);
       mesh.userData.entityId = b.id;
-      this.subtractGroup.add(mesh, edgeLines(b.brush, this.subtractEdgeMat));
+      this.subtractGroup.add(mesh, edgeLines(b.brush, trigger ? this.triggerEdgeMat : this.subtractEdgeMat));
     }
   }
 

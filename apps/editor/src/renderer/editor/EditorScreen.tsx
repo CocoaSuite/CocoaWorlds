@@ -15,6 +15,7 @@ const AUTOSAVE_MS = 30_000;
 
 export function EditorScreen() {
   const showBottom = useEditor((s) => s.showBottom);
+  const playing = useEditor((s) => !!s.playing);
   const recovery = useEditor((s) => s.recovery);
   const recover = useEditor((s) => s.recover);
   const [keysOpen, setKeysOpen] = useState(false);
@@ -28,14 +29,21 @@ export function EditorScreen() {
   return (
     <div className="cw-editor">
       <TopBar onShowKeys={() => setKeysOpen(true)} />
-      <div className="cw-mid">
-        <SceneTree />
+      <div className={`cw-mid${playing ? ' cw-playing' : ''}`}>
+        {/* While playing, editing panels are inert: the game runs from a snapshot of the scene. */}
+        <div className="cw-inert-wrap" inert={playing}>
+          <SceneTree />
+        </div>
         <div className="cw-stage">
           <Viewport />
-          <ToolBar />
+          <div className="cw-inert-wrap" inert={playing}>
+            <ToolBar />
+          </div>
           {showBottom && <BottomPanel />}
         </div>
-        <Inspector />
+        <div className="cw-inert-wrap" inert={playing}>
+          <Inspector />
+        </div>
       </div>
 
       {recovery && (
