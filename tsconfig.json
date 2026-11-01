@@ -1,8 +1,17 @@
 {
   "files": [],
   "references": [
-    { "path": "packages/core" },
-    { "path": "packages/ui" },
-    { "path": "apps/editor" }
+    {
+      "path": "packages/core"
+    },
+    {
+      "path": "packages/geometry"
+    },
+    {
+      "path": "packages/ui"
+    },
+    {
+      "path": "apps/editor"
+    }
   ]
 }

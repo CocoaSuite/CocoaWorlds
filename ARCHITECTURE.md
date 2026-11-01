@@ -146,6 +146,7 @@ Built so far:
 ```
 apps/editor          Electron main (src/main), preload bridge (src/preload), React UI (src/renderer)
 packages/core        ids, math, file formats, validation, migrations, History, SceneDoc + commands
+packages/geometry    convex brushes, primitives, carve/intersect/merge, vertex editing, mesh + hull output (docs/geometry.md)
 packages/ui          CocoaCanvas tokens (styles.css) and React components
 ```
 

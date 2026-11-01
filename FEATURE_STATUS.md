@@ -46,7 +46,8 @@ Last updated: 2026-11-01 (Phase 2, first slice).
 
 | Area | Status |
 |---|---|
-| Brushes, face materials, carve/union/intersect (Phase 3) | Planned |
+| Brush geometry engine: primitives, carve/intersect/merge, vertex/face editing, meshes, collision hulls (Phase 3) | **Done** (library and tests; see docs/geometry.md) |
+| Brush tools in the editor, face materials UI (Phase 3) | Planned |
 | Entities, components, physics, triggers (Phase 4) | Planned |
 | Plain-language block scripting, graph view, VM (Phase 5) | Planned |
 | Source-style player controller, gameplay entities (Phase 6) | Planned |

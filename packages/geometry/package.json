@@ -1,0 +1,10 @@
+{
+  "name": "@cocoaworlds/geometry",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Convex brush geometry: planes, primitives, carve/intersect/merge, vertex editing, meshes and collision hulls. No renderer or DOM dependencies.",
+  "exports": {
+    ".": "./src/index.ts"
+  }
+}
