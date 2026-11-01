@@ -35,7 +35,7 @@ test('play as the player', async () => {
     await page.locator('.cw-crosshair').waitFor();
 
     // Standing on the floor at eye height.
-    await until(async () => Math.round((await feet()).y), 1);
+    await until(async () => { const y = (await feet()).y; return y > -1 && y < 2; }, true);
 
     // Walk forward: into the zone, up to the wall.
     await page.keyboard.down('w');

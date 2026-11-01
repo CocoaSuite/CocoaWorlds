@@ -24,8 +24,10 @@ import {
   parseScene,
   stringify,
   validatePrefab,
+  validateProject,
   validateScene,
   type PrefabFile,
+  type ProjectFile,
   type SceneFile,
 } from '@cocoaworlds/core';
 import type { OpenedProject, PrefabEntry } from '../shared/api';
@@ -177,6 +179,17 @@ export async function autosaveScene(dir: string, scenePath: string, scene: unkno
   resolveInside(dir, scenePath);
   await writeAtomic(autosavePath(dir, scenePath), stringify(valid));
   return { savedAt: new Date().toISOString() };
+}
+
+/** Save the project file (settings). Only the settings can change; everything else is kept from disk. */
+export async function saveProjectSettings(dir: string, settings: unknown): Promise<ProjectFile> {
+  const file = path.join(dir, PROJECT_FILE);
+  const { project } = parseProject(await fs.readFile(file, 'utf8'));
+  const next = { ...project, settings } as ProjectFile;
+  const r = validateProject(next);
+  if (!r.ok) throw new ProjectError('The project settings could not be saved because they are invalid.', r.problems.map((p) => `${p.path}: ${p.message}`));
+  await writeAtomic(file, stringify(r.value));
+  return r.value;
 }
 
 export async function discardRecovery(dir: string, scenePath: string): Promise<void> {

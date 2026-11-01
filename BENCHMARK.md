@@ -1,0 +1,165 @@
+# Benchmark
+
+CocoaWorlds is measured by the games it can make. Two tiers:
+
+- **Basic:** a typical Roblox game: a tycoon, Natural Disaster Survival, Grow a Garden, Pet Simulator.
+- **Advanced:** Slime Rancher, and Half-Life 1.
+
+"Can make" means a person builds the game in the editor, with blocks rather than code, and exports a game other people can play. Each game below is broken down into what it needs. Each need is marked:
+
+- ✅ the engine can do it today
+- 🟡 it can be done, but awkwardly or partly
+- ❌ it is missing
+
+Each need also notes the roadmap step that delivers it (the B / A steps are in [ROADMAP.md](ROADMAP.md)). The last section lists the decisions that need approval.
+
+Status as of 2026-11-01.
+
+## What every target needs
+
+These come up in almost every game, so they come first.
+
+| Need | Now | Step |
+|---|---|---|
+| Brush levels, materials per face, triggers, physics objects, prefabs | ✅ | — |
+| First-person player with Source-style movement, use (E) | ✅ | — |
+| Health, damage, death and restart, score (each can be switched off per project) | ✅ | — |
+| Blocks: events, moving, turning, showing and hiding, messages, variables, if/repeat, timers | ✅ | — |
+| **Game-wide values** (Cash, Gems, Round, Wave) that every script shares, shown on screen when wanted | 🟡 one score; variables belong to one object | B1 |
+| **On-screen text and messages** ("Round 3 starts!", "Need $50", "Press E to buy") | ❌ | B1 |
+| **Make copies while playing** (spawn a prefab at a place or object; remove a copy) | ❌ | B2 |
+| **More things blocks can do to objects**: scale, become physical (unanchor), push, spin speed, move toward or follow an object, teleport the player | 🟡 move/turn/show/hide only | B2 |
+| **Textures and materials from image files**, lights that light the level, sky, sound | ❌ dev textures, unlit | B3 (Phase 7) |
+| **Imported 3D models** (props, creatures), with animations | ❌ brushes and simple shapes only | B3 / A2 |
+| **Standalone export** (Windows, macOS, Linux, web) | ❌ plays only in the editor | B4 (Phases 8–9) |
+| **Saving progress** (in the exported game) | ❌ | B4 |
+
+## Basic: typical Roblox games
+
+Roblox games are made to be played online with other people. The table assumes **single-player versions** first; multiplayer is decision M1 below.
+
+### Tycoon
+
+You own a plot. Droppers make parts, conveyors carry them to a collector that pays you, and you buy buttons that build more of the base.
+
+| Need | Now | Step |
+|---|---|---|
+| Plot built from brushes and prefabs | ✅ | — |
+| Buy buttons: step on, pay if you have enough cash, the bought part appears | 🟡 the score can be the cash; parts start hidden and Show reveals them | B1 (Cash value, price text) |
+| Droppers make a part every few seconds | ❌ | B2 spawn |
+| Conveyor belts carry parts | ❌ | B2 surface speed |
+| Collector removes parts and pays their value | 🟡 a zone can hide a part, but can't remove it or know its value | B2 remove, values on copies |
+| Price signs over buttons | ❌ | B1 text in the world |
+| Cash on screen | 🟡 score | B1 |
+| Keep progress between sessions | ❌ | B4 |
+| Third-person camera (usual on Roblox) | ❌ first person only | B2 camera |
+| Several players with their own plots | ❌ | M1 |
+
+### Natural Disaster Survival
+
+Rounds: everyone is put on a map, a random disaster strikes (flood, tornado, meteors, earthquake), and the survivors win.
+
+| Need | Now | Step |
+|---|---|---|
+| Lobby and maps, round timer | 🟡 timers and variables work; no on-screen countdown | B1 |
+| Teleport the player to the map and back | ❌ | B2 |
+| Random disaster | ✅ random number + if | — |
+| Flood: rising water that kills | 🟡 a rising deadly zone works; no water to see or swim in | A1 water |
+| Buildings that break (parts become physical) | ❌ | B2 become physical |
+| Tornado or wind pushing things | ❌ | B2 push |
+| Meteors | ❌ | B2 spawn |
+| "You survived!" message, survivor count | ❌ | B1 |
+| Several players | ❌ | M1 |
+
+### Grow a Garden
+
+Buy seeds, plant them in your plot, wait for them to grow (even while away), harvest, and sell.
+
+| Need | Now | Step |
+|---|---|---|
+| Plant where you point | ❌ | B2 spawn at the aimed spot |
+| Plants grow over time (get bigger, change stage) | ❌ | B2 scale, swap model |
+| Inventory and hotbar (seeds, tools) | ❌ | B5 inventory |
+| Shop window with buttons | ❌ | B5 screen UI |
+| Sell zone pays for crops | 🟡 zone + score | B1 values |
+| Growing while you're away, saved garden | ❌ | B4 save, real-time clock |
+| Weather events (rain, gold mutations) | ❌ | B3 particles, B2 |
+
+### Pet Simulator
+
+Break coins and chests to collect currency, buy eggs that hatch random pets, pets follow you and help break things, unlock new zones.
+
+| Need | Now | Step |
+|---|---|---|
+| Breakable coins and chests with health | ❌ objects don't have health | B2 object health |
+| Several currencies | ❌ | B1 values |
+| Eggs: random pet by rarity | 🟡 random works; can't make the pet | B2 spawn |
+| Pets follow the player | ❌ | B2 follow |
+| Pet inventory, equip | ❌ | B5 inventory |
+| Gates to new zones that open when paid | ✅ door recipe + score check | — |
+| Third-person camera, saving | ❌ | B2 camera, B4 |
+| Trading and seeing other players | ❌ | M1 |
+
+## Advanced: Slime Rancher
+
+A first-person ranch game on large outdoor islands. You suck up slimes and food with a vacuum gun, keep slimes in corrals, feed them, and sell their plorts at a market whose prices change.
+
+| Need | Now | Step |
+|---|---|---|
+| First-person movement | ✅ | — |
+| **Large outdoor terrain** (hills, cliffs, beaches) sculpted and painted | ❌ brushes only | T1 terrain |
+| Foliage, rocks, trees placed many at once | ❌ | A2 scatter |
+| **Animated creatures** (models with animations) | ❌ | A2 models |
+| **Creature behaviour**: wander, hop, look for food, flee, get agitated, eat and produce plorts | ❌ | A2 behaviours |
+| Finding paths on terrain | ❌ | A2 navigation |
+| **Vacuum gun**: pull physics objects in, hold them in slots, shoot them out | ❌ | A1 held tools |
+| Hundreds of physics objects at once | 🟡 Rapier handles it; not measured | A2 performance check |
+| Corrals, feeders, silos built on plots | 🟡 prefabs; no building while playing | B2 spawn |
+| Market with changing prices, upgrade shop | ❌ | B1 values, B5 UI |
+| Day and night, sky, lighting, water | ❌ | B3, A1 water |
+| Sound and music | ❌ | B3 |
+| Save the ranch | ❌ | B4 |
+
+## Advanced: Half-Life 1
+
+A first-person shooter built from brush levels (the kind CocoaWorlds is designed around), with monsters, scientists, weapons, scripted scenes, and levels joined into one long journey.
+
+| Need | Now | Step |
+|---|---|---|
+| Brush levels, textures per face, hidden faces removed | ✅ (dev textures only) | B3 for real textures |
+| Player movement, crouch, jump, steps, fall damage | ✅ (Half-Life 2 numbers; Half-Life 1 is close) | — |
+| Triggers, multi-step logic (multi_manager, trigger_relay) | ✅ zones, messages, waits | — |
+| Doors, buttons, lifts, rotating doors | ✅ recipes + pivots | Phase 6 ready-made objects |
+| Pushable crates | ✅ | — |
+| Health ✅; **armour (HEV suit)**, health and suit chargers | 🟡 | A1 |
+| **Ladders, water and swimming** | ❌ | A1 (Phase 6) |
+| **Weapons**: hitscan, projectiles, grenades, explosions, ammo, switching, view models | ❌ | A1 weapons |
+| **Breakable objects** (func_breakable), gibs | ❌ | B2 object health, A1 |
+| **Monsters and NPCs**: models, animation, AI (see, chase, attack, take cover), following the player | ❌ | A2 models, A1 NPCs |
+| NPC movement through the level | ❌ | A2 navigation |
+| Trains and moving platforms along paths (func_train, func_tracktrain) | 🟡 moves are straight lines | A1 paths |
+| Scripted scenes (scientists walking, talking) | ❌ | A1 |
+| **Level changes** with the player carried over (changelevel, landmarks) | ❌ one scene at a time | A1 |
+| Baked lighting, sprites, decals (bullet holes, blood), particles | ❌ | B3, A1 |
+| Sound: footsteps, ambient, voices | ❌ | B3 |
+| HUD: health, armour, ammo | 🟡 health | A1 |
+| Quick save and load anywhere | ❌ | B4 |
+
+## How far each target is (rough)
+
+| Target | Ready today | Main missing pieces |
+|---|---|---|
+| Tycoon | ~25% | values and text (B1), spawning and conveyors (B2), export and saving (B4) |
+| Natural Disaster Survival | ~25% | B1, teleport and physics actions (B2), water |
+| Grow a Garden | ~15% | spawning and scale (B2), inventory and shop UI (B5), saving (B4) |
+| Pet Simulator | ~15% | object health, follow (B2), inventory (B5) |
+| Half-Life 1 | ~30% | weapons, NPCs and AI, models, level changes, lighting and sound |
+| Slime Rancher | ~10% | terrain, creatures with behaviour, vacuum tool, models |
+
+## Decisions that need approval
+
+- **M1 — Multiplayer.** Roblox games are online with other people, so there are three ways forward. (a) Single-player only. (b) Single-player now, but the game runtime is built so networking can be added later: game state kept in one place, input separate from simulation, scripts that don't assume one player. (c) Multiplayer now, with a host or server and replicated objects. **Recommended: (b).** It keeps the Basic tier reachable soon without closing the door. Real multiplayer is a large phase of its own, after export.
+- **T1 — Terrain.** Slime Rancher and most outdoor Roblox maps need ground that isn't made of brushes. The proposal is a heightmap terrain object: sculpt with raise, lower, smooth and flatten; paint with up to 4–8 materials; colliders from the heightfield (Rapier has one). Caves and overhangs stay brush work.
+- **A2 — Models.** Import glTF/GLB files (static and skinned, with animations), shown in the asset browser and placeable as objects with a collision shape. FBX and OBJ would be converted on import.
+- **A2 — Navigation.** Generate a navigation mesh from the level and terrain (recast-navigation, which runs in WebAssembly), so NPCs and creatures can find paths. Half-Life's hand-placed node graph would not be used.
+- **B5 — Screen UI.** A simple screen-layout editor (text, images, buttons, bars, lists placed in anchored boxes), with blocks to show, hide and fill them. This is needed for shops, inventories and menus.

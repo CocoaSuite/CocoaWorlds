@@ -1,5 +1,5 @@
 /** Inspector for the selection (CocoaCanvas right panel). Scene settings when nothing is selected. */
-import { PIVOT, pivotOf, worldBoundsOf, type EntityData, type Transform, type Vec3 } from '@cocoaworlds/core';
+import { PIVOT, gameRules, pivotOf, worldBoundsOf, type EntityData, type Transform, type Vec3 } from '@cocoaworlds/core';
 import { brushBounds } from '../brush/brushes';
 import { Button, Field, NumberField, PanelHeader, Section, Switch } from '@cocoaworlds/ui';
 import { t } from '../i18n';
@@ -157,7 +157,28 @@ function SceneSettings() {
           <code>{doc.settings.gravity} u/s²</code>
         </Field>
       </Section>
+      <GameRulesSection />
     </>
+  );
+}
+
+/** Built-in game systems for the whole project: a building or farming game may want no health or score. */
+function GameRulesSection() {
+  const project = useEditor((s) => s.session?.project);
+  const set = useEditor((s) => s.setGameRule);
+  const playing = useEditor((s) => !!s.playing);
+  if (!project) return null;
+  const rules = gameRules(project.settings);
+  return (
+    <Section title={t('insp.gameRules')}>
+      <p className="cw-hint">{t('insp.gameRulesHint')}</p>
+      <Field label={t('insp.health')}>
+        <Switch checked={rules.health} label={t('insp.health')} onChange={(on) => !playing && void set('health', on)} />
+      </Field>
+      <Field label={t('insp.score')}>
+        <Switch checked={rules.score} label={t('insp.score')} onChange={(on) => !playing && void set('score', on)} />
+      </Field>
+    </Section>
   );
 }
 

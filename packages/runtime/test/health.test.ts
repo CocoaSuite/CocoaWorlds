@@ -160,4 +160,29 @@ describe('health and score', () => {
     expect(w.player!.feetPosition.z).toBeGreaterThan(-160);
     w.dispose();
   });
+
+  it('a project without health: nothing hurts, falls are harmless, falling out just starts again', () => {
+    const logic = newEntity('logic', { script: script([on('start', [hurt(500)]), on('die', [log('Game over')])]) as never });
+    const w = GameWorld.create(scene(brush('ledge', [-64, -16, -64], [64, 0, 64]), spawn([0, 400, 0]), logic), { rules: { health: false } });
+    expect(w.scriptProblems.map((p) => p.severity)).toEqual(['warning', 'warning']);
+    run(w, 2);
+    expect(w.playerStatus()).toMatchObject({ showHealth: false, health: 100, deaths: 0 });
+    w.setPlayerInput({ forward: 1 });
+    run(w, 1);
+    w.setPlayerInput({ forward: 0 });
+    run(w, 6);
+    expect(w.playerStatus()!.deaths).toBe(0);
+    expect(w.drainLogs()).toEqual([]);
+    w.dispose();
+  });
+
+  it('a project without score: the score stays 0 and never shows', () => {
+    const coin = brush('coin', [-8, 16, -96], [8, 48, -88]);
+    const w = GameWorld.create(scene(floor(), spawn(), ...apply('coin', coin, [-8, 16, -96], [8, 48, -88])), { rules: { score: false } });
+    w.setPlayerInput({ forward: 1 });
+    run(w, 1.4);
+    expect(w.isVisible(coin.id)).toBe(false);
+    expect(w.playerStatus()).toMatchObject({ score: 0, showScore: false });
+    w.dispose();
+  });
 });

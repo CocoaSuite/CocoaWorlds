@@ -5,7 +5,7 @@
 import { BrowserWindow, Menu, app, dialog, ipcMain, shell, type IpcMainInvokeEvent } from 'electron';
 import path from 'node:path';
 import { IPC, type Result } from '../shared/api';
-import { ProjectError, autosaveScene, createProject, discardRecovery, listPrefabs, openProject, savePrefab, saveScene } from './project-fs';
+import { ProjectError, autosaveScene, createProject, discardRecovery, listPrefabs, openProject, savePrefab, saveProjectSettings, saveScene } from './project-fs';
 import { SettingsStore } from './settings';
 
 if (process.env.CW_USER_DATA) app.setPath('userData', process.env.CW_USER_DATA);
@@ -143,6 +143,7 @@ function registerIpc(): void {
   handle(IPC.saveScene, async (dir, scenePath, scene) => saveScene(str(dir), str(scenePath), scene));
   handle(IPC.autosave, async (dir, scenePath, scene) => autosaveScene(str(dir), str(scenePath), scene));
   handle(IPC.listPrefabs, async (dir) => listPrefabs(str(dir)));
+  handle(IPC.saveSettings, async (dir, settings) => saveProjectSettings(str(dir), settings));
   handle(IPC.savePrefab, async (dir, prefab, rel) => savePrefab(str(dir), prefab, rel === undefined ? undefined : str(rel)));
   handleRaw(IPC.discardRecovery, async (dir, scenePath) => discardRecovery(str(dir), str(scenePath)));
   handleRaw(IPC.reveal, async (dir) => {

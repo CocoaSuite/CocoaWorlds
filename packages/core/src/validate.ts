@@ -29,6 +29,10 @@ export function validateProject(data: unknown): Result<ProjectFile> {
   const s = data.settings;
   need(p, isObj(s) && isNum(s.gridSize) && s.gridSize > 0, 'settings.gridSize', 'Grid size must be a positive number.');
   need(p, isObj(s) && isNum(s.unitsPerMetre) && s.unitsPerMetre > 0, 'settings.unitsPerMetre', 'Units per metre must be positive.');
+  if (isObj(s) && s.game !== undefined) {
+    const g = s.game;
+    need(p, isObj(g) && ['health', 'score'].every((k) => g[k] === undefined || typeof g[k] === 'boolean'), 'settings.game', 'Game rules must be on or off (true or false).');
+  }
   if (Array.isArray(data.scenes) && isStr(data.startScene)) {
     need(p, data.scenes.includes(data.startScene), 'startScene', 'Start scene is not in the scene list.');
   }

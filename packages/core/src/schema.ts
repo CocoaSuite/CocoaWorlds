@@ -25,6 +25,25 @@ export interface ProjectSettings {
   gridSize: number;
   /** Units per metre, used to convert to physics space. */
   unitsPerMetre: number;
+  /** Which built-in game systems the project uses (missing in older files: everything on). */
+  game?: Partial<GameRules>;
+}
+
+/** Built-in game systems a project can switch off (a building or farming game may want neither). */
+export interface GameRules {
+  /** The player has health: damage, falls, dying, the health bar. Off: nothing hurts and the player can't die. */
+  health: boolean;
+  /** The game keeps a score, shown once a script changes it. */
+  score: boolean;
+}
+
+export const defaultGameRules = (): GameRules => ({ health: true, score: true });
+
+/** A project's game rules with defaults filled in. */
+export function gameRules(settings: Pick<ProjectSettings, 'game'> | undefined): GameRules {
+  const g = settings?.game ?? {};
+  const d = defaultGameRules();
+  return { health: typeof g.health === 'boolean' ? g.health : d.health, score: typeof g.score === 'boolean' ? g.score : d.score };
 }
 
 export interface ProjectFile {

@@ -5,7 +5,7 @@
  * With a Player start in the scene you play as the player (first person); without one, Play is a physics
  * preview watched with the free camera.
  */
-import { SceneDoc, readComponent, type ColliderData, type SceneFile } from '@cocoaworlds/core';
+import { SceneDoc, readComponent, type ColliderData, type GameRules, type SceneFile } from '@cocoaworlds/core';
 import { buildMesh, isInvisibleMaterial, type WorldBrush } from '@cocoaworlds/geometry';
 import { GameWorld, initPhysics, type PlayerInput, type PlayerStatus, type ScriptLog, type TriggerEvent } from '@cocoaworlds/runtime';
 import type { Problem, ScriptError } from '@cocoaworlds/scripting';
@@ -44,16 +44,16 @@ export class PlaySession {
   private uses: string[] = [];
   private notes: string[] = [];
 
-  static async start(scene: SceneFile, material: (name: string) => THREE.Material): Promise<PlaySession> {
+  static async start(scene: SceneFile, material: (name: string) => THREE.Material, rules?: GameRules): Promise<PlaySession> {
     await initPhysics();
     // Invisible colliders (COL) collide but aren't drawn in the game.
     const hidden = new THREE.MeshBasicMaterial({ visible: false });
-    return new PlaySession(scene, (name) => (isInvisibleMaterial(name) ? hidden : material(name)));
+    return new PlaySession(scene, (name) => (isInvisibleMaterial(name) ? hidden : material(name)), rules);
   }
 
-  private constructor(scene: SceneFile, material: (name: string) => THREE.Material) {
+  private constructor(scene: SceneFile, material: (name: string) => THREE.Material, rules?: GameRules) {
     this.group.name = 'play';
-    this.world = GameWorld.create(scene);
+    this.world = GameWorld.create(scene, { rules });
     const doc = new SceneDoc(structuredClone(scene));
     const bodies = new Set(this.world.movingBodies().map((b) => b.id));
 

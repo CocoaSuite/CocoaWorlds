@@ -22,6 +22,7 @@ const api: CocoaApi = {
     reveal: (dir) => ipcRenderer.invoke(IPC.reveal, dir),
     listPrefabs: (dir) => ipcRenderer.invoke(IPC.listPrefabs, dir),
     savePrefab: (dir, prefab, path) => ipcRenderer.invoke(IPC.savePrefab, dir, prefab, path),
+    saveSettings: (dir, settings) => ipcRenderer.invoke(IPC.saveSettings, dir, settings),
   },
   window: {
     setTitle: (title) => ipcRenderer.send(IPC.setTitle, title),

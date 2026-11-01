@@ -13,6 +13,22 @@
 | 9 | Builds: Windows, macOS, Linux packaging; web export; runtime verification | Not started |
 | 10 | Polish: usability, performance, demo level, documentation | Not started |
 
+From here the order follows the benchmark: [BENCHMARK.md](BENCHMARK.md) — can it make a typical Roblox game (Basic), Slime Rancher and Half-Life 1 (Advanced)? The steps below deliver it; they fill in the phases above rather than replace them.
+
+## Benchmark steps
+
+| Step | What | Unlocks | Phase |
+|---|---|---|---|
+| B1 | Game-wide values (Cash, Gems, Round) shared by all scripts and shown on screen; on-screen messages and countdowns; text signs in the world | Tycoon buttons and prices, round timers, currencies | 5–6 |
+| B2 | Copies while playing (spawn a prefab, remove a copy, values on copies); object actions: scale, become physical, push, follow or move toward, teleport the player; conveyor surfaces; object health and breaking; third-person camera option | Droppers, conveyors, disasters, planting, pets, breakables | 6 |
+| B3 | Assets and rendering: image textures and materials, lights and sky, sound, glTF models (static first) | Every target looks and sounds like a game | 7 |
+| B4 | Standalone export (Windows, macOS, Linux, web) and saved progress | Games others can play and come back to | 8–9 |
+| B5 | Screen UI editor (text, images, buttons, bars, lists) and an inventory/hotbar | Shops, inventories, menus | 6–7 |
+| A1 | Half-Life set: ladders, water and swimming, armour and chargers, weapons (hitscan, projectiles, explosions, ammo), paths and trains, level changes with landmarks, decals and particles, scripted scenes, NPCs | Half-Life 1 | 6, 10 |
+| A2 | Animated models, creature behaviours, navigation meshes, scattering foliage, many-objects performance | Half-Life NPCs, Slime Rancher creatures | 7, 10 |
+| T1 | Heightmap terrain: sculpt and paint | Slime Rancher, outdoor maps | 7 |
+| M1 | Multiplayer (decision pending; recommended: design for it now, build it after export) | Roblox-style online play | after 9 |
+
 Order may shift where dependencies require it (for example, the project format from Phase 8 is started in Phase 2 because saving is needed from day one). Significant changes are explained in [DECISIONS.md](DECISIONS.md).
 
 ## Phase 1 checklist
@@ -88,4 +104,4 @@ Order may shift where dependencies require it (for example, the project format f
 
 ## Next
 
-Phase 6 continues with ready-made doors, buttons, pressure plates and lifts as objects you place (beyond the recipes), then ladders, water and key rebinding. Phase 3's subtract/union/intersect commands and Phase 5's debugging (watching values, breakpoints, stepping) and drag-and-drop of blocks are still open.
+B1: game-wide values, on-screen messages and text signs. Then B2 (copies while playing and the new object actions). Decisions M1, T1, models, navigation and screen UI are waiting for approval (see [BENCHMARK.md](BENCHMARK.md)).

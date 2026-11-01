@@ -45,6 +45,8 @@ export interface CocoaApi {
     reveal(dir: string): Promise<void>;
     listPrefabs(dir: string): Promise<Result<{ prefabs: PrefabEntry[]; problems: string[] }>>;
     savePrefab(dir: string, prefab: PrefabFile, path?: string): Promise<Result<{ path: string }>>;
+    /** Save the project's settings; returns the project as written. */
+    saveSettings(dir: string, settings: ProjectFile['settings']): Promise<Result<ProjectFile>>;
   };
   window: {
     setTitle(title: string): void;
@@ -67,6 +69,7 @@ export const IPC = {
   reveal: 'projects:reveal',
   listPrefabs: 'projects:listPrefabs',
   savePrefab: 'projects:savePrefab',
+  saveSettings: 'projects:saveSettings',
   setTitle: 'window:setTitle',
   setDirty: 'window:setDirty',
   saveRequest: 'window:saveRequest',

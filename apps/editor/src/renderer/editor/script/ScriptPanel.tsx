@@ -30,6 +30,7 @@ import {
   type StatementKind,
   type VariableDef,
 } from '@cocoaworlds/scripting';
+import { gameRules } from '@cocoaworlds/core';
 import { Button, ContextMenu, IconButton, type MenuEntry } from '@cocoaworlds/ui';
 import { createContext, useContext, useMemo, useState, type ReactNode } from 'react';
 import { t } from '../../i18n';
@@ -71,10 +72,11 @@ export function ScriptPanel() {
   const problems = useMemo(() => {
     const m = new Map<string, Problem[]>();
     if (!owner || !script) return m;
-    const info = { objects: new Map(objects.map((o) => [o.id, { name: o.name, isZone: o.isZone }])) };
+    const info = { objects: new Map(objects.map((o) => [o.id, { name: o.name, isZone: o.isZone }])), rules: gameRules(useEditor.getState().session?.project.settings) };
     for (const p of compileScript(owner.id, script, info).problems) m.set(p.block, [...(m.get(p.block) ?? []), p]);
     return m;
-  }, [owner, script, objects]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [owner, script, objects, useEditor.getState().session?.project]);
 
   if (!owner) return <div className="cw-muted cw-script-empty">{t('script.selectObject')}</div>;
   if (!script)

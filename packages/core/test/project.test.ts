@@ -48,3 +48,16 @@ describe('project files', () => {
     expect(() => parseScene(JSON.stringify(s))).toThrow(/damaged/);
   });
 });
+
+describe('game rules', () => {
+  it('older projects have everything on; rules round-trip; bad values are refused', async () => {
+    const { gameRules } = await import('../src/schema');
+    const { project } = newProject('Farm');
+    expect(gameRules(project.settings)).toEqual({ health: true, score: true });
+    project.settings.game = { health: false };
+    const back = parseProject(stringify(project)).project;
+    expect(gameRules(back.settings)).toEqual({ health: false, score: true });
+    project.settings.game = { health: 'no' as never };
+    expect(() => parseProject(stringify(project))).toThrow(ProjectFormatError);
+  });
+});

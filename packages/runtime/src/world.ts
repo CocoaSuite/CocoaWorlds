@@ -18,6 +18,8 @@ import {
   type RigidBodyData,
   type SceneFile,
   type TriggerData,
+  gameRules,
+  type GameRules,
 } from '@cocoaworlds/core';
 import { EventBus } from './events';
 import { ScriptRunner, compileScript, type ActionName, type Problem, type Program, type Script, type Value } from '@cocoaworlds/scripting';
@@ -90,6 +92,8 @@ interface Body {
 
 /** The player's state for the screen (health bar, score). */
 export interface PlayerStatus {
+  /** The project uses health (otherwise nothing hurts and no health bar shows). */
+  showHealth: boolean;
   health: number;
   maxHealth: number;
   score: number;
@@ -141,12 +145,16 @@ export class GameWorld {
   private hurtAt = -Infinity;
   private deaths = 0;
 
+  /** Which built-in game systems are on (from the project settings). */
+  readonly rules: GameRules;
+
   /** Build a world from a scene snapshot. Call `initPhysics()` first. */
-  static create(scene: SceneFile): GameWorld {
-    return new GameWorld(scene);
+  static create(scene: SceneFile, options: { rules?: Partial<GameRules> } = {}): GameWorld {
+    return new GameWorld(scene, gameRules({ game: options.rules }));
   }
 
-  private constructor(scene: SceneFile) {
+  private constructor(scene: SceneFile, rules: GameRules) {
+    this.rules = rules;
     const doc = new SceneDoc(structuredClone(scene));
     this.world = new RAPIER.World({ x: 0, y: -(doc.settings.gravity ?? 800), z: 0 });
     this.world.lengthUnit = UNITS_PER_METRE;
@@ -169,7 +177,7 @@ export class GameWorld {
     for (const e of doc.entities) {
       const script = e.components.script as unknown as Script | undefined;
       if (!script?.handlers || !shown(e)) continue;
-      const r = compileScript(e.id, script, { objects });
+      const r = compileScript(e.id, script, { objects, rules });
       programs.push(r.program);
       scripts.push([e.id, script]);
       this.scriptProblems.push(...r.problems);
@@ -237,7 +245,7 @@ export class GameWorld {
       },
       read: (name) => (name === 'health' ? this.health : this.score),
     });
-    this.usesScore = scripts.some(([, s]) => /"kind":"(score|addScore)"/.test(JSON.stringify(s.handlers)));
+    this.usesScore = rules.score && scripts.some(([, s]) => /"kind":"(score|addScore)"/.test(JSON.stringify(s.handlers)));
   }
 
   /** An object moved by scripts: a kinematic body at its place, carrying the hulls of every brush inside it. */
@@ -374,7 +382,10 @@ export class GameWorld {
           this.player.landingSpeed = 0;
           if (damage > 0) this.hurt(damage, 'a fall');
         }
-        if (this.player.feetPosition.y < this.killY) this.die('falling out of the world');
+        if (this.player.feetPosition.y < this.killY) {
+          if (this.rules.health) this.die('falling out of the world');
+          else this.player.respawn();
+        }
         if (this.useQueued) this.doUse();
       }
       this.useQueued = false;
@@ -423,7 +434,7 @@ export class GameWorld {
 
   /** Take health from the player (a negative amount heals). At 0 the player dies. */
   hurt(amount: number, cause = 'something'): void {
-    if (!this.player || !Number.isFinite(amount)) return;
+    if (!this.player || !this.rules.health || !Number.isFinite(amount)) return;
     if (amount < 0) return this.heal(-amount);
     if (amount === 0) return;
     this.health = Math.max(0, this.health - amount);
@@ -434,13 +445,13 @@ export class GameWorld {
 
   /** Give health back, up to the maximum. */
   heal(amount: number): void {
-    if (!this.player || !Number.isFinite(amount)) return;
+    if (!this.player || !this.rules.health || !Number.isFinite(amount)) return;
     if (amount < 0) return this.hurt(-amount);
     this.health = Math.min(PLAYER.maxHealth, this.health + amount);
   }
 
   addScore(by: number): void {
-    if (!Number.isFinite(by) || by === 0) return;
+    if (!this.rules.score || !Number.isFinite(by) || by === 0) return;
     this.score += by;
     this.usesScore = true;
     this.bus.emit({ type: 'score', score: this.score, by, time: this.time });
@@ -458,7 +469,7 @@ export class GameWorld {
 
   playerStatus(): PlayerStatus | null {
     if (!this.player) return null;
-    return { health: this.health, maxHealth: PLAYER.maxHealth, score: this.score, showScore: this.usesScore, sinceHurt: this.time - this.hurtAt, deaths: this.deaths };
+    return { showHealth: this.rules.health, health: this.health, maxHealth: PLAYER.maxHealth, score: this.score, showScore: this.usesScore, sinceHurt: this.time - this.hurtAt, deaths: this.deaths };
   }
 
   // ── What scripts can do ──

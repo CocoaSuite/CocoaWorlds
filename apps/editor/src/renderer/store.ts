@@ -41,6 +41,8 @@ import {
   type ProjectFile,
   type SceneFile,
   type Transform,
+  gameRules,
+  type GameRules,
 } from '@cocoaworlds/core';
 import {
   bakeSubtract,
@@ -127,7 +129,7 @@ interface State {
   /** Whether something has been copied (for menu state). */
   canPaste: boolean;
   /** Play mode: a snapshot of the scene being played (the editor's scene is untouched). */
-  playing: { scene: SceneFile; startedAt: number } | null;
+  playing: { scene: SceneFile; startedAt: number; rules: GameRules } | null;
   /** The project's prefabs by id, with their file paths. */
   prefabs: Map<string, PrefabEntry>;
   /** Where "place" puts new things: the point the view is looking at (set by the viewport). */
@@ -209,6 +211,8 @@ interface Actions {
   // play mode
   play(): void;
   stopPlaying(): void;
+  /** Switch a built-in game system on or off for the whole project (saved to the project file at once). */
+  setGameRule(rule: keyof GameRules, on: boolean): Promise<void>;
   setBottomTab(tab: State['bottomTab']): void;
   /** Change an object's script (the whole `script` component) as one undo step, merging with `mergeKey`. */
   updateScript(id: string, fn: (s: Script) => Script, label: string, mergeKey?: string): void;
@@ -1019,13 +1023,26 @@ export const useEditor = create<State & Actions>()((set, get) => ({
     const { doc, playing } = get();
     if (!doc || playing) return;
     get().history.commit();
-    set({ playing: { scene: doc.toFile(), startedAt: Date.now() }, tool: 'select' });
+    set({ playing: { scene: doc.toFile(), startedAt: Date.now(), rules: gameRules(get().session?.project.settings) }, tool: 'select' });
   },
 
   stopPlaying() {
     if (!get().playing) return;
     set({ playing: null, activeBlocks: new Map() });
     get().log('info', 'Play', 'Stopped. The scene is as it was before Play.');
+  },
+
+  async setGameRule(rule, on) {
+    const session = get().session;
+    if (!session) return;
+    const settings = { ...session.project.settings, game: { ...gameRules(session.project.settings), [rule]: on } };
+    const r = await window.cocoa.projects.saveSettings(session.dir, settings);
+    if (!r.ok) {
+      get().log('error', 'Project', r.error);
+      return;
+    }
+    set({ session: { ...get().session!, project: r.value }, rev: get().rev + 1 });
+    get().log('info', 'Project', `${rule === 'health' ? 'Health' : 'Score'} is now ${on ? 'on' : 'off'} for this project.`);
   },
 
   openDialog(dialog) {

@@ -21,6 +21,7 @@ import type { PlayFrame, PlayInfo, PlaySession } from './play-session';
 
 /** What the in-game display shows. */
 export interface Hud {
+  showHealth: boolean;
   health: number;
   maxHealth: number;
   score: number;
@@ -28,7 +29,7 @@ export interface Hud {
   /** Just hurt: flash red. */
   hurt: boolean;
 }
-import type { SceneFile } from '@cocoaworlds/core';
+import type { GameRules, SceneFile } from '@cocoaworlds/core';
 
 export interface ViewportCallbacks {
   select(ids: string[], mode: 'replace' | 'toggle'): void;
@@ -378,12 +379,12 @@ export class ViewportEngine {
   }
 
   /** Build a game world from a scene snapshot and show it instead of the editor's scene. */
-  async startPlay(scene: SceneFile): Promise<PlayInfo> {
+  async startPlay(scene: SceneFile, rules?: GameRules): Promise<PlayInfo> {
     this.stopPlay();
     const token = ++this.playToken;
     // Physics (and its WebAssembly) loads on first Play, so opening the editor stays quick.
     const { PlaySession } = await import('./play-session');
-    const session = await PlaySession.start(scene, (name) => this.world.material(name));
+    const session = await PlaySession.start(scene, (name) => this.world.material(name), rules);
     if (token !== this.playToken || this.disposed) {
       // Stopped while loading.
       session.dispose();
@@ -1052,7 +1053,7 @@ export class ViewportEngine {
       if (frame.events.length || frame.logs.length || frame.errors.length || frame.uses.length || frame.notes.length) this.cb.playFrame(frame, this.play.info.names);
       const status = this.play.status();
       if (status) {
-        const hud: Hud = { health: Math.ceil(status.health), maxHealth: status.maxHealth, score: status.score, showScore: status.showScore, hurt: status.sinceHurt < 0.35 };
+        const hud: Hud = { showHealth: status.showHealth, health: Math.ceil(status.health), maxHealth: status.maxHealth, score: status.score, showScore: status.showScore, hurt: status.sinceHurt < 0.35 };
         const key = JSON.stringify(hud);
         if (key !== this.hudKey) {
           this.hudKey = key;

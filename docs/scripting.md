@@ -59,7 +59,8 @@ object when it needs one, in one undo step. Change the blocks afterwards like an
 
 The player has 100 health, shown in the bottom-left corner while playing; the screen flashes red when hurt.
 At 0 the player dies, every “When the player dies” stack runs, and they start again at the Player start with
-full health (the score is kept). Falls hurt (Half-Life 2's numbers: safe up to about 170 u, fatal from about
+full health (the score is kept). A project that doesn't want health or a score switches them off under
+**Game rules** in the Inspector (with nothing selected); their blocks then do nothing and are marked with a warning. Falls hurt (Half-Life 2's numbers: safe up to about 170 u, fatal from about
 530 u), and falling out of the world counts as dying.
 
 | Block | What it does |

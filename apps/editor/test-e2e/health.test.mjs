@@ -3,6 +3,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { promises as fs } from 'node:fs';
+import path from 'node:path';
 import { drawBrush, launch, newProject, quit, setDraft, shot, tempDirs, until } from './helpers.mjs';
 
 test('health and score', async () => {
@@ -40,7 +41,7 @@ test('health and score', async () => {
     // 2. Play: full health, score 0; walk into the coin.
     await page.keyboard.press('F5');
     await page.getByTestId('play-banner').waitFor();
-    if (await page.getByTestId('click-to-play').count()) await page.getByTestId('click-to-play').click();
+    if (await page.getByTestId('click-to-play').count()) await page.getByTestId('click-to-play').click({ timeout: 2000 }).catch(() => {});
     await page.getByTestId('hud').waitFor();
     assert.equal(await page.getByTestId('hud-health').textContent(), '100');
     assert.equal(await page.getByTestId('hud-score').textContent(), '0');
@@ -65,6 +66,28 @@ test('health and score', async () => {
     const text = await consoleText();
     assert.ok(text.includes('Score: 1 (+1)'), text);
     assert.ok(text.includes('The player died (a test) and starts again'), text);
+
+    // 4. A project without health: switch it off in the Inspector (nothing selected → scene and game rules).
+    await page.keyboard.press('Escape');
+    const healthSwitch = insp().getByRole('switch', { name: 'Player health' });
+    assert.equal(await healthSwitch.isChecked(), true);
+    await healthSwitch.click({ force: true });
+    await until(() => healthSwitch.isChecked(), false);
+    await new Promise((r) => setTimeout(r, 400));
+    await shot(page, 'h02-rules');
+    const project = JSON.parse(await fs.readFile(path.join(projectsDir, 'coins', 'project.cwproj'), 'utf8'));
+    assert.deepEqual(project.settings.game, { health: false, score: true });
+    await page.getByRole('button', { name: 'Play' }).click();
+    await page.getByTestId('play-banner').waitFor();
+    if (await page.getByTestId('click-to-play').count()) await page.getByTestId('click-to-play').click({ timeout: 2000 }).catch(() => {});
+    await page.getByTestId('hud-score').waitFor();
+    assert.equal(await page.getByTestId('hud-health').count(), 0);
+    await page.evaluate(() => window.__cwViewport.play.hurt(500));
+    await new Promise((r) => setTimeout(r, 300));
+    assert.equal(await page.evaluate(() => window.__cwViewport.play.status().deaths), 0);
+    await page.keyboard.press('Escape');
+    await page.keyboard.press('Escape');
+    await until(() => page.getByTestId('play-banner').count(), 0);
   } catch (e) {
     await shot(page, 'h-failure');
     throw e;

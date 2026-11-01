@@ -9,6 +9,8 @@ import type { Direction, Expr, Handler, Ref, Script, Statement, ValueType } from
 export interface SceneInfo {
   /** Every object id with its name and whether it is a trigger zone. */
   objects: Map<string, { name: string; isZone: boolean }>;
+  /** Which built-in game systems the project uses (missing: all on). */
+  rules?: { health: boolean; score: boolean };
 }
 
 export interface Problem {
@@ -147,7 +149,10 @@ class HandlerCompiler {
     this.stmt = ev.id;
     if (ev.kind === 'start') event = { kind: 'start' };
     else if (ev.kind === 'use') event = { kind: 'use' };
-    else if (ev.kind === 'die') event = { kind: 'die' };
+    else if (ev.kind === 'die') {
+      event = { kind: 'die' };
+      this.ruleOff('health', ev.id);
+    }
     else if (ev.kind === 'enter' || ev.kind === 'leave') {
       const zone = this.resolveRef(ev.zone, ev.id, true);
       if (zone) event = { kind: ev.kind, zone };
@@ -194,6 +199,18 @@ class HandlerCompiler {
       return null;
     }
     return ref.entity;
+  }
+
+  /** A block for a game system the project has switched off still compiles, with a warning. */
+  private ruleOff(rule: 'health' | 'score', block: string): void {
+    if (this.scene.rules && !this.scene.rules[rule])
+      this.problem(
+        block,
+        rule === 'health'
+          ? 'Health is off for this project (Project settings), so this block does nothing.'
+          : 'The score is off for this project (Project settings), so this block does nothing.',
+        'warning',
+      );
   }
 
   private otherAllowed(): boolean {
@@ -333,6 +350,7 @@ class HandlerCompiler {
       case 'heal':
       case 'addScore':
         this.expect(s.amount, 'number', s.kind === 'addScore' ? 'The score changes by a number.' : 'Health changes by a number.');
+        this.ruleOff(s.kind === 'addScore' ? 'score' : 'health', s.id);
         this.emit({ op: 'game', name: s.kind });
         break;
     }
@@ -408,6 +426,7 @@ class HandlerCompiler {
         return 'number';
       case 'health':
       case 'score':
+        this.ruleOff(e.kind, e.id);
         this.emit({ op: 'read', name: e.kind });
         return 'number';
     }

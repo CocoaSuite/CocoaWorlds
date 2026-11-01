@@ -159,7 +159,7 @@ export function Viewport() {
     }
     let cancelled = false;
     const st = useEditor.getState();
-    e.startPlay(playing.scene)
+    e.startPlay(playing.scene, playing.rules)
       .then((info) => {
         if (cancelled) return;
         st.log(
@@ -265,7 +265,7 @@ export function Viewport() {
         </div>
       )}
       {playing && lock === true && <div className="cw-crosshair" aria-hidden="true" />}
-      {playing && hud && <HudView hud={hud} />}
+      {playing && hud && (hud.showHealth || hud.showScore) && <HudView hud={hud} />}
       {playing && lock === false && (
         <button type="button" className="cw-ov cw-click-play" data-testid="click-to-play" onClick={() => engine.current?.capturePlayer()}>
           <strong>{t('play.click')}</strong>
@@ -300,20 +300,22 @@ export function Viewport() {
 
 /** Health (and the score, once a script uses it) in the corner of the game view; red flash when hurt. */
 function HudView({ hud }: { hud: Hud }) {
-  const low = hud.health <= 25;
+  const low = hud.showHealth && hud.health <= 25;
   return (
     <>
-      {hud.hurt && <div className="cw-hurt" aria-hidden="true" />}
+      {hud.hurt && hud.showHealth && <div className="cw-hurt" aria-hidden="true" />}
       <div className="cw-ov cw-hud" data-testid="hud">
-        <div className={`cw-hud-item${low ? ' low' : ''}`} role="meter" aria-label={t('hud.health')} aria-valuemin={0} aria-valuemax={hud.maxHealth} aria-valuenow={hud.health}>
-          <span className="cw-hud-label">{t('hud.health')}</span>
-          <span className="cw-hud-value" data-testid="hud-health">
-            {hud.health}
-          </span>
-          <span className="cw-hud-bar">
-            <span style={{ width: `${(100 * hud.health) / hud.maxHealth}%` }} />
-          </span>
-        </div>
+        {hud.showHealth && (
+          <div className={`cw-hud-item${low ? ' low' : ''}`} role="meter" aria-label={t('hud.health')} aria-valuemin={0} aria-valuemax={hud.maxHealth} aria-valuenow={hud.health}>
+            <span className="cw-hud-label">{t('hud.health')}</span>
+            <span className="cw-hud-value" data-testid="hud-health">
+              {hud.health}
+            </span>
+            <span className="cw-hud-bar">
+              <span style={{ width: `${(100 * hud.health) / hud.maxHealth}%` }} />
+            </span>
+          </div>
+        )}
         {hud.showScore && (
           <div className="cw-hud-item">
             <span className="cw-hud-label">{t('hud.score')}</span>
