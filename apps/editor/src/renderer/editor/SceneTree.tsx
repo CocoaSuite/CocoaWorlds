@@ -3,12 +3,14 @@ import { reparentCmd, type EntityData } from '@cocoaworlds/core';
 import { Button, ContextMenu, Icon, PanelHeader, type IconName, type MenuEntry } from '@cocoaworlds/ui';
 import { useMemo, useState, type DragEvent } from 'react';
 import { t } from '../i18n';
+import { isGroup } from '../scene-ops';
 import { useEditor } from '../store';
 
 export function iconFor(e: EntityData): IconName {
   const brush = e.components.brush as { role?: string } | undefined;
   if (brush) return brush.role === 'subtract' ? 'trigger' : 'block';
-  if (!Object.keys(e.components).length && useEditor.getState().doc?.children(e.id).length) return 'folder';
+  const doc = useEditor.getState().doc;
+  if (doc && isGroup(doc, e)) return 'folder';
   const light = e.components.light as { kind?: string } | undefined;
   if (light?.kind === 'directional') return 'sun';
   if (light?.kind === 'spot') return 'spot';

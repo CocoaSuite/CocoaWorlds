@@ -1,9 +1,10 @@
 /** Inspector for the selection (CocoaCanvas right panel). Scene settings when nothing is selected. */
 import type { EntityData, Transform, Vec3 } from '@cocoaworlds/core';
-import { Field, NumberField, PanelHeader, Section, Switch } from '@cocoaworlds/ui';
+import { Button, Field, NumberField, PanelHeader, Section, Switch } from '@cocoaworlds/ui';
 import { t } from '../i18n';
 import { BrushInspector, MultiBrushActions } from './BrushInspector';
 import { FaceInspector } from './FaceInspector';
+import { isGroup } from '../scene-ops';
 import { useSelectedEntities, useEditor } from '../store';
 
 export function Inspector() {
@@ -17,7 +18,7 @@ export function Inspector() {
       <div className="cw-insp cw-scroll">
         {faceTool && <FaceInspector />}
         {!faceTool && sel.length === 0 && <SceneSettings />}
-        {!faceTool && sel.length === 1 && (sel[0]!.components.brush ? <BrushEntity e={sel[0]!} /> : <EntityInspector e={sel[0]!} />)}
+        {!faceTool && sel.length === 1 && (sel[0]!.components.brush ? <BrushEntity e={sel[0]!} /> : isGroupEntity(sel[0]!) ? <GroupEntity e={sel[0]!} /> : <EntityInspector e={sel[0]!} />)}
         {!faceTool && sel.length > 1 && (
           <>
             <p className="cw-empty">
@@ -62,12 +63,61 @@ function BrushEntity({ e }: { e: EntityData }) {
   );
 }
 
+const isGroupEntity = (e: EntityData) => {
+  const doc = useEditor.getState().doc;
+  return !!doc && isGroup(doc, e);
+};
+
+/** Groups: name, what's inside, step in / ungroup, and visibility and lock for everything inside. */
+function GroupEntity({ e }: { e: EntityData }) {
+  const s = useEditor.getState();
+  const doc = useEditor((x) => x.doc)!;
+  const count = doc.subtree(e.id).length - 1;
+  return (
+    <>
+      <input
+        className="cw-input"
+        aria-label={t('insp.name')}
+        key={`${e.id}-${e.name}`}
+        defaultValue={e.name}
+        onKeyDown={(ev) => {
+          ev.stopPropagation();
+          if (ev.key === 'Enter') ev.currentTarget.blur();
+        }}
+        onBlur={(ev) => s.rename(e.id, ev.currentTarget.value)}
+      />
+      <Section title={t('insp.group')}>
+        <div className="cw-f">
+          <span>{t('insp.contains')}</span>
+          <span data-testid="group-count">{count}</span>
+        </div>
+        <p className="cw-hint">{t('insp.groupHint')}</p>
+        <div className="cw-row">
+          <Button onClick={s.enterGroup}>{t('insp.selectInside')}</Button>
+          <Button onClick={s.ungroupSelection}>{t('edit.ungroup')}</Button>
+        </div>
+      </Section>
+      <Section title={t('insp.display')}>
+        <div className="cw-flagrow">
+          <span>{t('insp.visible')}</span>
+          <Switch label={t('insp.visible')} checked={e.visible} onChange={(v) => s.setFlag(e.id, 'visible', v)} />
+        </div>
+        <div className="cw-flagrow">
+          <span>{t('insp.locked')}</span>
+          <Switch label={t('insp.locked')} checked={e.locked} onChange={(v) => s.setFlag(e.id, 'locked', v)} />
+        </div>
+      </Section>
+    </>
+  );
+}
+
 function componentLabel(e: EntityData): string {
   const brush = e.components.brush as { role?: string } | undefined;
   if (brush) return brush.role === 'subtract' ? t('brush.subtract') : t('insp.brush');
   const light = e.components.light as { kind?: string } | undefined;
   if (light) return `${light.kind ?? ''} light`;
   if (e.components.playerSpawn) return 'Player spawn';
+  if (isGroupEntity(e)) return t('insp.group');
   return 'Object';
 }
 

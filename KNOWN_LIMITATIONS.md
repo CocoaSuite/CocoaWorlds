@@ -3,11 +3,11 @@
 ## Current build
 
 - **Only tested on Linux.** The editor is built on cross-platform pieces (Electron, Three.js) but has not yet been run on Windows or macOS. Packaged installers come in Phase 9.
-- **Parenting is hierarchy-only.** Moving a parent does not move its children in the viewport yet; nested transforms arrive with the runtime scene graph in Phase 4.
-- **Gizmo works on one object at a time.** Multi-object transforms are planned.
+- **No nested transforms yet.** Selecting a parent or group and using the gizmo moves everything inside it, but children's positions are stored in world space and a group has no transform of its own. Nested transforms arrive with the runtime scene graph in Phase 4.
 - **No box selection** in the viewport yet.
 - **Lights are markers only.** They don't light the scene until materials and lighting land (Phase 7).
 - **One scene per project in the UI.** The format supports a scene list; scene management UI comes later.
+- **The clipboard is inside the editor.** Copy/paste works across projects within one session, but not with other apps or after a restart.
 - **Some tools are visible but disabled** (vertex, clip, triggers, Play, Build), each labelled with when it arrives.
 - **Materials are built-in development colours** until material assets and textures arrive in Phase 7.
 - **Surfaces made by a live cut** (the inside of a doorway) follow the wall around them and can't be selected until the cut is applied.

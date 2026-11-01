@@ -3,10 +3,11 @@
  * and the brush tool. Renders on demand (only after something changes) so an idle editor costs no GPU time.
  */
 import type { EntityData, SceneDoc, Transform, Vec3 } from '@cocoaworlds/core';
-import { bounds, center, composeM4, faceAt, transform as transformBrush, translate, type Brush, type V3 } from '@cocoaworlds/geometry';
+import { bounds, faceAt, transform as transformBrush, translate, vertices, type Brush, type V3 } from '@cocoaworlds/geometry';
 import * as THREE from 'three';
 import { TransformControls } from 'three/addons/controls/TransformControls.js';
-import { brushOf, worldBrushes, type ShapeOptions } from '../brush/brushes';
+import { brushOf, isLocked, isShown, worldBrushes, type ShapeOptions } from '../brush/brushes';
+import { isGroup } from '../scene-ops';
 import { BrushDraft, draftAxes, type DraftState } from './brush-draft';
 import { CameraRig, type ViewKind } from './camera';
 import { EditorGrid } from './grid';
@@ -15,9 +16,11 @@ import { WorldRenderer, type FaceRef } from './world-render';
 
 export interface ViewportCallbacks {
   select(ids: string[], mode: 'replace' | 'toggle'): void;
+  /** A click in the view: the store resolves groups (`deep` = double-click, pick the object itself). */
+  clickSelect(id: string | null, additive: boolean, deep: boolean): void;
   beginEdit(label: string): void;
-  liveTransform(id: string, t: Transform): void;
-  liveBrush(id: string, brush: Brush): void;
+  /** Live result of a gizmo drag for every moving object. */
+  liveMany(changes: LiveChange[]): void;
   endEdit(): void;
   contextMenu(clientX: number, clientY: number, ground: Vec3 | null): void;
   stats(s: ViewportStats): void;
@@ -28,6 +31,24 @@ export interface ViewportCallbacks {
   /** Face tool click: `null` clicks empty space; `cut` is a surface made by a live cut (not editable). */
   selectFace(ref: FaceRef | null, mode: 'replace' | 'toggle' | 'brush', cut?: boolean): void;
 }
+
+export interface LiveChange {
+  id: string;
+  brush?: Brush;
+  transform?: Transform;
+}
+
+/** What a gizmo drag moves: every selected object and its descendants, as they were when the drag began. */
+interface DragSet {
+  pivot: V3;
+  items: { id: string; brush?: Brush; transform?: Transform }[];
+  /** Vertex snapping: the moving point nearest the cursor when the drag began. */
+  grab: V3 | null;
+  /** Screen positions of points that don't move (snap targets). */
+  targets: { p: V3; x: number; y: number }[];
+}
+
+const SNAP_PX = 12;
 
 export interface ViewportStats {
   frameMs: number;
@@ -49,9 +70,12 @@ export class ViewportEngine {
   private world = new WorldRenderer();
   private markers = new Map<string, { m: Marker; key: string }>();
   private gizmo: TransformControls;
-  /** Stand-in object the gizmo drags when a brush is selected (brush geometry lives in world space). */
-  private brushProxy = new THREE.Object3D();
-  private brushDrag: { id: string; original: Brush; pivot: V3 } | null = null;
+  /** Stand-in object the gizmo drags; the selection follows it (brush geometry lives in world space). */
+  private proxy = new THREE.Object3D();
+  private dragSet: DragSet | null = null;
+  private vertexSnap = true;
+  private lastPointer = { x: 0, y: 0 };
+  private snapMarker: THREE.Points;
   private axisScene = new THREE.Scene();
   private axisCam = new THREE.OrthographicCamera(-1.4, 1.4, 1.4, -1.4, -10, 10);
   private raycaster = new THREE.Raycaster();
@@ -90,7 +114,16 @@ export class ViewportEngine {
     this.renderer.domElement.setAttribute('aria-label', '3D viewport');
     host.prepend(this.renderer.domElement);
 
-    this.scene.add(this.grid.object, this.world.group, this.brushProxy);
+    this.scene.add(this.grid.object, this.world.group, this.proxy);
+    {
+      const g = new THREE.BufferGeometry();
+      g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(3), 3));
+      this.snapMarker = new THREE.Points(g, new THREE.PointsMaterial({ color: 0xff5b8a, size: 11, sizeAttenuation: false, depthTest: false, transparent: true }));
+      this.snapMarker.renderOrder = 20;
+      this.snapMarker.visible = false;
+      this.snapMarker.frustumCulled = false;
+      this.scene.add(this.snapMarker);
+    }
     // Editor preview lighting (scene lights take over when lighting lands in Phase 7).
     this.scene.add(new THREE.HemisphereLight(0xe8eef5, 0x3a3530, 1.4));
     const key = new THREE.DirectionalLight(0xfff6ea, 1.6);
@@ -109,29 +142,15 @@ export class ViewportEngine {
       const dragging = (e as unknown as { value: boolean }).value;
       if (dragging) {
         this.cb.beginEdit(this.gizmoMode === 'rotate' ? 'Rotate' : this.gizmoMode === 'scale' ? 'Scale' : 'Move');
-        if (this.gizmo.object === this.brushProxy) {
-          const id = this.selection[0]!;
-          const b = brushOf(this.doc?.get(id));
-          if (b) this.brushDrag = { id, original: b.brush, pivot: [this.brushProxy.position.x, this.brushProxy.position.y, this.brushProxy.position.z] };
-        }
+        this.dragSet = this.buildDragSet();
       } else {
-        this.brushDrag = null;
+        this.dragSet = null;
+        this.snapMarker.visible = false;
         this.cb.endEdit();
-        this.placeBrushProxy();
+        this.placeProxy();
       }
     });
-    this.gizmo.addEventListener('objectChange', () => {
-      const o = this.gizmo.object;
-      if (!o) return;
-      if (o === this.brushProxy) return this.onBrushGizmo();
-      const id = o.userData.entityId as string | undefined;
-      if (!id) return;
-      this.cb.liveTransform(id, {
-        position: [r3(o.position.x), r3(o.position.y), r3(o.position.z)],
-        rotation: [r3(o.rotation.x / DEG), r3(o.rotation.y / DEG), r3(o.rotation.z / DEG)],
-        scale: [r3(o.scale.x), r3(o.scale.y), r3(o.scale.z)],
-      });
-    });
+    this.gizmo.addEventListener('objectChange', () => this.onProxyGizmo());
 
     this.buildAxisGizmo();
     this.bindInput();
@@ -155,7 +174,7 @@ export class ViewportEngine {
     const seen = new Set<string>();
     if (doc) {
       for (const e of doc.entities) {
-        if (e.components.brush) continue;
+        if (e.components.brush || isGroup(doc, e)) continue;
         seen.add(e.id);
         this.syncEntity(e);
       }
@@ -243,14 +262,20 @@ export class ViewportEngine {
     this.draft.dispose();
     this.draft = null;
     this.drag = null;
+    this.showSnap(null);
     this.cb.draft(null);
     this.invalidate();
+  }
+
+  setVertexSnap(enabled: boolean): void {
+    this.vertexSnap = enabled;
   }
 
   setSnap(enabled: boolean, gridSize: number): void {
     this.snap = enabled;
     this.gridSize = gridSize;
-    this.gizmo.setTranslationSnap(enabled ? gridSize : null);
+    // Translation snapping is done relative to the drag start in onProxyGizmo.
+    this.gizmo.setTranslationSnap(null);
     this.gizmo.setRotationSnap(enabled ? 15 * DEG : null);
     this.gizmo.setScaleSnap(enabled ? 0.25 : null);
     this.grid.update(gridSize, this.rig.unitsPerPixel);
@@ -277,7 +302,7 @@ export class ViewportEngine {
       const bb = bounds(this.world.brush(id)?.brush ?? { faces: [] });
       if (bb) box.expandByPoint(new THREE.Vector3(...bb.min)).expandByPoint(new THREE.Vector3(...bb.max));
     };
-    for (const id of this.selection) {
+    for (const id of this.expandedSelection()) {
       const rec = this.markers.get(id);
       if (rec) box.expandByObject(rec.m.group);
       else addBrush(id);
@@ -337,23 +362,19 @@ export class ViewportEngine {
       g.rotation.set(t.rotation[0] * DEG, t.rotation[1] * DEG, t.rotation[2] * DEG, 'YXZ');
       g.scale.set(...t.scale);
     }
-    g.visible = e.visible;
-    g.userData.locked = e.locked;
+    g.visible = isShown(this.doc!, e);
+    g.userData.locked = isLocked(this.doc!, e);
   }
 
   private applySelection(): void {
-    for (const [id, { m }] of this.markers) setMarkerSelected(m, this.selection.includes(id));
-    this.world.setSelection(this.selection);
-    const id = this.selection.length === 1 ? this.selection[0]! : null;
-    const ent = id ? this.doc?.get(id) : undefined;
+    const expanded = this.expandedSelection();
+    const sel = new Set(expanded);
+    for (const [id, { m }] of this.markers) setMarkerSelected(m, sel.has(id));
+    this.world.setSelection(expanded);
     let target: THREE.Object3D | null = null;
-    if (ent && ent.visible && !ent.locked && this.gizmoMode !== 'none' && !this.brushTool && !this.faceTool) {
-      if (ent.components.brush) {
-        if (!this.brushDrag) this.placeBrushProxy();
-        target = this.brushProxy;
-      } else {
-        target = this.markers.get(ent.id)?.m.group ?? null;
-      }
+    if (this.movable().length && this.gizmoMode !== 'none' && !this.brushTool && !this.faceTool) {
+      if (!this.dragSet) this.placeProxy();
+      target = this.proxy;
     }
     if (target) {
       if (this.gizmo.object !== target) this.gizmo.attach(target);
@@ -364,33 +385,174 @@ export class ViewportEngine {
   }
 
   /** Put the gizmo stand-in at the centre of the selected brush, unrotated and unscaled. */
-  private placeBrushProxy(): void {
-    const id = this.selection.length === 1 ? this.selection[0]! : null;
-    const b = id ? brushOf(this.doc?.get(id)) : null;
-    if (!b) return;
-    const c = center(b.brush);
-    this.brushProxy.position.set(...c);
-    this.brushProxy.rotation.set(0, 0, 0);
-    this.brushProxy.scale.set(1, 1, 1);
-    this.brushProxy.updateMatrixWorld();
+  /** Selected ids plus all their descendants (selecting a group selects what's inside it). */
+  private expandedSelection(): string[] {
+    const doc = this.doc;
+    if (!doc) return [];
+    const out = new Set<string>();
+    for (const id of this.selection) for (const e of doc.subtree(id)) out.add(e.id);
+    return [...out];
   }
 
-  /** Turn the stand-in's movement into a new brush, always computed from the brush as it was when the drag began. */
-  private onBrushGizmo(): void {
-    const d = this.brushDrag;
-    if (!d) return;
-    const p = this.brushProxy;
-    const delta: V3 = [p.position.x - d.pivot[0], p.position.y - d.pivot[1], p.position.z - d.pivot[2]];
-    let next: Brush;
-    if (this.gizmoMode === 'translate') {
-      next = translate(d.original, delta);
-    } else {
-      const rot: V3 = [p.rotation.x / DEG, p.rotation.y / DEG, p.rotation.z / DEG];
-      const s: V3 = [Math.max(0.01, Math.abs(p.scale.x)), Math.max(0.01, Math.abs(p.scale.y)), Math.max(0.01, Math.abs(p.scale.z))];
-      next = transformBrush(d.original, composeM4(delta, rot, s, d.pivot));
-    }
-    this.cb.liveBrush(d.id, next);
+  /** The objects a gizmo drag would move: visible, unlocked, and actually something in space. */
+  private movable(): EntityData[] {
+    const doc = this.doc;
+    if (!doc) return [];
+    return this.expandedSelection()
+      .map((id) => doc.get(id))
+      .filter((e): e is EntityData => !!e && isShown(this.doc!, e) && !isLocked(this.doc!, e) && (!!e.components.brush || this.markers.has(e.id)));
   }
+
+  private selectionBox(items: EntityData[]): THREE.Box3 {
+    const box = new THREE.Box3();
+    for (const e of items) {
+      const b = brushOf(e);
+      if (b) {
+        const bb = bounds(b.brush);
+        if (bb) box.expandByPoint(new THREE.Vector3(...bb.min)).expandByPoint(new THREE.Vector3(...bb.max));
+      } else {
+        box.expandByPoint(new THREE.Vector3(...e.transform.position));
+      }
+    }
+    return box;
+  }
+
+  private placeProxy(): void {
+    const items = this.movable();
+    if (!items.length) return;
+    const one = items.length === 1 && !items[0]!.components.brush ? items[0]! : null;
+    const c = one ? new THREE.Vector3(...one.transform.position) : this.selectionBox(items).getCenter(new THREE.Vector3());
+    this.proxy.position.copy(c);
+    this.proxy.rotation.set(0, 0, 0);
+    this.proxy.scale.set(1, 1, 1);
+    this.proxy.updateMatrixWorld();
+  }
+
+  private buildDragSet(): DragSet | null {
+    const items = this.movable();
+    if (!items.length) return null;
+    const pivot: V3 = [this.proxy.position.x, this.proxy.position.y, this.proxy.position.z];
+    const moving = new Set(items.map((e) => e.id));
+    const set: DragSet = {
+      pivot,
+      items: items.map((e) => {
+        const b = brushOf(e);
+        return b ? { id: e.id, brush: b.brush } : { id: e.id, transform: structuredClone(e.transform) };
+      }),
+      grab: null,
+      targets: [],
+    };
+    if (this.vertexSnap && this.gizmoMode === 'translate') {
+      // The grab point: the moving point nearest the cursor. Targets: every point that stays put.
+      let best = Infinity;
+      for (const p of this.pointsOf(items)) {
+        const sp = this.toScreen(p);
+        const d = Math.hypot(sp.x - this.lastPointer.x, sp.y - this.lastPointer.y);
+        if (d < best) {
+          best = d;
+          set.grab = p;
+        }
+      }
+      const others = (this.doc?.entities ?? []).filter((e) => isShown(this.doc!, e) && !moving.has(e.id));
+      for (const p of this.pointsOf(others)) {
+        const sp = this.toScreen(p);
+        if (sp.z < 1) set.targets.push({ p, x: sp.x, y: sp.y });
+      }
+    }
+    return set;
+  }
+
+  /** Brush corners and point-entity positions. */
+  private pointsOf(items: EntityData[]): V3[] {
+    const out: V3[] = [];
+    for (const e of items) {
+      const b = brushOf(e);
+      if (b) out.push(...vertices(b.brush));
+      else if (this.markers.has(e.id)) out.push([...e.transform.position] as V3);
+    }
+    return out;
+  }
+
+  /** Client-space pixel position (z > 1 = behind the camera or beyond the far plane). */
+  private toScreen(p: V3): { x: number; y: number; z: number } {
+    const v = new THREE.Vector3(...p).project(this.rig.camera);
+    const r = this.renderer.domElement.getBoundingClientRect();
+    return { x: r.left + ((v.x + 1) / 2) * r.width, y: r.top + ((1 - v.y) / 2) * r.height, z: v.z };
+  }
+
+  /** The nearest snap target to a client point within SNAP_PX, if any. */
+  private nearestTarget(targets: { p: V3; x: number; y: number }[], x: number, y: number): V3 | null {
+    let best: V3 | null = null;
+    let bestD = SNAP_PX;
+    for (const t of targets) {
+      const d = Math.hypot(t.x - x, t.y - y);
+      if (d < bestD) {
+        bestD = d;
+        best = t.p;
+      }
+    }
+    return best;
+  }
+
+  private showSnap(p: V3 | null): void {
+    this.snapMarker.visible = !!p;
+    if (p) {
+      (this.snapMarker.geometry.getAttribute('position') as THREE.BufferAttribute).set(p).needsUpdate = true;
+    }
+  }
+
+  private onProxyGizmo(): void {
+    const d = this.dragSet;
+    if (!d) return;
+    const p = this.proxy;
+    const changes: LiveChange[] = [];
+    if (this.gizmoMode === 'translate') {
+      let delta: V3 = [p.position.x - d.pivot[0], p.position.y - d.pivot[1], p.position.z - d.pivot[2]];
+      // Grid snapping is relative to where the drag began, so off-grid objects keep their offset.
+      const axes = (this.gizmo as unknown as { axis: string | null }).axis ?? 'XYZ';
+      const free = [axes.includes('X'), axes.includes('Y'), axes.includes('Z')];
+      if (this.snap) delta = delta.map((v, i) => (free[i] ? Math.round(v / this.gridSize) * this.gridSize : 0)) as V3;
+      let snapped: V3 | null = null;
+      if (d.grab) {
+        const target = this.nearestTarget(d.targets, this.lastPointer.x, this.lastPointer.y);
+        if (target) {
+          delta = delta.map((v, i) => (free[i] ? target[i]! - d.grab![i]! : v)) as V3;
+          snapped = target;
+        }
+      }
+      this.showSnap(snapped);
+      p.position.set(d.pivot[0] + delta[0], d.pivot[1] + delta[1], d.pivot[2] + delta[2]);
+      for (const it of d.items) {
+        if (it.brush) changes.push({ id: it.id, brush: translate(it.brush, delta) });
+        else if (it.transform) changes.push({ id: it.id, transform: { ...it.transform, position: it.transform.position.map((v, i) => r3(v + delta[i]!)) as Vec3 } });
+      }
+    } else {
+      p.updateMatrixWorld();
+      const m = new THREE.Matrix4().copy(p.matrixWorld).multiply(new THREE.Matrix4().makeTranslation(-d.pivot[0], -d.pivot[1], -d.pivot[2]));
+      const s: V3 = [Math.max(0.01, Math.abs(p.scale.x)), Math.max(0.01, Math.abs(p.scale.y)), Math.max(0.01, Math.abs(p.scale.z))];
+      const q = p.quaternion.clone();
+      for (const it of d.items) {
+        if (it.brush) {
+          changes.push({ id: it.id, brush: transformBrush(it.brush, m.elements as unknown as number[]) });
+        } else if (it.transform) {
+          const t = it.transform;
+          const pos = new THREE.Vector3(...t.position).applyMatrix4(m);
+          const e = new THREE.Euler(t.rotation[0] * DEG, t.rotation[1] * DEG, t.rotation[2] * DEG, 'YXZ');
+          const rot = new THREE.Euler().setFromQuaternion(q.clone().multiply(new THREE.Quaternion().setFromEuler(e)), 'YXZ');
+          changes.push({
+            id: it.id,
+            transform: {
+              position: [r3(pos.x), r3(pos.y), r3(pos.z)],
+              rotation: [r3(rot.x / DEG), r3(rot.y / DEG), r3(rot.z / DEG)],
+              scale: [r3(t.scale[0] * s[0]), r3(t.scale[1] * s[1]), r3(t.scale[2] * s[2])],
+            },
+          });
+        }
+      }
+    }
+    this.cb.liveMany(changes);
+  }
+
 
   // ── rendering ──
 
@@ -507,12 +669,26 @@ export class ViewportEngine {
     if (!p) return null;
     const out: V3 = [this.snapV(p.x), this.snapV(p.y), this.snapV(p.z)];
     out[ax] = base;
+    // Snap the in-plane coordinates to a brush corner near the cursor.
+    let snapped: V3 | null = null;
+    if (this.vertexSnap && this.doc) {
+      const targets: { p: V3; x: number; y: number }[] = [];
+      for (const v of this.pointsOf(this.doc.entities.filter((x) => x.components.brush && isShown(this.doc!, x)))) {
+        const sp = this.toScreen(v);
+        if (sp.z < 1) targets.push({ p: v, x: sp.x, y: sp.y });
+      }
+      snapped = this.nearestTarget(targets, e.clientX, e.clientY);
+      if (snapped) for (let i = 0; i < 3; i++) if (i !== ax) out[i] = snapped[i]!;
+    }
+    this.showSnap(snapped ? out : null);
     return out;
   }
 
   /** Ground point for "add here" menus. */
   private groundPoint(e: { clientX: number; clientY: number }): Vec3 | null {
-    return this.drawPoint(e);
+    const p = this.drawPoint(e);
+    this.showSnap(null);
+    return p;
   }
 
   private pick(e: { clientX: number; clientY: number }): string | null {
@@ -521,7 +697,7 @@ export class ViewportEngine {
     for (const { m } of this.markers.values()) if (m.group.visible && !m.group.userData.locked) targets.push(m.pick);
     const markerHit = this.raycaster.intersectObjects(targets, false)[0];
     const worldHit = this.world.pick(this.raycaster);
-    const locked = (id: string) => !!this.doc?.get(id)?.locked;
+    const locked = (id: string) => !!this.doc && isLocked(this.doc, this.doc.get(id));
     const w = worldHit && !locked(worldHit.entityId) ? worldHit : null;
     if (markerHit && (!w || markerHit.distance <= w.distance)) return (markerHit.object.userData.entityId as string) ?? null;
     return w?.entityId ?? null;
@@ -532,7 +708,7 @@ export class ViewportEngine {
     this.raycaster.setFromCamera(this.ndc(e), this.rig.camera);
     // Subtract volumes never appear in the level, so the face tools click straight through them.
     const hit = this.world.pick(this.raycaster, true);
-    if (!hit || this.doc?.get(hit.entityId)?.locked) return null;
+    if (!hit || !this.doc || isLocked(this.doc, this.doc.get(hit.entityId))) return null;
     const wb = this.world.brush(hit.entityId);
     if (!wb) return null;
     const face = faceAt(wb.brush, [hit.point.x, hit.point.y, hit.point.z], [hit.normal.x, hit.normal.y, hit.normal.z], 0.05);
@@ -572,6 +748,16 @@ export class ViewportEngine {
   };
 
   private heightAnchor: { y: number; h: number } | null = null;
+
+  private onDoubleClick = (e: MouseEvent): void => {
+    if (this.brushTool || this.faceTool || e.button !== 0) return;
+    const id = this.pick(e);
+    if (id) this.cb.clickSelect(id, false, true);
+  };
+
+  private trackPointer = (e: PointerEvent): void => {
+    this.lastPointer = { x: e.clientX, y: e.clientY };
+  };
 
   private onPointerMove = (e: PointerEvent): void => {
     // Height stage follows the mouse without a button held (perspective only; ortho views type the depth).
@@ -634,6 +820,7 @@ export class ViewportEngine {
       if (!dr || !dr.hasArea) return this.cancelDraft();
       dr.stage = 'height';
       this.heightAnchor = null;
+      this.showSnap(null);
       dr.update(this.shapeOpts, this.brushRole);
       this.cb.draft(dr.state());
       this.invalidate();
@@ -646,8 +833,7 @@ export class ViewportEngine {
       this.cb.selectFace(hit?.ref ?? null, mode, hit?.cut);
     } else if (d.mode === 'click') {
       const id = this.pick(e);
-      const additive = e.ctrlKey || e.metaKey || e.shiftKey;
-      this.cb.select(id ? [id] : [], additive ? 'toggle' : 'replace');
+      this.cb.clickSelect(id, e.ctrlKey || e.metaKey || e.shiftKey, false);
     } else if (d.button === 2) {
       if (this.draft) return this.cancelDraft();
       const id = this.pick(e);
@@ -706,6 +892,9 @@ export class ViewportEngine {
 
   private bindInput(): void {
     const el = this.renderer.domElement;
+    el.addEventListener('pointermove', this.trackPointer, true);
+    el.addEventListener('pointerdown', this.trackPointer, true);
+    el.addEventListener('dblclick', this.onDoubleClick);
     el.addEventListener('pointerdown', this.onPointerDown);
     el.addEventListener('pointermove', this.onPointerMove);
     el.addEventListener('pointerup', this.onPointerUp);
@@ -718,6 +907,9 @@ export class ViewportEngine {
 
   private unbindInput(): void {
     const el = this.renderer.domElement;
+    el.removeEventListener('pointermove', this.trackPointer, true);
+    el.removeEventListener('pointerdown', this.trackPointer, true);
+    el.removeEventListener('dblclick', this.onDoubleClick);
     el.removeEventListener('pointerdown', this.onPointerDown);
     el.removeEventListener('pointermove', this.onPointerMove);
     el.removeEventListener('pointerup', this.onPointerUp);

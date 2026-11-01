@@ -35,7 +35,8 @@ Order may shift where dependencies require it (for example, the project format f
 - [x] Hierarchy: rename, hide, lock, reparent, duplicate, delete, context menus
 - [x] Unit/integration tests (28) and an end-to-end test that drives the real app
 - [ ] Nested transforms (children follow parents) — moved to Phase 4 with the runtime scene graph
-- [ ] Multi-object transforms and box selection
+- [x] Multi-object transforms, groups, copy/cut/paste, snap to corners
+- [ ] Box selection
 - [ ] Run and check on Windows and macOS
 
 ## Phase 3 checklist
@@ -56,4 +57,4 @@ Order may shift where dependencies require it (for example, the project format f
 
 ## Next
 
-Rest of Phase 3: vertex/edge editing, the clip tool, polygon prisms, then the spatial index and worker-based rebuilds. Phase 2 leftovers (multi-object transforms, box selection) come next to vertex editing.
+Rest of Phase 3: vertex/edge editing, the clip tool, polygon prisms, then the spatial index and worker-based rebuilds. Box selection comes with vertex editing.

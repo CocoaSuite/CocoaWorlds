@@ -26,11 +26,17 @@ export const SHORTCUTS: { label: string; keys: string[] }[] = [
   { label: 'Zoom', keys: ['Wheel'] },
   { label: 'Undo / Redo', keys: [`${mod}+Z`, `${mod}+Shift+Z`] },
   { label: 'Duplicate', keys: [`${mod}+D`] },
+  { label: 'Copy / Cut / Paste', keys: [`${mod}+C`, `${mod}+X`, `${mod}+V`] },
+  { label: 'Group / Ungroup', keys: [`${mod}+G`, `${mod}+Shift+G`] },
+  { label: 'Step into a group / out of it', keys: ['Enter', 'Esc'] },
+  { label: 'Pick an object inside a group', keys: ['Double-click'] },
+  { label: 'Move several objects', keys: ['Select them', 'W'] },
   { label: 'Delete', keys: ['Delete'] },
   { label: 'Rename', keys: ['F2'] },
   { label: 'Select all', keys: [`${mod}+A`] },
   { label: 'Save', keys: [`${mod}+S`] },
   { label: 'Toggle grid snapping', keys: ['G'] },
+  { label: 'Toggle snapping to corners', keys: ['Shift+G'] },
   { label: 'Deselect / step out', keys: ['Esc'] },
   { label: 'This list', keys: ['?'] },
 ];
@@ -60,6 +66,10 @@ export function useShortcuts(openKeys: () => void): void {
         if (k === 'y') return run(s.redo);
         if (k === 's') return run(() => void s.save());
         if (k === 'd') return run(s.duplicateSelection);
+        if (k === 'c') return run(s.copySelection);
+        if (k === 'x') return run(s.cutSelection);
+        if (k === 'v') return run(s.paste);
+        if (k === 'g') return run(e.shiftKey ? s.ungroupSelection : s.groupSelection);
         if (k === 'a') return run(s.tool === 'face' ? s.selectAllFaces : s.selectAll);
         return;
       }
@@ -84,7 +94,9 @@ export function useShortcuts(openKeys: () => void): void {
         case 'KeyF':
           return s.frameSelection();
         case 'KeyG':
-          return s.toggle('snap');
+          return s.toggle(e.shiftKey ? 'vertexSnap' : 'snap');
+        case 'Enter':
+          return s.enterGroup();
         case 'Digit1':
           return s.setView('perspective');
         case 'Digit2':
@@ -108,6 +120,7 @@ export function useShortcuts(openKeys: () => void): void {
         case 'Escape':
           if (s.tool === 'face' && s.faceSelection.length) return s.selectFace(null);
           if (s.tool !== 'select') return s.setTool('select');
+          if (s.stepOut()) return;
           return s.select([]);
       }
     };

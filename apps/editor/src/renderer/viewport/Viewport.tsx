@@ -10,6 +10,8 @@ import { BrushPanel } from './BrushPanel';
 import { PaintPanel } from './PaintPanel';
 import { ViewportEngine, type ViewportStats } from './engine';
 
+const mod = navigator.platform.toLowerCase().includes('mac') ? '⌘' : 'Ctrl+';
+
 export function Viewport() {
   const host = useRef<HTMLDivElement>(null);
   const engine = useRef<ViewportEngine | null>(null);
@@ -27,6 +29,7 @@ export function Viewport() {
   const tool = useEditor((s) => s.tool);
   const view = useEditor((s) => s.view);
   const snap = useEditor((s) => s.snap);
+  const vertexSnap = useEditor((s) => s.vertexSnap);
   const showGrid = useEditor((s) => s.showGrid);
   const showStats = useEditor((s) => s.showStats);
   const gridSize = useEditor((s) => s.session?.project.settings.gridSize ?? 16);
@@ -41,8 +44,8 @@ export function Viewport() {
       e = new ViewportEngine(host.current, {
         select: (ids, mode) => useEditor.getState().select(ids, mode),
         beginEdit: (label) => useEditor.getState().begin(label),
-        liveTransform: (id, tr) => useEditor.getState().setTransform(id, tr, 'gizmo'),
-        liveBrush: (id, b) => useEditor.getState().setBrush(id, b, 'gizmo', 'Transform brush'),
+        clickSelect: (id, additive, deep) => useEditor.getState().clickSelect(id, additive, deep),
+        liveMany: (changes) => useEditor.getState().applyLive(changes),
         draft: setDraft,
         createBrush: (min, max) => useEditor.getState().createBrushes(min, max),
         cancelTool: () => useEditor.getState().setTool('select'),
@@ -94,6 +97,9 @@ export function Viewport() {
     engine.current?.setSnap(snap, gridSize);
   }, [snap, gridSize]);
   useEffect(() => {
+    engine.current?.setVertexSnap(vertexSnap);
+  }, [vertexSnap]);
+  useEffect(() => {
     engine.current?.setGridVisible(showGrid);
   }, [showGrid]);
   useEffect(() => {
@@ -104,12 +110,18 @@ export function Viewport() {
   const ctxItems: MenuEntry[] = selection.length
     ? [
         { label: t('view.frame'), shortcut: 'F', onSelect: s.frameSelection },
+        { label: t('edit.copy'), shortcut: `${mod}C`, onSelect: s.copySelection },
+        { label: t('edit.cut'), shortcut: `${mod}X`, onSelect: s.cutSelection },
+        { label: t('edit.paste'), shortcut: `${mod}V`, disabled: !s.canPaste, onSelect: s.paste },
         { label: t('edit.duplicate'), onSelect: s.duplicateSelection },
+        { label: t('edit.group'), shortcut: `${mod}G`, onSelect: s.groupSelection },
         { label: t('edit.rename'), disabled: selection.length !== 1, onSelect: () => s.startRename(selection[0]!) },
         'separator',
         { label: t('edit.delete'), onSelect: s.deleteSelection },
       ]
     : [
+        { label: t('edit.paste'), shortcut: `${mod}V`, disabled: !s.canPaste, onSelect: s.paste },
+        'separator',
         { label: `${t('add.pointLight')}`, onSelect: () => s.add('pointLight', ctx?.ground ?? undefined) },
         { label: `${t('add.spotLight')}`, onSelect: () => s.add('spotLight', ctx?.ground ?? undefined) },
         { label: `${t('add.spawn')}`, onSelect: () => s.add('spawn', ctx?.ground ?? undefined) },

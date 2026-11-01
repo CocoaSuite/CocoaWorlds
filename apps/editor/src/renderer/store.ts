@@ -7,9 +7,9 @@ import {
   SceneDoc,
   addEntitiesCmd,
   deleteEntitiesCmd,
-  duplicateCmd,
   newEntity,
   renameCmd,
+  reparentCmd,
   setComponentCmd,
   setFlagCmd,
   setTransformCmd,
@@ -34,11 +34,13 @@ import {
   type BrushRole,
 } from '@cocoaworlds/geometry';
 import { create } from 'zustand';
-import { brushComponent, brushOf, newBrushEntity, shapeBrushes, shapeName, worldBrushes, type ShapeOptions } from './brush/brushes';
+import { brushComponent, brushOf, isLocked, isShown, newBrushEntity, shapeBrushes, shapeName, worldBrushes, type ShapeOptions } from './brush/brushes';
 import { useShallow } from 'zustand/react/shallow';
 import type { OpenedProject } from '../shared/api';
 import { DEV_TEXTURE_SIZE } from './brush/materials';
 import type { FaceRef } from './viewport/world-render';
+import type { LiveChange } from './viewport/engine';
+import { cloneSnapshot, isGroup, rootsOf, snapshotSubtrees } from './scene-ops';
 import { getLang, setLang, t, type Lang } from './i18n';
 
 export type Tool = 'select' | 'move' | 'rotate' | 'scale' | 'brush' | 'face' | 'paint';
@@ -86,6 +88,12 @@ interface State {
   faceSelection: FaceRef[];
   /** Material the paint tool applies. */
   paintMaterial: string;
+  /** Snap moves and brush drawing to nearby brush corners. */
+  vertexSnap: boolean;
+  /** The group the user has stepped into: clicks in the view pick objects inside it. */
+  enteredGroup: string | null;
+  /** Whether something has been copied (for menu state). */
+  canPaste: boolean;
 }
 
 interface Actions {
@@ -98,7 +106,7 @@ interface Actions {
   selectAll(): void;
   setTool(t: Tool): void;
   setView(v: ViewMode): void;
-  toggle(k: 'showGrid' | 'showStats' | 'showBottom' | 'snap'): void;
+  toggle(k: 'showGrid' | 'showStats' | 'showBottom' | 'snap' | 'vertexSnap'): void;
   execute(cmd: Command): void;
   begin(label: string): void;
   commit(): void;
@@ -131,11 +139,23 @@ interface Actions {
   fitFaces(repeat?: [number, number]): void;
   justifyFaces(side: Justify): void;
   setPaintMaterial(id: string): void;
+  // multi-object editing, groups, clipboard
+  applyLive(changes: LiveChange[]): void;
+  clickSelect(id: string | null, additive: boolean, deep: boolean): void;
+  groupSelection(): void;
+  ungroupSelection(): void;
+  enterGroup(): void;
+  stepOut(): boolean;
+  copySelection(): void;
+  cutSelection(): void;
+  paste(): void;
 }
 
 const now = () => new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 
 let unsubDoc: (() => void) | null = null;
+/** Copied objects. Lives for the whole app session, so it also pastes into another project. */
+let clipboard: { entities: EntityData[]; pastes: number } | null = null;
 let unsubHist: (() => void) | null = null;
 
 /** A short name for new brush entities: block, block_2, … */
@@ -171,6 +191,9 @@ export const useEditor = create<State & Actions>()((set, get) => ({
   brushRole: 'solid',
   faceSelection: [],
   paintMaterial: 'dev/wall',
+  vertexSnap: true,
+  enteredGroup: null,
+  canPaste: false,
 
   setLang(l) {
     setLang(l);
@@ -202,6 +225,7 @@ export const useEditor = create<State & Actions>()((set, get) => ({
       history,
       selection: [],
       faceSelection: [],
+      enteredGroup: null,
       tool: 'select',
       dirty: false,
       recovery: o.recovery,
@@ -241,7 +265,7 @@ export const useEditor = create<State & Actions>()((set, get) => ({
 
   selectAll() {
     const doc = get().doc;
-    if (doc) set({ selection: doc.entities.filter((e) => e.visible && !e.locked).map((e) => e.id) });
+    if (doc) set({ selection: doc.entities.filter((e) => isShown(doc, e) && !isLocked(doc, e)).map((e) => e.id) });
   },
 
   setTool: (tool) => set((s) => (tool === 'face' || s.tool !== 'face' ? { tool } : { tool, faceSelection: [] })),
@@ -288,7 +312,7 @@ export const useEditor = create<State & Actions>()((set, get) => ({
   deleteSelection() {
     const { doc, selection } = get();
     if (!doc || !selection.length) return;
-    const ids = selection.filter((id) => !doc.get(id)?.locked);
+    const ids = selection.filter((id) => !isLocked(doc, doc.get(id)));
     if (!ids.length) return;
     get().execute(deleteEntitiesCmd(doc, ids));
   },
@@ -297,23 +321,11 @@ export const useEditor = create<State & Actions>()((set, get) => ({
     const { doc, selection } = get();
     if (!doc || !selection.length) return;
     const g = get().session?.project.settings.gridSize ?? 16;
-    // Skip children whose ancestor is also selected; they come along with it.
-    const roots = selection.filter((id) => !selection.some((o) => o !== id && doc.isAncestor(o, id)));
-    const { cmd, newIds } = duplicateCmd(doc, roots, [g, 0, g]);
-    const h = get().history;
-    h.begin('Duplicate');
-    h.execute(cmd);
-    // Brush geometry is stored in world space, so copies move their faces rather than their transform.
-    for (const id of newIds) {
-      const e = doc.get(id);
-      const b = brushOf(e);
-      if (!e || !b) continue;
-      h.execute(setTransformCmd(doc, id, { ...e.transform, position: [0, 0, 0] }));
-      h.execute(setComponentCmd(doc, id, 'brush', brushComponent(translate(b.brush, [g, 0, g]), b.role) as never, 'Duplicate'));
-    }
-    h.commit();
-    set({ selection: newIds });
+    const { copies, roots } = cloneSnapshot(doc, snapshotSubtrees(doc, rootsOf(doc, selection)), [g, 0, g]);
+    get().execute(addEntitiesCmd(doc, copies, 'Duplicate'));
+    set({ selection: roots });
   },
+
 
   rename(id, name) {
     const doc = get().doc;
@@ -474,7 +486,7 @@ export const useEditor = create<State & Actions>()((set, get) => ({
       return;
     }
     const names = ['floor', 'ceiling', 'wall_west', 'wall_east', 'wall_north', 'wall_south'];
-    const group = newEntity(e.name, {});
+    const group = newEntity(e.name, { group: {} });
     group.parent = e.parent;
     const ents = walls.map((w, i) => {
       const x = newBrushEntity(names[i] ?? `wall_${i}`, w, 'solid');
@@ -582,6 +594,149 @@ export const useEditor = create<State & Actions>()((set, get) => ({
   setPaintMaterial(id) {
     set({ paintMaterial: id });
   },
+
+  applyLive(changes) {
+    const doc = get().doc;
+    if (!doc || !changes.length) return;
+    const cmds: Command[] = [];
+    for (const c of changes) {
+      const e = doc.get(c.id);
+      if (!e) continue;
+      if (c.brush) {
+        const cur = brushOf(e);
+        if (cur) cmds.push(setComponentCmd(doc, c.id, 'brush', brushComponent(c.brush, cur.role) as never, 'Transform'));
+      } else if (c.transform) {
+        cmds.push(setTransformCmd(doc, c.id, c.transform));
+      }
+    }
+    if (!cmds.length) return;
+    get().execute({
+      label: 'Transform',
+      mergeKey: 'gizmo',
+      apply: () => cmds.forEach((c) => c.apply()),
+      revert: () => [...cmds].reverse().forEach((c) => c.revert()),
+    });
+  },
+
+  clickSelect(id, additive, deep) {
+    const st = get();
+    const doc = st.doc;
+    if (!doc) return;
+    if (!id) {
+      if (!additive) set({ selection: [] });
+      return;
+    }
+    let pick = id;
+    let entered = st.enteredGroup;
+    if (deep) {
+      // Double-click steps into the groups around the object and picks the object itself.
+      const parent = doc.get(id)?.parent ?? null;
+      entered = parent && isGroup(doc, doc.get(parent)) ? parent : entered;
+    } else {
+      // A click picks the outermost group around the object, unless the user has stepped inside it.
+      for (let a = doc.get(id)?.parent ?? null; a; a = doc.get(a)?.parent ?? null) {
+        if (a === entered) break;
+        if (isGroup(doc, doc.get(a))) pick = a;
+      }
+      if (entered && !doc.isAncestor(entered, id)) entered = null;
+    }
+    set({ enteredGroup: entered });
+    st.select([pick], additive ? 'toggle' : 'replace');
+  },
+
+  groupSelection() {
+    const { doc, selection } = get();
+    if (!doc || !selection.length) return;
+    const roots = rootsOf(doc, selection);
+    const parents = new Set(roots.map((id) => doc.get(id)?.parent ?? null));
+    const parent = parents.size === 1 ? [...parents][0]! : null;
+    const names = new Set(doc.entities.map((e) => e.name));
+    let name = 'group', i = 2;
+    while (names.has(name)) name = `group_${i++}`;
+    const group = newEntity(name, { group: {} });
+    group.parent = parent;
+    const h = get().history;
+    h.begin('Group');
+    h.execute(addEntitiesCmd(doc, [group], 'Group'));
+    for (const id of roots) h.execute(reparentCmd(doc, id, group.id));
+    h.commit();
+    set({ selection: [group.id] });
+    get().log('info', 'Edit', `Grouped ${roots.length} object(s) into ${name}`);
+  },
+
+  ungroupSelection() {
+    const { doc, selection } = get();
+    if (!doc) return;
+    const groups = selection.filter((id) => isGroup(doc, doc.get(id)));
+    if (!groups.length) return;
+    const freed: string[] = [];
+    const h = get().history;
+    h.begin('Ungroup');
+    for (const g of groups) {
+      const parent = doc.get(g)?.parent ?? null;
+      for (const c of doc.children(g)) {
+        h.execute(reparentCmd(doc, c.id, parent));
+        freed.push(c.id);
+      }
+      h.execute(deleteEntitiesCmd(doc, [g]));
+    }
+    h.commit();
+    set({ selection: freed, enteredGroup: null });
+  },
+
+  enterGroup() {
+    const { doc, selection } = get();
+    if (!doc || selection.length !== 1 || !isGroup(doc, doc.get(selection[0]!))) return;
+    const g = selection[0]!;
+    set({ enteredGroup: g, selection: doc.children(g).map((c) => c.id) });
+  },
+
+  stepOut() {
+    const { doc, enteredGroup } = get();
+    if (!doc || !enteredGroup) return false;
+    let outer: string | null = null;
+    for (let a = doc.get(enteredGroup)?.parent ?? null; a; a = doc.get(a)?.parent ?? null) {
+      if (isGroup(doc, doc.get(a))) {
+        outer = a;
+        break;
+      }
+    }
+    set({ enteredGroup: outer, selection: doc.get(enteredGroup) ? [enteredGroup] : [] });
+    return true;
+  },
+
+  copySelection() {
+    const { doc, selection } = get();
+    if (!doc || !selection.length) return;
+    clipboard = { entities: snapshotSubtrees(doc, rootsOf(doc, selection)), pastes: 0 };
+    set({ canPaste: true });
+    get().notify(t('toast.copied').replace('{n}', String(rootsOf(doc, selection).length)));
+  },
+
+  cutSelection() {
+    const { doc, selection } = get();
+    if (!doc || !selection.length) return;
+    const roots = rootsOf(doc, selection).filter((id) => !isLocked(doc, doc.get(id)));
+    if (!roots.length) return;
+    // A cut pastes back in place the first time.
+    clipboard = { entities: snapshotSubtrees(doc, roots), pastes: -1 };
+    set({ canPaste: true });
+    const h = get().history;
+    h.begin('Cut');
+    h.execute(deleteEntitiesCmd(doc, roots));
+    h.commit();
+  },
+
+  paste() {
+    const doc = get().doc;
+    if (!doc || !clipboard) return;
+    const g = get().session?.project.settings.gridSize ?? 16;
+    clipboard.pastes++;
+    const k = clipboard.pastes * g;
+    const { copies, roots } = cloneSnapshot(doc, clipboard.entities, [k, 0, k]);
+    get().execute(addEntitiesCmd(doc, copies, 'Paste'));
+    set({ selection: roots });
+  },
 }));
 
 const selectedEntities = (s: State): EntityData[] =>
@@ -603,7 +758,7 @@ function applyToFaces(get: () => State & Actions, fn: (b: Brush, faces: number[]
   const cmds: Command[] = [];
   for (const [id, faces] of byId) {
     const cur = brushOf(doc.get(id));
-    if (!cur || doc.get(id)?.locked) continue;
+    if (!cur || isLocked(doc, doc.get(id))) continue;
     cmds.push(setComponentCmd(doc, id, 'brush', brushComponent(fn(cur.brush, faces), cur.role) as never, label));
   }
   if (!cmds.length) return;

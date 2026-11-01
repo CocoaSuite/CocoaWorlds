@@ -8,6 +8,7 @@ export function ToolBar() {
   const tool = useEditor((s) => s.tool);
   const setTool = useEditor((s) => s.setTool);
   const snap = useEditor((s) => s.snap);
+  const vertexSnap = useEditor((s) => s.vertexSnap);
   const toggle = useEditor((s) => s.toggle);
   const shape = useEditor((s) => s.brushOptions.shape);
   const setBrushOptions = useEditor((s) => s.setBrushOptions);
@@ -49,6 +50,9 @@ export function ToolBar() {
       <Divider />
       <button type="button" className={`cw-snap${snap ? ' on' : ''}`} aria-pressed={snap} title="Grid snapping (G)" onClick={() => toggle('snap')}>
         {t('grid.snap')} {snap ? `${grid}u` : t('grid.off')}
+      </button>
+      <button type="button" className={`cw-snap${vertexSnap ? ' on' : ''}`} aria-pressed={vertexSnap} title="Snap to brush corners (Shift+G)" onClick={() => toggle('vertexSnap')}>
+        {t('grid.vertices')}
       </button>
     </div>
   );

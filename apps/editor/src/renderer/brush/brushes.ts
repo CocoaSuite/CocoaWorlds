@@ -54,10 +54,22 @@ export function newBrushEntity(name: string, brush: Brush, role: BrushRole): Ent
   return newEntity(name, { brush: brushComponent(brush, role) as unknown as Record<string, unknown> });
 }
 
+/** Visible when it and every group around it are visible. */
+export function isShown(doc: SceneDoc, e: EntityData | undefined): boolean {
+  for (let x = e; x; x = x.parent ? doc.get(x.parent) : undefined) if (!x.visible) return false;
+  return !!e;
+}
+
+/** Locked when it or any group around it is locked. */
+export function isLocked(doc: SceneDoc, e: EntityData | undefined): boolean {
+  for (let x = e; x; x = x.parent ? doc.get(x.parent) : undefined) if (x.locked) return true;
+  return false;
+}
+
 export function worldBrushes(doc: SceneDoc): WorldBrush[] {
   const out: WorldBrush[] = [];
   for (const e of doc.entities) {
-    if (!e.visible) continue;
+    if (!isShown(doc, e)) continue;
     const b = brushOf(e);
     if (b) out.push({ id: e.id, role: b.role, brush: b.brush });
   }

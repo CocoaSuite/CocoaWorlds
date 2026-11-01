@@ -26,6 +26,8 @@ Details and trade-offs for each: [ARCHITECTURE.md](ARCHITECTURE.md).
 
 ## Log
 
+- **2026-11-01** — Routine choices for multi-select, groups, clipboard and snapping (reversible): groups follow CocoaCanvas (a click selects the outermost group, double-click or Enter steps in, Esc steps out); a group's Visible and Locked switches apply to everything inside; each paste is offset one grid step further and a cut pastes back in place; snapping to corners grabs the moving corner nearest the cursor and shows it in the guide colour; grid snapping while moving is relative to the start of the drag.
+
 - **2026-11-01** — Approved G1 (live subtract brushes) and G2 (split bent faces) after reviewing the geometry engine.
 
 - **2026-11-01** — Routine choices made during Phase 2 (reversible, recorded for reference): Y-up coordinates with degrees in YXZ order; esbuild for the main/preload bundles and Vite for the UI; the editor grid is a shader rather than line geometry; editor-only overlays use Three.js directly while game content will go through the render adapter.
