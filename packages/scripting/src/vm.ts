@@ -39,6 +39,8 @@ export interface ScriptHost {
   playSound?(sound: string, place: Value, volume: number, owner: string): void;
   /** Stop the sounds an object is making. */
   stopSound?(target: string): void;
+  /** Play an animation of an object's model. */
+  playAnimation?(target: string, name: string, loop: boolean): void;
   /** Make a copy of `template` at a place (an object, or 'aim'); returns the copy's id, or null if it couldn't. */
   spawn?(template: string, place: Value, owner: string): string | null;
 }
@@ -406,6 +408,11 @@ export class ScriptRunner {
           const volume = Math.max(0, num(s.pop() ?? 1));
           const place = s.pop() ?? null;
           if (op.sound) this.host.playSound?.(op.sound, place, volume, t.inst.program.owner);
+          break;
+        }
+        case 'anim': {
+          const target = s.pop();
+          if (target && typeof target === 'object') this.host.playAnimation?.(target.ref, op.name, op.loop);
           break;
         }
         case 'stopsound': {

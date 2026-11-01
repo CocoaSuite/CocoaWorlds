@@ -25,8 +25,8 @@ describe('component registry', () => {
     expect(names(brush, true)).toEqual(['breakable', 'conveyor', 'rigidBody', 'script', 'sound', 'trigger']);
     expect(names({ ...brush, trigger: {} }, true)).toEqual(['breakable', 'script', 'sound']);
     expect(names({ ...brush, rigidBody: {} }, true)).toEqual(['breakable', 'script', 'sound']);
-    expect(names({}, false)).toEqual(['breakable', 'collider', 'light', 'playerSpawn', 'rigidBody', 'script', 'sign', 'sound']);
-    expect(names({ light: {} }, false)).toEqual(['breakable', 'collider', 'playerSpawn', 'rigidBody', 'script', 'sign', 'sound']);
+    expect(names({}, false)).toEqual(['breakable', 'collider', 'light', 'model', 'playerSpawn', 'rigidBody', 'script', 'sign', 'sound']);
+    expect(names({ light: {} }, false)).toEqual(['breakable', 'collider', 'model', 'playerSpawn', 'rigidBody', 'script', 'sign', 'sound']);
     expect(componentDef('group')?.internal).toBe(true);
   });
 });

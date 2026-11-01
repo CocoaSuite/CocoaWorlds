@@ -20,6 +20,8 @@ export type GameEvent =
    */
   | { type: 'sound'; sound: string; at: [number, number, number] | null; follow: string | null; volume: number; loop: boolean; range: number; source: string; time: number }
   | { type: 'sound.stop'; source: string; time: number }
+  /** Play an animation of an object's model (the game world has no models; whoever draws them plays it). */
+  | { type: 'anim'; target: string; name: string; loop: boolean; time: number }
   | { type: 'message'; name: string; from: string | null; time: number; data?: unknown };
 
 export type EventType = GameEvent['type'];

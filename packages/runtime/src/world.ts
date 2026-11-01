@@ -297,6 +297,7 @@ export class GameWorld {
         this.bus.emit({ type: 'sound', sound, at, follow, volume, loop: false, range: 2048, source: owner, time: this.time });
       },
       stopSound: (target) => this.bus.emit({ type: 'sound.stop', source: target, time: this.time }),
+      playAnimation: (target, name, loop) => this.bus.emit({ type: 'anim', target, name, loop, time: this.time }),
       spawn: (template, place) => this.spawn(template, place),
       setText: (target, text) => {
         if (!this.signs.has(target) || this.signs.get(target) === text) return;
@@ -833,7 +834,7 @@ export class GameWorld {
   }
 
   /** The moving body an object belongs to (itself, or the unit it is part of), if any. */
-  private bodyOf(id: string): string | null {
+  bodyOf(id: string): string | null {
     const b = this.bodies.get(id) ?? this.bodies.get(this.unitOf.get(id) ?? '');
     return b && b.info.kind !== 'zone' ? b.info.id : null;
   }

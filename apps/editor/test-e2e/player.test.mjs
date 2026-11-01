@@ -30,7 +30,7 @@ test('play as the player', async () => {
     await page.getByTestId('play-banner').waitFor();
     await until(async () => (await consoleText()).includes('Playing as the player'), true, 10000);
     // Capture the mouse (Play may already have; otherwise “Click to play”).
-    if (await page.getByTestId('click-to-play').count()) await page.getByTestId('click-to-play').click();
+    if (await page.getByTestId('click-to-play').count()) await page.getByTestId('click-to-play').click({ timeout: 2000 }).catch(() => {});
     await until(() => page.evaluate(() => document.pointerLockElement?.tagName ?? ''), 'CANVAS');
     await page.locator('.cw-crosshair').waitFor();
 

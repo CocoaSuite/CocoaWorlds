@@ -5,7 +5,7 @@
  * With a Player start in the scene you play as the player (first person); without one, Play is a physics
  * preview watched with the free camera.
  */
-import { SceneDoc, readComponent, type ColliderData, type GameRules, type GameValue, type SceneFile, type SignData } from '@cocoaworlds/core';
+import { SceneDoc, readComponent, type ColliderData, type GameRules, type GameValue, type ModelData, type SceneFile, type SignData } from '@cocoaworlds/core';
 import { buildMesh, isInvisibleMaterial, type WorldBrush } from '@cocoaworlds/geometry';
 import { GameWorld, initPhysics, type BodyInfo, type PlayerInput, type PlayerStatus, type ScriptLog, type TriggerEvent } from '@cocoaworlds/runtime';
 import type { Problem, ScriptError } from '@cocoaworlds/scripting';
@@ -15,6 +15,7 @@ import { buildLevel } from './world-build';
 import { toGeometry } from './world-render';
 import { buildSign, type SignObject } from './sign';
 import { assetUrl } from '../assets';
+import { modelInstance, type ModelInstance } from './models';
 
 export interface PlayInfo {
   moving: number;
@@ -72,7 +73,24 @@ export class PlaySession {
     }
 
     this.material = material;
+    this.doc = doc;
     for (const b of this.world.movingBodies()) if (doc.get(b.id)) this.addMover(b);
+
+    // Models of objects without a body of their own: still, or carried by the moving object they are inside.
+    for (const e of doc.entities) {
+      if (!e.components.model || bodies.has(e.id)) continue;
+      let shownE = true;
+      for (let x = doc.get(e.id); x; x = x.parent ? doc.get(x.parent) : undefined) if (!x.visible) shownE = false;
+      const data = this.modelOf(e.id);
+      if (!shownE || !data) continue;
+      const holder = new THREE.Group();
+      holder.matrixAutoUpdate = false;
+      holder.matrix.fromArray(doc.worldMatrix(e.id));
+      this.group.add(holder);
+      const mover = this.world.bodyOf(e.id);
+      if (mover) this.movers.push({ id: mover, obj: holder, base: holder.matrix.clone() });
+      this.attachModel(holder, data, e.id);
+    }
 
     // Text signs, where they stand (redrawn when blocks change their text).
     const shown = (id: string) => {
@@ -101,12 +119,42 @@ export class PlaySession {
     this.world.bus.on('use', (e) => void this.uses.push(e.target));
     this.world.bus.on('player.die', (e) => void this.notes.push(`The player died (${e.cause}) and starts again`));
     this.world.bus.on('sound', (e) => void this.startSound(e));
+    this.world.bus.on('anim', (e) => {
+      const inst = this.models.get(e.target);
+      if (inst && !inst.play(e.name, e.loop)) this.notes.push(`The model has no animation called “${e.name}”`);
+    });
     this.world.bus.on('sound.stop', (e) => this.stopSounds(e.source));
     this.world.bus.on('break', (e) => void this.notes.push(`${this.info.names.get(e.target.split('#')[0]!) ?? 'Something'} broke`));
     this.world.bus.on('score', (e) => void this.notes.push(`Score: ${e.score} (${e.by > 0 ? '+' : ''}${e.by})`));
   }
 
   private material: (name: string) => THREE.Material;
+  private doc!: SceneDoc;
+
+  // ── Models ──
+
+  private mixers: THREE.AnimationMixer[] = [];
+  /** Model copies by the object that shows them (for “Play animation”). */
+  readonly models = new Map<string, ModelInstance>();
+
+  /** An object's model settings (copies made while playing use their original's). */
+  private modelOf(id: string): ModelData | null {
+    const e = this.doc.get(id.split('#')[0]!);
+    if (!e?.components.model) return null;
+    const m = readComponent<ModelData>('model', e.components.model);
+    return m.model ? m : null;
+  }
+
+  private attachModel(holder: THREE.Group, data: ModelData, id: string): void {
+    void modelInstance(data)
+      .then((inst) => {
+        if (this.disposed) return;
+        holder.add(inst.object);
+        if (inst.mixer) this.mixers.push(inst.mixer);
+        this.models.set(id, inst);
+      })
+      .catch(() => this.notes.push(`Could not load the model ${data.model}`));
+  }
 
   // ── Sound ──
 
@@ -210,9 +258,20 @@ export class PlaySession {
       const m = buildMesh(brushes);
       obj = new THREE.Mesh(toGeometry(m), m.groups.map((g) => this.material(g.material)));
     } else {
-      // A point object with a collision shape: draw the shape, placed like the entity (scale in the shape).
+      // A point object with a collision shape: draw its model if it has one, else the shape, placed like the
+      // entity (scale in the shape).
       const shape = this.world.pointShape(b.id);
       if (!shape) return;
+      const model = this.modelOf(b.id);
+      if (model) {
+        const holder = new THREE.Group();
+        holder.matrixAutoUpdate = false;
+        holder.matrix.fromArray(shape.matrix);
+        this.group.add(holder);
+        this.movers.push({ id: b.id, obj: holder, base: holder.matrix.clone() });
+        this.attachModel(holder, model, b.id);
+        return;
+      }
       const c = shape.collider;
       const geo =
         c.shape === 'sphere'
@@ -264,6 +323,7 @@ export class PlaySession {
         s.holder.add(s.sign.object);
       }
     }
+    for (const m of this.mixers) m.update(dt);
     // Sounds that travel with a moving object.
     for (const s of this.sounds) {
       if (!s.follow) continue;

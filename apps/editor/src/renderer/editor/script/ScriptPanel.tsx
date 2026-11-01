@@ -591,6 +591,17 @@ function statementWords(s: Statement, set: (patch: Record<string, unknown>, merg
           <ExprSlot expr={s.volume} type="number" label={`${w('playSound')} ${w('volume')}`} />
         </>
       );
+    case 'playAnim':
+      return (
+        <>
+          {w('playAnim')} <TextSlot value={s.name} label={w('playAnim')} onChange={(name) => set({ name })} /> {w('onWord')}{' '}
+          <RefSlot value={s.target} onChange={(target) => set({ target })} label={`${w('playAnim')} ${w('onWord')}`} />
+          <select className="cw-input cw-mini" aria-label={`${w('playAnim')} ${w('looping')}`} value={s.loop ? 'loop' : 'once'} onChange={(e) => set({ loop: e.target.value === 'loop' })}>
+            <option value="loop">{w('looping')}</option>
+            <option value="once">{w('once')}</option>
+          </select>
+        </>
+      );
     case 'stopSound':
       return (
         <>

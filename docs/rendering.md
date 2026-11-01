@@ -36,7 +36,7 @@ folder moves. Texture coordinates follow Hammer: at the usual scale of 0.25, a 5
 Pixels less than half opaque are cut out (fences, grilles). A missing image shows Source's pink and black
 checker.
 
-Models (GLB, glTF) can be imported the same way; placing them comes next.
+Models (GLB, glTF) can be imported the same way; see Models below.
 
 ## Sound
 
@@ -49,3 +49,19 @@ Models (GLB, glTF) can be imported the same way; placing them comes next.
   everywhere (not in 3D, for music and announcements).
 - **Stop the sounds of [object]**: its Sound component and anything its scripts played. Removing an object
   stops its sounds too.
+
+## Models
+
+**Assets › Models › Import…** takes GLB files (and glTF files with their data embedded). Give any point object
+(an Empty object, say) the **Model** component:
+
+- **Model**: the file. **Made in**: Metres (Blender and most tools; 1 m becomes 39.37 u) or Game units.
+- **Animation**: the name of an animation in the file to play from the start, looping.
+- **Shadows**: whether it casts them (with Lighting: Game and in Play).
+
+Models are for looks. For collisions add a **Collision shape**, and **Physics** to make it move: a crate model
+with a box shape and Physics falls and tumbles. Models inside objects that scripts move go with them, and
+copies made while playing show their original's model.
+
+The **Play animation [name] on [object], looping/once** block switches a model's animation.
+

@@ -94,6 +94,8 @@ export function newStatement(kind: StatementKind, opts: { target?: Ref; variable
       return { id: id(), kind, sound: '', at: { self: true }, volume: num(1) };
     case 'stopSound':
       return { id: id(), kind, target };
+    case 'playAnim':
+      return { id: id(), kind, target, name: '', loop: true };
   }
 }
 

@@ -13,7 +13,7 @@ import { PIVOT, applyMat4, mat4Key, pivotOf, type Mat4 } from '@cocoaworlds/core
 import { BrushDraft, draftAxes, type DraftState } from './brush-draft';
 import { CameraRig, type ViewKind } from './camera';
 import { EditorGrid } from './grid';
-import { buildMarker, disposeMarker, markerKey, setMarkerSelected, type Marker } from './markers';
+import { buildMarker, disposeMarker, markerKey, onMarkerLoaded, setMarkerSelected, type Marker } from './markers';
 import { WorldRenderer, type FaceRef } from './world-render';
 import { VertexTool } from './vertex-tool';
 import { ClipTool, type ClipKeep, type ClipState } from './clip-tool';
@@ -217,6 +217,7 @@ export class ViewportEngine {
       this.applySelection();
       this.invalidate();
     };
+    onMarkerLoaded(() => this.invalidate());
     this.scene.add(this.grid.object, this.world.group, this.proxy, this.vertexTool.group, this.clipTool.group);
     this.vertexTool.group.visible = false;
     this.marquee = document.createElement('div');

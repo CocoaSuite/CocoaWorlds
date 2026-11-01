@@ -71,7 +71,7 @@ test('copies while playing: dropper, conveyor, third person', async () => {
     if (await page.getByTestId('click-to-play').count()) await page.getByTestId('click-to-play').click({ timeout: 2000 }).catch(() => {});
     // Copies appear (and are drawn), and the conveyor carries them north.
     const copies = () => page.evaluate(() => (window.__cwViewport.play?.movers ?? []).filter((m) => m.id.includes('#')).map((m) => m.id));
-    await until(async () => (await copies()).length >= 2, true, 6000);
+    await until(async () => (await copies()).length >= 2, true, 15000);
     const first = (await copies())[0];
     const z0 = await page.evaluate((id) => window.__cwViewport.play.world.positionOf(id)[2], first);
     // (Waits on the result, not the clock: the test display renders slowly, so the game runs slower.)

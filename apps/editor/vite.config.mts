@@ -12,7 +12,8 @@ function csp(): Plugin {
     "font-src 'self'",
     "worker-src 'self' blob:",
     // Project assets (textures, sounds, models) are read through the main process and handed over as blob: URLs.
-    "connect-src 'self' blob:",
+    // (data: for glTF files that embed their buffers.)
+    "connect-src 'self' blob: data:",
     "media-src 'self' blob:",
     "object-src 'none'",
     "base-uri 'none'",

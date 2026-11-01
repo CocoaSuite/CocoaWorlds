@@ -8,6 +8,7 @@
 export type Lang = 'en' | 'ru';
 
 export type SoundData = { sound: string; volume: number; loop: boolean; playOnStart: boolean; range: number };
+export type ModelData = { model: string; units: 'metres' | 'units'; animation: string; castShadows: boolean };
 export type ConveyorData = { speed: number; direction: 'north' | 'south' | 'east' | 'west' };
 export type BreakableData = { health: number };
 
@@ -107,6 +108,33 @@ export const COMPONENTS: ComponentDef[] = [
         type: { kind: 'number', min: 16, step: 64, unit: 'u' },
         default: 1024,
       },
+    ],
+  },
+  {
+    name: 'model',
+    label: e('Model', 'Модель'),
+    description: e(
+      'A 3D model (GLB or glTF) drawn at this object. For collisions add a Collision shape (and Physics to make it move).',
+      '3D-модель (GLB или glTF) на месте объекта. Для столкновений добавьте форму столкновения (и Физику, чтобы двигалась).',
+    ),
+    appliesTo: 'point',
+    fields: [
+      { key: 'model', label: e('Model', 'Модель'), type: { kind: 'asset', asset: 'models' }, default: '' },
+      {
+        key: 'units',
+        label: e('Made in', 'Единицы'),
+        hint: e('Most tools (Blender) use metres: 1 m becomes 39.37 u.', 'Большинство программ (Blender) работают в метрах: 1 м = 39,37 ед.'),
+        type: {
+          kind: 'enum',
+          options: [
+            { value: 'metres', label: e('Metres', 'Метры') },
+            { value: 'units', label: e('Game units', 'Ед. игры') },
+          ],
+        },
+        default: 'metres',
+      },
+      { key: 'animation', label: e('Animation', 'Анимация'), hint: e('Plays from the start, looping (empty: none).', 'Играет с начала, по кругу (пусто — нет).'), type: { kind: 'text' }, default: '' },
+      { key: 'castShadows', label: e('Shadows', 'Тени'), type: { kind: 'boolean' }, default: true },
     ],
   },
   {

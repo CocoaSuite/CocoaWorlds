@@ -76,6 +76,8 @@ export type Op =
   | { op: 'sound'; sound: string }
   /** Pops an object: stop its sounds. */
   | { op: 'stopsound' }
+  /** Pops an object: play its model's animation. */
+  | { op: 'anim'; name: string; loop: boolean }
   | { op: 'halt' };
 
 export type GameAction = 'hurt' | 'heal' | 'addScore';
@@ -475,6 +477,11 @@ class HandlerCompiler {
       case 'stopSound':
         this.actTarget(s.target, s.id);
         this.emit({ op: 'stopsound' });
+        break;
+      case 'playAnim':
+        if (!s.name.trim()) this.problem(s.id, 'Type the name of the animation (as it is called in the model).');
+        this.actTarget(s.target, s.id);
+        this.emit({ op: 'anim', name: s.name.trim(), loop: s.loop });
         break;
       case 'hurt':
       case 'heal':

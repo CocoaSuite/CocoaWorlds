@@ -21,7 +21,7 @@ From here the order follows the benchmark: [BENCHMARK.md](BENCHMARK.md) — can 
 |---|---|---|---|
 | B1 ✅ | Game-wide values (Cash, Gems, Round) shared by all scripts and shown on screen; on-screen messages and countdowns; text signs in the world | Tycoon buttons and prices, round timers, currencies | 5–6 |
 | B2 ✅ | Copies while playing (spawn a prefab, remove a copy, values on copies); object actions: scale, become physical, push, follow or move toward, teleport the player; conveyor surfaces; object health and breaking; third-person camera option | Droppers, conveyors, disasters, planting, pets, breakables | 6 |
-| B3 (in progress: lighting, sky, fog, image textures and sound done; models next) | Assets and rendering: image textures and materials, lights and sky, sound, glTF models (static first) | Every target looks and sounds like a game | 7 |
+| B3 ✅ | Assets and rendering: image textures and materials, lights and sky, sound, glTF models (static first) | Every target looks and sounds like a game | 7 |
 | B4 | Standalone export (Windows, macOS, Linux, web) and saved progress | Games others can play and come back to | 8–9 |
 | B5 | Screen UI editor (text, images, buttons, bars, lists) and an inventory/hotbar | Shops, inventories, menus | 6–7 |
 | A1 | Half-Life set: ladders, water and swimming, armour and chargers, weapons (hitscan, projectiles, explosions, ammo), paths and trains, level changes with landmarks, decals and particles, scripted scenes, NPCs | Half-Life 1 | 6, 10 |
@@ -104,4 +104,4 @@ Order may shift where dependencies require it (for example, the project format f
 
 ## Next
 
-B3: assets and rendering (image textures and materials, lights and sky, sound, glTF models), so every target looks and sounds like a game. B5 (screen UI editor, inventory) and B4 (export, saving) follow.
+B5: the screen UI editor (text, images, buttons, bars and lists in anchored boxes, driven by blocks) and an inventory/hotbar, then B4: export (Windows, macOS, Linux, web) and saved progress. A1 (the Half-Life set) and T1 (voxel terrain) follow.

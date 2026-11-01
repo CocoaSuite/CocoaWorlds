@@ -2,7 +2,14 @@
  * Editor-only visuals for entities that have no geometry of their own yet (spawn points, lights, empties).
  * Each marker has an invisible pick volume so it can be clicked.
  */
-import { readComponent, type EntityData, type SignData } from '@cocoaworlds/core';
+import { readComponent, type EntityData, type ModelData, type SignData } from '@cocoaworlds/core';
+import { modelInstance } from './models';
+
+/** Called when a marker's model has loaded (the view needs a redraw). */
+let markerLoaded: () => void = () => {};
+export function onMarkerLoaded(fn: () => void): void {
+  markerLoaded = fn;
+}
 import * as THREE from 'three';
 import { buildSign } from './sign';
 
@@ -77,7 +84,42 @@ export function buildMarker(e: EntityData): Marker {
   let baseColor = COLORS.idle;
   const light = e.components.light as { kind?: string; range?: number; angle?: number } | undefined;
 
-  if (e.components.sign) {
+  const model = e.components.model ? readComponent<ModelData>('model', e.components.model) : null;
+  if (model?.model) {
+    // The model itself (once loaded), a small cross at the origin for selection colour, and a pick box that
+    // grows to fit the model.
+    lines.push(
+      segs(
+        [
+          [-8, 0, 0],
+          [8, 0, 0],
+          [0, -8, 0],
+          [0, 8, 0],
+          [0, 0, -8],
+          [0, 0, 8],
+        ],
+        baseColor,
+      ),
+    );
+    pick = new THREE.Mesh(new THREE.BoxGeometry(24, 24, 24), pickMat);
+    const p = pick;
+    void modelInstance(model)
+      .then((inst) => {
+        if (group.userData.disposed) return;
+        group.add(inst.object);
+        p.geometry.dispose();
+        p.geometry = new THREE.BoxGeometry(Math.max(8, inst.size.x), Math.max(8, inst.size.y), Math.max(8, inst.size.z)).translate(inst.center.x, inst.center.y, inst.center.z);
+        markerLoaded();
+      })
+      .catch(() => {
+        // A missing or broken model: a pink box like a missing texture.
+        if (group.userData.disposed) return;
+        const box = new THREE.Mesh(new THREE.BoxGeometry(24, 24, 24), new THREE.MeshBasicMaterial({ color: 0xff00dc, wireframe: true }));
+        box.name = 'model-missing';
+        group.add(box);
+        markerLoaded();
+      });
+  } else if (e.components.sign) {
     // The sign itself, plus a small cross at the object's origin for selection colour.
     const sign = buildSign(readComponent<SignData>('sign', e.components.sign));
     group.add(sign.object);
@@ -165,9 +207,12 @@ export function setMarkerSelected(m: Marker, selected: boolean): void {
 }
 
 export function disposeMarker(m: Marker): void {
+  m.group.userData.disposed = true;
   (m.group.userData.dispose as (() => void) | undefined)?.();
   m.group.traverse((o) => {
     if (o.name === 'sign') return;
+    // (Model meshes share geometry with the loaded file; only the clone's tree is dropped.)
+    for (let x: THREE.Object3D | null = o; x; x = x.parent) if (x.name === 'model') return;
     if (o instanceof THREE.Mesh || o instanceof THREE.LineSegments) {
       o.geometry.dispose();
       const mat = o.material as THREE.Material;
@@ -178,5 +223,5 @@ export function disposeMarker(m: Marker): void {
 
 /** Stable key for "does this marker need rebuilding" (shape-affecting data only). */
 export function markerKey(e: EntityData): string {
-  return JSON.stringify([e.components.light ?? null, !!e.components.playerSpawn, e.components.sign ?? null]);
+  return JSON.stringify([e.components.light ?? null, !!e.components.playerSpawn, e.components.sign ?? null, e.components.model ?? null]);
 }

@@ -84,7 +84,9 @@ export type Statement =
   /** Play a sound file (`assets/sounds/…`) once, at a place (heard in 3D) or everywhere (null). */
   | { id: string; kind: 'playSound'; sound: string; at: Place | null; volume: Expr }
   /** Stop the sounds an object is making (its Sound component and what its scripts played). */
-  | { id: string; kind: 'stopSound'; target: Ref };
+  | { id: string; kind: 'stopSound'; target: Ref }
+  /** Play one of a model's animations by name, looping or once. */
+  | { id: string; kind: 'playAnim'; target: Ref; name: string; loop: boolean };
 
 export type EventBlock =
   | { id: string; kind: 'start' }

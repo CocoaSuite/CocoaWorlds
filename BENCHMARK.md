@@ -13,7 +13,7 @@ CocoaWorlds is measured by the games it can make. Two tiers:
 
 Each need also notes the roadmap step that delivers it (the B / A steps are in [ROADMAP.md](ROADMAP.md)). The last section lists the decisions that need approval.
 
-Status as of 2026-11-01 (after B2).
+Status as of 2026-11-01 (after B3).
 
 ## What every target needs
 
@@ -29,8 +29,8 @@ These come up in almost every game, so they come first.
 | **On-screen text and messages** ("Round 3 starts!", "Need $50", "Press E to buy") | ✅ messages; 🟡 no countdown widget yet (build it from a value) | B1, B5 |
 | **Make copies while playing** (spawn a prefab at a place or object; remove a copy) | ✅ copies of scene objects (templates) | B2 |
 | **More things blocks can do to objects**: scale, become physical (unanchor), push, spin speed, move toward or follow an object, teleport the player | ✅ | B2 |
-| **Textures and materials from image files**, lights that light the level, sky, sound | ❌ dev textures, unlit | B3 (Phase 7) |
-| **Imported 3D models** (props, creatures), with animations | ❌ brushes and simple shapes only | B3 / A2 |
+| **Textures and materials from image files**, lights that light the level, sky, sound | ✅ | B3 |
+| **Imported 3D models** (props, creatures), with animations | ✅ GLB/glTF with animations; 🟡 no creature behaviour yet | B3 / A2 |
 | **Standalone export** (Windows, macOS, Linux, web) | ❌ plays only in the editor | B4 (Phases 8–9) |
 | **Saving progress** (in the exported game) | ❌ | B4 |
 
