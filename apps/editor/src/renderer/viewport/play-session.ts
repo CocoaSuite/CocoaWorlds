@@ -6,9 +6,10 @@
  */
 import { SceneDoc, readComponent, type ColliderData, type SceneFile } from '@cocoaworlds/core';
 import { buildMesh, type WorldBrush } from '@cocoaworlds/geometry';
-import { GameWorld, initPhysics, type TriggerEvent } from '@cocoaworlds/runtime';
+import { GameWorld, initPhysics, type ScriptLog, type TriggerEvent } from '@cocoaworlds/runtime';
+import type { Problem, ScriptError } from '@cocoaworlds/scripting';
 import * as THREE from 'three';
-import { worldBrushOf, worldBrushes } from '../brush/brushes';
+import { worldBrushes } from '../brush/brushes';
 import { buildLevel } from './world-build';
 import { toGeometry } from './world-render';
 
@@ -16,6 +17,14 @@ export interface PlayInfo {
   moving: number;
   triggers: number;
   names: Map<string, string>;
+  /** Script problems found when the game was built (stacks with errors don't run). */
+  problems: Problem[];
+}
+
+export interface PlayFrame {
+  events: TriggerEvent[];
+  logs: ScriptLog[];
+  errors: ScriptError[];
 }
 
 export class PlaySession {
@@ -36,26 +45,25 @@ export class PlaySession {
     this.world = GameWorld.create(scene);
     const doc = new SceneDoc(structuredClone(scene));
     const bodies = new Set(this.world.movingBodies().map((b) => b.id));
-    const fixedBodies = new Set(doc.entities.filter((e) => e.components.rigidBody && !bodies.has(e.id)).map((e) => e.id));
 
-    // The level as players see it: no trigger zones, no subtract volumes, no moving brushes.
-    const all = worldBrushes(doc);
-    const still: WorldBrush[] = all.filter((b) => b.role !== 'trigger' && !bodies.has(b.id));
+    // The level as players see it: only still brushes (no trigger zones, no subtract volumes, nothing that moves).
+    const still: WorldBrush[] = worldBrushes(doc).filter((b) => this.world.levelIds.has(b.id) || (b.role === 'subtract' && !bodies.has(b.id)));
     const level = buildLevel({ seq: 0, brushes: still });
     if (level.mesh) {
       const m = level.mesh;
       this.group.add(new THREE.Mesh(toGeometry(m), m.groups.map((g) => material(g.material))));
     }
 
-    for (const id of [...bodies, ...fixedBodies]) {
-      const e = doc.get(id);
-      if (!e) continue;
+    for (const b of this.world.movingBodies()) {
+      const e = doc.get(b.id);
+      if (!e || b.kind === 'zone') continue;
       let obj: THREE.Object3D;
       let base = new THREE.Matrix4();
-      const wb = worldBrushOf(doc, e);
-      if (wb) {
-        if (!bodies.has(id)) continue; // fixed brush bodies are already in the level mesh
-        const m = buildMesh([wb.brush]);
+      if (b.kind === 'brush' || b.kind === 'unit') {
+        // Drawn in world space at the start; the body's motion moves it from there.
+        const brushes = this.world.bodyBrushes(b.id);
+        if (!brushes.length) continue;
+        const m = buildMesh(brushes);
         obj = new THREE.Mesh(toGeometry(m), m.groups.map((g) => material(g.material)));
       } else {
         // A point object with a collision shape: draw the shape, placed like the entity (scale in the shape).
@@ -68,31 +76,37 @@ export class PlaySession {
               : new THREE.BoxGeometry(...c.size);
         geo.translate(...c.offset);
         obj = new THREE.Mesh(geo, this.shapeMat);
-        base = new THREE.Matrix4().fromArray(doc.worldMatrix(id));
+        base = new THREE.Matrix4().fromArray(doc.worldMatrix(b.id));
       }
       obj.matrixAutoUpdate = false;
       obj.matrix.copy(base);
       this.group.add(obj);
-      if (bodies.has(id)) this.movers.push({ id, obj, base });
+      this.movers.push({ id: b.id, obj, base });
     }
     this.info = {
       moving: bodies.size,
       triggers: this.world.stats.triggers,
       names: new Map(doc.entities.map((e) => [e.id, e.name])),
+      problems: this.world.scriptProblems,
     };
   }
 
-  /** Advance the game and move what moved. Returns trigger events from this frame. */
-  tick(dt: number): TriggerEvent[] {
+  /** Advance the game and move what moved. Returns what happened this frame. */
+  tick(dt: number): PlayFrame {
     this.world.step(dt);
     const motion = new THREE.Matrix4();
     for (const m of this.movers) {
+      m.obj.visible = this.world.isVisible(m.id);
       const mm = this.world.motionOf(m.id);
       if (!mm) continue;
       m.obj.matrix.copy(motion.fromArray(mm).multiply(m.base));
       m.obj.matrixWorldNeedsUpdate = true;
     }
-    return this.world.drainEvents();
+    return { events: this.world.drainEvents(), logs: this.world.drainLogs(), errors: this.world.drainScriptErrors() };
+  }
+
+  activeBlocks(): Map<string, string[]> {
+    return this.world.activeBlocks();
   }
 
   get time(): number {

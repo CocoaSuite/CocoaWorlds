@@ -58,6 +58,7 @@ import { create } from 'zustand';
 import { brushComponent, brushOf, isLocked, isShown, newBrushEntity, toLocal, toWorld, worldBrushOf, shapeBrushes, shapeName, worldBrushes, type DrawRole, type Outline, type ShapeOptions } from './brush/brushes';
 import { useShallow } from 'zustand/react/shallow';
 import type { OpenedProject, PrefabEntry } from '../shared/api';
+import { emptyScript, type Script } from '@cocoaworlds/scripting';
 import { copyRootOf, recordAllChanges, repivot, syncCommands, unlinked } from './prefabs';
 import { DEV_TEXTURE_SIZE } from './brush/materials';
 import type { FaceRef } from './viewport/world-render';
@@ -124,6 +125,10 @@ interface State {
   placementPoint: () => [number, number, number] | null;
   /** An open editor dialog. */
   dialog: 'makePrefab' | null;
+  /** The bottom workspace's open tab. */
+  bottomTab: 'script' | 'assets' | 'console' | 'problems';
+  /** While playing: the blocks each object's script is running (for highlighting). */
+  activeBlocks: Map<string, string[]>;
 }
 
 interface Actions {
@@ -193,6 +198,9 @@ interface Actions {
   // play mode
   play(): void;
   stopPlaying(): void;
+  setBottomTab(tab: State['bottomTab']): void;
+  /** Change an object's script (the whole `script` component) as one undo step, merging with `mergeKey`. */
+  updateScript(id: string, fn: (s: Script) => Script, label: string, mergeKey?: string): void;
   // components
   addComponent(id: string, name: string): void;
   removeComponent(id: string, name: string): void;
@@ -246,6 +254,8 @@ export const useEditor = create<State & Actions>()((set, get) => ({
   prefabs: new Map(),
   placementPoint: () => null,
   dialog: null,
+  bottomTab: 'console',
+  activeBlocks: new Map(),
 
   setLang(l) {
     setLang(l);
@@ -869,7 +879,22 @@ export const useEditor = create<State & Actions>()((set, get) => ({
     const e = doc?.get(id);
     if (!doc || !e || e.components[name]) return;
     const label = componentDef(name)?.label.en ?? name;
-    get().execute(setComponentCmd(doc, id, name, defaultComponent(name) as never, `Add ${label}`));
+    const data = name === 'script' ? emptyScript() : defaultComponent(name);
+    get().execute(setComponentCmd(doc, id, name, data as never, `Add ${label}`));
+    if (name === 'script') set({ bottomTab: 'script', showBottom: true });
+  },
+
+  setBottomTab(bottomTab) {
+    set({ bottomTab, showBottom: true });
+  },
+
+  updateScript(id, fn, label, mergeKey) {
+    const doc = get().doc;
+    const cur = doc?.get(id)?.components.script as unknown as Script | undefined;
+    if (!doc || !cur) return;
+    const next = fn(cur);
+    if (JSON.stringify(next) === JSON.stringify(cur)) return;
+    get().execute(setComponentCmd(doc, id, 'script', next as never, label, mergeKey));
   },
 
   removeComponent(id, name) {
@@ -897,7 +922,7 @@ export const useEditor = create<State & Actions>()((set, get) => ({
 
   stopPlaying() {
     if (!get().playing) return;
-    set({ playing: null });
+    set({ playing: null, activeBlocks: new Map() });
     get().log('info', 'Play', 'Stopped. The scene is as it was before Play.');
   },
 

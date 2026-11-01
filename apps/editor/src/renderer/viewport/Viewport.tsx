@@ -57,14 +57,17 @@ export function Viewport() {
         cancelTool: () => useEditor.getState().setTool('select'),
         selectFace: (ref, mode, cut) => useEditor.getState().selectFace(ref, mode, cut),
         boxSelect: (ids, additive) => useEditor.getState().boxSelect(ids, additive),
-        playEvents: (events, names) => {
-          const log = useEditor.getState().log;
-          for (const ev of events) {
+        playFrame: (frame, names) => {
+          const st = useEditor.getState();
+          for (const ev of frame.events) {
             const what = names.get(ev.other) ?? ev.other;
             const zone = names.get(ev.trigger) ?? ev.trigger;
-            log('info', 'Trigger', `${ev.time.toFixed(2)} s — ${what} ${ev.kind === 'enter' ? 'entered' : 'left'} ${zone}`);
+            st.log('info', 'Trigger', `${ev.time.toFixed(2)} s — ${what} ${ev.kind === 'enter' ? 'entered' : 'left'} ${zone}`);
           }
+          for (const l of frame.logs) st.log('info', names.get(l.owner) ?? 'Script', l.text);
+          for (const e of frame.errors) st.log('error', names.get(e.owner) ?? 'Script', e.message);
         },
+        activeBlocks: (blocks) => useEditor.setState({ activeBlocks: blocks }),
         vertexInfo: setVertexCount,
         clipState: (state, keep) => setClip({ state, keep }),
         clip: (plane, keep) => useEditor.getState().clipSelection(plane, keep),
@@ -136,6 +139,9 @@ export function Viewport() {
       .then((info) => {
         if (cancelled) return;
         st.log('info', 'Play', `Playing: ${info.moving} moving object(s), ${info.triggers} trigger zone(s). Esc or Stop returns to editing.`);
+        for (const p of info.problems) {
+          st.log(p.severity === 'error' ? 'error' : 'warn', info.names.get(p.owner) ?? 'Script', p.severity === 'error' ? `${p.message} (this stack doesn't run)` : p.message);
+        }
       })
       .catch((err: Error) => {
         st.log('error', 'Play', `Could not start the game: ${err.message}`);

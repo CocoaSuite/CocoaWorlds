@@ -17,8 +17,7 @@ import { buildMarker, disposeMarker, markerKey, setMarkerSelected, type Marker }
 import { WorldRenderer, type FaceRef } from './world-render';
 import { VertexTool } from './vertex-tool';
 import { ClipTool, type ClipKeep, type ClipState } from './clip-tool';
-import type { PlayInfo, PlaySession } from './play-session';
-import type { TriggerEvent } from '@cocoaworlds/runtime';
+import type { PlayFrame, PlayInfo, PlaySession } from './play-session';
 import type { SceneFile } from '@cocoaworlds/core';
 
 export interface ViewportCallbacks {
@@ -46,8 +45,10 @@ export interface ViewportCallbacks {
   clip(plane: Plane, keep: ClipKeep): void;
   /** A short message for the user (e.g. why a vertex move was refused). */
   message(text: string): void;
-  /** Play mode: trigger events from the game world. */
-  playEvents(events: TriggerEvent[], names: Map<string, string>): void;
+  /** Play mode: what happened in the game this frame. */
+  playFrame(frame: PlayFrame, names: Map<string, string>): void;
+  /** Play mode: the blocks scripts are running (sent a few times a second, only when it changes). */
+  activeBlocks(blocks: Map<string, string[]>): void;
 }
 
 /** A live gizmo result: a brush in world space, or an entity's new world placement. */
@@ -123,6 +124,8 @@ export class ViewportEngine {
   private marquee: HTMLDivElement;
   private play: PlaySession | null = null;
   private playToken = 0;
+  private blockFrames = 0;
+  private blockKey = '';
   private gridWasVisible = true;
   private shapeOpts: ShapeOptions = { shape: 'box', sides: 16, steps: 8, facing: 0 };
   private brushRole: DrawRole = 'solid';
@@ -822,8 +825,16 @@ export class ViewportEngine {
       }
     }
     if (this.play) {
-      const events = this.play.tick(dt);
-      if (events.length) this.cb.playEvents(events, this.play.info.names);
+      const frame = this.play.tick(dt);
+      if (frame.events.length || frame.logs.length || frame.errors.length) this.cb.playFrame(frame, this.play.info.names);
+      if (++this.blockFrames % 6 === 0) {
+        const blocks = this.play.activeBlocks();
+        const key = JSON.stringify([...blocks]);
+        if (key !== this.blockKey) {
+          this.blockKey = key;
+          this.cb.activeBlocks(blocks);
+        }
+      }
       this.needsRender = true;
     }
     if (!this.needsRender) return;

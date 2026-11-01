@@ -6,7 +6,7 @@
 | 2 | Desktop foundation: Electron app, CocoaCanvas-style shell, projects, viewport, scene model, selection, transforms, undo | **Mostly done** (see checklist) |
 | 3 | Brush geometry: creation, manipulation, grid/snap, vertex and face editing, materials per face, carve/union/intersect, validation | **In progress** — brushes can be drawn, sized, cut and saved |
 | 4 | Entities and physics: components, Rapier, colliders, triggers, inspector, interaction infrastructure | **Done** (the player's “use” raycast moves to Phase 6 with the player) |
-| 5 | Visual scripting: blocks editor, script model, compiler, VM, events, debugging, recipes | Not started |
+| 5 | Visual scripting: blocks editor, script model, compiler, VM, events, debugging, recipes | **In progress** — model, checker, compiler, VM, block editor and Play integration done |
 | 6 | Gameplay: Source-style controller, player, interaction, health/score, doors/plates/buttons/lifts | Not started |
 | 7 | Assets and rendering: asset browser, material editor, textures, lighting, audio | Not started |
 | 8 | Runtime and persistence: standalone runtime, Play isolation, autosave, recovery, migrations | Not started |
@@ -38,6 +38,17 @@ Order may shift where dependencies require it (for example, the project format f
 - [x] Multi-object transforms, groups, copy/cut/paste, snap to corners
 - [x] Box selection
 - [ ] Run and check on Windows and macOS
+
+## Phase 5 checklist
+
+- [x] Decisions S1 (scripts on objects) and S2 (core block set)
+- [x] Script model, editing helpers, checker, compiler to IR, VM with step budget
+- [x] Runtime: script-driven bodies, actions over time, zone/message/timer events
+- [x] Block editor in the Visual script tab; problems under blocks and in the Problems tab
+- [x] Play: running blocks highlighted, Write blocks and errors in the console
+- [ ] Recipes for common mechanics (V2)
+- [ ] Optional graph view of the same scripts (V3)
+- [ ] Drag-and-drop of blocks; watching values; breakpoints and stepping
 
 ## Phase 4 checklist
 

@@ -35,6 +35,13 @@ export function ComponentsSection({ e }: { e: EntityData }) {
                   <FieldEditor key={f.key} entity={e.id} component={name} field={f} value={data[f.key]} />
                 ))}
               {!def.fields.length && <p className="cw-hint">{def.description[lang]}</p>}
+              {name === 'script' && (
+                <div className="cw-row">
+                  <span className="cw-muted">{t('script.stacks').replace('{n}', String(((e.components.script as { handlers?: unknown[] }).handlers ?? []).length))}</span>
+                  <span className="cw-sp" />
+                  <Button onClick={() => s.setBottomTab('script')}>{t('script.edit')}</Button>
+                </div>
+              )}
             </div>
           </Section>
         );

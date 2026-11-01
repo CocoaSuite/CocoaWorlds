@@ -54,7 +54,7 @@ New CocoaWorlds-only semantic colours (dark-background contrast checked against 
 | (subtract) | `#FF8A73` (`--bad`) | Subtract brushes in the viewport: they remove geometry, so they use the destructive colour |
 | `--cw-axis-x` / `-y` / `-z` | `#FF6B5B` / `#8FD14F` / `#4B9CFF` | Gizmo axes and X/Y/Z field labels |
 | `--cw-entity` | `#4B9CFF` tint `#1D2A3A` / border `#2F4D70` | Entity reference slots in script blocks |
-| `--cw-event` | `#3B4A1C` / border `#5A7128` | "When…" event blocks |
+| `--cw-event` | `#3B4A1C` / border `#5A7128` (`--cw-event-line`) | "When…" event blocks |
 
 ### 2.2 Typography
 

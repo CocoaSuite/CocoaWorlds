@@ -113,6 +113,8 @@ export class GameWorld {
   private logs: ScriptLog[] = [];
   private reportedErrors = 0;
   private names = new Map<string, string>();
+  /** Brushes that are part of the still level (not moved by physics or scripts). */
+  levelIds = new Set<string>();
 
   /** Build a world from a scene snapshot. Call `initPhysics()` first. */
   static create(scene: SceneFile): GameWorld {
@@ -168,6 +170,7 @@ export class GameWorld {
       }
     }
     this.addLevel(level);
+    this.levelIds = new Set(level.map((b) => b.id));
     for (const root of unitRoots) this.addUnit(root, doc.worldMatrix(root), unitBrushes.get(root)!);
 
     this.runner = new ScriptRunner(programs, {

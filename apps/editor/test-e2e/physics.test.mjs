@@ -39,8 +39,10 @@ test('components, trigger zone, play and stop', async () => {
     assert.equal(await physics.getByLabel('Moves', { exact: true }).inputValue(), 'dynamic');
     await physics.getByLabel('Bounce', { exact: true }).fill('0');
     await physics.getByLabel('Bounce', { exact: true }).press('Enter');
-    // Nothing else fits a moving brush (a trigger zone can't move, lights and shapes are for point objects).
-    assert.equal(await insp().getByRole('button', { name: 'Add component' }).isDisabled(), true);
+    // Only a Script still fits a moving brush (a trigger zone can't move; lights and shapes are for point objects).
+    await insp().getByRole('button', { name: 'Add component' }).click();
+    assert.deepEqual((await page.getByRole('menuitem').allTextContents()).map((x) => x.split(' — ')[0]), ['Script']);
+    await page.keyboard.press('Escape');
 
     // 2. The trigger zone notices physics objects.
     await item('trigger').click();

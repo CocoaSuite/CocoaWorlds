@@ -163,3 +163,55 @@ code { font: 12px var(--mono); color: var(--fg); }
 .cw-asset svg { width: 14px; height: 14px; color: var(--mute); }
 .cw-asset-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cw-asset-meta { color: var(--mute); font-size: 12px; }
+
+/* Visual script (mockup 02) */
+.cw-bottom.tall { height: min(46vh, 520px); }
+.cw-script-empty { display: flex; align-items: center; gap: 12px; font: 13px/1.4 var(--sans, system-ui); }
+.cw-script { font: 13px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif; color: var(--fg); display: flex; flex-direction: column; gap: 10px; }
+.cw-script-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; position: sticky; top: -8px; background: var(--panel); padding: 2px 0 6px; z-index: 1; }
+.cw-script-owner { font-weight: 600; }
+.cw-vars { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.cw-var { display: inline-flex; align-items: center; gap: 4px; padding: 2px 2px 2px 4px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); }
+.cw-var-name { width: 90px; }
+.cw-var-x { width: 22px; height: 22px; padding: 0; }
+.cw-var-x svg { width: 12px; height: 12px; }
+.cw-stacks { display: flex; flex-wrap: wrap; gap: 14px; align-items: flex-start; }
+.cw-stack { min-width: 340px; max-width: 100%; display: flex; flex-direction: column; }
+.cw-blk { position: relative; border: 1px solid var(--line); border-radius: 6px; background: var(--panel2); margin-top: 3px; }
+.cw-blk.event { background: var(--cw-event); border-color: var(--cw-event-line); border-radius: 8px 8px 6px 6px; font-weight: 600; margin-top: 0; }
+.cw-blk.control { border-left: 3px solid var(--mute); }
+.cw-blk.data { border-left: 3px solid var(--cw-brand); }
+.cw-blk.action { border-left: 3px solid var(--sel); }
+.cw-blk.running { outline: 2px solid var(--cw-brand-hi); outline-offset: 1px; }
+.cw-blk.bad { border-color: var(--bad); }
+.cw-blk-line { display: flex; align-items: center; gap: 6px; padding: 4px 6px 4px 8px; min-height: 32px; }
+.cw-blk-words { flex: 1; display: flex; align-items: center; gap: 5px; flex-wrap: wrap; min-width: 0; }
+.cw-blk-tools { display: flex; gap: 1px; opacity: 0; transition: opacity 0.15s; }
+.cw-blk-line:hover > .cw-blk-tools, .cw-blk-line:focus-within > .cw-blk-tools { opacity: 1; }
+.cw-blk-tools .cw-ic, .cw-blk-tools button { width: 22px; height: 22px; padding: 0; }
+.cw-blk-tools svg { width: 13px; height: 13px; }
+.cw-blk-body { padding: 0 6px 6px 18px; border-left: 2px solid var(--line); margin-left: 10px; }
+.cw-blk-else { display: flex; align-items: center; justify-content: space-between; color: var(--mute); margin: 6px 0 0 -12px; font-weight: 600; }
+.cw-blk-else button { width: 22px; height: 22px; padding: 0; }
+.cw-blk-problems { padding: 0 8px 6px 10px; }
+.cw-blk-problem { font-size: 12px; }
+.cw-blk-problem.error { color: var(--bad); }
+.cw-blk-problem.warning { color: var(--cw-warn); }
+.cw-list { display: flex; flex-direction: column; }
+.cw-add-blk { align-self: flex-start; margin-top: 4px; padding: 2px 8px; font-size: 12px; color: var(--mute); background: transparent; border: 1px dashed var(--line); border-radius: 6px; }
+.cw-add-blk:hover { color: var(--fg); border-color: var(--mute); }
+.cw-script .cw-input { height: 24px; padding: 2px 6px; font-size: 12px; }
+.cw-slot.num { width: 56px; font-family: var(--mono, ui-monospace, monospace); }
+.cw-slot.txt { width: 110px; }
+.cw-mini { width: auto; }
+.cw-ref { width: auto; max-width: 180px; background: var(--cw-entity); border-color: var(--cw-entity-line); color: #cfe1ff; }
+.cw-var-slot { width: auto; max-width: 140px; border-color: var(--cw-brand); }
+.cw-expr { display: inline-flex; align-items: center; gap: 3px; }
+.cw-expr.pill { padding: 1px 3px 1px 6px; border: 1px solid var(--line); border-radius: 999px; background: var(--bg); }
+.cw-expr.bad > .cw-input, .cw-expr.bad.pill { border-color: var(--bad); }
+.cw-slot-kind { width: 16px; height: 22px; padding: 0; border: 0; background: transparent; color: var(--mute); font-size: 10px; cursor: pointer; }
+.cw-slot-kind:hover { color: var(--fg); }
+.cw-pill-text { color: var(--mute); font-style: italic; }
+.cw-op { min-width: 40px; }
+.cw-log-btn { display: flex; width: 100%; text-align: left; background: transparent; border: 0; padding: 0; font: inherit; color: inherit; cursor: pointer; gap: 0; }
+.cw-log-btn:hover { background: var(--panel2); }

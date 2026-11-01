@@ -84,6 +84,9 @@ Last updated: 2026-11-01 (Phase 2, first slice).
 | Assets, materials, lighting, audio (Phase 7) | Planned |
 | Prefabs (P1): Edit › Make prefab…, place copies from the Assets panel, per-copy changes listed in the Inspector with Revert / Apply, Unlink; copies stored in full and synced on Apply and on open | **Done** (Phase 4). See docs/prefabs.md. |
 | Game event bus (trigger enter/exit now; “use” and messages reserved for scripts) | **Done** (Phase 4) |
+| Visual scripting (S1, S2): Script component, block editor in the Visual script tab (plain-language rows, palette, ▾ value kinds, variables), checker with problems under blocks and in the Problems tab | **Done** (Phase 5). See docs/scripting.md. |
+| Script VM in Play: waits, moves/turns over time, messages, every-N-seconds, zone events, “the thing that entered”; step budget stops runaway loops; running blocks highlighted; Write and errors in the console | **Done** (Phase 5) |
+| Recipes (ready-made scripts such as “door that opens when the player comes near”), the optional graph view (V3), drag-and-drop of blocks, watching values and breakpoints | Planned (rest of Phase 5) |
 | Standalone runtime and Play as built (Phase 8) | Planned |
 | Desktop and web export (Phase 9) | Planned |
 | Custom JavaScript scripting | Not supported (deferred past v1) |
