@@ -8,6 +8,7 @@
 import { box } from './primitives';
 import { bounds, type Brush, type FaceSurface } from './brush';
 import { carveDetailed } from './ops';
+import { AabbTree } from './spatial';
 import type { V3 } from './vec';
 
 export type BrushRole = 'solid' | 'subtract';
@@ -41,6 +42,7 @@ const boxesTouch = (a: Box3, b: Box3) =>
 
 export function buildWorld(brushes: WorldBrush[]): BuiltWorld {
   const subtracts = brushes.filter((b) => b.role === 'subtract').map((b) => ({ ...b, bb: bounds(b.brush) }));
+  const tree = new AabbTree(subtracts.map((c) => c.bb));
   let droppedSlivers = 0;
   const solids: BuiltSolid[] = [];
   for (const s of brushes) {
@@ -48,7 +50,10 @@ export function buildWorld(brushes: WorldBrush[]): BuiltWorld {
     const sb = bounds(s.brush);
     let pieces: Brush[] = [s.brush];
     const cutBy: string[] = [];
-    for (const c of subtracts) {
+    // Cutters in scene order, as before; the tree just skips the far ones.
+    const near = sb ? tree.near(sb).sort((a, b) => a - b) : [];
+    for (const ci of near) {
+      const c = subtracts[ci]!;
       if (!sb || !c.bb || !boxesTouch(sb, c.bb)) continue;
       const next: Brush[] = [];
       let cut = false;

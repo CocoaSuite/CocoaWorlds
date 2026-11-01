@@ -33,9 +33,14 @@ export function BrushPanel({ draft, onBounds, onCreate, onCancel }: { draft: Dra
   };
 
   const ortho = useEditor((s) => s.view !== 'perspective');
+  const poly = opts.shape === 'polygon';
   const hint = !draft
-    ? t('brush.hintDraw')
-    : draft.stage === 'footprint'
+    ? poly
+      ? t('brush.hintPolygon')
+      : t('brush.hintDraw')
+    : draft.stage === 'footprint' && poly
+      ? t('brush.hintPolygonMore')
+      : draft.stage === 'footprint'
       ? t('brush.hintFootprint')
       : ortho
         ? t('brush.hintDepth')
@@ -53,6 +58,7 @@ export function BrushPanel({ draft, onBounds, onCreate, onCancel }: { draft: Dra
             { value: 'cylinder', label: t('brush.cylinder') },
             { value: 'wedge', label: t('brush.wedge') },
             { value: 'stairs', label: t('brush.stairs') },
+            { value: 'polygon', label: t('brush.polygon') },
           ]}
         />
         <Segmented<'solid' | 'subtract'>
@@ -95,7 +101,7 @@ export function BrushPanel({ draft, onBounds, onCreate, onCancel }: { draft: Dra
         )}
       </div>
       <div className="cw-brush-row">
-        {draft && size ? (
+        {draft && size && !(poly && draft.stage === 'footprint') ? (
           <>
             <div className="cw-brush-dims" aria-label={t('brush.size')}>
               <span className="cw-brush-k">{t('brush.size')}</span>
@@ -115,7 +121,7 @@ export function BrushPanel({ draft, onBounds, onCreate, onCancel }: { draft: Dra
               {t('brush.create')}
             </Button>
           </>
-        ) : (
+        ) : draft ? null : (
           <span className="cw-brush-hint">{hint}</span>
         )}
       </div>

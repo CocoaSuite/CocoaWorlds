@@ -29,7 +29,8 @@ Each face is saved as **three points on its plane** plus its surface (the same i
 
 | Operation | Function | Notes |
 |---|---|---|
-| Primitives | `box`, `cylinder` (3–64 sides), `wedge`/ramp (4 facings), `prism` (any convex footprint), `stairs` (separate non-overlapping step brushes) | Footprints are drawn on the XZ plane, Y is up. |
+| Primitives | `box`, `cylinder` (3–64 sides), `wedge`/ramp (4 facings), `prism` (any convex footprint), `stairs` (separate non-overlapping step brushes), `extrudePolygon` (any outline on any axis plane; made convex with `convexHull2D`) | Footprints are drawn on the XZ plane, Y is up, except `extrudePolygon`, which takes the view's axes. |
+| Clip | `clipPlane`, `clipBrush` | The plane through two drawn points along the view's depth; pieces on each side with matching cap surfaces. |
 | Move | `translate` | Texture lock keeps textures glued to the faces. |
 | Rotate / scale / mirror | `transform` | Planes rebuilt from transformed polygons; mirroring keeps normals outward. |
 | Face drag | `pushFace` | Refuses to collapse the brush. |
@@ -68,6 +69,14 @@ Distances under 0.001 u count as "on the plane". Generated coordinates are round
 | Door-sized carve | ~3 ms |
 | 16-sided column carved through a wall | ~55 ms |
 | Mesh for 500 box brushes (6,000 triangles) | ~75 ms |
-| Same with hidden-face removal | ~320 ms. This step is O(n²) today and will use the spatial index in Phase 3. |
+| Same with hidden-face removal | ~150 ms (was ~320 ms before the spatial index) |
+| 2,000 floor tiles with hidden-face removal | ~220 ms (was ~4.2 s) |
+| Level of 500 brushes with 40 live cutters | ~450 ms, almost all of it carving; runs in the background worker |
 
-Mesh building is designed to run in a worker so the editor never stalls.
+## Spatial index
+
+`AabbTree` is a static bounding-box tree (median split on the longest axis). Hidden-face removal asks it which brushes touch each face; live subtract asks it which cutters touch each solid. A randomized test checks it returns exactly what a brute-force search does.
+
+## Background builds
+
+The editor builds the level (live subtract, then the mesh) with one plain-data function, `buildLevel`. From 64 brushes it runs in a worker; while a build is running, newer edits wait and only the latest one is built next.

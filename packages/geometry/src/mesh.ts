@@ -2,7 +2,8 @@
  * Render and collision data from brushes. Plain typed arrays, no renderer imports, so this runs in a worker
  * and in the game runtime as well as in the editor.
  */
-import { polygons, vertices, type Brush, type BrushPolygon } from './brush';
+import { bounds, polygons, vertices, type Brush, type BrushPolygon } from './brush';
+import { AabbTree, type Aabb } from './spatial';
 import { EPS, samePlane, flip } from './plane';
 import { uvAt, uvAxes } from './uv';
 import { type V3 } from './vec';
@@ -41,7 +42,12 @@ export function buildMesh(brushes: Brush[], opts: MeshOptions = {}): BrushMesh {
   const perBrush = brushes.map((b) => polygons(b));
   perBrush.forEach((polys, bi) => polys.forEach((poly) => all.push({ poly, brush: bi })));
 
-  const visible = opts.cullTouchingFaces ? all.filter((x) => !isCovered(x.poly, x.brush, perBrush)) : all;
+  let visible = all;
+  if (opts.cullTouchingFaces) {
+    // Only brushes whose bounds touch a face's bounds can cover it.
+    const tree = new AabbTree(brushes.map((b) => bounds(b)));
+    visible = all.filter((x) => !isCovered(x.poly, x.brush, perBrush, tree.near(polyBounds(x.poly), EPS)));
+  }
   const byMat = new Map<string, typeof visible>();
   for (const x of visible) {
     const k = x.poly.surface.material;
@@ -82,9 +88,18 @@ export function buildMesh(brushes: Brush[], opts: MeshOptions = {}): BrushMesh {
 }
 
 /** A face is covered when another brush has a face on the same plane facing the other way whose polygon contains it. */
-function isCovered(poly: BrushPolygon, self: number, perBrush: BrushPolygon[][]): boolean {
+function polyBounds(poly: BrushPolygon): Aabb {
+  const min: V3 = [Infinity, Infinity, Infinity], max: V3 = [-Infinity, -Infinity, -Infinity];
+  for (const p of poly.points) for (let k = 0; k < 3; k++) {
+    if (p[k]! < min[k]!) min[k] = p[k]!;
+    if (p[k]! > max[k]!) max[k] = p[k]!;
+  }
+  return { min, max };
+}
+
+function isCovered(poly: BrushPolygon, self: number, perBrush: BrushPolygon[][], candidates: number[]): boolean {
   const opposite = flip(poly.plane);
-  for (let bi = 0; bi < perBrush.length; bi++) {
+  for (const bi of candidates) {
     if (bi === self) continue;
     for (const other of perBrush[bi]!) {
       if (!samePlane(other.plane, opposite)) continue;

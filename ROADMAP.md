@@ -46,15 +46,15 @@ Order may shift where dependencies require it (for example, the project format f
 - [x] Brush entities in the scene format; level rendering with the dev grid texture, hidden-face removal, selection outlines
 - [x] Brush tool: block, cylinder, wedge, stairs — draw footprint → set height → preview → confirm, with exact numeric size/corner, solid or subtract
 - [x] Live subtract brushes, Apply cut (bake), Make hollow, Merge, numeric size and centre, move/rotate/scale brushes with the gizmo (texture lock on move)
-- [ ] Polygon prism drawing (custom footprint)
-- [ ] Move level geometry building into a worker
+- [x] Polygon brush drawing (custom outline, any view)
+- [x] Level building in a background worker
 - [x] Make hollow: walls inward or outward
 - [x] Face tool: face selection, per-face materials, texture alignment (offset, scale, rotation, World/Face, Fit, line up)
 - [x] Paint tool with built-in development materials
 - [x] Vertex and edge editing tool; clip tool
 - [ ] Subtract/union/intersect commands with undo
-- [ ] Spatial index for picking, culling and fast hidden-face removal
+- [x] Spatial index for hidden-face removal and live subtract (picking and culling reuse it in Phase 7)
 
 ## Next
 
-Rest of Phase 3: polygon prisms (custom footprints), the spatial index and worker-based rebuilds, then a Phase 3 review before Phase 4.
+Phase 3 features are complete. Next: a Phase 3 review with the user, then Phase 4 (entities, physics, nested transforms).

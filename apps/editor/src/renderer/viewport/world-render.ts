@@ -2,7 +2,9 @@
  * Draws level brushes: solids (after live subtract) as one lit mesh per material, subtract brushes as orange
  * see-through volumes, and outlines for selected brushes. Rebuilt whenever brushes change.
  */
-import { buildMesh, buildWorld, edges, polygons, samePlane, type Brush, type BrushMesh, type WorldBrush } from '@cocoaworlds/geometry';
+import { buildMesh, edges, polygons, samePlane, type Brush, type BrushMesh, type WorldBrush } from '@cocoaworlds/geometry';
+import { buildLevel, type WorldResult } from './world-build';
+import WorldWorker from './world-worker?worker&inline';
 import * as THREE from 'three';
 import { DEV_TEXTURE_SIZE, devMaterial, paintDevTexture } from '../brush/materials';
 
@@ -58,7 +60,20 @@ export class WorldRenderer {
   private brushes: WorldBrush[] = [];
   private brushById = new Map<string, WorldBrush>();
   /** Statistics from the last rebuild. */
-  stats = { solids: 0, pieces: 0, subtracts: 0, droppedSlivers: 0 };
+  stats = { solids: 0, pieces: 0, subtracts: 0, droppedSlivers: 0, buildMs: 0 };
+  /** Levels at least this big are built in the background worker; smaller ones right away. */
+  static asyncThreshold = 64;
+  private worker: Worker | null = null;
+  private seq = 0;
+  private inFlight = false;
+  private pending: WorldBrush[] | null = null;
+  /** Called when a background build lands (the view needs a redraw). */
+  onUpdate: () => void = () => {};
+
+  /** True while a background build is running. */
+  get building(): boolean {
+    return this.inFlight;
+  }
 
   constructor() {
     this.group.name = 'world';
@@ -83,40 +98,75 @@ export class WorldRenderer {
   rebuild(brushes: WorldBrush[]): void {
     this.brushes = brushes;
     this.brushById = new Map(brushes.map((b) => [b.id, b]));
-    const world = buildWorld(brushes);
-    const pieces: Brush[] = [];
-    const owners: string[] = [];
-    this.piecesById = new Map();
-    for (const s of world.solids) {
-      this.piecesById.set(s.id, s.pieces);
-      for (const p of s.pieces) {
-        pieces.push(p);
-        owners.push(s.id);
-      }
+    const worker = brushes.length >= WorldRenderer.asyncThreshold ? this.ensureWorker() : null;
+    if (worker) {
+      if (this.inFlight) this.pending = brushes;
+      else this.post(worker, brushes);
+    } else {
+      this.pending = null;
+      this.seq++;
+      this.apply(buildLevel({ seq: this.seq, brushes }));
     }
-    this.stats = {
-      solids: world.solids.length,
-      pieces: pieces.length,
-      subtracts: brushes.filter((b) => b.role === 'subtract').length,
-      droppedSlivers: world.droppedSlivers,
-    };
+    this.rebuildSubtracts(brushes);
+  }
 
+  private ensureWorker(): Worker | null {
+    if (this.worker) return this.worker;
+    try {
+      this.worker = new WorldWorker();
+      this.worker.onmessage = (e: MessageEvent<WorldResult>) => this.onResult(e.data);
+      this.worker.onerror = () => {
+        // Fall back to building on the main thread.
+        this.worker?.terminate();
+        this.worker = null;
+        this.inFlight = false;
+        WorldRenderer.asyncThreshold = Infinity;
+        this.rebuild(this.brushes);
+        this.onUpdate();
+      };
+    } catch {
+      WorldRenderer.asyncThreshold = Infinity;
+    }
+    return this.worker;
+  }
+
+  private post(worker: Worker, brushes: WorldBrush[]): void {
+    this.inFlight = true;
+    worker.postMessage({ seq: ++this.seq, brushes });
+  }
+
+  private onResult(r: WorldResult): void {
+    this.inFlight = false;
+    // A newer edit arrived meanwhile: build that next and skip this stale result's mesh if a sync build overtook it.
+    if (r.seq === this.seq) this.apply(r);
+    if (this.pending && this.worker) {
+      const next = this.pending;
+      this.pending = null;
+      this.post(this.worker, next);
+    }
+    this.onUpdate();
+  }
+
+  private apply(r: WorldResult): void {
+    this.piecesById = new Map(r.pieces);
+    this.stats = { ...r.stats, buildMs: Math.round(r.ms) };
     if (this.solidMesh) {
       this.group.remove(this.solidMesh);
       this.solidMesh.geometry.dispose();
       this.solidMesh = null;
     }
-    if (pieces.length) {
-      const m = buildMesh(pieces, { cullTouchingFaces: true });
+    if (r.mesh) {
+      const m = r.mesh;
       this.solidMesh = new THREE.Mesh(toGeometry(m), m.groups.map((g) => this.material(g.material)));
       this.solidMesh.name = 'world-solids';
       this.solidMesh.castShadow = this.solidMesh.receiveShadow = false;
       this.group.add(this.solidMesh);
-      this.triangleOwner = Array.from(m.triangleBrushes, (bi) => owners[bi]!);
-    } else {
-      this.triangleOwner = [];
     }
+    this.triangleOwner = r.triangleOwner;
+    this.setFaceSelection(this.faceRefs);
+  }
 
+  private rebuildSubtracts(brushes: WorldBrush[]): void {
     clear(this.subtractGroup);
     for (const b of brushes) {
       if (b.role !== 'subtract') continue;
@@ -125,7 +175,6 @@ export class WorldRenderer {
       mesh.userData.entityId = b.id;
       this.subtractGroup.add(mesh, edgeLines(b.brush, this.subtractEdgeMat));
     }
-    this.setFaceSelection(this.faceRefs);
   }
 
   /** Highlight faces: the parts of each face that are actually visible (a cut wall shows its doorway). */
@@ -199,6 +248,8 @@ export class WorldRenderer {
   }
 
   dispose(): void {
+    this.worker?.terminate();
+    this.worker = null;
     this.solidMesh?.geometry.dispose();
     clear(this.subtractGroup);
     clear(this.outlineGroup);

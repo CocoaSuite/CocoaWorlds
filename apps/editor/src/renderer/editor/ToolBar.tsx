@@ -39,6 +39,7 @@ export function ToolBar() {
       {B('cylinder', 'cylinder', t('tool.cylinder'))}
       {B('wedge', 'wedge', t('tool.wedge'))}
       {B('stairs', 'stairs', t('tool.stairs'))}
+      {B('polygon', 'polygon', t('tool.polygon'))}
       <Divider />
       {T('vertex', 'vertex', t('tool.vertex'), 'X')}
       {T('face', 'face', t('tool.face'), 'T')}

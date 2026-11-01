@@ -12,7 +12,7 @@
 - **The vertex tool moves corners with the gizmo only;** dragging a corner handle directly is not supported yet.
 - **Materials are built-in development colours** until material assets and textures arrive in Phase 7.
 - **Surfaces made by a live cut** (the inside of a doorway) follow the wall around them and can't be selected until the cut is applied.
-- **Level geometry rebuilds on the main thread.** Fine for hundreds of brushes; very large levels may stutter while editing until the rebuild moves to a worker. Hidden-face removal is O(n²) for now.
+- **Big levels update a moment after an edit.** From 64 brushes the level is rebuilt in a background worker, so the view can lag an edit by the build time (shown in the stats). Picking uses the last finished build.
 - **Brush rotation re-projects textures** (world alignment). Texture lock is exact for moves only.
 - **Carving can drop hair-thin slivers** (< 0.5 u thick, ≤ 8 cubic units) left by cutters at very shallow angles; the count is reported.
 - **Automated end-to-end tests run on a software renderer** (SwiftShader). Real-GPU behaviour is covered by manual testing only so far.

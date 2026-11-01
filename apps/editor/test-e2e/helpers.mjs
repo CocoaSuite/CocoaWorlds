@@ -22,6 +22,7 @@ export async function launch(userData, projectsDir) {
   });
   const page = await app.firstWindow();
   page.on('pageerror', (e) => console.error('[page error]', e.stack));
+  if (process.env.CW_DEBUG) page.on('console', (m) => m.type() === 'error' && console.error('[console]', m.text().slice(0, 6000)));
   page.setDefaultTimeout(15000);
   return { app, page };
 }

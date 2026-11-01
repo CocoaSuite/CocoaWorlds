@@ -26,6 +26,8 @@ Details and trade-offs for each: [ARCHITECTURE.md](ARCHITECTURE.md).
 
 ## Log
 
+- **2026-11-01** — Routine choices for the end of Phase 3 (reversible): polygon outlines are made convex (dents filled in) rather than split into several brushes; levels of 64+ brushes build in a background worker inlined into the bundle as a blob (no extra files to load from disk); while a build runs, only the latest edit is queued. Number fields now derive their text during render instead of copying props into state in an effect, which removed a render loop seen when pasting many objects quickly.
+
 - **2026-11-01** — Routine choices for multi-select, groups, clipboard and snapping (reversible): groups follow CocoaCanvas (a click selects the outermost group, double-click or Enter steps in, Esc steps out); a group's Visible and Locked switches apply to everything inside; each paste is offset one grid step further and a cut pastes back in place; snapping to corners grabs the moving corner nearest the cursor and shows it in the guide colour; grid snapping while moving is relative to the start of the drag.
 
 - **2026-11-01** — Approved G1 (live subtract brushes) and G2 (split bent faces) after reviewing the geometry engine.

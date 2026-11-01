@@ -36,7 +36,7 @@ import {
   type BrushRole,
 } from '@cocoaworlds/geometry';
 import { create } from 'zustand';
-import { brushComponent, brushOf, isLocked, isShown, newBrushEntity, shapeBrushes, shapeName, worldBrushes, type ShapeOptions } from './brush/brushes';
+import { brushComponent, brushOf, isLocked, isShown, newBrushEntity, shapeBrushes, shapeName, worldBrushes, type Outline, type ShapeOptions } from './brush/brushes';
 import { useShallow } from 'zustand/react/shallow';
 import type { OpenedProject } from '../shared/api';
 import { DEV_TEXTURE_SIZE } from './brush/materials';
@@ -128,7 +128,7 @@ interface Actions {
   // brushes
   setBrushOptions(o: Partial<ShapeOptions>): void;
   setBrushRole(r: BrushRole): void;
-  createBrushes(min: [number, number, number], max: [number, number, number]): void;
+  createBrushes(min: [number, number, number], max: [number, number, number], outline?: Outline): void;
   setBrush(id: string, brush: Brush, mergeKey?: string, label?: string): void;
   changeBrushRole(id: string, role: BrushRole): void;
   applySubtract(ids: string[]): void;
@@ -410,10 +410,17 @@ export const useEditor = create<State & Actions>()((set, get) => ({
   },
   setBrushRole: (brushRole) => set({ brushRole }),
 
-  createBrushes(min, max) {
+  createBrushes(min, max, outline) {
     const { doc, brushOptions, brushRole } = get();
     if (!doc) return;
-    const brushes = shapeBrushes(brushOptions, min, max, brushRole);
+    let brushes: Brush[];
+    try {
+      brushes = shapeBrushes(brushOptions, min, max, brushRole, outline);
+    } catch (err) {
+      get().notify((err as Error).message);
+      return;
+    }
+    if (!brushes.length) return;
     const problems = brushes.flatMap((b) => validate(b));
     if (problems.length) {
       get().notify(`The brush is too small to build (${problems[0]}).`);

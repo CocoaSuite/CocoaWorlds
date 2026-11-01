@@ -6,7 +6,7 @@ import type { EntityData, SceneDoc, Transform, Vec3 } from '@cocoaworlds/core';
 import { bounds, faceAt, transform as transformBrush, translate, vertices, type Brush, type Plane, type V3 } from '@cocoaworlds/geometry';
 import * as THREE from 'three';
 import { TransformControls } from 'three/addons/controls/TransformControls.js';
-import { brushOf, isLocked, isShown, worldBrushes, type ShapeOptions } from '../brush/brushes';
+import { brushOf, isLocked, isShown, worldBrushes, type Outline, type ShapeOptions } from '../brush/brushes';
 import { isGroup } from '../scene-ops';
 import { BrushDraft, draftAxes, type DraftState } from './brush-draft';
 import { CameraRig, type ViewKind } from './camera';
@@ -28,7 +28,7 @@ export interface ViewportCallbacks {
   stats(s: ViewportStats): void;
   setFlying(active: boolean): void;
   draft(state: DraftState | null): void;
-  createBrush(min: V3, max: V3): void;
+  createBrush(min: V3, max: V3, outline?: Outline): void;
   cancelTool(): void;
   /** Face tool click: `null` clicks empty space; `cut` is a surface made by a live cut (not editable). */
   selectFace(ref: FaceRef | null, mode: 'replace' | 'toggle' | 'brush', cut?: boolean): void;
@@ -66,6 +66,10 @@ export interface ViewportStats {
   draws: number;
   triangles: number;
   view: ViewKind;
+  /** A background level build is running. */
+  building: boolean;
+  /** How long the last level build took. */
+  buildMs: number;
 }
 
 export type GizmoMode = 'none' | 'translate' | 'rotate' | 'scale';
@@ -130,6 +134,10 @@ export class ViewportEngine {
     this.renderer.domElement.setAttribute('aria-label', '3D viewport');
     host.prepend(this.renderer.domElement);
 
+    this.world.onUpdate = () => {
+      this.applySelection();
+      this.invalidate();
+    };
     this.scene.add(this.grid.object, this.world.group, this.proxy, this.vertexTool.group, this.clipTool.group);
     this.vertexTool.group.visible = false;
     this.marquee = document.createElement('div');
@@ -284,8 +292,9 @@ export class ViewportEngine {
     const { min, max } = d.bounds();
     const e = draftAxes(this.rig.kind).e;
     this.lastHeight = Math.abs(max[e]! - min[e]!) || this.lastHeight;
+    const outline = d.outline() ?? undefined;
     this.cancelDraft();
-    this.cb.createBrush(min, max);
+    this.cb.createBrush(min, max, outline);
   }
 
   cancelDraft(): void {
@@ -728,6 +737,8 @@ export class ViewportEngine {
       draws: this.renderer.info.render.calls,
       triangles: this.renderer.info.render.triangles,
       view: this.rig.kind,
+      building: this.world.building,
+      buildMs: this.world.stats.buildMs,
     });
   };
 
@@ -905,6 +916,10 @@ export class ViewportEngine {
       this.confirmDraft();
       return;
     }
+    if (mode === 'draw' && this.shapeOpts.shape === 'polygon') {
+      this.polygonClick(e);
+      return;
+    }
     if (mode === 'draw') {
       const p = this.drawPoint(e);
       if (!p) return;
@@ -932,7 +947,46 @@ export class ViewportEngine {
 
   private heightAnchor: { y: number; h: number } | null = null;
 
+  /** Polygon brushes: each click places a corner; clicking the first corner finishes the outline. */
+  private polygonClick(e: PointerEvent): void {
+    const d = this.draft;
+    const base = d ? d.bounds().min[draftAxes(this.rig.kind).e] : undefined;
+    const p = this.drawPoint(e, base);
+    if (!p) return;
+    if (!d || !d.points) {
+      this.cancelDraft();
+      this.draft = new BrushDraft(this.rig.kind, p, this.lastHeight);
+      this.draft.startPolygon(p);
+      this.scene.add(this.draft.group);
+    } else {
+      const { a, b, e: ax } = draftAxes(this.rig.kind);
+      const first = d.points[0]!;
+      const fp: V3 = [0, 0, 0];
+      fp[a] = first[0];
+      fp[b] = first[1];
+      fp[ax] = p[ax]!;
+      const s = this.toScreen(fp);
+      if (Math.hypot(s.x - e.clientX, s.y - e.clientY) < 10 && d.canClose) return this.closePolygon();
+      d.addPoint(p);
+    }
+    const nd = this.draft!;
+    nd.update(this.shapeOpts, this.brushRole);
+    this.cb.draft(nd.state());
+    this.invalidate();
+  }
+
+  private closePolygon(): void {
+    const d = this.draft;
+    if (!d?.closePolygon()) return;
+    this.heightAnchor = null;
+    this.showSnap(null);
+    d.update(this.shapeOpts, this.brushRole);
+    this.cb.draft(d.state());
+    this.invalidate();
+  }
+
   private onDoubleClick = (e: MouseEvent): void => {
+    if (this.brushTool && this.draft?.points && this.draft.stage === 'footprint') return this.closePolygon();
     if (this.brushTool || this.faceTool || e.button !== 0) return;
     const id = this.pick(e);
     if (id) this.cb.clickSelect(id, false, true);
@@ -943,6 +997,14 @@ export class ViewportEngine {
   };
 
   private onPointerMove = (e: PointerEvent): void => {
+    // Polygon outline: the next corner follows the cursor.
+    if (!this.drag && this.draft?.points && this.draft.stage === 'footprint') {
+      const p = this.drawPoint(e, this.draft.bounds().min[draftAxes(this.rig.kind).e]);
+      this.draft.setCursor(p);
+      this.draft.update(this.shapeOpts, this.brushRole);
+      this.invalidate();
+      return;
+    }
     // Height stage follows the mouse without a button held (perspective only; ortho views type the depth).
     if (!this.drag && this.draft?.stage === 'height' && this.rig.kind === 'perspective') {
       if (!this.heightAnchor) this.heightAnchor = { y: e.clientY, h: this.draft.height };
@@ -1095,6 +1157,17 @@ export class ViewportEngine {
 
   private onKeyDown = (e: KeyboardEvent): void => {
     if (this.isTyping(e)) return;
+    if (this.draft?.points && this.draft.stage === 'footprint' && (e.key === 'Enter' || e.key === 'Backspace')) {
+      e.preventDefault();
+      e.stopPropagation();
+      if (e.key === 'Enter') this.closePolygon();
+      else if (this.draft.removeLastPoint()) {
+        this.draft.update(this.shapeOpts, this.brushRole);
+        this.cb.draft(this.draft.state());
+        this.invalidate();
+      } else this.cancelDraft();
+      return;
+    }
     if (this.draft && (e.key === 'Enter' || e.key === 'Escape')) {
       e.preventDefault();
       e.stopPropagation();

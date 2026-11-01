@@ -3,6 +3,7 @@ import { newEntity, type EntityData, type SceneDoc } from '@cocoaworlds/core';
 import {
   box,
   cylinder,
+  extrudePolygon,
   defaultSurface,
   fromData,
   stairs,
@@ -20,7 +21,13 @@ export interface BrushComponent {
   faces: BrushData['faces'];
 }
 
-export type BrushShape = 'box' | 'cylinder' | 'wedge' | 'stairs';
+export type BrushShape = 'box' | 'cylinder' | 'wedge' | 'stairs' | 'polygon';
+
+/** A polygon brush's outline: corners on axes `a`/`b` of the view it was drawn in; depth runs along `e`. */
+export interface Outline {
+  points: [number, number][];
+  axes: { a: 0 | 1 | 2; b: 0 | 1 | 2; e: 0 | 1 | 2 };
+}
 export type Facing = 0 | 90 | 180 | 270;
 
 export interface ShapeOptions {
@@ -77,9 +84,12 @@ export function worldBrushes(doc: SceneDoc): WorldBrush[] {
 }
 
 /** The brushes for a shape spanning min–max. Stairs produce one brush per step. */
-export function shapeBrushes(o: ShapeOptions, min: V3, max: V3, role: 'solid' | 'subtract'): Brush[] {
+export function shapeBrushes(o: ShapeOptions, min: V3, max: V3, role: 'solid' | 'subtract', outline?: Outline): Brush[] {
   const surface = defaultSurface(role === 'subtract' ? 'dev/subtract' : 'dev/grid');
   switch (o.shape) {
+    case 'polygon':
+      if (!outline) return [];
+      return [extrudePolygon(outline.points, outline.axes, min[outline.axes.e]!, max[outline.axes.e]!, surface)];
     case 'cylinder':
       return [cylinder(min, max, o.sides, surface)];
     case 'wedge':
@@ -91,4 +101,4 @@ export function shapeBrushes(o: ShapeOptions, min: V3, max: V3, role: 'solid' | 
   }
 }
 
-export const shapeName: Record<BrushShape, string> = { box: 'block', cylinder: 'cylinder', wedge: 'wedge', stairs: 'stairs' };
+export const shapeName: Record<BrushShape, string> = { box: 'block', cylinder: 'cylinder', wedge: 'wedge', stairs: 'stairs', polygon: 'prism' };

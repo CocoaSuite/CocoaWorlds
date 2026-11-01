@@ -57,7 +57,8 @@ Last updated: 2026-11-01 (Phase 2, first slice).
 | Make hollow (room from a block) | **Done** | Six walls of a chosen thickness, grouped. Walls go inward (block = outside of the room) or outward (block = inside). |
 | Merge brushes whose union is convex | **Done** | |
 | Move/rotate/scale brushes with the gizmo; numeric size and centre | **Done** | Texture lock on move. |
-| Level rendering: dev grid texture, editor lighting, hidden-face removal, selection outlines | **Done** | Rebuilt on the main thread for now. |
+| Level rendering: dev materials, editor lighting, hidden-face removal, selection outlines | **Done** | Levels of 64+ brushes rebuild in a background worker ("updating level…" in the stats); smaller ones rebuild instantly. |
+| Spatial index (bounding-box tree) for hidden-face removal and live subtract | **Done** | 2,000 brushes mesh in ~0.2 s (was ~4.2 s). |
 | Brushes saved in scenes (three points per face, exact integers on the grid) | **Done** | |
 | Geometry engine: carve/intersect/merge, vertex editing, validation, meshes, hulls | **Done** | Library and tests; see docs/geometry.md. |
 | Face tool (T): select faces (Ctrl+click add/remove, Shift+click whole brush), per-face material, World/Face alignment, offset/scale/rotation, Fit, Reset, line up left/right/top/bottom/centre | **Done** | Several faces at once; differing values show as blank. Faces made by a live cut follow the wall and are painted after Apply cut. |
@@ -65,7 +66,7 @@ Last updated: 2026-11-01 (Phase 2, first slice).
 | Built-in development materials (9 colours with a 16-unit grid) | **Done** | Placeholders until material assets in Phase 7. |
 | Vertex tool (X): pick corners or edge middles (click, Ctrl+click, box), move them with the gizmo, grid and corner snapping | **Done** | Bent faces split into triangles (G2); moves that would dent or flatten a brush stop at the last good position with a message. |
 | Clip tool (C): drag a line across selected brushes in any view; keep both pieces, one side or the other (Tab); Enter clips | **Done** | New faces take the material of the brush face pointing the same way. Brushes the line misses are left alone. |
-| Polygon prism (custom footprint) | Planned | Engine support done. |
+| Polygon brush: click corners in any view, finish by clicking the first corner / double-click / Enter, then set the depth | **Done** | Dents are filled in (the outline is made convex) so the brush stays solid. Backspace removes the last corner. |
 
 ## Later phases
 

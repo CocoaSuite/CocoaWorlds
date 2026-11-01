@@ -52,7 +52,7 @@ export function Viewport() {
         clickSelect: (id, additive, deep) => useEditor.getState().clickSelect(id, additive, deep),
         liveMany: (changes) => useEditor.getState().applyLive(changes),
         draft: setDraft,
-        createBrush: (min, max) => useEditor.getState().createBrushes(min, max),
+        createBrush: (min, max, outline) => useEditor.getState().createBrushes(min, max, outline),
         cancelTool: () => useEditor.getState().setTool('select'),
         selectFace: (ref, mode, cut) => useEditor.getState().selectFace(ref, mode, cut),
         boxSelect: (ids, additive) => useEditor.getState().boxSelect(ids, additive),
@@ -182,7 +182,8 @@ export function Viewport() {
       )}
       {showStats && stats && (
         <div className="cw-ov cw-ov-br mono" data-testid="viewport-stats">
-          {stats.frameMs.toFixed(1)} ms · {stats.draws} draws · {stats.triangles.toLocaleString()} tris
+          {stats.building ? `${t('stats.building')} · ` : ''}
+          {stats.frameMs.toFixed(1)} ms · {stats.draws} draws · {stats.triangles.toLocaleString()} tris · {t('stats.build')} {stats.buildMs} ms
         </div>
       )}
       {tool === 'brush' && (

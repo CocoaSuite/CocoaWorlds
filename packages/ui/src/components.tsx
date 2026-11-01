@@ -212,11 +212,15 @@ export function NumberField({
   onCommit: (v: number) => void;
   onBegin?: () => void;
 }) {
-  const [text, setText] = useState(fmt(value));
-  const [focused, setFocused] = useState(false);
-  useEffect(() => {
-    if (!focused) setText(fmt(value));
-  }, [value, focused]);
+  // While the field is being edited it shows what was typed; otherwise it shows the value. Derived during
+  // render (no effect copying props into state), so a busy store never causes extra render passes.
+  const [draft, setDraftState] = useState<string | null>(null);
+  const draftRef = useRef<string | null>(null);
+  const setDraft = (v: string | null) => {
+    draftRef.current = v;
+    setDraftState(v);
+  };
+  const text = draft ?? fmt(value);
 
   // Blur and Enter can both reach commit before React re-renders; remember what was last committed.
   const lastCommitted = useRef(value);
@@ -224,11 +228,14 @@ export function NumberField({
     lastCommitted.current = value;
   }, [value]);
   const commitText = () => {
-    const n = text.trim() === '' ? NaN : Number(text.replace(',', '.'));
+    const typed = draftRef.current;
+    setDraft(null);
+    if (typed === null) return;
+    const n = typed.trim() === '' ? NaN : Number(typed.replace(',', '.'));
     if (Number.isFinite(n) && n !== lastCommitted.current) {
       lastCommitted.current = n;
       onCommit(n);
-    } else if (!Number.isFinite(n)) setText(fmt(value));
+    }
   };
 
   const scrub = (e: RPointerEvent<HTMLSpanElement>) => {
@@ -265,20 +272,16 @@ export function NumberField({
         placeholder="—"
         value={text}
         onFocus={(e) => {
-          setFocused(true);
+          setDraft(fmt(value));
           e.currentTarget.select();
         }}
-        onBlur={() => {
-          setFocused(false);
-          commitText();
-        }}
-        onChange={(e) => setText(e.target.value)}
+        onBlur={commitText}
+        onChange={(e) => setDraft(e.target.value)}
         onKeyDown={(e: KeyboardEvent<HTMLInputElement>) => {
           e.stopPropagation();
           if (e.key === 'Enter') e.currentTarget.blur();
           if (e.key === 'Escape') {
-            setText(fmt(value));
-            setFocused(false);
+            setDraft(null); // cancel: blur then commits nothing
             e.currentTarget.blur();
           }
         }}

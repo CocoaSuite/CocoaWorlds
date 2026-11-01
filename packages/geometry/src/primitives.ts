@@ -4,7 +4,7 @@
  * Axis convention: Y is up. Footprints are drawn on the XZ plane.
  */
 import { cloneSurface, defaultSurface, type Brush, type BrushFace, type FaceSurface } from './brush';
-import { planeFromPoints, type Plane } from './plane';
+import { flip, planeFromPoints, signedDist, type Plane } from './plane';
 import { type V3 } from './vec';
 
 function face(a: V3, b: V3, c: V3, s: FaceSurface): BrushFace {
@@ -130,4 +130,70 @@ export function stairs(min: V3, max: V3, steps: number, facing: 0 | 90 | 180 | 2
 function round(n: number): number {
   const r = Math.round(n * 1024) / 1024;
   return r === 0 ? 0 : r;
+}
+
+/**
+ * Convex hull of 2D points (Andrew's monotone chain), counter-clockwise, collinear points dropped.
+ * Used by the polygon brush tool: a footprint with a dent gets the dent filled in.
+ */
+export function convexHull2D(pts: [number, number][]): [number, number][] {
+  const p = [...new Map(pts.map((q) => [`${q[0]},${q[1]}`, q])).values()].sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+  if (p.length < 3) return p;
+  const cross = (o: [number, number], a: [number, number], b: [number, number]) => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
+  const lower: [number, number][] = [];
+  for (const q of p) {
+    while (lower.length >= 2 && cross(lower[lower.length - 2]!, lower[lower.length - 1]!, q) <= 1e-9) lower.pop();
+    lower.push(q);
+  }
+  const upper: [number, number][] = [];
+  for (let i = p.length - 1; i >= 0; i--) {
+    const q = p[i]!;
+    while (upper.length >= 2 && cross(upper[upper.length - 2]!, upper[upper.length - 1]!, q) <= 1e-9) upper.pop();
+    upper.push(q);
+  }
+  return [...lower.slice(0, -1), ...upper.slice(0, -1)];
+}
+
+/**
+ * A prism from a footprint drawn on any axis plane: `footprint` holds coordinates on axes `a` and `b`, and the
+ * brush spans `lo`–`hi` along axis `e`. The footprint is made convex first (dents are filled in).
+ */
+export function extrudePolygon(
+  footprint: [number, number][],
+  axes: { a: 0 | 1 | 2; b: 0 | 1 | 2; e: 0 | 1 | 2 },
+  lo: number,
+  hi: number,
+  surface: FaceSurface = defaultSurface(),
+): Brush {
+  const hull = convexHull2D(footprint);
+  if (hull.length < 3) throw new Error('The outline needs at least three corners that are not in a line.');
+  const l = Math.min(lo, hi), h = Math.max(lo, hi);
+  if (h - l <= 0) throw new Error('The brush needs some depth.');
+  const at = (q: [number, number], e: number): V3 => {
+    const v: V3 = [0, 0, 0];
+    v[axes.a] = q[0];
+    v[axes.b] = q[1];
+    v[axes.e] = e;
+    return v;
+  };
+  const centre: V3 = [0, 0, 0];
+  for (const q of hull) {
+    const v = at(q, (l + h) / 2);
+    for (let k = 0; k < 3; k++) centre[k] = centre[k]! + v[k]! / hull.length;
+  }
+  // Build each face from three points and turn it to face away from the centre.
+  const outward = (p0: V3, p1: V3, p2: V3): BrushFace => {
+    let pl = planeFromPoints(p0, p1, p2)!;
+    if (signedDist(pl, centre) > 0) pl = flip(pl);
+    return { plane: pl, surface: cloneSurface(surface) };
+  };
+  const faces: BrushFace[] = [
+    outward(at(hull[0]!, h), at(hull[1]!, h), at(hull[2]!, h)),
+    outward(at(hull[0]!, l), at(hull[1]!, l), at(hull[2]!, l)),
+  ];
+  for (let i = 0; i < hull.length; i++) {
+    const q0 = hull[i]!, q1 = hull[(i + 1) % hull.length]!;
+    faces.push(outward(at(q0, l), at(q0, h), at(q1, h)));
+  }
+  return { faces };
 }
