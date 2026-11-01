@@ -248,3 +248,45 @@ describe('turn', () => {
     expect(host.acts).toEqual(['turn door ["north",45,0]']);
   });
 });
+
+describe('health and score blocks', () => {
+  it('hurt, heal and score reach the game; health and score can be read', () => {
+    const calls: string[] = [];
+    let health = 100;
+    const s = script([
+      handler(
+        newEvent('start'),
+        { ...newStatement('hurt'), amount: num(30) } as Statement,
+        { ...newStatement('addScore'), amount: num(2) } as Statement,
+        { ...newStatement('log'), text: { ...newExpr('join'), a: text('hp '), b: newExpr('health') } as Expr } as Statement,
+      ),
+      handler(newEvent('die'), { ...newStatement('log'), text: text('dead') } as Statement),
+    ]);
+    const r = compileScript('me', s, scene);
+    expect(r.problems).toEqual([]);
+    const log: string[] = [];
+    const vm = new ScriptRunner([r.program], {
+      now: () => 0,
+      random: () => 0,
+      nameOf: (id) => id,
+      act: () => null,
+      send: () => {},
+      log: (t) => void log.push(t),
+      game: (name, amount) => {
+        calls.push(`${name} ${amount}`);
+        if (name === 'hurt') health -= amount;
+      },
+      read: (name) => (name === 'health' ? health : 0),
+    });
+    vm.start();
+    vm.dispatch({ type: 'die' });
+    vm.tick(0.1);
+    expect(calls).toEqual(['hurt 30', 'addScore 2']);
+    expect(log).toEqual(['hp 70', 'dead']);
+  });
+
+  it('the amount must be a number', () => {
+    const s = script([handler(newEvent('start'), { ...newStatement('heal'), amount: text('lots') } as Statement)]);
+    expect(compileScript('me', s, scene).problems.map((p) => p.message)).toEqual(['Health changes by a number.']);
+  });
+});

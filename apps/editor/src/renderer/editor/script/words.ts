@@ -13,6 +13,7 @@ const W = {
   message: ['When this gets the message', 'Когда приходит сообщение'],
   use: ['When the player uses this', 'Когда игрок использует это'],
   every: ['Every', 'Каждые'],
+  die: ['When the player dies', 'Когда игрок погибает'],
   seconds: ['seconds', 'с'],
   // actions
   move: ['Move', 'Сдвинуть'],
@@ -43,6 +44,11 @@ const W = {
   times: ['times', 'раз'],
   forever: ['Repeat forever', 'Повторять всегда'],
   stop: ['Stop this stack', 'Остановить этот стек'],
+  hurt: ['Hurt the player by', 'Ранить игрока на'],
+  heal: ['Heal the player by', 'Вылечить игрока на'],
+  addScore: ['Change the score by', 'Изменить счёт на'],
+  health: ['the player’s health', 'здоровье игрока'],
+  score: ['the score', 'счёт'],
   // values
   self: ['this object', 'этот объект'],
   other: ['the thing that entered', 'то, что вошло'],
@@ -82,6 +88,7 @@ const PALETTE_EVENT: Record<EventKind, Pair> = {
   use: ['When the player uses this (E)', 'Когда игрок использует это (E)'],
   message: ['When this gets a message', 'Когда приходит сообщение'],
   every: ['Every few seconds', 'Каждые несколько секунд'],
+  die: ['When the player dies', 'Когда игрок погибает'],
 };
 export const eventName = (k: EventKind) => pick(PALETTE_EVENT[k]);
 
@@ -102,11 +109,15 @@ const PALETTE_STMT: Record<StatementKind, Pair> = {
   repeat: ['Repeat N times', 'Повторить N раз'],
   forever: ['Repeat forever', 'Повторять всегда'],
   stop: ['Stop this stack', 'Остановить стек'],
+  hurt: ['Hurt the player', 'Ранить игрока'],
+  heal: ['Heal the player', 'Вылечить игрока'],
+  addScore: ['Change the score', 'Изменить счёт'],
 };
 export const statementName = (k: StatementKind) => pick(PALETTE_STMT[k]);
 
 export const STATEMENT_GROUPS: { title: Pair; kinds: StatementKind[] }[] = [
   { title: ['Do', 'Действия'], kinds: ['move', 'turn', 'return', 'show', 'hide', 'turnOn', 'turnOff', 'send', 'log'] },
+  { title: ['Player and score', 'Игрок и счёт'], kinds: ['hurt', 'heal', 'addScore'] },
   { title: ['Control', 'Управление'], kinds: ['wait', 'if', 'repeat', 'forever', 'stop'] },
   { title: ['Variables', 'Переменные'], kinds: ['set', 'change'] },
 ];
@@ -125,13 +136,15 @@ const VALUE: Record<ExprKind, Pair> = {
   join: ['Join text', 'Соединить текст'],
   object: ['An object', 'Объект'],
   time: ['Seconds since start', 'Секунд с начала'],
+  health: ['The player’s health', 'Здоровье игрока'],
+  score: ['The score', 'Счёт'],
 };
 export const valueName = (k: ExprKind) => pick(VALUE[k]);
 
 /** Which value blocks fit a slot of a given type. */
 export const VALUES_FOR: Record<'number' | 'boolean' | 'text' | 'any', ExprKind[]> = {
-  number: ['number', 'variable', 'maths', 'random', 'time'],
+  number: ['number', 'variable', 'maths', 'random', 'time', 'health', 'score'],
   boolean: ['boolean', 'variable', 'compare', 'logic', 'not'],
-  text: ['text', 'variable', 'join', 'number', 'object'],
-  any: ['number', 'text', 'boolean', 'variable', 'maths', 'compare', 'logic', 'not', 'random', 'join', 'time', 'object'],
+  text: ['text', 'variable', 'join', 'number', 'object', 'score'],
+  any: ['number', 'text', 'boolean', 'variable', 'maths', 'compare', 'logic', 'not', 'random', 'join', 'time', 'health', 'score', 'object'],
 };

@@ -29,7 +29,17 @@ export const PLAYER = {
   stepHeight: 18,
   maxSlope: 45.6,
   useReach: 96,
+  maxHealth: 100,
+  /** Falls landing slower than this don't hurt; at the fatal speed the fall takes all 100 health (Half-Life 2's values). */
+  safeFallSpeed: 526.5,
+  fatalFallSpeed: 922.5,
 };
+
+/** Damage from landing at `speed` (units per second, downwards). */
+export function fallDamage(speed: number): number {
+  if (speed <= PLAYER.safeFallSpeed) return 0;
+  return Math.round(((speed - PLAYER.safeFallSpeed) * PLAYER.maxHealth) / (PLAYER.fatalFallSpeed - PLAYER.safeFallSpeed));
+}
 
 export interface PlayerInput {
   /** -1…1: back/forward and left/right. */
@@ -59,6 +69,8 @@ export class Player {
   crouched = false;
   private jumpHeld = false;
   input: PlayerInput = noInput();
+  /** How fast the player was falling when they last landed (set on landing, cleared by whoever reads it). */
+  landingSpeed = 0;
   /** Feet position at the previous and current physics step (for smooth drawing between steps). */
   private prevFeet: V;
   private feet: V;
@@ -112,6 +124,7 @@ export class Player {
     this.feet = { ...this.spawn.feet };
     this.prevFeet = { ...this.spawn.feet };
     this.velocity = { x: 0, y: 0, z: 0 };
+    this.landingSpeed = 0;
     this.input.yaw = this.spawn.yaw;
     this.input.pitch = 0;
     this.body.setTranslation({ x: this.feet.x, y: this.feet.y + this.height / 2, z: this.feet.z }, true);
@@ -171,6 +184,7 @@ export class Player {
       v.x -= nrm.x * into;
       v.z -= nrm.z * into;
     }
+    if (grounded && !this.onGround && v.y < 0) this.landingSpeed = -v.y;
     if (grounded && v.y <= 0) v.y = 0;
     if (v.y > 0 && moved.y < desired.y - 1e-3) v.y = 0; // bumped the ceiling
     this.onGround = grounded && this.velocity.y <= 0;

@@ -8,7 +8,7 @@
  *    reported, and the game keeps running.
  *  - A failing action or a division by zero stops only that thread, with a message pointing at the block.
  */
-import type { ActionName, CompiledHandler, Op, Program, Value } from './compile';
+import type { ActionName, CompiledHandler, GameAction, GameValue, Op, Program, Value } from './compile';
 
 export const STEP_BUDGET = 10_000;
 
@@ -23,6 +23,10 @@ export interface ScriptHost {
   log(text: string, from: string, block: string): void;
   /** A readable name for an object (for logging and joining text). */
   nameOf(id: string): string;
+  /** Hurt or heal the player, or change the score (games without a player ignore health). */
+  game?(name: GameAction, amount: number, owner: string): void;
+  /** The player's health or the score. */
+  read?(name: GameValue): number;
 }
 
 export interface ScriptError {
@@ -58,7 +62,9 @@ export type RunnerEvent =
   | { type: 'enter' | 'leave'; zone: string; other: string }
   | { type: 'message'; message: string; to: string | null; from: string | null }
   /** The player used `targets` (the object looked at and everything it is inside). */
-  | { type: 'use'; targets: string[]; by: string };
+  | { type: 'use'; targets: string[]; by: string }
+  /** The player's health reached 0. */
+  | { type: 'die' };
 
 export class ScriptRunner {
   private instances: Instance[];
@@ -91,7 +97,9 @@ export class ScriptRunner {
     for (const inst of this.instances) {
       for (const h of inst.program.handlers) {
         const ev = h.event;
-        if (e.type === 'use') {
+        if (e.type === 'die') {
+          if (ev.kind === 'die') this.spawn(inst, h, null);
+        } else if (e.type === 'use') {
           if (ev.kind === 'use' && e.targets.includes(inst.program.owner)) this.spawn(inst, h, e.by);
         } else if (e.type === 'message') {
           if (ev.kind === 'message' && ev.message === e.message && (e.to === null || e.to === inst.program.owner)) this.spawn(inst, h, null);
@@ -298,6 +306,12 @@ export class ScriptRunner {
         }
         case 'log':
           this.host.log(this.text(s.pop() ?? null), t.inst.program.owner, t.handler.blocks[t.pc - 1] ?? '');
+          break;
+        case 'game':
+          this.host.game?.(op.name, num(s.pop() ?? 0), t.inst.program.owner);
+          break;
+        case 'read':
+          s.push(this.host.read?.(op.name) ?? 0);
           break;
         case 'halt':
           return this.finish(t);

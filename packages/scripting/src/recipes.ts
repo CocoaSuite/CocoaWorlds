@@ -3,7 +3,7 @@
  * one, describes a trigger zone for the editor to create), so the result can be read and changed like any
  * script the user wrote. Recipes never add special blocks of their own.
  */
-import { blockId, type EventBlock, type Handler, type Statement, type VariableDef } from './model';
+import { blockId, type EventBlock, type Expr, type Handler, type Statement, type VariableDef } from './model';
 import { bool, num, self, text, variable } from './factory';
 
 type L = { en: string; ru: string };
@@ -64,7 +64,12 @@ const st = {
   send: (message: string): Statement => ({ id: id(), kind: 'send', message, to: null }),
   set: (name: string, value: boolean): Statement => ({ id: id(), kind: 'set', variable: name, value: bool(value) }),
   forever: (body: Statement[]): Statement => ({ id: id(), kind: 'forever', body }),
+  hurt: (amount: number): Statement => ({ id: id(), kind: 'hurt', amount: num(amount) }),
+  heal: (amount: number): Statement => ({ id: id(), kind: 'heal', amount: num(amount) }),
+  score: (amount: number): Statement => ({ id: id(), kind: 'addScore', amount: num(amount) }),
+  stop: (): Statement => ({ id: id(), kind: 'stop' }),
 };
+const isNot = (name: string): Expr => ({ id: id(), kind: 'not', a: variable(name) });
 
 /** A box around the object, grown sideways by `side` and up by `up`. */
 function around(t: RecipeTarget, side: number, up = 0, down = 0): { min: V3; max: V3 } {
@@ -173,6 +178,79 @@ export const RECIPES: Recipe[] = [
     description: { en: 'Adds a zone around it. When the player touches it, it disappears and says so in the console.', ru: 'Добавляет зону вокруг. Когда игрок касается предмета, он исчезает, а в консоли появляется запись.' },
     zone: (t) => ({ name: `${t.name}_zone`, ...around(t, 8, 8, 8), detects: 'player', once: true }),
     build: (t, zone) => ({ variables: [], handlers: [handler(ev.enter(zone!), [st.hide(), st.log(`Picked up ${t.name}`)])] }),
+  },
+  {
+    id: 'coin',
+    group: 'gameplay',
+    name: { en: 'Coin: +1 score when collected', ru: 'Монета: +1 к счёту' },
+    description: {
+      en: 'Adds a zone around it. When the player touches it, it disappears and the score goes up by 1.',
+      ru: 'Добавляет зону вокруг. Когда игрок касается монеты, она исчезает, а счёт увеличивается на 1.',
+    },
+    zone: (t) => ({ name: `${t.name}_zone`, ...around(t, 8, 8, 8), detects: 'player', once: true }),
+    build: (_t, zone) => ({ variables: [], handlers: [handler(ev.enter(zone!), [st.hide(), st.score(1)])] }),
+  },
+  {
+    id: 'health-pickup',
+    group: 'gameplay',
+    name: { en: 'Health pack: +25 health', ru: 'Аптечка: +25 здоровья' },
+    description: {
+      en: 'Adds a zone around it. The player gets 25 health back and it disappears — unless their health is already full.',
+      ru: 'Добавляет зону вокруг. Игрок получает 25 здоровья, и аптечка исчезает — если здоровье ещё не полное.',
+    },
+    zone: (t) => ({ name: `${t.name}_zone`, ...around(t, 8, 8, 8), detects: 'player', once: false }),
+    build: (_t, zone) => ({
+      variables: [{ name: 'taken', type: 'boolean', initial: false }],
+      handlers: [
+        handler(ev.enter(zone!), [
+          {
+            id: id(),
+            kind: 'if',
+            condition: {
+              id: id(),
+              kind: 'logic',
+              op: 'and',
+              a: isNot('taken'),
+              b: { id: id(), kind: 'compare', op: '<', a: { id: id(), kind: 'health' }, b: num(100) },
+            },
+            then: [st.set('taken', true), st.heal(25), st.hide()],
+            otherwise: null,
+          },
+        ]),
+      ],
+    }),
+  },
+  {
+    id: 'hurt-zone',
+    group: 'gameplay',
+    name: { en: 'Hurts the player who stands in it', ru: 'Ранит игрока, который в нём стоит' },
+    description: {
+      en: 'Adds a zone over the object (fire, spikes, acid). While the player is inside, they lose 10 health every half second.',
+      ru: 'Добавляет зону на объекте (огонь, шипы, кислота). Пока игрок внутри, он теряет 10 здоровья каждые полсекунды.',
+    },
+    zone: (t) => ({ name: `${t.name}_zone`, min: [t.min[0], t.min[1], t.min[2]], max: [t.max[0], t.max[1] + 32, t.max[2]], detects: 'player', once: false }),
+    build: (_t, zone) => ({
+      variables: [{ name: 'inside', type: 'boolean', initial: false }],
+      handlers: [
+        // (Two stacks: stepping back in while the loop is still waiting must still count as inside.)
+        handler(ev.enter(zone!), [st.set('inside', true)]),
+        handler(ev.enter(zone!), [
+          st.forever([{ id: id(), kind: 'if', condition: isNot('inside'), then: [st.stop()], otherwise: null }, st.hurt(10), st.wait(0.5)]),
+        ]),
+        handler(ev.leave(zone!), [st.set('inside', false)]),
+      ],
+    }),
+  },
+  {
+    id: 'deadly',
+    group: 'gameplay',
+    name: { en: 'Deadly: touching it kills the player', ru: 'Смертельно: касание убивает игрока' },
+    description: {
+      en: 'Adds a zone over the object (lava, a bottomless pit). The player who touches it dies and starts again.',
+      ru: 'Добавляет зону на объекте (лава, пропасть). Игрок, коснувшийся его, погибает и начинает заново.',
+    },
+    zone: (t) => ({ name: `${t.name}_zone`, min: [t.min[0], t.min[1], t.min[2]], max: [t.max[0], t.max[1] + 16, t.max[2]], detects: 'player', once: false }),
+    build: (_t, zone) => ({ variables: [], handlers: [handler(ev.enter(zone!), [st.hurt(1000)])] }),
   },
 ];
 

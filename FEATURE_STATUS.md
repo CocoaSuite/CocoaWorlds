@@ -86,7 +86,8 @@ Last updated: 2026-11-01 (Phase 2, first slice).
 | COL material (invisible collider): in the material picker and as a brush kind (Brush tool → COL); striped purple and see-through in the editor, not drawn in the game, still solid; never hides the visible faces it touches | **Done** |
 | Pivots: shown and set in the Inspector (numbers, Middle, Bottom), dragged in the view in Edit pivot mode (O, snaps to corners); the gizmo rotates and scales around it; scripts turn objects around it; saved and undoable | **Done** |
 | Plain-language block scripting, graph view, VM (Phase 5) | Planned |
-| Gameplay entities: health, damage, pickups, ready-made doors/buttons/lifts, ladders (rest of Phase 6) | Planned |
+| Health and score: 100 health on screen with a red flash when hurt, death and restart at the Player start, fall damage; blocks Hurt / Heal / Change the score, values health and score, “When the player dies”; recipes Coin, Health pack, Hurts the player, Deadly | **Done** (Phase 6) |
+| Ready-made doors/buttons/plates/lifts beyond recipes, ladders, water, key rebinding (rest of Phase 6) | Planned |
 | Assets, materials, lighting, audio (Phase 7) | Planned |
 | Prefabs (P1): Edit › Make prefab…, place copies from the Assets panel, per-copy changes listed in the Inspector with Revert / Apply, Unlink; copies stored in full and synced on Apply and on open | **Done** (Phase 4). See docs/prefabs.md. |
 | Game event bus (trigger enter/exit now; “use” and messages reserved for scripts) | **Done** (Phase 4) |

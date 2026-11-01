@@ -102,7 +102,7 @@ export function ScriptPanel() {
     ctx.menu(
       ev.clientX,
       ev.clientY,
-      (['start', 'enter', 'leave', 'use', 'message', 'every'] as EventKind[]).map((k) => ({
+      (['start', 'enter', 'leave', 'use', 'message', 'every', 'die'] as EventKind[]).map((k) => ({
         label: eventName(k),
         onSelect: () => {
           const zone: Ref = objects.find((o) => o.id === owner.id)?.isZone ? { self: true } : objects.find((o) => o.isZone) ? { entity: objects.find((o) => o.isZone)!.id } : { self: true };
@@ -242,6 +242,7 @@ function EventRow({ ev, onRemove }: { ev: EventBlock; onRemove: () => void }) {
   let content: ReactNode;
   if (ev.kind === 'start') content = w('start');
   else if (ev.kind === 'use') content = w('use');
+  else if (ev.kind === 'die') content = w('die');
   else if (ev.kind === 'enter' || ev.kind === 'leave')
     content = (
       <>
@@ -439,6 +440,14 @@ function statementWords(s: Statement, set: (patch: Record<string, unknown>, merg
       return w('forever');
     case 'stop':
       return w('stop');
+    case 'hurt':
+    case 'heal':
+    case 'addScore':
+      return (
+        <>
+          {w(s.kind)} <ExprSlot expr={s.amount} type="number" label={w(s.kind)} />
+        </>
+      );
   }
 }
 
@@ -543,7 +552,9 @@ function ExprSlot({ expr, type, label }: { expr: Expr; type: 'number' | 'boolean
       body = <VariableSlot value={expr.name} label={label} onChange={(name) => set({ name })} />;
       break;
     case 'time':
-      body = <span className="cw-pill-text">{w('time')}</span>;
+    case 'health':
+    case 'score':
+      body = <span className="cw-pill-text">{w(expr.kind)}</span>;
       break;
     case 'object':
       body = <RefSlot value={expr.ref} label={label} onChange={(ref) => ref && set({ ref })} />;

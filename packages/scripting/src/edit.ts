@@ -17,7 +17,7 @@ export function replaceBlock(script: Script, id: string, fn: (b: Node) => Node):
   const st = (s: Statement): Statement => {
     if (s.id === id) return fn(s) as Statement;
     const c = { ...s } as Record<string, unknown>;
-    for (const k of ['distance', 'seconds', 'degrees', 'text', 'value', 'by', 'condition', 'times']) if (c[k] && typeof c[k] === 'object') c[k] = ex(c[k] as Expr);
+    for (const k of ['distance', 'seconds', 'degrees', 'text', 'value', 'by', 'condition', 'times', 'amount']) if (c[k] && typeof c[k] === 'object') c[k] = ex(c[k] as Expr);
     if (s.kind === 'if') {
       c.then = s.then.map(st);
       c.otherwise = s.otherwise ? s.otherwise.map(st) : null;

@@ -18,6 +18,16 @@ import { WorldRenderer, type FaceRef } from './world-render';
 import { VertexTool } from './vertex-tool';
 import { ClipTool, type ClipKeep, type ClipState } from './clip-tool';
 import type { PlayFrame, PlayInfo, PlaySession } from './play-session';
+
+/** What the in-game display shows. */
+export interface Hud {
+  health: number;
+  maxHealth: number;
+  score: number;
+  showScore: boolean;
+  /** Just hurt: flash red. */
+  hurt: boolean;
+}
 import type { SceneFile } from '@cocoaworlds/core';
 
 export interface ViewportCallbacks {
@@ -51,6 +61,8 @@ export interface ViewportCallbacks {
   activeBlocks(blocks: Map<string, string[]>): void;
   /** Play mode as the player: whether the mouse is captured (false = “click to play”). */
   playerLock(locked: boolean): void;
+  /** Health and score changed (only while playing as the player). */
+  hud(hud: Hud | null): void;
   /** Loop cut tool: how many cuts, and whether the cursor is on a brush where a loop fits (null = not on a brush). */
   loopCutState(cuts: number, fits: boolean | null): void;
   /** Loop cut tool: replace this brush (world space) with the cut one. */
@@ -150,6 +162,7 @@ export class ViewportEngine {
   private playToken = 0;
   private blockFrames = 0;
   private blockKey = '';
+  private hudKey = '';
   private gridWasVisible = true;
   /** First-person camera while playing as the player. */
   private fpCam = new THREE.PerspectiveCamera(74, 1, 2, 65536);
@@ -402,6 +415,8 @@ export class ViewportEngine {
     const p = this.play;
     if (!p) return;
     this.play = null;
+    this.hudKey = '';
+    this.cb.hud(null);
     this.gameKeys.clear();
     if (document.pointerLockElement === this.renderer.domElement) document.exitPointerLock();
     this.scene.remove(p.group);
@@ -1034,7 +1049,16 @@ export class ViewportEngine {
     }
     if (this.play) {
       const frame = this.play.tick(dt);
-      if (frame.events.length || frame.logs.length || frame.errors.length || frame.uses.length) this.cb.playFrame(frame, this.play.info.names);
+      if (frame.events.length || frame.logs.length || frame.errors.length || frame.uses.length || frame.notes.length) this.cb.playFrame(frame, this.play.info.names);
+      const status = this.play.status();
+      if (status) {
+        const hud: Hud = { health: Math.ceil(status.health), maxHealth: status.maxHealth, score: status.score, showScore: status.showScore, hurt: status.sinceHurt < 0.35 };
+        const key = JSON.stringify(hud);
+        if (key !== this.hudKey) {
+          this.hudKey = key;
+          this.cb.hud(hud);
+        }
+      }
       if (++this.blockFrames % 6 === 0) {
         const blocks = this.play.activeBlocks();
         const key = JSON.stringify([...blocks]);

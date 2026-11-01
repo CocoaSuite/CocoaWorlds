@@ -7,7 +7,7 @@
 | 3 | Brush geometry: creation, manipulation, grid/snap, vertex and face editing, materials per face, carve/union/intersect, validation | **In progress** — brushes can be drawn, sized, cut and saved |
 | 4 | Entities and physics: components, Rapier, colliders, triggers, inspector, interaction infrastructure | **Done** (the player's “use” raycast moves to Phase 6 with the player) |
 | 5 | Visual scripting: blocks editor, script model, compiler, VM, events, debugging, recipes | **In progress** — model, checker, compiler, VM, block editor, Play integration and recipes done |
-| 6 | Gameplay: Source-style controller, player, interaction, health/score, doors/plates/buttons/lifts | **Started** — player controller, Play as the player, “use” |
+| 6 | Gameplay: Source-style controller, player, interaction, health/score, doors/plates/buttons/lifts | **In progress** — player controller, Play as the player, “use”, health, damage, pickups and score done |
 | 7 | Assets and rendering: asset browser, material editor, textures, lighting, audio | Not started |
 | 8 | Runtime and persistence: standalone runtime, Play isolation, autosave, recovery, migrations | Not started |
 | 9 | Builds: Windows, macOS, Linux packaging; web export; runtime verification | Not started |
@@ -43,7 +43,7 @@ Order may shift where dependencies require it (for example, the project format f
 
 - [x] Player controller (D4): Source-style ground/air movement, jump, crouch, walk, steps, slopes, pushing physics objects
 - [x] Play as the player: pointer lock, first-person camera, crosshair, Use (E) and “When the player uses this”
-- [ ] Health, damage, pickups, score
+- [x] Health, damage, pickups, score: on-screen health and score, death and restart, fall damage, blocks and recipes
 - [ ] Ready-made doors, buttons, pressure plates, lifts
 - [ ] Ladders, water, key rebinding
 
@@ -88,4 +88,4 @@ Order may shift where dependencies require it (for example, the project format f
 
 ## Next
 
-Phase 3 is complete. Phase 4 has started with nested transforms (G3). Next in Phase 4: the component inspector (adding and editing components), Rapier physics and colliders from brushes, triggers, and a Play-mode preview of physics.
+Phase 6 continues with ready-made doors, buttons, pressure plates and lifts as objects you place (beyond the recipes), then ladders, water and key rebinding. Phase 3's subtract/union/intersect commands and Phase 5's debugging (watching values, breakpoints, stepping) and drag-and-drop of blocks are still open.

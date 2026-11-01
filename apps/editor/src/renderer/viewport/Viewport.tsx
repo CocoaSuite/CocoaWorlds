@@ -12,7 +12,7 @@ import { ClipPanel } from './ClipPanel';
 import { VertexPanel } from './VertexPanel';
 import { LoopCutPanel } from './LoopCutPanel';
 import type { ClipKeep, ClipState } from './clip-tool';
-import { ViewportEngine, type ViewportStats } from './engine';
+import { ViewportEngine, type Hud, type ViewportStats } from './engine';
 
 const mod = navigator.platform.toLowerCase().includes('mac') ? '⌘' : 'Ctrl+';
 
@@ -26,6 +26,7 @@ export function Viewport() {
   const [vertexCount, setVertexCount] = useState(0);
   /** Playing as the player: null = not, false = waiting for a click, true = mouse captured. */
   const [lock, setLock] = useState<boolean | null>(null);
+  const [hud, setHud] = useState<Hud | null>(null);
   const [loop, setLoop] = useState<{ cuts: number; fits: boolean | null }>({ cuts: 1, fits: null });
   const [clip, setClip] = useState<{ state: ClipState | null; keep: ClipKeep }>({ state: null, keep: 'both' });
   const brushOptions = useEditor((s) => s.brushOptions);
@@ -72,9 +73,11 @@ export function Viewport() {
           for (const l of frame.logs) st.log('info', names.get(l.owner) ?? 'Script', l.text);
           for (const e of frame.errors) st.log('error', names.get(e.owner) ?? 'Script', e.message);
           for (const u of frame.uses) st.log('info', 'Player', `The player used ${names.get(u) ?? u}`);
+          for (const n of frame.notes) st.log('info', 'Player', n);
         },
         activeBlocks: (blocks) => useEditor.setState({ activeBlocks: blocks }),
         playerLock: setLock,
+        hud: setHud,
         livePivot: (id, world) => useEditor.getState().setPivot(id, world, `pivot-${id}`),
         loopCutState: (cuts, fits) => setLoop({ cuts, fits }),
         applyLoopCut: (id, brush) => {
@@ -262,6 +265,7 @@ export function Viewport() {
         </div>
       )}
       {playing && lock === true && <div className="cw-crosshair" aria-hidden="true" />}
+      {playing && hud && <HudView hud={hud} />}
       {playing && lock === false && (
         <button type="button" className="cw-ov cw-click-play" data-testid="click-to-play" onClick={() => engine.current?.capturePlayer()}>
           <strong>{t('play.click')}</strong>
@@ -291,5 +295,34 @@ export function Viewport() {
       )}
       {ctx && <ContextMenu x={ctx.x} y={ctx.y} items={ctxItems} onClose={() => setCtx(null)} />}
     </div>
+  );
+}
+
+/** Health (and the score, once a script uses it) in the corner of the game view; red flash when hurt. */
+function HudView({ hud }: { hud: Hud }) {
+  const low = hud.health <= 25;
+  return (
+    <>
+      {hud.hurt && <div className="cw-hurt" aria-hidden="true" />}
+      <div className="cw-ov cw-hud" data-testid="hud">
+        <div className={`cw-hud-item${low ? ' low' : ''}`} role="meter" aria-label={t('hud.health')} aria-valuemin={0} aria-valuemax={hud.maxHealth} aria-valuenow={hud.health}>
+          <span className="cw-hud-label">{t('hud.health')}</span>
+          <span className="cw-hud-value" data-testid="hud-health">
+            {hud.health}
+          </span>
+          <span className="cw-hud-bar">
+            <span style={{ width: `${(100 * hud.health) / hud.maxHealth}%` }} />
+          </span>
+        </div>
+        {hud.showScore && (
+          <div className="cw-hud-item">
+            <span className="cw-hud-label">{t('hud.score')}</span>
+            <span className="cw-hud-value" data-testid="hud-score">
+              {hud.score}
+            </span>
+          </div>
+        )}
+      </div>
+    </>
   );
 }

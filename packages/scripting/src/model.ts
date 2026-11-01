@@ -22,7 +22,10 @@ export type Expr =
   | { id: string; kind: 'random'; min: Expr; max: Expr }
   | { id: string; kind: 'join'; a: Expr; b: Expr }
   | { id: string; kind: 'object'; ref: Ref }
-  | { id: string; kind: 'time' };
+  | { id: string; kind: 'time' }
+  /** The player's health (0–100) and the game's score. */
+  | { id: string; kind: 'health' }
+  | { id: string; kind: 'score' };
 
 export type Direction = 'up' | 'down' | 'north' | 'south' | 'east' | 'west';
 export type Axis = 'up' | 'north' | 'east';
@@ -43,7 +46,11 @@ export type Statement =
   | { id: string; kind: 'if'; condition: Expr; then: Statement[]; otherwise: Statement[] | null }
   | { id: string; kind: 'repeat'; times: Expr; body: Statement[] }
   | { id: string; kind: 'forever'; body: Statement[] }
-  | { id: string; kind: 'stop' };
+  | { id: string; kind: 'stop' }
+  /** Hurt or heal the player; change the game's score (all by an amount, which may be negative). */
+  | { id: string; kind: 'hurt'; amount: Expr }
+  | { id: string; kind: 'heal'; amount: Expr }
+  | { id: string; kind: 'addScore'; amount: Expr };
 
 export type EventBlock =
   | { id: string; kind: 'start' }
@@ -52,7 +59,9 @@ export type EventBlock =
   | { id: string; kind: 'message'; message: string }
   /** The player pressed Use (E) while looking at this object (or anything inside it). */
   | { id: string; kind: 'use' }
-  | { id: string; kind: 'every'; seconds: Expr };
+  | { id: string; kind: 'every'; seconds: Expr }
+  /** The player's health reached 0 (they start again at the Player start). */
+  | { id: string; kind: 'die' };
 
 export interface Handler {
   id: string;
@@ -94,7 +103,7 @@ export function* walk(script: Script): Generator<{ id: string; kind: string }> {
   function* stmts(list: Statement[]): Generator<{ id: string; kind: string }> {
     for (const s of list) {
       yield s;
-      for (const k of ['distance', 'seconds', 'degrees', 'text', 'value', 'by', 'condition', 'times'] as const) {
+      for (const k of ['distance', 'seconds', 'degrees', 'text', 'value', 'by', 'condition', 'times', 'amount'] as const) {
         const sub = (s as Record<string, unknown>)[k] as Expr | undefined;
         if (sub && typeof sub === 'object' && 'kind' in sub) yield* expr(sub);
       }

@@ -7,7 +7,7 @@
  */
 import { SceneDoc, readComponent, type ColliderData, type SceneFile } from '@cocoaworlds/core';
 import { buildMesh, isInvisibleMaterial, type WorldBrush } from '@cocoaworlds/geometry';
-import { GameWorld, initPhysics, type PlayerInput, type ScriptLog, type TriggerEvent } from '@cocoaworlds/runtime';
+import { GameWorld, initPhysics, type PlayerInput, type PlayerStatus, type ScriptLog, type TriggerEvent } from '@cocoaworlds/runtime';
 import type { Problem, ScriptError } from '@cocoaworlds/scripting';
 import * as THREE from 'three';
 import { worldBrushes } from '../brush/brushes';
@@ -30,6 +30,8 @@ export interface PlayFrame {
   errors: ScriptError[];
   /** What the player used (entity ids). */
   uses: string[];
+  /** Health and score news for the console: deaths and score changes. */
+  notes: string[];
 }
 
 export class PlaySession {
@@ -40,6 +42,7 @@ export class PlaySession {
   readonly info: PlayInfo;
   private shapeMat = new THREE.MeshStandardMaterial({ color: 0xc8c8c8, roughness: 0.8 });
   private uses: string[] = [];
+  private notes: string[] = [];
 
   static async start(scene: SceneFile, material: (name: string) => THREE.Material): Promise<PlaySession> {
     await initPhysics();
@@ -99,6 +102,8 @@ export class PlaySession {
       player: !!this.world.player,
     };
     this.world.bus.on('use', (e) => void this.uses.push(e.target));
+    this.world.bus.on('player.die', (e) => void this.notes.push(`The player died (${e.cause}) and starts again`));
+    this.world.bus.on('score', (e) => void this.notes.push(`Score: ${e.score} (${e.by > 0 ? '+' : ''}${e.by})`));
   }
 
   /** Advance the game and move what moved. Returns what happened this frame. */
@@ -112,9 +117,20 @@ export class PlaySession {
       m.obj.matrix.copy(motion.fromArray(mm).multiply(m.base));
       m.obj.matrixWorldNeedsUpdate = true;
     }
-    const uses = this.uses;
+    const uses = this.uses, notes = this.notes;
     this.uses = [];
-    return { events: this.world.drainEvents(), logs: this.world.drainLogs(), errors: this.world.drainScriptErrors(), uses };
+    this.notes = [];
+    return { events: this.world.drainEvents(), logs: this.world.drainLogs(), errors: this.world.drainScriptErrors(), uses, notes };
+  }
+
+  /** Health and score for the screen (null without a player). */
+  status(): PlayerStatus | null {
+    return this.world.playerStatus();
+  }
+
+  /** For tests: hurt the player as a script would. */
+  hurt(amount: number): void {
+    this.world.hurt(amount, 'a test');
   }
 
   // ── The player ──

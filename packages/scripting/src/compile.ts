@@ -47,7 +47,14 @@ export type Op =
   /** Pops the target ref (or null for everyone). */
   | { op: 'send'; message: string }
   | { op: 'log' }
+  /** Pops an amount: hurt or heal the player, or add to the score. */
+  | { op: 'game'; name: GameAction }
+  /** Pushes the player's health or the score. */
+  | { op: 'read'; name: GameValue }
   | { op: 'halt' };
+
+export type GameAction = 'hurt' | 'heal' | 'addScore';
+export type GameValue = 'health' | 'score';
 
 export type ActionName = 'move' | 'turn' | 'return' | 'show' | 'hide' | 'turnOn' | 'turnOff';
 
@@ -56,6 +63,7 @@ export type CompiledEvent =
   | { kind: 'enter' | 'leave'; zone: string }
   | { kind: 'message'; message: string }
   | { kind: 'use' }
+  | { kind: 'die' }
   | { kind: 'every'; seconds: number };
 
 export interface CompiledHandler {
@@ -139,6 +147,7 @@ class HandlerCompiler {
     this.stmt = ev.id;
     if (ev.kind === 'start') event = { kind: 'start' };
     else if (ev.kind === 'use') event = { kind: 'use' };
+    else if (ev.kind === 'die') event = { kind: 'die' };
     else if (ev.kind === 'enter' || ev.kind === 'leave') {
       const zone = this.resolveRef(ev.zone, ev.id, true);
       if (zone) event = { kind: ev.kind, zone };
@@ -320,6 +329,12 @@ class HandlerCompiler {
       case 'stop':
         this.emit({ op: 'halt' });
         break;
+      case 'hurt':
+      case 'heal':
+      case 'addScore':
+        this.expect(s.amount, 'number', s.kind === 'addScore' ? 'The score changes by a number.' : 'Health changes by a number.');
+        this.emit({ op: 'game', name: s.kind });
+        break;
     }
     this.stmt = outer;
   }
@@ -390,6 +405,10 @@ class HandlerCompiler {
         return 'object';
       case 'time':
         this.emit({ op: 'time' });
+        return 'number';
+      case 'health':
+      case 'score':
+        this.emit({ op: 'read', name: e.kind });
         return 'number';
     }
   }

@@ -22,7 +22,7 @@ import {
 import { EventBus } from './events';
 import { ScriptRunner, compileScript, type ActionName, type Problem, type Program, type Script, type Value } from '@cocoaworlds/scripting';
 import { scriptTargets } from './script-targets';
-import { Player, type PlayerInput } from './player';
+import { PLAYER, Player, fallDamage, type PlayerInput } from './player';
 import { bounds, brushToWorld, buildMesh, buildWorld, fromData, hullPoints, vertices, type Brush, type BrushData, type WorldBrush } from '@cocoaworlds/geometry';
 
 /** Units per metre (an inch-based world). */
@@ -88,6 +88,18 @@ interface Body {
   startInverse: number[];
 }
 
+/** The player's state for the screen (health bar, score). */
+export interface PlayerStatus {
+  health: number;
+  maxHealth: number;
+  score: number;
+  /** Whether any script uses the score (otherwise the screen doesn't show it). */
+  showScore: boolean;
+  /** Seconds since the player was last hurt (Infinity if never), for a red flash. */
+  sinceHurt: number;
+  deaths: number;
+}
+
 export interface WorldStats {
   staticPieces: number;
   bodies: number;
@@ -123,6 +135,11 @@ export class GameWorld {
   private useQueued = false;
   /** Below this the player has fallen out of the world and starts again. */
   private killY = -Infinity;
+  private health: number = PLAYER.maxHealth;
+  private score = 0;
+  private usesScore = false;
+  private hurtAt = -Infinity;
+  private deaths = 0;
 
   /** Build a world from a scene snapshot. Call `initPhysics()` first. */
   static create(scene: SceneFile): GameWorld {
@@ -213,7 +230,14 @@ export class GameWorld {
         this.runner.dispatch({ type: 'message', message, to, from });
       },
       log: (text, owner, block) => void this.logs.push({ text, owner, block, time: this.time }),
+      game: (name, amount, owner) => {
+        if (name === 'addScore') this.addScore(amount);
+        else if (name === 'hurt') this.hurt(amount, this.names.get(owner) ?? owner);
+        else this.heal(amount);
+      },
+      read: (name) => (name === 'health' ? this.health : this.score),
     });
+    this.usesScore = scripts.some(([, s]) => /"kind":"(score|addScore)"/.test(JSON.stringify(s.handlers)));
   }
 
   /** An object moved by scripts: a kinematic body at its place, carrying the hulls of every brush inside it. */
@@ -345,7 +369,12 @@ export class GameWorld {
       this.applyTweens(this.time + STEP);
       if (this.player) {
         this.player.step(STEP);
-        if (this.player.feetPosition.y < this.killY) this.player.respawn();
+        if (this.player.landingSpeed) {
+          const damage = fallDamage(this.player.landingSpeed);
+          this.player.landingSpeed = 0;
+          if (damage > 0) this.hurt(damage, 'a fall');
+        }
+        if (this.player.feetPosition.y < this.killY) this.die('falling out of the world');
         if (this.useQueued) this.doUse();
       }
       this.useQueued = false;
@@ -388,6 +417,48 @@ export class GameWorld {
     for (let x: string | null | undefined = id; x; x = this.parentOf.get(x)) targets.push(x);
     this.runner.dispatch({ type: 'use', targets, by: 'player' });
     this.bus.emit({ type: 'use', target: id, by: 'player', time: this.time });
+  }
+
+  // ── Health and score ──
+
+  /** Take health from the player (a negative amount heals). At 0 the player dies. */
+  hurt(amount: number, cause = 'something'): void {
+    if (!this.player || !Number.isFinite(amount)) return;
+    if (amount < 0) return this.heal(-amount);
+    if (amount === 0) return;
+    this.health = Math.max(0, this.health - amount);
+    this.hurtAt = this.time;
+    this.bus.emit({ type: 'player.hurt', amount, health: this.health, cause, time: this.time });
+    if (this.health <= 0) this.die(cause);
+  }
+
+  /** Give health back, up to the maximum. */
+  heal(amount: number): void {
+    if (!this.player || !Number.isFinite(amount)) return;
+    if (amount < 0) return this.hurt(-amount);
+    this.health = Math.min(PLAYER.maxHealth, this.health + amount);
+  }
+
+  addScore(by: number): void {
+    if (!Number.isFinite(by) || by === 0) return;
+    this.score += by;
+    this.usesScore = true;
+    this.bus.emit({ type: 'score', score: this.score, by, time: this.time });
+  }
+
+  /** The player dies: “When the player dies” runs, and they start again at the Player start with full health. */
+  private die(cause: string): void {
+    if (!this.player) return;
+    this.deaths++;
+    this.health = PLAYER.maxHealth;
+    this.player.respawn();
+    this.bus.emit({ type: 'player.die', cause, time: this.time });
+    this.runner.dispatch({ type: 'die' });
+  }
+
+  playerStatus(): PlayerStatus | null {
+    if (!this.player) return null;
+    return { health: this.health, maxHealth: PLAYER.maxHealth, score: this.score, showScore: this.usesScore, sinceHurt: this.time - this.hurtAt, deaths: this.deaths };
   }
 
   // ── What scripts can do ──

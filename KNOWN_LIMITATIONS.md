@@ -9,11 +9,12 @@
 - **One scene per project in the UI.** The format supports a scene list; scene management UI comes later.
 - **The clipboard is inside the editor.** Copy/paste works across projects within one session, but not with other apps or after a restart.
 - **Some tools are visible but disabled** (Build), labelled with when it arrives.
-- **Play as the player needs a Player start** (new scenes have one). Without it, Play is the physics preview with the free camera. Lights are not drawn yet (Phase 7), the player has no body or weapon model, and there is no health, ladders or swimming yet (Phase 6).
+- **Play as the player needs a Player start** (new scenes have one). Without it, Play is the physics preview with the free camera. Lights are not drawn yet (Phase 7), the player has no body or weapon model, and there are no ladders or swimming yet (Phase 6).
 - **Pivots apply to one selected object.** With several selected, the gizmo uses the middle of them all; a pivot set on a brush stays put relative to it when moved, but not when it is rotated through its parent group.
+- **Health and score are simple:** one player with 100 health, no armour, lives or game-over screen; dying starts again at the Player start straight away, and nothing that moved is put back. The score isn't saved between plays. The console can only be read after Esc frees the mouse.
 - **Player speeds are fixed** (Half-Life 2's: run 190, walk 100, crouch 64 u/s); a per-scene setting comes later.
 - **Keys while playing are fixed** (WASD, Space, Ctrl or C, Shift, E); rebinding comes later. While the mouse is captured, editor shortcuts are off; F5 still stops.
-- **Scripts: variables belong to each object** (no game-wide variables yet; use messages). Blocks are rearranged with ↑ ↓ for now; drag-and-drop comes later. The graph view (V3) and recipes come later in Phase 5.
+- **Scripts: variables belong to each object** (no game-wide variables yet; use messages). Blocks are rearranged with ↑ ↓ for now; drag-and-drop comes later. The graph view (V3) comes later in Phase 5.
 - **Applying a change to a prefab writes the prefab file straight away.** Undo restores this scene's copies but not the file; apply the old value again to change the prefab back.
 - **Prefabs are edited through their copies.** Opening a prefab on its own to edit it, and prefabs inside prefabs, come later.
 - **Brushes with Physics move as one solid piece** and aren't cut by subtract brushes while playing.

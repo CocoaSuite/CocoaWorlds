@@ -19,6 +19,7 @@ export function newEvent(kind: EventKind, zone: Ref = self): EventBlock {
   switch (kind) {
     case 'start':
     case 'use':
+    case 'die':
       return { id: id(), kind };
     case 'enter':
     case 'leave':
@@ -62,6 +63,12 @@ export function newStatement(kind: StatementKind, opts: { target?: Ref; variable
       return { id: id(), kind, body: [] };
     case 'stop':
       return { id: id(), kind };
+    case 'hurt':
+      return { id: id(), kind, amount: num(10) };
+    case 'heal':
+      return { id: id(), kind, amount: num(25) };
+    case 'addScore':
+      return { id: id(), kind, amount: num(1) };
   }
 }
 
@@ -90,6 +97,8 @@ export function newExpr(kind: ExprKind, opts: { variable?: string } = {}): Expr 
     case 'object':
       return { id: id(), kind, ref: self };
     case 'time':
+    case 'health':
+    case 'score':
       return { id: id(), kind };
   }
 }

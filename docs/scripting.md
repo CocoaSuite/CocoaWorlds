@@ -50,3 +50,22 @@ object when it needs one, in one undo step. Change the blocks afterwards like an
 | Keeps spinning | Game starts → repeat forever: turn 360° over 4 s |
 | Platform that vanishes when stepped on | A zone on top → wait 0.5 s, hide, wait 3 s, show |
 | Pickup the player collects | A zone around it (once) → hide, write “Picked up …” |
+| Coin: +1 score when collected | A zone around it (once) → hide, change the score by 1 |
+| Health pack: +25 health | A zone around it → if not taken and health < 100: heal 25, hide |
+| Hurts the player who stands in it | A zone over it → 10 damage every 0.5 s while the player is inside |
+| Deadly: touching it kills the player | A zone over it → hurt the player by 1000 |
+
+## Health and score
+
+The player has 100 health, shown in the bottom-left corner while playing; the screen flashes red when hurt.
+At 0 the player dies, every “When the player dies” stack runs, and they start again at the Player start with
+full health (the score is kept). Falls hurt (Half-Life 2's numbers: safe up to about 170 u, fatal from about
+530 u), and falling out of the world counts as dying.
+
+| Block | What it does |
+|---|---|
+| Hurt the player by *n* | Takes *n* health (a negative number heals) |
+| Heal the player by *n* | Gives *n* health back, up to 100 |
+| Change the score by *n* | Adds *n* to the score (the score appears on screen the first time a script uses it) |
+| the player's health, the score | Values for comparisons and text (“If the player's health < 30 …”) |
+| When the player dies | Runs when health reaches 0, after the player has started again |
