@@ -96,6 +96,29 @@ export interface SceneSettings {
   backgroundColor: string;
   fog: { enabled: boolean; color: string; near: number; far: number };
   gravity: number;
+  /** A gradient sky behind the level (missing in older files: off, the plain background shows). */
+  sky?: SkySettings;
+}
+
+export interface SkySettings {
+  enabled: boolean;
+  /** Straight up, at the horizon, and below the horizon. */
+  top: string;
+  horizon: string;
+  ground: string;
+}
+
+export const defaultSky = (): SkySettings => ({ enabled: true, top: '#4a7fc1', horizon: '#c9dcef', ground: '#3b3a36' });
+
+/** A scene's settings with everything filled in (older files lack the sky). */
+export function sceneSettings(s: Partial<SceneSettings> | undefined): SceneSettings {
+  const d = defaultSceneSettings();
+  return {
+    ...d,
+    ...s,
+    fog: { ...d.fog, ...(s?.fog ?? {}) },
+    sky: { ...defaultSky(), enabled: false, ...(s?.sky ?? {}) },
+  };
 }
 
 export interface SceneFile {
@@ -115,4 +138,5 @@ export const defaultSceneSettings = (): SceneSettings => ({
   backgroundColor: '#1f1f1f',
   fog: { enabled: false, color: '#1f1f1f', near: 512, far: 4096 },
   gravity: 800,
+  sky: defaultSky(),
 });

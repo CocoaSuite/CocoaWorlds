@@ -12,6 +12,7 @@ import {
   type ComponentData,
   type EntityData,
   type SceneFile,
+  type SceneSettings,
 } from './schema';
 
 export type SceneChange =
@@ -93,6 +94,12 @@ export class SceneDoc {
   /** A deep copy suitable for saving or for building a Play-mode world. */
   toFile(): SceneFile {
     return clone(this.file);
+  }
+
+  /** Replace the scene settings (tells listeners, like any other change). */
+  setSettings(next: SceneSettings): void {
+    this.file.settings = clone(next);
+    this.emit({ kind: 'updated', ids: [] });
   }
 
   subscribe(fn: (c: SceneChange) => void): () => void {
@@ -216,6 +223,13 @@ export function setFlagCmd(doc: SceneDoc, id: string, flag: Flag, value: boolean
     apply: () => doc.patch(id, (e) => void (e[flag] = value)),
     revert: () => doc.patch(id, (e) => void (e[flag] = prev)),
   };
+}
+
+/** Change some scene settings (merged into the current ones). */
+export function setSceneSettingsCmd(doc: SceneDoc, patch: Partial<SceneSettings>, label = 'Edit scene settings', mergeKey?: string): Command {
+  const prev = clone(doc.settings);
+  const next = clone({ ...doc.settings, ...patch });
+  return { label, mergeKey, apply: () => doc.setSettings(next), revert: () => doc.setSettings(prev) };
 }
 
 export function renameCmd(doc: SceneDoc, id: string, name: string): Command {

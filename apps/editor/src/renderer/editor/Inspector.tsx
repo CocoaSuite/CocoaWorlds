@@ -1,7 +1,7 @@
 /** Inspector for the selection (CocoaCanvas right panel). Scene settings when nothing is selected. */
-import { PIVOT, gameRules, pivotOf, worldBoundsOf, type EntityData, type Transform, type Vec3 } from '@cocoaworlds/core';
+import { PIVOT, gameRules, pivotOf, sceneSettings, worldBoundsOf, type EntityData, type SceneSettings as SceneSettingsData, type Transform, type Vec3 } from '@cocoaworlds/core';
 import { brushBounds } from '../brush/brushes';
-import { Button, Field, NumberField, PanelHeader, Section, Switch } from '@cocoaworlds/ui';
+import { Button, ColorField, Field, NumberField, PanelHeader, Section, Switch } from '@cocoaworlds/ui';
 import { t } from '../i18n';
 import { BrushInspector, MultiBrushActions } from './BrushInspector';
 import { FaceInspector } from './FaceInspector';
@@ -132,7 +132,15 @@ function componentLabel(e: EntityData): string {
 }
 
 function SceneSettings() {
+  useEditor((s) => s.rev);
   const doc = useEditor((s) => s.doc)!;
+  const st = useEditor.getState();
+  const cur = sceneSettings(doc.settings);
+  const set = (patch: Partial<SceneSettingsData>, label: string, mergeKey?: string) => st.setSceneSettings(patch, label, mergeKey);
+  const sky = cur.sky!;
+  const num = (label: string, value: number, step: number, onChange: (v: number) => void, unit = '#') => (
+    <NumberField label={unit} ariaLabel={label} value={value} step={step} onChange={onChange} onCommit={onChange} />
+  );
   return (
     <>
       <p className="cw-empty" style={{ padding: 0 }}>
@@ -143,20 +151,48 @@ function SceneSettings() {
           <span>{doc.name}</span>
         </Field>
         <Field label={t('insp.ambient')}>
-          <span className="cw-swatch-row">
-            <span className="cw-swatch" style={{ background: doc.settings.ambientColor }} />
-            <code>{doc.settings.ambientColor}</code>
-          </span>
+          <ColorField label={t('insp.ambient')} value={cur.ambientColor} onChange={(v) => set({ ambientColor: v }, 'Ambient colour', 'scene-ambient')} />
+        </Field>
+        <Field label={t('insp.ambientStrength')}>
+          {num(t('insp.ambientStrength'), cur.ambientIntensity, 0.05, (v) => set({ ambientIntensity: Math.max(0, v) }, 'Ambient strength', 'scene-ambient-i'))}
         </Field>
         <Field label={t('insp.background')}>
-          <span className="cw-swatch-row">
-            <span className="cw-swatch" style={{ background: doc.settings.backgroundColor }} />
-            <code>{doc.settings.backgroundColor}</code>
-          </span>
+          <ColorField label={t('insp.background')} value={cur.backgroundColor} onChange={(v) => set({ backgroundColor: v }, 'Background', 'scene-bg')} />
         </Field>
         <Field label={t('insp.gravity')}>
-          <code>{doc.settings.gravity} u/s²</code>
+          {num(t('insp.gravity'), cur.gravity, 50, (v) => set({ gravity: Math.max(0, v) }, 'Gravity', 'scene-gravity'), 'u/s²')}
         </Field>
+      </Section>
+      <Section title={t('insp.sky')}>
+        <Field label={t('insp.skyOn')}>
+          <Switch label={t('insp.skyOn')} checked={sky.enabled} onChange={(v) => set({ sky: { ...sky, enabled: v } }, v ? 'Sky on' : 'Sky off')} />
+        </Field>
+        {sky.enabled && (
+          <>
+            <Field label={t('insp.skyTop')}>
+              <ColorField label={t('insp.skyTop')} value={sky.top} onChange={(v) => set({ sky: { ...sky, top: v } }, 'Sky colour', 'scene-sky-top')} />
+            </Field>
+            <Field label={t('insp.skyHorizon')}>
+              <ColorField label={t('insp.skyHorizon')} value={sky.horizon} onChange={(v) => set({ sky: { ...sky, horizon: v } }, 'Sky colour', 'scene-sky-h')} />
+            </Field>
+            <Field label={t('insp.skyGround')}>
+              <ColorField label={t('insp.skyGround')} value={sky.ground} onChange={(v) => set({ sky: { ...sky, ground: v } }, 'Sky colour', 'scene-sky-g')} />
+            </Field>
+          </>
+        )}
+        <Field label={t('insp.fog')}>
+          <Switch label={t('insp.fog')} checked={cur.fog.enabled} onChange={(v) => set({ fog: { ...cur.fog, enabled: v } }, v ? 'Fog on' : 'Fog off')} />
+        </Field>
+        {cur.fog.enabled && (
+          <>
+            <Field label={t('insp.fogColor')}>
+              <ColorField label={t('insp.fogColor')} value={cur.fog.color} onChange={(v) => set({ fog: { ...cur.fog, color: v } }, 'Fog colour', 'scene-fog-c')} />
+            </Field>
+            <Field label={t('insp.fogNear')}>{num(t('insp.fogNear'), cur.fog.near, 64, (v) => set({ fog: { ...cur.fog, near: Math.max(0, v) } }, 'Fog', 'scene-fog-n'), 'u')}</Field>
+            <Field label={t('insp.fogFar')}>{num(t('insp.fogFar'), cur.fog.far, 256, (v) => set({ fog: { ...cur.fog, far: Math.max(cur.fog.near + 1, v) } }, 'Fog', 'scene-fog-f'), 'u')}</Field>
+          </>
+        )}
+        <p className="cw-hint">{t('insp.skyHint')}</p>
       </Section>
       <GameRulesSection />
     </>

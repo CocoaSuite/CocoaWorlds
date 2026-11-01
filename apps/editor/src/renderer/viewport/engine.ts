@@ -18,6 +18,7 @@ import { WorldRenderer, type FaceRef } from './world-render';
 import { VertexTool } from './vertex-tool';
 import { ClipTool, type ClipKeep, type ClipState } from './clip-tool';
 import type { PlayFrame, PlayInfo, PlaySession } from './play-session';
+import { SceneLighting } from './scene-lighting';
 
 /** Larger single mouse movements (pixels) while playing are glitches, not the player. */
 const MAX_MOUSE_STEP = 300;
@@ -178,6 +179,9 @@ export class ViewportEngine {
   private playToken = 0;
   private blockFrames = 0;
   private blockKey = '';
+  private previewLights = new THREE.Group();
+  private lighting = new SceneLighting();
+  private gameLighting = false;
   private hudKey = '';
   private gridWasVisible = true;
   /** First-person camera while playing as the player. */
@@ -200,6 +204,8 @@ export class ViewportEngine {
     this.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.renderer.setClearColor(0x1f1f1f);
+    this.renderer.shadowMap.enabled = true;
+    this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     this.renderer.autoClear = false;
     this.renderer.info.autoReset = false; // count the whole frame, not just the last pass
     this.renderer.domElement.className = 'cw-canvas';
@@ -229,14 +235,17 @@ export class ViewportEngine {
     this.pivotMarker.renderOrder = 21;
     this.pivotMarker.visible = false;
     this.scene.add(this.pivotMarker);
-    // Editor preview lighting (scene lights take over when lighting lands in Phase 7).
-    this.scene.add(new THREE.HemisphereLight(0xe8eef5, 0x3a3530, 1.4));
+    // Editor preview lighting: flat and even, for building. The scene's own lighting replaces it in Play and
+    // when “Game lighting” is on.
+    this.previewLights.add(new THREE.HemisphereLight(0xe8eef5, 0x3a3530, 1.4));
     const key = new THREE.DirectionalLight(0xfff6ea, 1.6);
     key.position.set(0.45, 1, 0.3);
-    this.scene.add(key);
+    this.previewLights.add(key);
     const fill = new THREE.DirectionalLight(0xdfe8ff, 0.5);
     fill.position.set(-0.6, 0.4, -0.8);
-    this.scene.add(fill);
+    this.previewLights.add(fill);
+    this.scene.add(this.previewLights, this.lighting.group);
+    this.lighting.group.visible = false;
 
     this.gizmo = new TransformControls(this.rig.camera, this.renderer.domElement);
     this.gizmo.setSpace('world');
@@ -278,6 +287,28 @@ export class ViewportEngine {
   }
 
   // ── public API used by the React wrapper ──
+
+  /** Show the scene's own lighting in the editor (Play always does). */
+  setGameLighting(on: boolean): void {
+    this.gameLighting = on;
+    this.invalidate();
+  }
+
+  /** Scene lighting in Play and with “Game lighting”; flat preview lighting otherwise. */
+  private updateLighting(): void {
+    const on = !!this.play || this.gameLighting;
+    this.previewLights.visible = !on;
+    this.lighting.group.visible = on;
+    if (!on || !this.doc) {
+      this.scene.background = null;
+      this.scene.fog = null;
+      return;
+    }
+    const level = this.play ? this.play.group : this.world.group;
+    const bounds = new THREE.Box3().setFromObject(level);
+    this.lighting.update(this.doc, (id) => this.mats.get(id) ?? this.doc!.worldMatrix(id), bounds, this.scene);
+    this.lighting.applyTo(this.scene);
+  }
 
   setDoc(doc: SceneDoc | null): void {
     this.doc = doc;
@@ -1121,6 +1152,7 @@ export class ViewportEngine {
     r.setViewport(0, 0, size.x, size.y);
     r.clear();
     if (this.pivotMarker.visible) this.showPivotMarker();
+    this.updateLighting();
     if (this.play?.placeCamera(this.fpCam)) {
       r.render(this.scene, this.fpCam);
       return;

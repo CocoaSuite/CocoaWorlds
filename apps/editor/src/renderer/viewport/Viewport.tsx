@@ -43,6 +43,7 @@ export function Viewport() {
   const vertexSnap = useEditor((s) => s.vertexSnap);
   const pivotEdit = useEditor((s) => s.pivotEdit);
   const showGrid = useEditor((s) => s.showGrid);
+  const gameLighting = useEditor((s) => s.gameLighting);
   const showStats = useEditor((s) => s.showStats);
   const gridSize = useEditor((s) => s.session?.project.settings.gridSize ?? 16);
   const focusRequest = useEditor((s) => s.focusRequest);
@@ -185,6 +186,9 @@ export function Viewport() {
     engine.current?.setGridVisible(showGrid);
   }, [showGrid]);
   useEffect(() => {
+    engine.current?.setGameLighting(gameLighting);
+  }, [gameLighting]);
+  useEffect(() => {
     if (focusRequest) engine.current?.frameSelection();
   }, [focusRequest]);
 
@@ -240,6 +244,20 @@ export function Viewport() {
         <span className="cw-pill-sep" />
         <span className="cw-pill-k">{t('grid.snap')}</span>
         <span>{snap ? t('grid.on') : t('grid.off')}</span>
+        {!playing && (
+          <>
+            <span className="cw-pill-sep" />
+            <button
+              type="button"
+              className="cw-pill-btn"
+              aria-pressed={gameLighting}
+              title={t('view.gameLightingHint')}
+              onClick={() => useEditor.getState().toggle('gameLighting')}
+            >
+              <span className="cw-pill-k">{t('view.lighting')}</span> {gameLighting ? t('view.lightingGame') : t('view.lightingPreview')}
+            </button>
+          </>
+        )}
       </div>
       {one && (
         <div className="cw-ov cw-ov-bl mono" data-testid="selection-readout">

@@ -167,7 +167,7 @@ export class WorldRenderer {
       const m = r.mesh;
       this.solidMesh = new THREE.Mesh(toGeometry(m), m.groups.map((g) => this.material(g.material)));
       this.solidMesh.name = 'world-solids';
-      this.solidMesh.castShadow = this.solidMesh.receiveShadow = false;
+      this.solidMesh.castShadow = this.solidMesh.receiveShadow = true;
       this.group.add(this.solidMesh);
     }
     this.triangleOwner = r.triangleOwner;

@@ -64,6 +64,7 @@ export function TopBar({ onShowKeys }: { onShowKeys: () => void }) {
               { label: t('view.frame'), shortcut: 'F', disabled: !s.selection.length, onSelect: s.frameSelection },
               'separator',
               { label: `${s.showGrid ? '✓ ' : ''}${t('view.grid')}`, onSelect: () => s.toggle('showGrid') },
+              { label: `${s.gameLighting ? '✓ ' : ''}${t('view.gameLighting')}`, onSelect: () => s.toggle('gameLighting') },
               { label: `${s.showStats ? '✓ ' : ''}${t('view.stats')}`, onSelect: () => s.toggle('showStats') },
               { label: `${s.showBottom ? '✓ ' : ''}${t('view.bottom')}`, onSelect: () => s.toggle('showBottom') },
               'separator',

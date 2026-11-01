@@ -38,7 +38,8 @@ Last updated: 2026-11-01 (Phase 2, first slice).
 | Feature | Status | Notes |
 |---|---|---|
 | Hierarchy: select, rename, hide, lock, drag to reparent, context menu, filter | **Done** | |
-| Add: empty, point/spot/sun light, player spawn | **Done** | Editor markers only; lights don't light anything yet. |
+| Add: empty, point/spot/sun light, player spawn, text sign | **Done** | Lights light the level in Play and with Lighting: Game. |
+| Scene lighting: bulbs, spotlights and suns with optional shadows, ambient light, gradient sky, fog; editable scene settings with undo; Lighting: Preview / Game in the view (benchmark B3) | **Done** |
 | Nested transforms (G3): transforms are relative to the parent; brush faces live in the parent's space; moving, turning or scaling a group carries its contents | **Done** | Format-2 scenes. Format-1 scenes upgrade on open with a backup and nothing moves. Changing parent (drag in the list, group, ungroup) keeps objects where they are. |
 | Multi-object transform: move, rotate and scale any selection (brushes, lights, spawns, groups) with one gizmo, as one undo step | **Done** | Grid snapping is relative to where the drag began, so off-grid objects keep their offset. |
 | Snap to corners (vertex snap): moves and brush drawing snap to nearby brush corners; toolbar "Corners" or Shift+G | **Done** | The grabbed point is the moving corner nearest the cursor when the drag starts. |
@@ -80,7 +81,7 @@ Last updated: 2026-11-01 (Phase 2, first slice).
 | Physics component (fixed / falls and tumbles / moved by scripts; weight, grip, bounce, gravity, stay upright) and collision shapes for point objects (box, ball, capsule) | **Done** (Phase 4) |
 | Trigger zones: tool bar button or Trigger in the brush panel; amber volumes; notice the player, physics objects or anything; once-only option | **Done** (Phase 4) |
 | Game world (`packages/runtime`): Rapier physics from the scene, the level as convex pieces (live subtract included), fixed 60 Hz steps, trigger enter/exit events | **Done** (Phase 4) |
-| Play in the editor (F5 / Play): from a snapshot of the scene; trigger events and uses in the console; Stop returns with the scene untouched | **Done** (Phase 4). Lights are not drawn yet (Phase 7). |
+| Play in the editor (F5 / Play): from a snapshot of the scene; trigger events and uses in the console; Stop returns with the scene untouched | **Done** (Phase 4); lit by the scene's lights since B3 |
 | Play as the player: first person at the Player start, Source-style movement with firmer grip (stops in ~0.2 s), smooth stairs and a view that eases over steps (run 190 like Half-Life 2, Shift walk, Space jump, Ctrl/C crouch, steps up to 18 u, air strafing, pushes physics objects), click to capture the mouse, Esc frees it, E uses; falls out of the world → back to the start. Without a Player start, a free-camera physics preview | **Done** (start of Phase 6) |
 | “When the player uses this” script event, with a prompt word shown under the crosshair (“E Open”) | **Done** |
 | Sphere brush (sides setting) | **Done** |

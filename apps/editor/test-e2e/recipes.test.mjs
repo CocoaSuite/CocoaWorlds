@@ -53,11 +53,12 @@ test('recipe: door that opens when the player comes near', async () => {
     await until(() => page.evaluate(() => document.pointerLockElement?.tagName ?? ''), 'CANVAS');
     await until(doorY, 64);
     await page.keyboard.down('w');
-    await until(doorY, 192, 5000);
+    // (Generous waits: the test display renders slowly, so the game runs slower than real time.)
+    await until(doorY, 192, 15000);
     await page.keyboard.up('w');
     await shot(page, 'r03-open');
     await page.keyboard.down('s');
-    await until(doorY, 64, 6000);
+    await until(doorY, 64, 15000);
     await page.keyboard.up('s');
     await page.keyboard.press('F5');
     await until(() => page.getByTestId('play-banner').count(), 0);

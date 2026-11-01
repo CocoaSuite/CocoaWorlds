@@ -65,7 +65,9 @@ export class PlaySession {
     const level = buildLevel({ seq: 0, brushes: still });
     if (level.mesh) {
       const m = level.mesh;
-      this.group.add(new THREE.Mesh(toGeometry(m), m.groups.map((g) => material(g.material))));
+      const levelMesh = new THREE.Mesh(toGeometry(m), m.groups.map((g) => material(g.material)));
+      levelMesh.castShadow = levelMesh.receiveShadow = true;
+      this.group.add(levelMesh);
     }
 
     this.material = material;
@@ -110,6 +112,7 @@ export class PlaySession {
     const mat = new THREE.MeshStandardMaterial({ color: 0x8fb04a, roughness: 0.6 });
     const capsule = new THREE.Mesh(new THREE.CapsuleGeometry(15, 40, 6, 16), mat);
     capsule.position.y = 35;
+    capsule.castShadow = true;
     const visor = new THREE.Mesh(new THREE.BoxGeometry(18, 8, 6), new THREE.MeshStandardMaterial({ color: 0x1f1f1f, roughness: 0.3 }));
     visor.position.set(0, 58, -13);
     g.add(capsule, visor);
@@ -146,6 +149,7 @@ export class PlaySession {
     }
     obj.matrixAutoUpdate = false;
     obj.matrix.copy(base);
+    obj.castShadow = obj.receiveShadow = true;
     this.group.add(obj);
     this.movers.push({ id: b.id, obj, base });
   }

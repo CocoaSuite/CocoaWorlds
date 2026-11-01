@@ -44,6 +44,8 @@ import {
   gameRules,
   type GameRules,
   type GameValue,
+  type SceneSettings,
+  setSceneSettingsCmd,
 } from '@cocoaworlds/core';
 import {
   bakeSubtract,
@@ -104,6 +106,8 @@ interface State {
   tool: Tool;
   view: ViewMode;
   showGrid: boolean;
+  /** Show the scene's own lighting (lights, sky, fog) in the editor instead of the flat preview lights. */
+  gameLighting: boolean;
   showStats: boolean;
   showBottom: boolean;
   snap: boolean;
@@ -153,7 +157,7 @@ interface Actions {
   selectAll(): void;
   setTool(t: Tool): void;
   setView(v: ViewMode): void;
-  toggle(k: 'showGrid' | 'showStats' | 'showBottom' | 'snap' | 'vertexSnap' | 'pivotEdit'): void;
+  toggle(k: 'showGrid' | 'showStats' | 'showBottom' | 'snap' | 'vertexSnap' | 'pivotEdit' | 'gameLighting'): void;
   /** Put an object's pivot at a world position (null: back to the default, its middle). */
   setPivot(id: string, world: Vec3 | null, mergeKey?: string): void;
   execute(cmd: Command): void;
@@ -214,6 +218,8 @@ interface Actions {
   stopPlaying(): void;
   /** Switch a built-in game system on or off for the whole project (saved to the project file at once). */
   setGameRule(rule: keyof GameRules, on: boolean): Promise<void>;
+  /** Change the scene's settings (lighting, sky, fog, gravity), with undo. */
+  setSceneSettings(patch: Partial<SceneSettings>, label: string, mergeKey?: string): void;
   /** Replace the project's game values (saved to the project file at once). */
   setGameValues(values: GameValue[], label: string): Promise<boolean>;
   setBottomTab(tab: State['bottomTab']): void;
@@ -253,6 +259,7 @@ export const useEditor = create<State & Actions>()((set, get) => ({
   tool: 'select',
   view: 'perspective',
   showGrid: true,
+  gameLighting: false,
   showStats: true,
   showBottom: true,
   snap: true,
@@ -1034,6 +1041,12 @@ export const useEditor = create<State & Actions>()((set, get) => ({
     if (!get().playing) return;
     set({ playing: null, activeBlocks: new Map() });
     get().log('info', 'Play', 'Stopped. The scene is as it was before Play.');
+  },
+
+  setSceneSettings(patch, label, mergeKey) {
+    const doc = get().doc;
+    if (!doc) return;
+    get().execute(setSceneSettingsCmd(doc, patch, label, mergeKey));
   },
 
   async setGameValues(values, label) {

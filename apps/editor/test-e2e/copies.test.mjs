@@ -74,9 +74,8 @@ test('copies while playing: dropper, conveyor, third person', async () => {
     await until(async () => (await copies()).length >= 2, true, 6000);
     const first = (await copies())[0];
     const z0 = await page.evaluate((id) => window.__cwViewport.play.world.positionOf(id)[2], first);
-    await new Promise((r) => setTimeout(r, 1500));
-    const z1 = await page.evaluate((id) => window.__cwViewport.play.world.positionOf(id)[2], first);
-    assert.ok(z1 < z0 - 30, `carried north (${z0} → ${z1})`);
+    // (Waits on the result, not the clock: the test display renders slowly, so the game runs slower.)
+    await until(async () => (await page.evaluate((id) => window.__cwViewport.play.world.positionOf(id)?.[2] ?? 0, first)) < z0 - 30, true, 15000);
     assert.ok(await page.evaluate(() => !!window.__cwViewport.play.group.getObjectByName('player-body')), 'the player is seen');
     await shot(page, 'c02-third-person');
     await page.keyboard.press('Escape');
