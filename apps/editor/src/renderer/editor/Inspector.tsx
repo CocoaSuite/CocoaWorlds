@@ -5,6 +5,7 @@ import { t } from '../i18n';
 import { BrushInspector, MultiBrushActions } from './BrushInspector';
 import { FaceInspector } from './FaceInspector';
 import { ComponentsSection } from './ComponentsSection';
+import { PrefabSection } from './PrefabSection';
 import { isGroup } from '../scene-ops';
 import { useSelectedEntities, useEditor } from '../store';
 
@@ -49,6 +50,7 @@ function BrushEntity({ e }: { e: EntityData }) {
         }}
         onBlur={(ev) => s.rename(e.id, ev.currentTarget.value)}
       />
+      <PrefabSection e={e} />
       <BrushInspector e={e} />
       <ComponentsSection e={e} />
       <Section title={t('insp.display')}>
@@ -88,6 +90,7 @@ function GroupEntity({ e }: { e: EntityData }) {
         }}
         onBlur={(ev) => s.rename(e.id, ev.currentTarget.value)}
       />
+      <PrefabSection e={e} />
       <TransformSection e={e} />
       <Section title={t('insp.group')}>
         <div className="cw-f">
@@ -227,6 +230,7 @@ function EntityInspector({ e }: { e: EntityData }) {
         }}
         onBlur={(ev) => s.rename(e.id, ev.currentTarget.value)}
       />
+      <PrefabSection e={e} />
       <TransformSection e={e} />
       <Section title={t('insp.display')}>
         <div className="cw-flagrow">

@@ -20,6 +20,8 @@ const api: CocoaApi = {
     autosave: (dir, scenePath, scene) => ipcRenderer.invoke(IPC.autosave, dir, scenePath, scene),
     discardRecovery: (dir, scenePath) => ipcRenderer.invoke(IPC.discardRecovery, dir, scenePath),
     reveal: (dir) => ipcRenderer.invoke(IPC.reveal, dir),
+    listPrefabs: (dir) => ipcRenderer.invoke(IPC.listPrefabs, dir),
+    savePrefab: (dir, prefab, path) => ipcRenderer.invoke(IPC.savePrefab, dir, prefab, path),
   },
   window: {
     setTitle: (title) => ipcRenderer.send(IPC.setTitle, title),

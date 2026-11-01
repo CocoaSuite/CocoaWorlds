@@ -92,7 +92,7 @@ function FieldEditor({ entity, component, field, value }: { entity: string; comp
   } else if (ty.kind === 'enum') {
     const options = ty.options.map((o) => ({ value: o.value, label: o.label[lang] }));
     // Short choices fit as segmented buttons; longer ones become a dropdown so the Inspector never overflows.
-    const fits = options.reduce((n, o) => n + o.label.length, 0) <= 22;
+    const fits = options.reduce((n, o) => n + o.label.length, 0) <= 14;
     input = fits ? (
       <Segmented<string> label={label} value={String(value)} onChange={(v) => set(v)} options={options} />
     ) : (

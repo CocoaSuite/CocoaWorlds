@@ -82,6 +82,8 @@ Last updated: 2026-11-01 (Phase 2, first slice).
 | Plain-language block scripting, graph view, VM (Phase 5) | Planned |
 | Source-style player controller, gameplay entities (Phase 6) | Planned |
 | Assets, materials, lighting, audio (Phase 7) | Planned |
+| Prefabs (P1): Edit › Make prefab…, place copies from the Assets panel, per-copy changes listed in the Inspector with Revert / Apply, Unlink; copies stored in full and synced on Apply and on open | **Done** (Phase 4). See docs/prefabs.md. |
+| Game event bus (trigger enter/exit now; “use” and messages reserved for scripts) | **Done** (Phase 4) |
 | Standalone runtime and Play as built (Phase 8) | Planned |
 | Desktop and web export (Phase 9) | Planned |
 | Custom JavaScript scripting | Not supported (deferred past v1) |

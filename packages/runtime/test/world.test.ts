@@ -116,3 +116,24 @@ describe('GameWorld', () => {
     w.dispose();
   });
 });
+
+describe('event bus', () => {
+  it('trigger events reach listeners; a failing listener is reported and the rest still run', () => {
+    const crate = brush('crate', [-16, 400, -16], [16, 432, 16], { rigidBody: { motion: 'dynamic' } });
+    const zone = brush('zone', [-64, 100, -64], [64, 200, 64], { trigger: { detects: 'physics' } });
+    const w = GameWorld.create(scene(floor(), crate, zone));
+    const seen: string[] = [];
+    w.bus.on('trigger.enter', () => {
+      throw new Error('boom');
+    });
+    w.bus.on('trigger.enter', (e) => seen.push(`enter ${e.other === crate.id}`));
+    const stop = w.bus.on('*', (e) => seen.push(`any ${e.type}`));
+    run(w, 3);
+    expect(seen).toEqual(['enter true', 'any trigger.enter', 'any trigger.exit']);
+    expect(w.bus.errors).toEqual([{ event: 'trigger.enter', message: 'boom' }]);
+    stop();
+    w.bus.emit({ type: 'message', name: 'open', from: null, time: 0 });
+    expect(seen).toHaveLength(3);
+    w.dispose();
+  });
+});

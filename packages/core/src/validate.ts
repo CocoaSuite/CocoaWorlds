@@ -74,3 +74,22 @@ export function validateScene(data: unknown): Result<SceneFile> {
   }
   return p.length ? { ok: false, problems: p } : { ok: true, value: data as unknown as SceneFile };
 }
+
+/** A prefab file: one tree with a single root. */
+export function validatePrefab(data: unknown): Result<import('./prefab').PrefabFile> {
+  const p: Problem[] = [];
+  if (!isObj(data)) return { ok: false, problems: [{ path: '', message: 'Prefab file is not a JSON object.' }] };
+  need(p, data.format === 'cocoaworlds.prefab', 'format', 'Not a CocoaWorlds prefab file.');
+  need(p, isNum(data.schemaVersion), 'schemaVersion', 'Missing schema version.');
+  need(p, isStr(data.id), 'id', 'Missing prefab id.');
+  need(p, isStr(data.name), 'name', 'Missing prefab name.');
+  if (!Array.isArray(data.entities)) need(p, false, 'entities', 'Entities must be a list.');
+  else {
+    data.entities.forEach((e, i) => validateEntity(e, `entities[${i}]`, p));
+    const ents = data.entities.filter(isObj) as unknown as EntityData[];
+    const ids = new Set(ents.map((e) => e.id));
+    if (ents.filter((e) => e.parent === null).length !== 1) p.push({ path: 'entities', message: 'A prefab needs exactly one root object.' });
+    for (const e of ents) if (e.parent !== null && !ids.has(e.parent)) p.push({ path: 'entities', message: `${e.name} has a parent that does not exist.` });
+  }
+  return p.length ? { ok: false, problems: p } : { ok: true, value: data as unknown as import('./prefab').PrefabFile };
+}

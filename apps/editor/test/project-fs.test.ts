@@ -88,3 +88,36 @@ describe('project folders', () => {
     expect(text.endsWith('\n')).toBe(true);
   });
 });
+
+describe('prefab files', () => {
+  it('saves with a name made from the prefab, lists them, and never overwrites another', async () => {
+    const { makePrefab, newEntity: ne } = await import('@cocoaworlds/core');
+    const { listPrefabs, savePrefab } = await import('../src/main/project-fs');
+    const { dir } = await createProject(tmp, 'Prefabs');
+    const root = ne('Big Lamp', { group: {} });
+    const a = makePrefab('Big Lamp', [root], root.id);
+    const b = makePrefab('Big Lamp', [root], root.id);
+    expect((await savePrefab(dir, a)).path).toBe('prefabs/big_lamp.cwprefab');
+    expect((await savePrefab(dir, b)).path).toBe('prefabs/big_lamp_2.cwprefab');
+    // Saving again to a known path updates it.
+    await savePrefab(dir, { ...a, name: 'Renamed' }, 'prefabs/big_lamp.cwprefab');
+    const { prefabs, problems } = await listPrefabs(dir);
+    expect(problems).toEqual([]);
+    expect(prefabs.map((p) => p.prefab.name).sort()).toEqual(['Big Lamp', 'Renamed']);
+  });
+
+  it('refuses paths outside the prefabs folder and invalid prefabs; reports damaged files', async () => {
+    const { makePrefab, newEntity: ne } = await import('@cocoaworlds/core');
+    const { listPrefabs, savePrefab } = await import('../src/main/project-fs');
+    const { dir } = await createProject(tmp, 'Prefabs2');
+    const root = ne('x', {});
+    const p = makePrefab('x', [root], root.id);
+    await expect(savePrefab(dir, p, 'scenes/evil.cwprefab')).rejects.toThrow(/prefabs folder/);
+    await expect(savePrefab(dir, p, '../../evil.cwprefab')).rejects.toThrow();
+    await expect(savePrefab(dir, { ...p, entities: [] })).rejects.toThrow(/not valid/);
+    await fs.writeFile(path.join(dir, 'prefabs', 'broken.cwprefab'), '{ nope');
+    const { prefabs, problems } = await listPrefabs(dir);
+    expect(prefabs).toEqual([]);
+    expect(problems[0]).toMatch(/broken\.cwprefab/);
+  });
+});

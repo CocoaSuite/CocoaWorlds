@@ -5,6 +5,16 @@
 import {
   History,
   SceneDoc,
+  LINK,
+  applyPathToSource,
+  diffPaths,
+  instantiate,
+  linkOf,
+  linkTree,
+  makePrefab as makePrefabFile,
+  replaceEntitiesCmd,
+  revertPath,
+  type PrefabFile,
   componentDef,
   defaultComponent,
   composeTransform,
@@ -47,7 +57,8 @@ import {
 import { create } from 'zustand';
 import { brushComponent, brushOf, isLocked, isShown, newBrushEntity, toLocal, toWorld, worldBrushOf, shapeBrushes, shapeName, worldBrushes, type DrawRole, type Outline, type ShapeOptions } from './brush/brushes';
 import { useShallow } from 'zustand/react/shallow';
-import type { OpenedProject } from '../shared/api';
+import type { OpenedProject, PrefabEntry } from '../shared/api';
+import { copyRootOf, recordAllChanges, repivot, syncCommands, unlinked } from './prefabs';
 import { DEV_TEXTURE_SIZE } from './brush/materials';
 import type { FaceRef } from './viewport/world-render';
 import type { LiveChange } from './viewport/engine';
@@ -107,6 +118,12 @@ interface State {
   canPaste: boolean;
   /** Play mode: a snapshot of the scene being played (the editor's scene is untouched). */
   playing: { scene: SceneFile; startedAt: number } | null;
+  /** The project's prefabs by id, with their file paths. */
+  prefabs: Map<string, PrefabEntry>;
+  /** Where "place" puts new things: the point the view is looking at (set by the viewport). */
+  placementPoint: () => [number, number, number] | null;
+  /** An open editor dialog. */
+  dialog: 'makePrefab' | null;
 }
 
 interface Actions {
@@ -165,6 +182,14 @@ interface Actions {
   copySelection(): void;
   cutSelection(): void;
   paste(): void;
+  // prefabs
+  openDialog(d: State['dialog']): void;
+  loadPrefabs(): Promise<void>;
+  makePrefab(name: string): Promise<boolean>;
+  placePrefab(prefabId: string): void;
+  revertChange(id: string, path: string | null): void;
+  applyChange(id: string, path: string | null): Promise<void>;
+  unlinkCopy(id: string): void;
   // play mode
   play(): void;
   stopPlaying(): void;
@@ -218,6 +243,9 @@ export const useEditor = create<State & Actions>()((set, get) => ({
   enteredGroup: null,
   canPaste: false,
   playing: null,
+  prefabs: new Map(),
+  placementPoint: () => null,
+  dialog: null,
 
   setLang(l) {
     setLang(l);
@@ -259,6 +287,8 @@ export const useEditor = create<State & Actions>()((set, get) => ({
     window.cocoa.window.setTitle(`${o.project.name} — ${o.scene.name} — CocoaWorlds`);
     get().log('info', 'Project', `Opened ${o.project.name} (${o.dir})`);
     if (o.migrated) get().notify(t('toast.migrated'));
+    set({ prefabs: new Map() });
+    void get().loadPrefabs();
   },
 
   closeSession() {
@@ -378,7 +408,7 @@ export const useEditor = create<State & Actions>()((set, get) => ({
     const { session, doc, history } = get();
     if (!session || !doc) return false;
     set({ saving: true });
-    const r = await window.cocoa.projects.saveScene(session.dir, session.scenePath, doc.toFile());
+    const r = await window.cocoa.projects.saveScene(session.dir, session.scenePath, sceneForSaving(doc, get().prefabs));
     set({ saving: false });
     if (!r.ok) {
       get().log('error', 'Save', `${r.error}${r.details?.length ? ` — ${r.details.join('; ')}` : ''}`);
@@ -394,7 +424,7 @@ export const useEditor = create<State & Actions>()((set, get) => ({
   async autosave() {
     const { session, doc, dirty } = get();
     if (!session || !doc || !dirty) return;
-    const r = await window.cocoa.projects.autosave(session.dir, session.scenePath, doc.toFile());
+    const r = await window.cocoa.projects.autosave(session.dir, session.scenePath, sceneForSaving(doc, get().prefabs));
     if (!r.ok) get().log('warn', 'Autosave', r.error);
   },
 
@@ -870,6 +900,132 @@ export const useEditor = create<State & Actions>()((set, get) => ({
     set({ playing: null });
     get().log('info', 'Play', 'Stopped. The scene is as it was before Play.');
   },
+
+  openDialog(dialog) {
+    set({ dialog });
+  },
+
+  async loadPrefabs() {
+    const session = get().session;
+    if (!session) return;
+    const r = await window.cocoa.projects.listPrefabs(session.dir);
+    if (!r.ok) {
+      get().log('error', 'Prefabs', r.error);
+      return;
+    }
+    for (const p of r.value.problems) get().log('warn', 'Prefabs', p);
+    const prefabs = new Map(r.value.prefabs.map((p) => [p.prefab.id, p]));
+    set({ prefabs });
+    // Copies catch up with prefabs changed since this scene was saved (keeping what each copy changed).
+    const doc = get().doc;
+    if (!doc || get().session !== session) return;
+    const h = get().history;
+    let updated = 0;
+    h.begin('Update from prefabs');
+    for (const { prefab } of prefabs.values()) {
+      const { cmds, copies } = syncCommands(doc, prefab, null);
+      for (const c of cmds) h.execute(c);
+      updated += copies;
+    }
+    h.commit();
+    if (updated) get().log('info', 'Prefabs', `Updated ${updated} cop${updated === 1 ? 'y' : 'ies'} from changed prefabs`);
+  },
+
+  async makePrefab(name) {
+    const { session, doc, selection } = get();
+    if (!session || !doc) return false;
+    const roots = rootsOf(doc, selection);
+    if (roots.length !== 1) {
+      get().notify(t('prefab.oneRoot'));
+      return false;
+    }
+    const rootId = roots[0]!;
+    if (copyRootOf(doc, rootId)) {
+      get().notify(t('prefab.alreadyCopy'));
+      return false;
+    }
+    // Put the origin at the bottom centre of the contents (nothing moves in the world).
+    const moved = new Map(repivot(doc, rootId).map((e) => [e.id, e]));
+    const tree = doc.subtree(rootId).map((e) => moved.get(e.id) ?? structuredClone(e));
+    const prefab = makePrefabFile(name.trim() || doc.get(rootId)!.name, unlinked(tree), rootId);
+    const r = await window.cocoa.projects.savePrefab(session.dir, prefab);
+    if (!r.ok) {
+      get().notify(`${t('prefab.saveFailed')}: ${r.error}`);
+      return false;
+    }
+    // The source becomes the first copy and takes the prefab's name (later copies are name_2, name_3 …).
+    const linked = linkTree(tree, prefab, rootId);
+    const taken = new Set(doc.entities.filter((e) => e.id !== rootId).map((e) => e.name));
+    let rootName = prefab.name, i = 2;
+    while (taken.has(rootName)) rootName = `${prefab.name}_${i++}`;
+    linked.find((e) => e.id === rootId)!.name = rootName;
+    get().execute(replaceEntitiesCmd(doc, linked, 'Make prefab'));
+    set((s) => ({ prefabs: new Map(s.prefabs).set(prefab.id, { path: r.value.path, prefab }) }));
+    get().log('info', 'Prefabs', `Made prefab ${prefab.name} (${r.value.path}) from ${tree.length} object(s)`);
+    get().notify(t('prefab.made').replace('{name}', prefab.name));
+    return true;
+  },
+
+  placePrefab(prefabId) {
+    const { doc, prefabs } = get();
+    const entry = prefabs.get(prefabId);
+    if (!doc || !entry) return;
+    const at = get().placementPoint() ?? [0, 0, 0];
+    const names = new Set(doc.entities.map((e) => e.name));
+    let name = entry.prefab.name, i = 2;
+    while (names.has(name)) name = `${entry.prefab.name}_${i++}`;
+    const ents = instantiate(entry.prefab, null, { position: at, rotation: [0, 0, 0], scale: [1, 1, 1] }, name);
+    get().execute(addEntitiesCmd(doc, ents, `Place ${entry.prefab.name}`));
+    set({ selection: [ents[0]!.id] });
+    get().log('info', 'Prefabs', `Placed ${name}`);
+  },
+
+  revertChange(id, path) {
+    const { doc, prefabs } = get();
+    const e = doc?.get(id);
+    const link = linkOf(e);
+    const src = link && prefabs.get(link.prefab)?.prefab.entities.find((x) => x.id === link.entity);
+    if (!doc || !e || !link || !src) return;
+    const paths = path ? [path] : diffPaths(e, src, !!link.root);
+    let next = e;
+    for (const p of paths) next = revertPath(next, src, p, !!link.root);
+    get().execute(replaceEntitiesCmd(doc, [next], path ? 'Revert change' : 'Revert all changes'));
+  },
+
+  async applyChange(id, path) {
+    const { session, doc, prefabs } = get();
+    const e = doc?.get(id);
+    const link = linkOf(e);
+    const entry = link ? prefabs.get(link.prefab) : undefined;
+    const src = entry?.prefab.entities.find((x) => x.id === link!.entity);
+    if (!session || !doc || !e || !link || !entry || !src) return;
+    const paths = path ? [path] : diffPaths(e, src, !!link.root);
+    let nextSrc = src;
+    for (const p of paths) nextSrc = applyPathToSource(e, nextSrc, p, !!link.root);
+    const next: PrefabFile = { ...entry.prefab, entities: entry.prefab.entities.map((x) => (x.id === src.id ? nextSrc : x)) };
+    const r = await window.cocoa.projects.savePrefab(session.dir, next, entry.path);
+    if (!r.ok) {
+      get().notify(`${t('prefab.saveFailed')}: ${r.error}`);
+      return;
+    }
+    set((s) => ({ prefabs: new Map(s.prefabs).set(next.id, { path: entry.path, prefab: next }) }));
+    // Every copy in this scene catches up (each keeps what it changed itself).
+    const { cmds, copies } = syncCommands(doc, next, entry.prefab);
+    const h = get().history;
+    h.begin('Apply to prefab');
+    for (const c of cmds) h.execute(c);
+    h.commit();
+    get().log('info', 'Prefabs', `Applied ${paths.length} change(s) to ${next.name}; ${copies} other cop${copies === 1 ? 'y' : 'ies'} updated`);
+  },
+
+  unlinkCopy(id) {
+    const doc = get().doc;
+    const root = doc ? copyRootOf(doc, id) : null;
+    if (!doc || !root) return;
+    const prefab = linkOf(root)!.prefab;
+    const tree = doc.subtree(root.id).filter((e) => linkOf(e)?.prefab === prefab);
+    get().execute(replaceEntitiesCmd(doc, unlinked(tree), 'Unlink prefab copy'));
+  },
 }));
 
 const selectedEntities = (s: State): EntityData[] =>
@@ -935,4 +1091,9 @@ export function reparentKeepWorld(doc: SceneDoc, id: string, parent: string | nu
   }
   cmds.push(reparentCmd(doc, id, parent));
   return cmds;
+}
+
+/** The scene as it goes to disk: prefab copies record what they changed. */
+function sceneForSaving(doc: SceneDoc, prefabs: Map<string, PrefabEntry>): SceneFile {
+  return recordAllChanges(doc.toFile(), new Map([...prefabs.values()].map((p) => [p.prefab.id, p.prefab])));
 }

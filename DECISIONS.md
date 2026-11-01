@@ -21,11 +21,14 @@ Status values: **Approved** (signed off by the product owner), **Proposed** (rec
 | G1 | Subtract behaviour | Live subtract brushes: a doorway stays an editable brush and solids re-cut instantly; Apply bakes to plain brushes; destructive carve also offered | Destructive carve only (Hammer) | **Approved** (2026-11-01) |
 | G2 | Vertex edits that bend a face | Split the bent face into flat triangles; dents still refused | Refuse the move | **Approved** (2026-11-01) |
 | G3 | Where brush geometry lives once transforms nest | Brush faces are stored relative to their parent; every entity's transform is local to its parent; moving or rotating a group carries its contents without rewriting them | Keep brushes in world space (Hammer-style) | **Approved** (2026-11-01) |
+| P1 | How a placed prefab copy is stored (amends D5) | In full in the scene, with a hidden link per object; on save each object records which values differ from the prefab; editing the prefab updates every copy except those values | Store only the differences and rebuild copies from the prefab file on open | **Approved** (2026-11-01) |
 | D12 | Editor UI stack | React + TypeScript + Zustand + Vite, CocoaCanvas CSS copied into a UI package | Vanilla TS like CocoaCanvas; Svelte | **Approved** (2026-11-01) |
 
 Details and trade-offs for each: [ARCHITECTURE.md](ARCHITECTURE.md).
 
 ## Log
+
+- **2026-11-01** — Approved P1: prefab copies are stored in full with tracked changes, so scenes open and play without their prefab files. This replaces D5's “instances store only overrides”; the per-field Apply and Revert from D5 stay.
 
 - **2026-11-01** — Routine choices for components and physics (reversible): one component registry in core drives the Inspector and the runtime; long multi-choice fields show as a dropdown so the Inspector never overflows; trigger zones are brushes with a trigger component (amber), and subtract brushes moved to coral so the two never look alike; physics runs in game units with Rapier's `lengthUnit`; an object's own Bounce wins over what it lands on; Rapier 0.21 loads on first Play; the CSP allows WebAssembly compilation only.
 

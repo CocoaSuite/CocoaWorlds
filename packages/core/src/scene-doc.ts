@@ -281,3 +281,13 @@ export function setComponentCmd(doc: SceneDoc, id: string, name: string, data: C
     });
   return { label, mergeKey, apply: () => put(after), revert: () => put(before) };
 }
+
+/** Replace entities with new versions (same ids), as one undoable step. */
+export function replaceEntitiesCmd(doc: SceneDoc, next: EntityData[], label = 'Edit'): Command {
+  const before = next.map((e) => doc.get(e.id)).filter(Boolean).map((e) => clone(e!));
+  const after = next.map(clone);
+  const put = (list: EntityData[]) => {
+    for (const e of list) doc.patch(e.id, (cur) => void Object.assign(cur, clone(e)));
+  };
+  return { label, apply: () => put(after), revert: () => put(before) };
+}

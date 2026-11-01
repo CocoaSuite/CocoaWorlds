@@ -24,6 +24,11 @@ export class CameraRig {
   private pitch = -0.45;
   private pos = new THREE.Vector3(-600, 420, 600);
   private focusDist = 900;
+
+  /** The point the camera orbits around (straight ahead at the focus distance). */
+  get target(): THREE.Vector3 {
+    return this.pos.clone().addScaledVector(this.forward(), this.focusDist);
+  }
   flySpeed = 512; // units per second
 
   // Ortho state per view: centre in view plane and units-per-pixel

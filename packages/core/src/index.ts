@@ -8,3 +8,4 @@ export * from './scene-doc';
 export * from './project';
 export * from './matrix';
 export * from './components';
+export * from './prefab';

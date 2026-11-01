@@ -109,3 +109,20 @@ describe('copies keep their world place', () => {
     expect(copies[0]!.transform.position).toEqual([110, 0, 0]);
   });
 });
+
+describe('pasting prefab copies', () => {
+  it('a whole copy stays linked; part of a copy becomes an ordinary object', async () => {
+    const { instantiate, makePrefab, linkOf } = await import('@cocoaworlds/core');
+    const doc = new SceneDoc(newScene('t'));
+    const root = newEntity('lamp', { group: {} });
+    const bulb = newEntity('bulb', { light: {} });
+    bulb.parent = root.id;
+    const prefab = makePrefab('lamp', [root, bulb], root.id);
+    const copy = instantiate(prefab, null);
+    doc.insert(copy);
+    const whole = cloneSnapshot(doc, snapshotSubtrees(doc, [copy[0]!.id]), [16, 0, 0]);
+    expect(whole.copies.every((c) => linkOf(c)?.prefab === prefab.id)).toBe(true);
+    const part = cloneSnapshot(doc, snapshotSubtrees(doc, [copy[1]!.id]), [16, 0, 0]);
+    expect(part.copies.every((c) => !linkOf(c))).toBe(true);
+  });
+});

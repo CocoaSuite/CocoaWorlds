@@ -1,4 +1,5 @@
-/** Bottom workspace: console now; script, assets and diagnostics panels arrive in later phases. */
+/** Bottom workspace: console, problems and assets (prefabs); the script panel arrives in Phase 5. */
+import { Button, Icon } from '@cocoaworlds/ui';
 import { useEffect, useRef, useState } from 'react';
 import { t } from '../i18n';
 import { useEditor } from '../store';
@@ -32,7 +33,8 @@ export function BottomPanel() {
         ))}
       </div>
       <div className="cw-console cw-scroll" role="tabpanel">
-        {(tab === 'script' || tab === 'assets') && <div className="cw-muted">{t('panel.notYet')}</div>}
+        {tab === 'script' && <div className="cw-muted">{t('panel.notYet')}</div>}
+        {tab === 'assets' && <AssetsPanel />}
         {(tab === 'console' || tab === 'problems') && (
           <div role="log" aria-label={tab === 'console' ? t('panel.console') : t('panel.problems')} aria-live="polite">
             {(tab === 'console' ? logs : problems).map((l, i) => (
@@ -49,5 +51,28 @@ export function BottomPanel() {
         <div ref={end} />
       </div>
     </section>
+  );
+}
+
+/** Assets: the project's prefabs, each with Place. Textures, sounds and models arrive in Phase 7. */
+function AssetsPanel() {
+  const prefabs = useEditor((s) => s.prefabs);
+  const place = useEditor((s) => s.placePrefab);
+  const list = [...prefabs.values()].sort((a, b) => a.prefab.name.localeCompare(b.prefab.name));
+  return (
+    <div className="cw-assets" role="list" aria-label={t('assets.prefabs')}>
+      {!list.length && <div className="cw-muted">{t('assets.none')}</div>}
+      {list.map(({ path, prefab }) => (
+        <div key={prefab.id} className="cw-asset" role="listitem" aria-label={prefab.name}>
+          <Icon name="cube" />
+          <span className="cw-asset-name">{prefab.name}</span>
+          <span className="cw-asset-meta mono">{path}</span>
+          <span className="cw-asset-meta">{t('assets.objects').replace('{n}', String(prefab.entities.length))}</span>
+          <Button size="sm" onClick={() => place(prefab.id)}>
+            {t('assets.place')}
+          </Button>
+        </div>
+      ))}
+    </div>
   );
 }

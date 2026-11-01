@@ -43,6 +43,7 @@ export function TopBar({ onShowKeys }: { onShowKeys: () => void }) {
               { label: t('edit.duplicate'), shortcut: `${mod}D`, disabled: !s.selection.length, onSelect: s.duplicateSelection },
               'separator',
               { label: t('edit.group'), shortcut: `${mod}G`, disabled: !s.selection.length, onSelect: s.groupSelection },
+              { label: t('prefab.make'), disabled: !s.selection.length, onSelect: () => s.openDialog('makePrefab') },
               { label: t('edit.ungroup'), shortcut: `${mod}⇧G`, disabled: !s.selection.length, onSelect: s.ungroupSelection },
               'separator',
               { label: t('edit.delete'), shortcut: 'Del', disabled: !s.selection.length, onSelect: s.deleteSelection },

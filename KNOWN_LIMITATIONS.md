@@ -10,6 +10,8 @@
 - **The clipboard is inside the editor.** Copy/paste works across projects within one session, but not with other apps or after a restart.
 - **Some tools are visible but disabled** (Build), labelled with when it arrives.
 - **Play is a physics preview for now.** There is no player yet (Phase 6) and lights are not drawn (Phase 7); you watch with the free camera. Zones set to notice “The player” stay quiet until then.
+- **Applying a change to a prefab writes the prefab file straight away.** Undo restores this scene's copies but not the file; apply the old value again to change the prefab back.
+- **Prefabs are edited through their copies.** Opening a prefab on its own to edit it, and prefabs inside prefabs, come later.
 - **Brushes with Physics move as one solid piece** and aren't cut by subtract brushes while playing.
 - **The vertex tool moves corners with the gizmo only;** dragging a corner handle directly is not supported yet.
 - **Materials are built-in development colours** until material assets and textures arrive in Phase 7.

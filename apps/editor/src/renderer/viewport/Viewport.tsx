@@ -84,6 +84,7 @@ export function Viewport() {
       return;
     }
     engine.current = e;
+    useEditor.setState({ placementPoint: () => e.focusPoint() });
     (window as unknown as { __cwViewport?: ViewportEngine }).__cwViewport = e;
     return () => {
       e.dispose();
@@ -160,6 +161,7 @@ export function Viewport() {
         { label: t('edit.paste'), shortcut: `${mod}V`, disabled: !s.canPaste, onSelect: s.paste },
         { label: t('edit.duplicate'), onSelect: s.duplicateSelection },
         { label: t('edit.group'), shortcut: `${mod}G`, onSelect: s.groupSelection },
+        { label: t('prefab.make'), onSelect: () => s.openDialog('makePrefab') },
         { label: t('edit.rename'), disabled: selection.length !== 1, onSelect: () => s.startRename(selection[0]!) },
         'separator',
         { label: t('edit.delete'), onSelect: s.deleteSelection },

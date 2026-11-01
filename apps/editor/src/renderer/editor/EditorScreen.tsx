@@ -46,6 +46,7 @@ export function EditorScreen() {
         </div>
       </div>
 
+      <MakePrefabDialog />
       {recovery && (
         <Dialog title={t('recover.title')} onClose={() => void recover(false)}>
           <p>{t('recover.body')}</p>
@@ -81,5 +82,43 @@ export function EditorScreen() {
         </Dialog>
       )}
     </div>
+  );
+}
+
+/** Asks for a name, then turns the selection into a prefab and its first copy. */
+function MakePrefabDialog() {
+  const open = useEditor((s) => s.dialog === 'makePrefab');
+  const s = useEditor.getState();
+  const first = useEditor((x) => (x.selection.length ? x.doc?.get(x.selection[0]!)?.name ?? '' : ''));
+  const [busy, setBusy] = useState(false);
+  if (!open) return null;
+  const close = () => s.openDialog(null);
+  const submit = async (name: string) => {
+    setBusy(true);
+    const ok = await s.makePrefab(name);
+    setBusy(false);
+    if (ok) close();
+  };
+  return (
+    <Dialog title={t('prefab.makeTitle')} onClose={close}>
+      <p className="cw-hint">{t('prefab.makeBody')}</p>
+      <form
+        onSubmit={(ev) => {
+          ev.preventDefault();
+          void submit(String(new FormData(ev.currentTarget).get('name') ?? ''));
+        }}
+      >
+        <label className="cw-f">
+          <span>{t('prefab.name')}</span>
+          <input className="cw-input" name="name" aria-label={t('prefab.name')} defaultValue={first} autoFocus onKeyDown={(ev) => ev.stopPropagation()} />
+        </label>
+        <div className="cw-actions">
+          <Button onClick={close}>{t('new.cancel')}</Button>
+          <Button variant="primary" type="submit" disabled={busy}>
+            {t('prefab.create')}
+          </Button>
+        </div>
+      </form>
+    </Dialog>
   );
 }

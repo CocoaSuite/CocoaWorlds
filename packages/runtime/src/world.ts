@@ -18,6 +18,7 @@ import {
   type SceneFile,
   type TriggerData,
 } from '@cocoaworlds/core';
+import { EventBus } from './events';
 import { brushToWorld, buildWorld, fromData, hullPoints, vertices, type Brush, type BrushData, type WorldBrush } from '@cocoaworlds/geometry';
 
 /** Units per metre (an inch-based world). */
@@ -74,6 +75,8 @@ export class GameWorld {
   private accumulator = 0;
   private disposed = false;
   time = 0;
+  /** What happens in the game, for scripts and the editor console. */
+  readonly bus = new EventBus();
   readonly stats: WorldStats = { staticPieces: 0, bodies: 0, triggers: 0 };
 
   /** Build a world from a scene snapshot. Call `initPhysics()` first. */
@@ -230,6 +233,7 @@ export class GameWorld {
       if (!zone.inside.delete(other)) return;
     }
     this.pending.push({ kind: started ? 'enter' : 'exit', trigger: zone.id, other, time: this.time });
+    this.bus.emit({ type: started ? 'trigger.enter' : 'trigger.exit', trigger: zone.id, other, time: this.time });
   }
 
   /** Trigger events since the last call. */
@@ -268,6 +272,7 @@ export class GameWorld {
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
+    this.bus.clear();
     this.events.free();
     this.world.free();
   }

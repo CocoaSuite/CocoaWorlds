@@ -1,6 +1,7 @@
 /** Creating, parsing and serializing project and scene files. File-system access lives in the editor's main process. */
 import { newId } from './ids';
-import { migrateProject, migrateScene } from './migrate';
+import { migratePrefab, migrateProject, migrateScene } from './migrate';
+import type { PrefabFile } from './prefab';
 import {
   CURRENT_SCHEMA_VERSION,
   SCENES_DIR,
@@ -10,7 +11,7 @@ import {
   type SceneFile,
 } from './schema';
 import { newScene } from './scene-doc';
-import { validateProject, validateScene, type Problem } from './validate';
+import { validatePrefab, validateProject, validateScene, type Problem } from './validate';
 
 export const ENGINE_VERSION = '0.1.0';
 
@@ -52,7 +53,7 @@ export function newProject(name: string, firstSceneName = 'level_01'): { project
 }
 
 /** Stable, readable JSON: two-space indent and a trailing newline, so files diff cleanly in git. */
-export function stringify(data: ProjectFile | SceneFile): string {
+export function stringify(data: ProjectFile | SceneFile | PrefabFile): string {
   return `${JSON.stringify(data, null, 2)}\n`;
 }
 
@@ -81,4 +82,11 @@ export function parseScene(text: string): { scene: SceneFile; migrated: boolean 
   const r = validateScene(data);
   if (!r.ok) throw new ProjectFormatError('The scene file is damaged.', r.problems);
   return { scene: r.value, migrated };
+}
+
+export function parsePrefab(text: string): { prefab: PrefabFile; migrated: boolean } {
+  const { data, migrated } = migratePrefab(parseJson(text, 'prefab'));
+  const r = validatePrefab(data);
+  if (!r.ok) throw new ProjectFormatError('The prefab file is damaged.', r.problems);
+  return { prefab: r.value, migrated };
 }

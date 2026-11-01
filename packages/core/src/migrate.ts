@@ -99,3 +99,5 @@ function run(kind: string, data: Raw, steps: Record<number, Step>): { data: Raw;
 
 export const migrateProject = (data: Raw) => run('project', data, projectSteps);
 export const migrateScene = (data: Raw) => run('scene', data, sceneSteps);
+/** Prefabs first appeared in format 2. */
+export const migratePrefab = (data: Raw) => run('prefab', data, {});

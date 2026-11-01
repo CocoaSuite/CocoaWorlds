@@ -2,7 +2,7 @@
  * Scene helpers shared by duplicate, copy/paste and grouping. Transforms nest (decision G3), so a copy is
  * placed by moving only its top-level objects; everything inside follows through the hierarchy.
  */
-import { composeTransform, decomposeMat4, identityMat4, identityTransform, invertMat4, multiplyMat4, newId, type EntityData, type SceneDoc } from '@cocoaworlds/core';
+import { LINK, composeTransform, decomposeMat4, identityMat4, identityTransform, invertMat4, linkOf, multiplyMat4, newId, type EntityData, type SceneDoc } from '@cocoaworlds/core';
 import { translate, type V3 } from '@cocoaworlds/geometry';
 import { brushComponent, brushOf, toLocal, worldBrushOf } from './brush/brushes';
 
@@ -87,5 +87,18 @@ export function cloneSnapshot(doc: SceneDoc, snapshot: EntityData[], delta: V3):
     }
     return c;
   });
+  // Part of a prefab copy pasted on its own is an ordinary object: drop links that have no copy root with them.
+  const parentOf = new Map(copies.map((c) => [c.id, c.parent]));
+  const inCopyWithRoot = (c: EntityData): boolean => {
+    const prefab = linkOf(c)?.prefab;
+    for (let id: string | null | undefined = c.id; id && parentOf.has(id); id = parentOf.get(id)) {
+      const e = copies.find((x) => x.id === id)!;
+      const l = linkOf(e);
+      if (!l || l.prefab !== prefab) return false;
+      if (l.root) return true;
+    }
+    return false;
+  };
+  for (const c of copies) if (linkOf(c) && !inCopyWithRoot(c)) delete c.components[LINK];
   return { copies, roots };
 }

@@ -2,7 +2,7 @@
  * The only surface the editor UI has onto the computer. Exposed by the preload script as `window.cocoa`.
  * The renderer never gets Node.js or direct file-system access.
  */
-import type { ProjectFile, SceneFile } from '@cocoaworlds/core';
+import type { PrefabFile, ProjectFile, SceneFile } from '@cocoaworlds/core';
 
 export interface RecentProject {
   name: string;
@@ -21,6 +21,12 @@ export interface OpenedProject {
   recovery: { scene: SceneFile; savedAt: string } | null;
 }
 
+export interface PrefabEntry {
+  /** Project-relative path, e.g. `prefabs/lamp.cwprefab`. */
+  path: string;
+  prefab: PrefabFile;
+}
+
 export type Result<T> = { ok: true; value: T } | { ok: false; error: string; details?: string[] };
 
 export interface CocoaApi {
@@ -37,6 +43,8 @@ export interface CocoaApi {
     autosave(dir: string, scenePath: string, scene: SceneFile): Promise<Result<{ savedAt: string }>>;
     discardRecovery(dir: string, scenePath: string): Promise<void>;
     reveal(dir: string): Promise<void>;
+    listPrefabs(dir: string): Promise<Result<{ prefabs: PrefabEntry[]; problems: string[] }>>;
+    savePrefab(dir: string, prefab: PrefabFile, path?: string): Promise<Result<{ path: string }>>;
   };
   window: {
     setTitle(title: string): void;
@@ -57,6 +65,8 @@ export const IPC = {
   autosave: 'projects:autosave',
   discardRecovery: 'projects:discardRecovery',
   reveal: 'projects:reveal',
+  listPrefabs: 'projects:listPrefabs',
+  savePrefab: 'projects:savePrefab',
   setTitle: 'window:setTitle',
   setDirty: 'window:setDirty',
   saveRequest: 'window:saveRequest',

@@ -401,6 +401,16 @@ export class ViewportEngine {
     this.invalidate();
   }
 
+  /** Where to place new things: the level surface (or ground) in the middle of the view, on the grid. */
+  focusPoint(): [number, number, number] {
+    const r = this.renderer.domElement.getBoundingClientRect();
+    const p = this.drawPoint({ clientX: r.left + r.width / 2, clientY: r.top + r.height / 2 });
+    this.showSnap(null);
+    if (p) return p;
+    const t = this.rig.target;
+    return [this.snapV(t.x), 0, this.snapV(t.z)];
+  }
+
   frameSelection(): void {
     const box = new THREE.Box3();
     const addBrush = (id: string) => {

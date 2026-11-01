@@ -19,12 +19,16 @@ import {
   fileStem,
   newProject,
   parseProject,
+  PREFAB_EXT,
+  parsePrefab,
   parseScene,
   stringify,
+  validatePrefab,
   validateScene,
+  type PrefabFile,
   type SceneFile,
 } from '@cocoaworlds/core';
-import type { OpenedProject } from '../shared/api';
+import type { OpenedProject, PrefabEntry } from '../shared/api';
 
 export class ProjectError extends Error {
   constructor(
@@ -178,4 +182,45 @@ export async function autosaveScene(dir: string, scenePath: string, scene: unkno
 export async function discardRecovery(dir: string, scenePath: string): Promise<void> {
   resolveInside(dir, scenePath);
   await fs.rm(autosavePath(dir, scenePath), { force: true });
+}
+
+// ── Prefabs ──
+
+/** Every prefab in the project. Damaged files are reported, not thrown, so one bad file can't block the rest. */
+export async function listPrefabs(dir: string): Promise<{ prefabs: PrefabEntry[]; problems: string[] }> {
+  const folder = resolveInside(dir, PREFABS_DIR);
+  const names = await fs.readdir(folder).catch(() => [] as string[]);
+  const prefabs: PrefabEntry[] = [];
+  const problems: string[] = [];
+  for (const n of names.filter((n) => n.endsWith(PREFAB_EXT)).sort()) {
+    const rel = `${PREFABS_DIR}/${n}`;
+    try {
+      const { prefab, migrated } = parsePrefab(await fs.readFile(resolveInside(dir, rel), 'utf8'));
+      if (migrated) await backup(dir, rel);
+      prefabs.push({ path: rel, prefab });
+    } catch (e) {
+      problems.push(`${rel}: ${(e as Error).message}`);
+    }
+  }
+  return { prefabs, problems };
+}
+
+/**
+ * Write a prefab. Without `rel`, a new file name is made from the prefab's name (lamp.cwprefab, lamp_2 …).
+ * Only files inside the prefabs folder can be written.
+ */
+export async function savePrefab(dir: string, prefab: unknown, rel?: string): Promise<{ path: string }> {
+  const r = validatePrefab(prefab);
+  if (!r.ok) throw new ProjectError('The prefab could not be saved because it is not valid.', r.problems.map((p) => `${p.path}: ${p.message}`));
+  const value: PrefabFile = r.value;
+  let target = rel;
+  if (!target) {
+    const stem = fileStem(value.name) || 'prefab';
+    let n = `${PREFABS_DIR}/${stem}${PREFAB_EXT}`;
+    for (let i = 2; await exists(resolveInside(dir, n)); i++) n = `${PREFABS_DIR}/${stem}_${i}${PREFAB_EXT}`;
+    target = n;
+  }
+  if (!target.startsWith(`${PREFABS_DIR}/`) || !target.endsWith(PREFAB_EXT)) throw new ProjectError('Prefabs are kept in the prefabs folder.');
+  await writeAtomic(resolveInside(dir, target), stringify(value));
+  return { path: target };
 }

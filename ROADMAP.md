@@ -5,7 +5,7 @@
 | 1 | Inspect CocoaCanvas, design system, technology research, architecture proposal, decisions | **Done** |
 | 2 | Desktop foundation: Electron app, CocoaCanvas-style shell, projects, viewport, scene model, selection, transforms, undo | **Mostly done** (see checklist) |
 | 3 | Brush geometry: creation, manipulation, grid/snap, vertex and face editing, materials per face, carve/union/intersect, validation | **In progress** — brushes can be drawn, sized, cut and saved |
-| 4 | Entities and physics: components, Rapier, colliders, triggers, inspector, interaction infrastructure | **In progress** — nested transforms, components, physics, triggers and Play preview done |
+| 4 | Entities and physics: components, Rapier, colliders, triggers, inspector, interaction infrastructure | **Done** (the player's “use” raycast moves to Phase 6 with the player) |
 | 5 | Visual scripting: blocks editor, script model, compiler, VM, events, debugging, recipes | Not started |
 | 6 | Gameplay: Source-style controller, player, interaction, health/score, doors/plates/buttons/lifts | Not started |
 | 7 | Assets and rendering: asset browser, material editor, textures, lighting, audio | Not started |
@@ -46,8 +46,9 @@ Order may shift where dependencies require it (for example, the project format f
 - [x] Physics component, collision shapes, trigger zones
 - [x] Game world package with Rapier; trigger events
 - [x] Play in the editor (physics preview from a snapshot)
-- [ ] Interaction infrastructure: “use” raycasts and an event bus scripts can listen to (with Phase 5)
-- [ ] Prefabs (D5): entity trees saved as files, instances with per-field overrides
+- [x] Event bus scripts can listen to (trigger enter/exit; “use” and messages reserved)
+- [x] Prefabs (D5 as amended by P1): files, copies with tracked changes, Apply / Revert / Unlink
+- [ ] “Use” raycasts from the player (with the player in Phase 6)
 
 ## Phase 3 checklist
 

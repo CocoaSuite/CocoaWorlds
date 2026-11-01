@@ -82,7 +82,7 @@ The player controller is **ours**, not Rapier's built-in one: a Source-style mov
 - Entity = id, name, transform, parent, tags, layer, scene. Components = plain serializable data (`Light`, `Collider`, `Trigger`, `Door`, `Health`, `Script`, …).
 - Systems (Physics, Triggers, Doors, Scripts, Audio, Render sync) iterate the components they care about.
 - Brushes are entities with a `Brush` component, so a door can be brush-built.
-- Prefabs: a prefab file holds an entity tree. Instances store only overrides (property paths that differ). Editing the prefab updates every instance except overridden fields; "Apply" and "Revert" per field.
+- Prefabs: a prefab file holds an entity tree. Editing the prefab updates every instance except overridden fields; "Apply" and "Revert" per field. **Amended by P1:** instances are stored in full with the list of fields they changed, so scenes don't depend on prefab files (see docs/prefabs.md).
 
 ### D6. Visual scripting — **Blocks first, one script model underneath** 
 
