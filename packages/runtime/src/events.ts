@@ -14,6 +14,12 @@ export type GameEvent =
   | { type: 'score'; score: number; by: number; time: number }
   | { type: 'spawn'; template: string; copy: string; time: number }
   | { type: 'break'; target: string; time: number }
+  /**
+   * A sound starts. `at` is where (null: everywhere, not in 3D); `follow` is a moving object it travels with;
+   * `source` is the object making it (for stopping); `range` is how far it carries (units).
+   */
+  | { type: 'sound'; sound: string; at: [number, number, number] | null; follow: string | null; volume: number; loop: boolean; range: number; source: string; time: number }
+  | { type: 'sound.stop'; source: string; time: number }
   | { type: 'message'; name: string; from: string | null; time: number; data?: unknown };
 
 export type EventType = GameEvent['type'];

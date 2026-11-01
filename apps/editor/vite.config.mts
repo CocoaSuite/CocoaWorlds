@@ -11,7 +11,9 @@ function csp(): Plugin {
     "img-src 'self' data: blob:",
     "font-src 'self'",
     "worker-src 'self' blob:",
-    "connect-src 'self'",
+    // Project assets (textures, sounds, models) are read through the main process and handed over as blob: URLs.
+    "connect-src 'self' blob:",
+    "media-src 'self' blob:",
     "object-src 'none'",
     "base-uri 'none'",
   ].join('; ');

@@ -210,3 +210,47 @@ describe('third-person camera', () => {
     first.dispose();
   });
 });
+
+describe('sounds (B3)', () => {
+  it('Sound components start with the game; blocks play and stop sounds; removed objects fall silent', () => {
+    const hum = newEntity('hum', { sound: { sound: 'assets/sounds/hum.ogg', volume: 0.5, loop: true, playOnStart: true, range: 512 } }, { position: [100, 50, 0] });
+    const quiet = newEntity('quiet', { sound: { sound: 'assets/sounds/x.ogg', playOnStart: false } });
+    const bell = brush('bell', [-16, 0, -16], [16, 32, 16]);
+    bell.components.script = script([
+      h(
+        ev('start'),
+        st('playSound', { sound: 'assets/sounds/ding.wav', at: { self: true }, volume: num(2) }),
+        st('playSound', { sound: 'assets/sounds/music.ogg', at: null }),
+        st('wait', { seconds: num(0.5) }),
+        st('stopSound', { target: ent(hum.id) }),
+        st('remove', { target: { self: true } }),
+      ),
+    ]);
+    const w = GameWorld.create(scene(floor(), hum, quiet, bell));
+    expect(w.scriptProblems).toEqual([]);
+    const events: { type: string; sound?: string; at?: unknown; loop?: boolean; volume?: number; source?: string; follow?: string | null }[] = [];
+    w.bus.on('*', (e) => {
+      if (e.type === 'sound' || e.type === 'sound.stop') events.push(e);
+    });
+    run(w, 1);
+    expect(events.map((e) => [e.type, e.sound ?? e.source])).toEqual([
+      ['sound', 'assets/sounds/hum.ogg'],
+      ['sound', 'assets/sounds/ding.wav'],
+      ['sound', 'assets/sounds/music.ogg'],
+      ['sound.stop', hum.id],
+      ['sound.stop', bell.id],
+    ]);
+    expect(events[0]).toMatchObject({ at: [100, 50, 0], loop: true, volume: 0.5, follow: null });
+    // The bell is a body (a script removes it), so the ding travels with it.
+    expect(events[1]).toMatchObject({ follow: bell.id, volume: 2, loop: false });
+    expect(events[2]).toMatchObject({ at: null });
+    w.dispose();
+  });
+
+  it('a sound block needs a sound', () => {
+    const s = script([h(ev('start'), st('playSound', { sound: '' }))]);
+    const w = GameWorld.create(scene(floor(), newEntity('x', { script: s })));
+    expect(w.scriptProblems.map((p) => p.message)).toEqual(['Pick a sound (import sounds in the Assets tab).']);
+    w.dispose();
+  });
+});

@@ -113,3 +113,12 @@ the player, comes closer when a wall is in the way, and the player is drawn as a
 “When the player uses this (E)” has a prompt word. While the player looks at the object within reach, the
 screen shows **E** and the word under the crosshair (“E Open”); with no word it shows “Use”. The door recipe
 uses “Open”, the button “Press”.
+
+## Sound blocks
+
+| Block | What it does |
+|---|---|
+| Play sound *file* at *place* volume *n* | Plays once; in 3D at an object, the player or where the player looks, or everywhere |
+| Stop the sounds of *object* | Stops its Sound component and what its scripts played |
+
+See [rendering.md](rendering.md#sound) for the Sound component.

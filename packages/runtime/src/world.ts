@@ -21,6 +21,7 @@ import {
   gameRules,
   type BreakableData,
   type ConveyorData,
+  type SoundData,
   type GameRules,
 } from '@cocoaworlds/core';
 import { EventBus } from './events';
@@ -289,6 +290,13 @@ export class GameWorld {
       getGlobal: (name) => this.globals.get(name) ?? null,
       setGlobal: (name, value) => void this.globals.set(name, value),
       say: (text, seconds, from) => this.say(text, seconds, from),
+      playSound: (sound, place, volume, owner) => {
+        const at = place === null ? null : this.placePoint(place);
+        if (place !== null && !at) return;
+        const follow = place && typeof place === 'object' && place.ref !== 'player' ? this.bodyOf(place.ref) : null;
+        this.bus.emit({ type: 'sound', sound, at, follow, volume, loop: false, range: 2048, source: owner, time: this.time });
+      },
+      stopSound: (target) => this.bus.emit({ type: 'sound.stop', source: target, time: this.time }),
       spawn: (template, place) => this.spawn(template, place),
       setText: (target, text) => {
         if (!this.signs.has(target) || this.signs.get(target) === text) return;
@@ -431,8 +439,9 @@ export class GameWorld {
     this.accumulator = Math.min(this.accumulator + Math.max(0, dt), STEP * MAX_STEPS_PER_FRAME);
     let n = 0;
     if (!this.startedScripts) {
-      // “When the game starts” runs on the first frame.
+      // “When the game starts” runs on the first frame, and sounds that play from the start begin.
       this.startedScripts = true;
+      for (const e of this.doc.entities) if (e.components.sound && this.isShown(e)) this.startSound(e.id, readComponent<SoundData>('sound', e.components.sound), null);
       this.runner.start();
     }
     while (this.accumulator >= STEP) {
@@ -729,6 +738,7 @@ export class GameWorld {
       return JSON.parse(json) as T;
     };
     const rootHasBody = !!root.components.rigidBody;
+    const sounds: [string, SoundData, number[]][] = [];
     const unitBrushes: Brush[] = [];
     for (const e of parts) {
       const id = ids.get(e.id)!;
@@ -748,6 +758,7 @@ export class GameWorld {
       } else if (e.components.rigidBody) this.addPointBody(copy, world);
       if (e.components.breakable) this.breakHealth.set(id, readComponent<BreakableData>('breakable', e.components.breakable).health);
       if (e.components.sign) this.signs.set(id, String((e.components.sign as { text?: unknown }).text ?? ''));
+      if (e.components.sound) sounds.push([id, readComponent<SoundData>('sound', e.components.sound), world]);
     }
     if (unitBrushes.length && !this.bodies.has(copyId)) this.addUnit(copyId, multiply(shift, this.doc.worldMatrix(template)), unitBrushes, [at[0], at[1], at[2]]);
     for (const id of ids.values()) {
@@ -768,6 +779,7 @@ export class GameWorld {
       this.runner.addProgram(r.program);
     }
     this.bus.emit({ type: 'spawn', template, copy: copyId, time: this.time });
+    for (const [id, s, w] of sounds) this.startSound(id, s, this.bodyOf(id) ? null : [w[12]!, w[13]!, w[14]!]);
     return copyId;
   }
 
@@ -793,6 +805,7 @@ export class GameWorld {
       this.removedIds.push(x);
     }
     for (const z of this.triggers.values()) for (const x of gone) z.inside.delete(x);
+    for (const x of gone) this.bus.emit({ type: 'sound.stop', source: x, time: this.time });
     this.runner.removeOwners(gone);
   }
 
@@ -808,6 +821,26 @@ export class GameWorld {
   /** A point object's collision shape and placement (for drawing it). */
   pointShape(id: string): { collider: ColliderData; matrix: number[] } | null {
     return this.bodies.get(id)?.shape ?? null;
+  }
+
+  // ── Sound ──
+
+  /** A Sound component that plays from the start (or a copy's, as it appears). */
+  private startSound(id: string, s: SoundData, at: Q3 | null): void {
+    if (!s.sound || !s.playOnStart) return;
+    const p = at ?? this.placePoint({ ref: id });
+    this.bus.emit({ type: 'sound', sound: s.sound, at: p, follow: this.bodyOf(id), volume: s.volume, loop: s.loop, range: s.range, source: id, time: this.time });
+  }
+
+  /** The moving body an object belongs to (itself, or the unit it is part of), if any. */
+  private bodyOf(id: string): string | null {
+    const b = this.bodies.get(id) ?? this.bodies.get(this.unitOf.get(id) ?? '');
+    return b && b.info.kind !== 'zone' ? b.info.id : null;
+  }
+
+  private isShown(e: EntityData): boolean {
+    for (let x: EntityData | undefined = e; x; x = x.parent ? this.doc.get(x.parent) : undefined) if (!x.visible) return false;
+    return true;
   }
 
   // ── Breaking, physics, conveyors ──

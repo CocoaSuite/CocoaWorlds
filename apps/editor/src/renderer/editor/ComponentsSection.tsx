@@ -72,6 +72,7 @@ export function ComponentsSection({ e }: { e: EntityData }) {
 
 function FieldEditor({ entity, component, field, value }: { entity: string; component: string; field: FieldDef; value: unknown }) {
   const s = useEditor.getState();
+  const assets = useEditor((st) => st.assets);
   const lang = getLang();
   const label = field.label[lang];
   const set = (v: unknown, live = false) => s.setComponentField(entity, component, field.key, v, live ? `${entity}-${component}-${field.key}` : undefined);
@@ -140,6 +141,20 @@ function FieldEditor({ entity, component, field, value }: { entity: string; comp
         </div>
         {field.hint && <p className="cw-hint">{field.hint[lang]}</p>}
       </>
+    );
+  } else if (ty.kind === 'asset') {
+    const list = assets[ty.asset];
+    const v = String(value ?? '');
+    input = (
+      <select className="cw-input cw-select" aria-label={label} value={v} onChange={(ev) => set(ev.target.value)}>
+        <option value="">{t('assets.pick')}</option>
+        {v && !list.some((a) => a.path === v) && <option value={v}>{v} ?</option>}
+        {list.map((a) => (
+          <option key={a.path} value={a.path}>
+            {a.name}
+          </option>
+        ))}
+      </select>
     );
   } else {
     input = (

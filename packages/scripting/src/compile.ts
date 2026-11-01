@@ -72,6 +72,10 @@ export type Op =
   | { op: 'copy' }
   /** Pops an object; pushes its variable called `name` (nothing if it has none). */
   | { op: 'varof'; name: string }
+  /** Pops volume, then the place (null: everywhere): play `sound`. */
+  | { op: 'sound'; sound: string }
+  /** Pops an object: stop its sounds. */
+  | { op: 'stopsound' }
   | { op: 'halt' };
 
 export type GameAction = 'hurt' | 'heal' | 'addScore';
@@ -460,6 +464,17 @@ class HandlerCompiler {
         this.actTarget(s.target, s.id);
         this.expect(s.amount, 'number', 'Damage must be a number.');
         this.emit({ op: 'act', name: 'damage', argc: 1 });
+        break;
+      case 'playSound':
+        if (!s.sound) this.problem(s.id, 'Pick a sound (import sounds in the Assets tab).');
+        if (s.at) this.pushPlace(s.at, s.id);
+        else this.emit({ op: 'push', v: null });
+        this.expect(s.volume, 'number', 'The volume must be a number (1 is normal).');
+        this.emit({ op: 'sound', sound: s.sound });
+        break;
+      case 'stopSound':
+        this.actTarget(s.target, s.id);
+        this.emit({ op: 'stopsound' });
         break;
       case 'hurt':
       case 'heal':

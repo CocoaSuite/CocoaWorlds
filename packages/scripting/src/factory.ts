@@ -90,6 +90,10 @@ export function newStatement(kind: StatementKind, opts: { target?: Ref; variable
       return { id: id(), kind, to: { self: true } };
     case 'damage':
       return { id: id(), kind, target, amount: num(10) };
+    case 'playSound':
+      return { id: id(), kind, sound: '', at: { self: true }, volume: num(1) };
+    case 'stopSound':
+      return { id: id(), kind, target };
   }
 }
 

@@ -33,6 +33,8 @@ function createWindow(): void {
       nodeIntegration: false,
       webSecurity: true,
       spellcheck: false,
+      // Play mode starts sounds from game events, not from clicks.
+      autoplayPolicy: 'no-user-gesture-required',
     },
   });
   win.once('ready-to-show', () => win?.show());

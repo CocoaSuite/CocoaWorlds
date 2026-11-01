@@ -49,6 +49,11 @@ const W = {
   addScore: ['Change the score by', 'Изменить счёт на'],
   say: ['Show on screen', 'Показать на экране'],
   usePrompt: ['showing', 'с подсказкой'],
+  playSound: ['Play sound', 'Играть звук'],
+  everywhere: ['everywhere (not in 3D)', 'везде (не в 3D)'],
+  volume: ['volume', 'громкость'],
+  stopSound: ['Stop the sounds of', 'Остановить звуки'],
+  pickSound: ['pick a sound', 'выберите звук'],
   breaks: ['When this breaks', 'Когда это ломается'],
   spawn: ['Make a copy of', 'Создать копию'],
   at: ['at', 'в месте:'],
@@ -147,6 +152,8 @@ const PALETTE_STMT: Record<StatementKind, Pair> = {
   moveTo: ['Move to a place', 'Переместить к месту'],
   teleport: ['Put the player somewhere', 'Переместить игрока'],
   damage: ['Damage', 'Повредить'],
+  playSound: ['Play a sound', 'Играть звук'],
+  stopSound: ['Stop sounds', 'Остановить звуки'],
 };
 export const statementName = (k: StatementKind) => pick(PALETTE_STMT[k]);
 
@@ -155,6 +162,7 @@ export const STATEMENT_GROUPS: { title: Pair; kinds: StatementKind[] }[] = [
   { title: ['Objects', 'Объекты'], kinds: ['spawn', 'remove', 'moveTo', 'scale', 'physical', 'push', 'damage'] },
   { title: ['Player and score', 'Игрок и счёт'], kinds: ['teleport', 'hurt', 'heal', 'addScore'] },
   { title: ['Screen and signs', 'Экран и таблички'], kinds: ['say', 'setText'] },
+  { title: ['Sound', 'Звук'], kinds: ['playSound', 'stopSound'] },
   { title: ['Control', 'Управление'], kinds: ['wait', 'if', 'repeat', 'forever', 'stop'] },
   { title: ['Variables', 'Переменные'], kinds: ['set', 'change'] },
 ];

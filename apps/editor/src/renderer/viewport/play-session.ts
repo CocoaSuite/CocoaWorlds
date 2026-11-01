@@ -14,6 +14,7 @@ import { worldBrushes } from '../brush/brushes';
 import { buildLevel } from './world-build';
 import { toGeometry } from './world-render';
 import { buildSign, type SignObject } from './sign';
+import { assetUrl } from '../assets';
 
 export interface PlayInfo {
   moving: number;
@@ -99,11 +100,87 @@ export class PlaySession {
     };
     this.world.bus.on('use', (e) => void this.uses.push(e.target));
     this.world.bus.on('player.die', (e) => void this.notes.push(`The player died (${e.cause}) and starts again`));
+    this.world.bus.on('sound', (e) => void this.startSound(e));
+    this.world.bus.on('sound.stop', (e) => this.stopSounds(e.source));
     this.world.bus.on('break', (e) => void this.notes.push(`${this.info.names.get(e.target.split('#')[0]!) ?? 'Something'} broke`));
     this.world.bus.on('score', (e) => void this.notes.push(`Score: ${e.score} (${e.by > 0 ? '+' : ''}${e.by})`));
   }
 
   private material: (name: string) => THREE.Material;
+
+  // ── Sound ──
+
+  /** Where the game is heard from (attached to the camera the game is seen through). */
+  private listener: THREE.AudioListener | null = null;
+  private static buffers = new Map<string, Promise<AudioBuffer>>();
+  /** Sounds playing now (for following moving objects and stopping). */
+  readonly sounds: { source: string; sound: string; audio: THREE.Audio | THREE.PositionalAudio; follow: string | null }[] = [];
+
+  /** Hear the game from this camera. */
+  setEars(cam: THREE.Camera): void {
+    if (this.listener?.parent === cam) return;
+    this.listener?.removeFromParent();
+    this.listener ??= new THREE.AudioListener();
+    cam.add(this.listener);
+  }
+
+  private async startSound(e: { sound: string; at: [number, number, number] | null; follow: string | null; volume: number; loop: boolean; range: number; source: string }): Promise<void> {
+    const listener = this.listener;
+    if (!listener || this.disposed) return;
+    let buffer: AudioBuffer;
+    try {
+      let p = PlaySession.buffers.get(e.sound);
+      if (!p) {
+        p = assetUrl(e.sound).then((url) => new THREE.AudioLoader().loadAsync(url));
+        PlaySession.buffers.set(e.sound, p);
+        p.catch(() => PlaySession.buffers.delete(e.sound));
+      }
+      buffer = await p;
+    } catch {
+      this.notes.push(`Could not play ${e.sound}`);
+      return;
+    }
+    if (this.disposed) return;
+    let audio: THREE.Audio | THREE.PositionalAudio;
+    if (e.at || e.follow) {
+      const pa = new THREE.PositionalAudio(listener);
+      // Full volume within a quarter of its range, fading to silence at the range.
+      pa.setDistanceModel('linear');
+      pa.setRefDistance(Math.max(1, e.range / 4));
+      pa.setMaxDistance(Math.max(2, e.range));
+      pa.setRolloffFactor(1);
+      if (e.at) pa.position.set(...e.at);
+      audio = pa;
+    } else audio = new THREE.Audio<GainNode>(listener);
+    audio.setBuffer(buffer);
+    audio.setLoop(e.loop);
+    audio.setVolume(e.volume);
+    this.group.add(audio);
+    const entry = { source: e.source, sound: e.sound, audio, follow: e.follow };
+    this.sounds.push(entry);
+    audio.onEnded = () => {
+      // (Replacing three's own onEnded, which only does this.)
+      (audio as { isPlaying: boolean }).isPlaying = false;
+      this.dropSound(entry);
+    };
+    audio.play();
+  }
+
+  private stopSounds(source: string): void {
+    for (const s of this.sounds.filter((x) => x.source === source)) {
+      if (s.audio.isPlaying) s.audio.stop();
+      this.dropSound(s);
+    }
+  }
+
+  private dropSound(s: (typeof this.sounds)[number]): void {
+    const i = this.sounds.indexOf(s);
+    if (i >= 0) this.sounds.splice(i, 1);
+    s.audio.removeFromParent();
+    s.audio.disconnect?.();
+  }
+
+  private disposed = false;
   private body: THREE.Group | null = null;
 
   /** The player's body for the third-person camera: a capsule with a visor showing where they face. */
@@ -187,6 +264,12 @@ export class PlaySession {
         s.holder.add(s.sign.object);
       }
     }
+    // Sounds that travel with a moving object.
+    for (const s of this.sounds) {
+      if (!s.follow) continue;
+      const p = this.world.positionOf(s.follow);
+      if (p) s.audio.position.set(...p);
+    }
     const uses = this.uses, notes = this.notes;
     this.uses = [];
     this.notes = [];
@@ -261,6 +344,12 @@ export class PlaySession {
   }
 
   dispose(): void {
+    this.disposed = true;
+    for (const s of [...this.sounds]) {
+      if (s.audio.isPlaying) s.audio.stop();
+      this.dropSound(s);
+    }
+    this.listener?.removeFromParent();
     this.world.dispose();
     for (const s of this.signs.values()) s.sign.dispose();
     this.group.traverse((o) => {

@@ -36,4 +36,16 @@ folder moves. Texture coordinates follow Hammer: at the usual scale of 0.25, a 5
 Pixels less than half opaque are cut out (fences, grilles). A missing image shows Source's pink and black
 checker.
 
-Sounds (OGG, MP3, WAV) and models (GLB, glTF) can be imported the same way; using them comes next.
+Models (GLB, glTF) can be imported the same way; placing them comes next.
+
+## Sound
+
+**Assets › Sounds › Import…** takes OGG, MP3 and WAV files. Sounds are heard in 3D from the player's ears
+(or the editor camera in a physics preview).
+
+- The **Sound** component on any object: a sound, volume, loop, whether it plays when the game starts, and
+  how far it is heard (full volume within a quarter of that, silent beyond). It moves with the object.
+- **Play sound [file] at [place] volume [n]**: once, at an object, the player, where the player looks, or
+  everywhere (not in 3D, for music and announcements).
+- **Stop the sounds of [object]**: its Sound component and anything its scripts played. Removing an object
+  stops its sounds too.

@@ -14,7 +14,7 @@ export type Ref = { self: true } | { entity: string } | { other: true } | { play
 export type Place = Ref | { aim: true };
 
 /** Statement and event fields that hold a value block (for walking and editing scripts). */
-export const EXPR_KEYS = ['distance', 'seconds', 'degrees', 'text', 'value', 'by', 'condition', 'times', 'amount', 'factor', 'strength', 'gap'] as const;
+export const EXPR_KEYS = ['distance', 'seconds', 'degrees', 'text', 'value', 'by', 'condition', 'times', 'amount', 'factor', 'strength', 'gap', 'volume'] as const;
 
 export type Expr =
   | { id: string; kind: 'number'; value: number }
@@ -80,7 +80,11 @@ export type Statement =
   /** Put the player at a place (facing the way that object faces). */
   | { id: string; kind: 'teleport'; to: Place }
   /** Take health from a breakable object; at 0 it breaks. */
-  | { id: string; kind: 'damage'; target: Ref; amount: Expr };
+  | { id: string; kind: 'damage'; target: Ref; amount: Expr }
+  /** Play a sound file (`assets/sounds/…`) once, at a place (heard in 3D) or everywhere (null). */
+  | { id: string; kind: 'playSound'; sound: string; at: Place | null; volume: Expr }
+  /** Stop the sounds an object is making (its Sound component and what its scripts played). */
+  | { id: string; kind: 'stopSound'; target: Ref };
 
 export type EventBlock =
   | { id: string; kind: 'start' }

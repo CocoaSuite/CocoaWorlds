@@ -7,6 +7,7 @@
 
 export type Lang = 'en' | 'ru';
 
+export type SoundData = { sound: string; volume: number; loop: boolean; playOnStart: boolean; range: number };
 export type ConveyorData = { speed: number; direction: 'north' | 'south' | 'east' | 'west' };
 export type BreakableData = { health: number };
 
@@ -26,7 +27,9 @@ export type FieldType =
   | { kind: 'enum'; options: { value: string; label: Text }[] }
   | { kind: 'color' }
   | { kind: 'vec3'; step?: number; min?: number }
-  | { kind: 'text' };
+  | { kind: 'text' }
+  /** A project asset of one kind, by its project path (empty: none). */
+  | { kind: 'asset'; asset: 'textures' | 'sounds' | 'models' };
 
 export interface FieldDef {
   key: string;
@@ -86,6 +89,25 @@ export const COMPONENTS: ComponentDef[] = [
     description: e('Where the player appears when the game starts.', 'Здесь игрок появляется в начале игры.'),
     appliesTo: 'point',
     fields: [],
+  },
+  {
+    name: 'sound',
+    label: e('Sound', 'Звук'),
+    description: e('A sound coming from this object: a hum, a waterfall, music. It is heard in 3D around the object.', 'Звук, идущий от объекта: гул, водопад, музыка. Слышен в 3D вокруг объекта.'),
+    appliesTo: 'any',
+    fields: [
+      { key: 'sound', label: e('Sound', 'Звук'), type: { kind: 'asset', asset: 'sounds' }, default: '' },
+      { key: 'volume', label: e('Volume', 'Громкость'), type: { kind: 'number', min: 0, max: 4, step: 0.1 }, default: 1 },
+      { key: 'loop', label: e('Loop', 'Повторять'), type: { kind: 'boolean' }, default: true },
+      { key: 'playOnStart', label: e('Play when the game starts', 'Играть с начала игры'), type: { kind: 'boolean' }, default: true },
+      {
+        key: 'range',
+        label: e('Heard up to', 'Слышно до'),
+        hint: e('Full volume within a quarter of this, silent beyond it.', 'Полная громкость на четверти расстояния, дальше — тише, после — тишина.'),
+        type: { kind: 'number', min: 16, step: 64, unit: 'u' },
+        default: 1024,
+      },
+    ],
   },
   {
     name: 'conveyor',

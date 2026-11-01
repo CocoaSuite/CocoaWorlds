@@ -583,6 +583,20 @@ function statementWords(s: Statement, set: (patch: Record<string, unknown>, merg
           {w('damage')} <RefSlot value={s.target} onChange={(target) => set({ target })} label={w('damage')} /> {w('by')} <ExprSlot expr={s.amount} type="number" label={`${w('damage')} ${w('by')}`} />
         </>
       );
+    case 'playSound':
+      return (
+        <>
+          {w('playSound')} <SoundSlot value={s.sound} onChange={(sound) => set({ sound })} /> {w('at')}{' '}
+          <RefSlot value={s.at} allowNone noneLabel={w('everywhere')} allowPlayer allowAim onChange={(at) => set({ at })} label={`${w('playSound')} ${w('at')}`} /> {w('volume')}{' '}
+          <ExprSlot expr={s.volume} type="number" label={`${w('playSound')} ${w('volume')}`} />
+        </>
+      );
+    case 'stopSound':
+      return (
+        <>
+          {w('stopSound')} <RefSlot value={s.target} onChange={(target) => set({ target })} label={w('stopSound')} />
+        </>
+      );
     case 'say':
       return (
         <>
@@ -633,6 +647,7 @@ function RefSlot<T extends Ref | Place | null>({
   allowNone,
   allowPlayer,
   allowAim,
+  noneLabel,
 }: {
   value: T;
   onChange: (r: T) => void;
@@ -644,6 +659,8 @@ function RefSlot<T extends Ref | Place | null>({
   allowPlayer?: boolean;
   /** Offer “where the player looks” (places only). */
   allowAim?: boolean;
+  /** What “none” is called (default: everyone). */
+  noneLabel?: string;
 }) {
   const c = useC();
   const enc = (r: Ref | Place | null) =>
@@ -665,7 +682,7 @@ function RefSlot<T extends Ref | Place | null>({
   const missing = current.startsWith('e:') && !c.objects.some((o) => o.id === current.slice(2));
   return (
     <select className="cw-input cw-ref" aria-label={label} value={current} onChange={(e) => onChange(dec(e.target.value))}>
-      {allowNone && <option value="none">{w('everyone')}</option>}
+      {allowNone && <option value="none">{noneLabel ?? w('everyone')}</option>}
       <option value="self">{w('self')}</option>
       {(allowPlayer || current === 'player') && <option value="player">{w('player')}</option>}
       {(allowAim || current === 'aim') && <option value="aim">{w('aim')}</option>}
@@ -674,6 +691,21 @@ function RefSlot<T extends Ref | Place | null>({
       {objs.map((o) => (
         <option key={o.id} value={`e:${o.id}`}>
           {o.name}
+        </option>
+      ))}
+    </select>
+  );
+}
+
+/** A sound file from the project's assets. */
+function SoundSlot({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const sounds = useEditor((s) => s.assets.sounds);
+  return (
+    <select className="cw-input cw-ref" aria-label={w('playSound')} value={value} onChange={(e) => onChange(e.target.value)}>
+      {!sounds.some((x) => x.path === value) && <option value={value}>{value ? `${value} ?` : w('pickSound')}</option>}
+      {sounds.map((x) => (
+        <option key={x.path} value={x.path}>
+          {x.name}
         </option>
       ))}
     </select>

@@ -35,6 +35,10 @@ export interface ScriptHost {
   say?(text: string, seconds: number, owner: string): void;
   /** Change what a text sign says. */
   setText?(target: string, text: string): void;
+  /** Play a sound at a place (an object, the player, 'aim') or everywhere (null). */
+  playSound?(sound: string, place: Value, volume: number, owner: string): void;
+  /** Stop the sounds an object is making. */
+  stopSound?(target: string): void;
   /** Make a copy of `template` at a place (an object, or 'aim'); returns the copy's id, or null if it couldn't. */
   spawn?(template: string, place: Value, owner: string): string | null;
 }
@@ -396,6 +400,17 @@ export class ScriptRunner {
           const inst = of && typeof of === 'object' ? this.instances.find((i) => i.program.owner === of.ref) : undefined;
           const slot = inst ? inst.program.variables.findIndex((v) => v.name === op.name) : -1;
           s.push(inst && slot >= 0 ? (inst.vars[slot] ?? null) : null);
+          break;
+        }
+        case 'sound': {
+          const volume = Math.max(0, num(s.pop() ?? 1));
+          const place = s.pop() ?? null;
+          if (op.sound) this.host.playSound?.(op.sound, place, volume, t.inst.program.owner);
+          break;
+        }
+        case 'stopsound': {
+          const target = s.pop();
+          if (target && typeof target === 'object') this.host.stopSound?.(target.ref);
           break;
         }
         case 'settext': {

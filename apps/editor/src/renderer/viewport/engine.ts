@@ -437,6 +437,8 @@ export class ViewportEngine {
       return session.info;
     }
     this.play = session;
+    // Heard from where it's seen: the player's eyes, or the editor camera in a physics preview.
+    session.setEars(session.info.player ? this.fpCam : this.rig.camera);
     this.cancelDraft();
     this.gizmo.detach();
     this.world.group.visible = false;
