@@ -45,10 +45,21 @@ test('room from brushes, live doorway, apply cut, save', async () => {
     assert.equal(await page.getByLabel('Size Y', { exact: true }).inputValue(), '256');
     assert.equal(await page.getByLabel('Size Z', { exact: true }).inputValue(), '512');
 
-    // 2. Hollow it into six 16-unit walls.
+    // 2. Hollow it into six 16-unit walls. Outward first (the block becomes the inside), undo, then inward.
+    await page.getByRole('radio', { name: 'Outward' }).click();
+    await page.getByRole('button', { name: 'Make hollow' }).click();
+    await tree().getByRole('treeitem', { name: 'floor' }).click();
+    assert.equal(await page.getByLabel('Size X', { exact: true }).inputValue(), '544');
+    assert.equal(await page.getByLabel('Centre Y', { exact: true }).inputValue(), '-8');
+    await page.keyboard.press('Control+z');
+    await tree().getByRole('treeitem', { name: /block/ }).click();
+    await page.getByRole('radio', { name: 'Inward' }).click();
     await page.getByRole('button', { name: 'Make hollow' }).click();
     await until(() => tree().getByRole('treeitem').count(), 2 + 7);
     for (const n of ['floor', 'ceiling', 'wall_west', 'wall_east', 'wall_north', 'wall_south']) await tree().getByRole('treeitem', { name: n }).waitFor();
+    await tree().getByRole('treeitem', { name: 'floor' }).click();
+    assert.equal(await page.getByLabel('Size X', { exact: true }).inputValue(), '512');
+    assert.equal(await page.getByLabel('Centre Y', { exact: true }).inputValue(), '8');
 
     // 3. A live subtract brush through the east wall makes a doorway.
     await page.keyboard.press('b');

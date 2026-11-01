@@ -22,6 +22,7 @@ import {
   bakeSubtract,
   bounds,
   hollowBox,
+  type HollowDirection,
   mergeAll,
   translate,
   validate,
@@ -109,7 +110,7 @@ interface Actions {
   setBrush(id: string, brush: Brush, mergeKey?: string, label?: string): void;
   changeBrushRole(id: string, role: BrushRole): void;
   applySubtract(ids: string[]): void;
-  makeHollow(id: string, thickness: number): void;
+  makeHollow(id: string, thickness: number, direction?: HollowDirection): void;
   mergeSelection(): void;
 }
 
@@ -431,7 +432,7 @@ export const useEditor = create<State & Actions>()((set, get) => ({
     get().log('info', 'Brush', `Applied ${subs.length} cut(s): ${replace.size} brush(es) replaced by ${added.length} piece(s)`);
   },
 
-  makeHollow(id, thickness) {
+  makeHollow(id, thickness, direction = 'inward') {
     const doc = get().doc;
     const e = doc?.get(id);
     const b = brushOf(e);
@@ -440,7 +441,7 @@ export const useEditor = create<State & Actions>()((set, get) => ({
     if (!bb) return;
     let walls: Brush[];
     try {
-      walls = hollowBox(bb.min, bb.max, thickness, b.brush.faces[0]?.surface);
+      walls = hollowBox(bb.min, bb.max, thickness, b.brush.faces[0]?.surface, direction);
     } catch (err) {
       get().notify((err as Error).message);
       return;
@@ -459,7 +460,7 @@ export const useEditor = create<State & Actions>()((set, get) => ({
     h.execute(addEntitiesCmd(doc, [group, ...ents]));
     h.commit();
     set({ selection: ents.map((x) => x.id) });
-    get().log('info', 'Brush', `Hollowed ${e.name} into 6 walls ${thickness} units thick`);
+    get().log('info', 'Brush', `Hollowed ${e.name} into 6 walls ${thickness} units thick (${direction})`);
   },
 
   mergeSelection() {

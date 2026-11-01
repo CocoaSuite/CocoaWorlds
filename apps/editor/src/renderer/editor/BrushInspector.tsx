@@ -15,6 +15,7 @@ export function BrushInspector({ e }: { e: EntityData }) {
   useEditor((x) => x.rev);
   const grid = useEditor((x) => (x.snap ? (x.session?.project.settings.gridSize ?? 16) : 1));
   const [thickness, setThickness] = useState(16);
+  const [hollowDir, setHollowDir] = useState<'inward' | 'outward'>('inward');
   const b = brushOf(e);
   if (!b) return null;
   const bb = bounds(b.brush);
@@ -106,15 +107,30 @@ export function BrushInspector({ e }: { e: EntityData }) {
       </Section>
 
       {b.role === 'solid' ? (
-        <div className="cw-row cw-brush-actions">
-          <label className="cw-brush-opt">
-            {t('insp.thickness')}
-            <span className="cw-brush-num">
-              <NumberField label="u" ariaLabel={t('insp.thickness')} value={thickness} step={grid || 1} onCommit={(v) => setThickness(Math.max(1, v))} />
-            </span>
-          </label>
-          <Button onClick={() => s.makeHollow(e.id, thickness)}>{t('insp.hollow')}</Button>
-        </div>
+        <>
+          <div className="cw-f">
+            <span>{t('insp.hollowDir')}</span>
+            <Segmented<'inward' | 'outward'>
+              label={t('insp.hollowDir')}
+              value={hollowDir}
+              onChange={setHollowDir}
+              options={[
+                { value: 'inward', label: t('insp.inward') },
+                { value: 'outward', label: t('insp.outward') },
+              ]}
+            />
+          </div>
+          <div className="cw-row cw-brush-actions">
+            <label className="cw-brush-opt">
+              {t('insp.thickness')}
+              <span className="cw-brush-num">
+                <NumberField label="u" ariaLabel={t('insp.thickness')} value={thickness} step={grid || 1} onCommit={(v) => setThickness(Math.max(1, v))} />
+              </span>
+            </label>
+            <Button onClick={() => s.makeHollow(e.id, thickness, hollowDir)}>{t('insp.hollow')}</Button>
+          </div>
+          <p className="cw-hint">{t(hollowDir === 'inward' ? 'insp.inwardHint' : 'insp.outwardHint')}</p>
+        </>
       ) : (
         <>
           <p className="cw-hint">{t('insp.subtractHint')}</p>

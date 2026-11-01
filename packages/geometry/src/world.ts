@@ -78,11 +78,18 @@ export function bakeSubtract(brushes: WorldBrush[], subtractIds: string[]): { re
   return { replace };
 }
 
-/** Hollow a box-shaped solid into walls of the given thickness (Hammer's "Make Hollow"). */
-export function hollowBox(min: V3, max: V3, thickness: number, surface?: FaceSurface): Brush[] {
+export type HollowDirection = 'inward' | 'outward';
+
+/**
+ * Hollow a box-shaped solid into walls of the given thickness (Hammer's "Make Hollow").
+ * 'inward' keeps the block as the outside of the room; 'outward' keeps it as the inside and builds the walls around it.
+ */
+export function hollowBox(min: V3, max: V3, thickness: number, surface?: FaceSurface, direction: HollowDirection = 'inward'): Brush[] {
   const t = Math.abs(thickness);
-  const lo: V3 = [Math.min(min[0], max[0]), Math.min(min[1], max[1]), Math.min(min[2], max[2])];
-  const hi: V3 = [Math.max(min[0], max[0]), Math.max(min[1], max[1]), Math.max(min[2], max[2])];
+  if (!(t > 0)) throw new Error('Wall thickness must be greater than zero.');
+  const grow = direction === 'outward' ? t : 0;
+  const lo: V3 = [Math.min(min[0], max[0]) - grow, Math.min(min[1], max[1]) - grow, Math.min(min[2], max[2]) - grow];
+  const hi: V3 = [Math.max(min[0], max[0]) + grow, Math.max(min[1], max[1]) + grow, Math.max(min[2], max[2]) + grow];
   if (hi.some((h, i) => h - lo[i]! <= 2 * t)) throw new Error('The walls would be thicker than the room.');
   const s = surface;
   // Floor and ceiling span the full footprint; the four walls sit between them, two long and two short.

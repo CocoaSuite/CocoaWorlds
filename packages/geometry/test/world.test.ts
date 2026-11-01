@@ -60,4 +60,23 @@ describe('hollowBox', () => {
   it('refuses walls thicker than the room', () => {
     expect(() => hollowBox([0, 0, 0], [16, 64, 64], 16)).toThrow();
   });
+
+  it('outward keeps the block as the inside of the room', () => {
+    const walls = hollowBox([0, 0, 0], [512, 256, 512], 16, undefined, 'outward');
+    expect(walls).toHaveLength(6);
+    for (const w of walls) expect(validate(w)).toEqual([]);
+    const total = walls.reduce((t, w) => t + volume(w), 0);
+    close(total, 544 * 288 * 544 - 512 * 256 * 512);
+    // The whole drawn block is empty; the walls start just outside it.
+    expect(inAny(walls, [1, 1, 1])).toBe(false);
+    expect(inAny(walls, [511, 255, 511])).toBe(false);
+    expect(inAny(walls, [-8, 128, 256])).toBe(true);
+    expect(inAny(walls, [256, 264, 256])).toBe(true);
+  });
+
+  it('outward works even when the block is thinner than two walls', () => {
+    const walls = hollowBox([0, 0, 0], [16, 64, 64], 16, undefined, 'outward');
+    for (const w of walls) expect(validate(w)).toEqual([]);
+    expect(inAny(walls, [8, 32, 32])).toBe(false);
+  });
 });

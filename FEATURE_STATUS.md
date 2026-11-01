@@ -50,7 +50,7 @@ Last updated: 2026-11-01 (Phase 2, first slice).
 | Exact sizes while drawing (size and corner fields) | **Done** | e.g. a 512 × 256 × 512 room. |
 | Solid and subtract brushes; live subtract (doorways stay movable) | **Done** | |
 | Apply cut (make a subtract permanent) | **Done** | Wall becomes separate convex brushes; undoable. |
-| Make hollow (room from a block) | **Done** | Six walls of a chosen thickness, grouped. |
+| Make hollow (room from a block) | **Done** | Six walls of a chosen thickness, grouped. Walls go inward (block = outside of the room) or outward (block = inside). |
 | Merge brushes whose union is convex | **Done** | |
 | Move/rotate/scale brushes with the gizmo; numeric size and centre | **Done** | Texture lock on move. |
 | Level rendering: dev grid texture, editor lighting, hidden-face removal, selection outlines | **Done** | Rebuilt on the main thread for now. |

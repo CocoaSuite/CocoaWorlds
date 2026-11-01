@@ -54,7 +54,7 @@ Tested cases include: doorway (3 pieces), window (4 pieces), cutter flush with b
 
 ## Live subtract in the level (decision G1)
 
-`buildWorld` takes every visible brush in the scene. Solid brushes are kept exactly as authored; each subtract brush that overlaps a solid cuts it while the level is being built, so moving or resizing a doorway re-cuts the wall without changing the saved wall brush. `bakeSubtract` ("Apply cut" in the editor) makes a cut permanent: the affected solids are replaced by their pieces and the cutter is removed, in one undoable step. `hollowBox` ("Make hollow") turns a block into six walls.
+`buildWorld` takes every visible brush in the scene. Solid brushes are kept exactly as authored; each subtract brush that overlaps a solid cuts it while the level is being built, so moving or resizing a doorway re-cuts the wall without changing the saved wall brush. `bakeSubtract` ("Apply cut" in the editor) makes a cut permanent: the affected solids are replaced by their pieces and the cutter is removed, in one undoable step. `hollowBox` ("Make hollow") turns a block into six walls. **Inward** (default) keeps the block as the outside of the room; **outward** keeps it as the inside and builds the walls around it, so a 512 × 256 × 512 block gives a 512 × 256 × 512 room inside a 544 × 288 × 544 shell (16-unit walls).
 
 ## Precision
 
