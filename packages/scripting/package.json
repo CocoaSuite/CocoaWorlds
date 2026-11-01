@@ -1,0 +1,10 @@
+{
+  "name": "@cocoaworlds/scripting",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Visual scripting: the block model, the checker, the compiler to IR, and the VM. No engine, renderer or DOM dependencies.",
+  "exports": {
+    ".": "./src/index.ts"
+  }
+}

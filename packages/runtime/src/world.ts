@@ -19,6 +19,8 @@ import {
   type TriggerData,
 } from '@cocoaworlds/core';
 import { EventBus } from './events';
+import { ScriptRunner, compileScript, type ActionName, type Problem, type Program, type Script, type Value } from '@cocoaworlds/scripting';
+import { scriptTargets } from './script-targets';
 import { brushToWorld, buildWorld, fromData, hullPoints, vertices, type Brush, type BrushData, type WorldBrush } from '@cocoaworlds/geometry';
 
 /** Units per metre (an inch-based world). */
@@ -46,14 +48,40 @@ export interface TriggerEvent {
 
 export interface BodyInfo {
   id: string;
-  /** 'brush' bodies are brushes that move; 'point' bodies are lights, empties etc. with a collision shape. */
-  kind: 'brush' | 'point';
+  /**
+   * 'brush': a brush with Physics. 'point': a point object with a collision shape. 'unit': an object a script
+   * moves, with everything inside it (a door group moves as one). 'zone': a trigger zone.
+   */
+  kind: 'brush' | 'point' | 'unit' | 'zone';
   motion: RigidBodyData['motion'];
 }
+
+export interface ScriptLog {
+  text: string;
+  owner: string;
+  block: string;
+  time: number;
+}
+
+interface Tween {
+  from: { p: Q3; q: Quat };
+  to: { p: Q3; q: Quat };
+  t0: number;
+  t1: number;
+  done: boolean;
+}
+
+type Q3 = [number, number, number];
+type Quat = { x: number; y: number; z: number; w: number };
 
 interface Body {
   info: BodyInfo;
   body: RAPIER.RigidBody;
+  /** Where it started (for “return to start”). */
+  start: { p: Q3; q: Quat };
+  /** The brushes drawn with this body, in world space at the start. */
+  brushes: Brush[];
+  visible: boolean;
   /** Inverse of the body's starting placement, so motion can be reported as "start → now". */
   startInverse: number[];
 }
@@ -78,6 +106,13 @@ export class GameWorld {
   /** What happens in the game, for scripts and the editor console. */
   readonly bus = new EventBus();
   readonly stats: WorldStats = { staticPieces: 0, bodies: 0, triggers: 0 };
+  /** Script problems found when the world was built (stacks with errors are left out). */
+  readonly scriptProblems: Problem[] = [];
+  private runner: ScriptRunner;
+  private tweens = new Map<string, Tween>();
+  private logs: ScriptLog[] = [];
+  private reportedErrors = 0;
+  private names = new Map<string, string>();
 
   /** Build a world from a scene snapshot. Call `initPhysics()` first. */
   static create(scene: SceneFile): GameWorld {
@@ -94,20 +129,74 @@ export class GameWorld {
       for (let x: EntityData | undefined = e; x; x = x.parent ? doc.get(x.parent) : undefined) if (!x.visible) return false;
       return true;
     };
+    for (const e of doc.entities) this.names.set(e.id, e.name);
+
+    // Scripts (decision S1): every visible object with a Script component.
+    const objects = new Map(doc.entities.map((e) => [e.id, { name: e.name, isZone: !!e.components.trigger }]));
+    const programs: Program[] = [];
+    const scripts: [string, Script][] = [];
+    for (const e of doc.entities) {
+      const script = e.components.script as unknown as Script | undefined;
+      if (!script?.handlers || !shown(e)) continue;
+      const r = compileScript(e.id, script, { objects });
+      programs.push(r.program);
+      scripts.push([e.id, script]);
+      this.scriptProblems.push(...r.problems);
+    }
+
+    // Objects scripts move or switch become "units": one body for the object and everything inside it.
+    const own = (e: EntityData) => !!e.components.rigidBody || !!e.components.trigger;
+    const targets = scriptTargets(scripts).filter((id) => doc.get(id) && !own(doc.get(id)!));
+    const unitRoots = targets.filter((id) => !targets.some((o) => o !== id && doc.isAncestor(o, id)));
+    const unitOf = new Map<string, string>();
+    for (const root of unitRoots) for (const e of doc.subtree(root)) if (!own(e) || e.id === root) unitOf.set(e.id, root);
+    const unitBrushes = new Map<string, Brush[]>(unitRoots.map((r) => [r, []]));
+    const scriptedZones = new Set(scriptTargets(scripts).filter((id) => doc.get(id)?.components.trigger));
+
     const level: WorldBrush[] = [];
     for (const e of doc.entities) {
       if (!shown(e)) continue;
       const brushData = e.components.brush as unknown as (BrushData & { role?: string }) | undefined;
       if (brushData?.faces) {
         const brush = brushToWorld(fromData({ faces: brushData.faces }), doc.worldMatrix(e.id));
-        if (e.components.trigger) this.addTrigger(e, brush);
+        if (e.components.trigger) this.addTrigger(e, brush, scriptedZones.has(e.id));
         else if (e.components.rigidBody) this.addBrushBody(e, brush);
+        else if (unitOf.has(e.id) && brushData.role !== 'subtract') unitBrushes.get(unitOf.get(e.id)!)!.push(brush);
         else level.push({ id: e.id, role: brushData.role === 'subtract' ? 'subtract' : 'solid', brush });
       } else if (e.components.rigidBody) {
         this.addPointBody(e, doc.worldMatrix(e.id));
       }
     }
     this.addLevel(level);
+    for (const root of unitRoots) this.addUnit(root, doc.worldMatrix(root), unitBrushes.get(root)!);
+
+    this.runner = new ScriptRunner(programs, {
+      now: () => this.time,
+      random: Math.random,
+      nameOf: (id) => this.names.get(id) ?? id,
+      act: (name, target, args) => this.act(name, target, args),
+      send: (message, to, from) => {
+        this.bus.emit({ type: 'message', name: message, from, time: this.time });
+        this.runner.dispatch({ type: 'message', message, to, from });
+      },
+      log: (text, owner, block) => void this.logs.push({ text, owner, block, time: this.time }),
+    });
+  }
+
+  /** An object moved by scripts: a kinematic body at its place, carrying the hulls of every brush inside it. */
+  private addUnit(id: string, world: number[], brushes: Brush[]): void {
+    const t = decomposeMat4(world);
+    const placement = composeTransform({ position: t.position, rotation: t.rotation, scale: [1, 1, 1] });
+    const toLocal = invertRigid(placement);
+    const body = this.world.createRigidBody(RAPIER.RigidBodyDesc.kinematicPositionBased().setTranslation(...t.position).setRotation(quatFromMatrix(placement)));
+    for (const b of brushes) {
+      const pts = new Float32Array(vertices(b).flatMap((v) => transformPoint(toLocal, v)));
+      const desc = RAPIER.ColliderDesc.convexHull(pts);
+      if (!desc) continue;
+      const c = this.world.createCollider(desc.setFriction(0.6), body);
+      this.owner.set(c.handle, id);
+    }
+    this.track(id, 'unit', 'kinematic', body, brushes);
   }
 
   /** The level: every plain solid brush (after live subtract) as one fixed body made of convex pieces. */
@@ -155,7 +244,7 @@ export class GameWorld {
     const body = this.world.createRigidBody(this.bodyDesc(rb).setTranslation(c[0]!, c[1]!, c[2]!));
     const col = this.world.createCollider(this.material(desc, rb), body);
     this.owner.set(col.handle, e.id);
-    this.track(e.id, 'brush', rb.motion, body);
+    this.track(e.id, 'brush', rb.motion, body, [brush]);
   }
 
   /** A point object (empty, light, …) with a collision shape. */
@@ -181,17 +270,27 @@ export class GameWorld {
     this.track(e.id, 'point', rb.motion, body);
   }
 
-  private track(id: string, kind: BodyInfo['kind'], motion: BodyInfo['motion'], body: RAPIER.RigidBody): void {
-    this.bodies.set(id, { info: { id, kind, motion }, body, startInverse: invertRigid(poseMatrix(body)) });
-    this.stats.bodies++;
+  private track(id: string, kind: BodyInfo['kind'], motion: BodyInfo['motion'], body: RAPIER.RigidBody, brushes: Brush[] = []): void {
+    const t = body.translation(), r = body.rotation();
+    this.bodies.set(id, {
+      info: { id, kind, motion },
+      body,
+      startInverse: invertRigid(poseMatrix(body)),
+      start: { p: [t.x, t.y, t.z], q: { x: r.x, y: r.y, z: r.z, w: r.w } },
+      brushes,
+      visible: true,
+    });
+    if (kind !== 'zone') this.stats.bodies++;
   }
 
   /** A trigger zone: a sensor that reports what enters and leaves. */
-  private addTrigger(e: EntityData, brush: Brush): void {
+  private addTrigger(e: EntityData, brush: Brush, scripted = false): void {
     const desc = RAPIER.ColliderDesc.convexHull(hullPoints(brush));
     if (!desc) return;
     desc.setSensor(true).setActiveEvents(RAPIER.ActiveEvents.COLLISION_EVENTS).setActiveCollisionTypes(RAPIER.ActiveCollisionTypes.ALL);
-    const body = this.world.createRigidBody(RAPIER.RigidBodyDesc.fixed());
+    // Zones that scripts move or switch get a body scripts can drive.
+    const body = this.world.createRigidBody(scripted ? RAPIER.RigidBodyDesc.kinematicPositionBased() : RAPIER.RigidBodyDesc.fixed());
+    if (scripted) this.track(e.id, 'zone', 'kinematic', body);
     const c = this.world.createCollider(desc, body);
     this.owner.set(c.handle, e.id);
     this.triggers.set(c.handle, { id: e.id, data: readComponent<TriggerData>('trigger', e.components.trigger), fired: false, inside: new Set() });
@@ -203,14 +302,134 @@ export class GameWorld {
     if (this.disposed) return 0;
     this.accumulator = Math.min(this.accumulator + Math.max(0, dt), STEP * MAX_STEPS_PER_FRAME);
     let n = 0;
+    if (!this.startedScripts) {
+      // “When the game starts” runs on the first frame.
+      this.startedScripts = true;
+      this.runner.start();
+    }
     while (this.accumulator >= STEP) {
+      this.applyTweens(this.time + STEP);
       this.world.step(this.events);
       this.accumulator -= STEP;
       this.time += STEP;
       n++;
       this.events.drainCollisionEvents((h1, h2, started) => this.onContact(h1, h2, started));
+      this.runner.tick(STEP);
     }
     return n;
+  }
+
+  private startedScripts = false;
+
+  // ── What scripts can do ──
+
+  private act(name: ActionName, target: string, args: Value[]): (() => boolean) | null {
+    const b = this.bodies.get(target);
+    const label = this.names.get(target) ?? 'That object';
+    if (!b) throw new Error(`${label} can't be moved or switched by scripts here.`);
+    const n = (v: Value) => (typeof v === 'number' ? v : 0);
+    const t = b.body.translation(), r = b.body.rotation();
+    const now = { p: [t.x, t.y, t.z] as Q3, q: { x: r.x, y: r.y, z: r.z, w: r.w } };
+    switch (name) {
+      case 'move': {
+        const [dist, dx, dy, dz, sec] = args.map(n) as [number, number, number, number, number];
+        return this.tween(target, b, now, { p: [now.p[0] + dx * dist, now.p[1] + dy * dist, now.p[2] + dz * dist], q: now.q }, sec);
+      }
+      case 'turn': {
+        const axis = args[0] === 'north' ? [0, 0, -1] : args[0] === 'east' ? [1, 0, 0] : [0, 1, 0];
+        const deg = n(args[1] ?? 0), sec = n(args[2] ?? 0);
+        const half = (deg * Math.PI) / 360;
+        const rq = { x: axis[0]! * Math.sin(half), y: axis[1]! * Math.sin(half), z: axis[2]! * Math.sin(half), w: Math.cos(half) };
+        return this.tween(target, b, now, { p: now.p, q: qmul(rq, now.q) }, sec);
+      }
+      case 'return':
+        return this.tween(target, b, now, b.start, n(args[0] ?? 0));
+      case 'show':
+      case 'hide':
+        b.visible = name === 'show';
+        this.setColliders(b, b.visible);
+        return null;
+      case 'turnOn':
+      case 'turnOff':
+        this.setColliders(b, name === 'turnOn');
+        return null;
+    }
+  }
+
+  /**
+   * Switch collisions on or off. Collision groups are used rather than disabling colliders, so a hidden
+   * physics object keeps its weight (and keeps falling).
+   */
+  private setColliders(b: Body, on: boolean): void {
+    for (let i = 0; i < b.body.numColliders(); i++) b.body.collider(i).setCollisionGroups(on ? 0xffffffff : 0);
+    b.body.wakeUp();
+  }
+
+  private tween(id: string, b: Body, from: Tween['from'], to: Tween['to'], seconds: number): () => boolean {
+    if (b.body.isFixed()) b.body.setBodyType(RAPIER.RigidBodyType.KinematicPositionBased, true);
+    const tw: Tween = { from, to, t0: this.time, t1: this.time + Math.max(0, seconds), done: false };
+    const prev = this.tweens.get(id);
+    if (prev) prev.done = true; // a new move replaces the old one
+    this.tweens.set(id, tw);
+    if (seconds <= 0) this.applyTweens(this.time);
+    return () => tw.done;
+  }
+
+  private applyTweens(at: number): void {
+    for (const [id, tw] of this.tweens) {
+      const b = this.bodies.get(id);
+      if (!b) continue;
+      const k = tw.t1 <= tw.t0 ? 1 : Math.min(1, Math.max(0, (at - tw.t0) / (tw.t1 - tw.t0)));
+      const e = k * k * (3 - 2 * k); // ease in and out
+      const p = { x: tw.from.p[0] + (tw.to.p[0] - tw.from.p[0]) * e, y: tw.from.p[1] + (tw.to.p[1] - tw.from.p[1]) * e, z: tw.from.p[2] + (tw.to.p[2] - tw.from.p[2]) * e };
+      const q = slerp(tw.from.q, tw.to.q, e);
+      if (b.body.isKinematic()) {
+        b.body.setNextKinematicTranslation(p);
+        b.body.setNextKinematicRotation(q);
+      } else {
+        b.body.setTranslation(p, true);
+        b.body.setRotation(q, true);
+        b.body.setLinvel({ x: 0, y: 0, z: 0 }, true);
+        b.body.setAngvel({ x: 0, y: 0, z: 0 }, true);
+      }
+      if (k >= 1) {
+        tw.done = true;
+        this.tweens.delete(id);
+      }
+    }
+  }
+
+  /** What scripts logged since the last call (for the console). */
+  drainLogs(): ScriptLog[] {
+    const out = this.logs;
+    this.logs = [];
+    return out;
+  }
+
+  /** Script errors since the last call (a stopped loop, a division by zero …). */
+  drainScriptErrors() {
+    const out = this.runner.errors.slice(this.reportedErrors);
+    this.reportedErrors = this.runner.errors.length;
+    return out;
+  }
+
+  /** The blocks each script is running right now. */
+  activeBlocks(): Map<string, string[]> {
+    return this.runner.activeBlocks();
+  }
+
+  scriptVariables(owner: string) {
+    return this.runner.variables(owner);
+  }
+
+  /** Whether a body is shown (scripts can hide things). */
+  isVisible(id: string): boolean {
+    return this.bodies.get(id)?.visible ?? true;
+  }
+
+  /** The brushes drawn with a body (world space at the start). */
+  bodyBrushes(id: string): Brush[] {
+    return this.bodies.get(id)?.brushes ?? [];
   }
 
   private onContact(h1: number, h2: number, started: boolean): void {
@@ -233,6 +452,7 @@ export class GameWorld {
       if (!zone.inside.delete(other)) return;
     }
     this.pending.push({ kind: started ? 'enter' : 'exit', trigger: zone.id, other, time: this.time });
+    this.runner.dispatch({ type: started ? 'enter' : 'leave', zone: zone.id, other });
     this.bus.emit({ type: started ? 'trigger.enter' : 'trigger.exit', trigger: zone.id, other, time: this.time });
   }
 
@@ -328,4 +548,38 @@ function quatFromMatrix(m: number[]): { x: number; y: number; z: number; w: numb
   }
   const s = 2 * Math.sqrt(1 + m33 - m11 - m22);
   return { w: (m21 - m12) / s, x: (m13 + m31) / s, y: (m23 + m32) / s, z: 0.25 * s };
+}
+
+function transformPoint(m: number[], v: readonly number[]): [number, number, number] {
+  return [
+    m[0]! * v[0]! + m[4]! * v[1]! + m[8]! * v[2]! + m[12]!,
+    m[1]! * v[0]! + m[5]! * v[1]! + m[9]! * v[2]! + m[13]!,
+    m[2]! * v[0]! + m[6]! * v[1]! + m[10]! * v[2]! + m[14]!,
+  ];
+}
+
+function qmul(a: Quat, b: Quat): Quat {
+  return {
+    w: a.w * b.w - a.x * b.x - a.y * b.y - a.z * b.z,
+    x: a.w * b.x + a.x * b.w + a.y * b.z - a.z * b.y,
+    y: a.w * b.y - a.x * b.z + a.y * b.w + a.z * b.x,
+    z: a.w * b.z + a.x * b.y - a.y * b.x + a.z * b.w,
+  };
+}
+
+function slerp(a: Quat, b0: Quat, t: number): Quat {
+  let b = b0;
+  let cos = a.x * b.x + a.y * b.y + a.z * b.z + a.w * b.w;
+  if (cos < 0) {
+    b = { x: -b.x, y: -b.y, z: -b.z, w: -b.w };
+    cos = -cos;
+  }
+  if (cos > 0.9995) {
+    const r = { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t, z: a.z + (b.z - a.z) * t, w: a.w + (b.w - a.w) * t };
+    const l = Math.hypot(r.x, r.y, r.z, r.w);
+    return { x: r.x / l, y: r.y / l, z: r.z / l, w: r.w / l };
+  }
+  const th = Math.acos(cos), s = Math.sin(th);
+  const ka = Math.sin((1 - t) * th) / s, kb = Math.sin(t * th) / s;
+  return { x: a.x * ka + b.x * kb, y: a.y * ka + b.y * kb, z: a.z * ka + b.z * kb, w: a.w * ka + b.w * kb };
 }

@@ -137,3 +137,103 @@ describe('event bus', () => {
     w.dispose();
   });
 });
+
+describe('scripts in the game world', () => {
+  // Minimal block builders (the editor makes these through the palette).
+  let n = 0;
+  const id = () => `b${++n}`;
+  const num = (value: number) => ({ id: id(), kind: 'number', value });
+  const script = (...handlers: unknown[]) => ({ script: { version: 1, variables: [], handlers } });
+
+  it('a door group opens when a crate drops into the zone, then the crate rests on the floor', () => {
+    const door = newEntity('door', { group: {} });
+    const left = brush('left', [100, 0, 0], [116, 128, 64]);
+    const right = brush('right', [116, 0, 0], [132, 128, 64]);
+    left.parent = right.parent = door.id;
+    const crate = brush('crate', [-16, 300, -16], [16, 332, 16], { rigidBody: { motion: 'dynamic' } });
+    const zone = brush('zone', [-64, 50, -64], [64, 150, 64], {
+      trigger: { detects: 'physics' },
+      ...script({
+        id: id(),
+        event: { id: id(), kind: 'enter', zone: { self: true } },
+        body: [
+          { id: id(), kind: 'move', target: { entity: door.id }, direction: 'up', distance: num(128), seconds: num(0.5) },
+          { id: id(), kind: 'log', text: { id: id(), kind: 'text', value: 'opened' } },
+        ],
+      }),
+    });
+    const w = GameWorld.create(scene(floor(), door, left, right, crate, zone));
+    expect(w.scriptProblems).toEqual([]);
+    expect(w.movingBodies().map((b) => `${b.kind}`).sort()).toEqual(['brush', 'unit']);
+    expect(w.bodyBrushes(door.id)).toHaveLength(2);
+    run(w, 3);
+    expect(w.positionOf(door.id)![1]).toBeCloseTo(128, 3);
+    expect(w.drainLogs().map((l) => l.text)).toEqual(['opened']);
+    expect(w.positionOf(crate.id)![1]).toBeCloseTo(16, 0);
+    w.dispose();
+  });
+
+  it('hide turns collisions off: a hidden crate falls through the floor', () => {
+    const crate = brush('crate', [-16, 100, -16], [16, 132, 16], {
+      rigidBody: { motion: 'dynamic' },
+      ...script({ id: id(), event: { id: id(), kind: 'start' }, body: [{ id: id(), kind: 'hide', target: { self: true } }] }),
+    });
+    const w = GameWorld.create(scene(floor(), crate));
+    run(w, 2);
+    expect(w.isVisible(crate.id)).toBe(false);
+    expect(w.positionOf(crate.id)![1]).toBeLessThan(-100);
+    w.dispose();
+  });
+
+  it('turning a door 90° and returning it to the start', () => {
+    const door = brush('door', [0, 0, 0], [64, 128, 8], {
+      ...script({
+        id: id(),
+        event: { id: id(), kind: 'start' },
+        body: [
+          { id: id(), kind: 'turn', target: { self: true }, axis: 'up', degrees: num(90), seconds: num(0.5) },
+          { id: id(), kind: 'wait', seconds: num(1) },
+          { id: id(), kind: 'return', target: { self: true }, seconds: num(0.5) },
+        ],
+      }),
+    });
+    const w = GameWorld.create(scene(door));
+    run(w, 0.6);
+    // Yaw 90°: a point 64 along +X from the pivot ends up along −Z.
+    const m = w.motionOf(door.id)!;
+    const p = applyMat4(m, [64, 0, 0]);
+    expect(p[0]).toBeCloseTo(0, 1);
+    expect(p[2]).toBeCloseTo(-64, 1);
+    run(w, 1.5);
+    const back = applyMat4(w.motionOf(door.id)!, [64, 0, 0]);
+    expect(back[0]).toBeCloseTo(64, 1);
+    w.dispose();
+  });
+
+  it('broken stacks are reported and left out; a runaway loop is stopped while physics keeps going', () => {
+    const crate = brush('crate', [-16, 200, -16], [16, 232, 16], { rigidBody: { motion: 'dynamic' } });
+    const rules = newEntity('rules', {
+      script: {
+        version: 1,
+        variables: [{ name: 'n', type: 'number', initial: 0 }],
+        handlers: [
+          { id: 'bad', event: { id: id(), kind: 'start' }, body: [{ id: 'gone', kind: 'hide', target: { entity: 'nothing' } }] },
+          {
+            id: 'loop',
+            event: { id: id(), kind: 'start' },
+            body: [{ id: 'forever', kind: 'forever', body: [{ id: id(), kind: 'change', variable: 'n', by: num(1) }] }],
+          },
+        ],
+      } as never,
+    });
+    const w = GameWorld.create(scene(floor(), crate, rules));
+    expect(w.scriptProblems.map((p) => [p.block, p.severity])).toEqual([
+      ['gone', 'error'],
+      ['forever', 'warning'],
+    ]);
+    run(w, 2);
+    expect(w.drainScriptErrors().map((e) => e.block)).toEqual(['forever']);
+    expect(w.positionOf(crate.id)![1]).toBeCloseTo(16, 0);
+    w.dispose();
+  });
+});

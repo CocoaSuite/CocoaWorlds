@@ -22,11 +22,15 @@ Status values: **Approved** (signed off by the product owner), **Proposed** (rec
 | G2 | Vertex edits that bend a face | Split the bent face into flat triangles; dents still refused | Refuse the move | **Approved** (2026-11-01) |
 | G3 | Where brush geometry lives once transforms nest | Brush faces are stored relative to their parent; every entity's transform is local to its parent; moving or rotating a group carries its contents without rewriting them | Keep brushes in world space (Hammer-style) | **Approved** (2026-11-01) |
 | P1 | How a placed prefab copy is stored (amends D5) | In full in the scene, with a hidden link per object; on save each object records which values differ from the prefab; editing the prefab updates every copy except those values | Store only the differences and rebuild copies from the prefab file on open | **Approved** (2026-11-01) |
+| S1 | Where scripts live | A Script component on the object it controls (“this door”), travelling with copies and prefabs; game-wide rules go on a “Game rules” object | Separate script files that name the objects they control | **Approved** (2026-11-01) |
+| S2 | First block set | Core set: events (game starts, enters/leaves a zone, message, every N seconds); actions (move, turn, return to start, show/hide, turn on/off, wait, send message, log, set/change variable); If/Otherwise, Repeat, Repeat forever, Stop; variables, maths, comparisons, random, text | A smaller first set | **Approved** (2026-11-01) |
 | D12 | Editor UI stack | React + TypeScript + Zustand + Vite, CocoaCanvas CSS copied into a UI package | Vanilla TS like CocoaCanvas; Svelte | **Approved** (2026-11-01) |
 
 Details and trade-offs for each: [ARCHITECTURE.md](ARCHITECTURE.md).
 
 ## Log
+
+- **2026-11-01** — Approved S1 (scripts on objects) and S2 (core block set) at the start of Phase 5.
 
 - **2026-11-01** — Approved P1: prefab copies are stored in full with tracked changes, so scenes open and play without their prefab files. This replaces D5's “instances store only overrides”; the per-field Apply and Revert from D5 stay.
 

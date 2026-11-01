@@ -10,6 +10,7 @@
   "dependencies": {
     "@cocoaworlds/core": "^0.1.0",
     "@cocoaworlds/geometry": "^0.1.0",
+    "@cocoaworlds/scripting": "^0.1.0",
     "@dimforge/rapier3d-compat": "0.21.0"
   }
 }

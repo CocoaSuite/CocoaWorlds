@@ -26,6 +26,7 @@
     "@cocoaworlds/core": "^0.1.0",
     "@cocoaworlds/geometry": "^0.1.0",
     "@cocoaworlds/runtime": "^0.1.0",
+    "@cocoaworlds/scripting": "^0.1.0",
     "@cocoaworlds/ui": "^0.1.0",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",

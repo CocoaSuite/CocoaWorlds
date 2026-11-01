@@ -8,6 +8,9 @@
       "path": "packages/geometry"
     },
     {
+      "path": "packages/scripting"
+    },
+    {
       "path": "packages/runtime"
     },
     {
