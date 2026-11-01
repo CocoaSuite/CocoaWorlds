@@ -53,7 +53,7 @@ test('groups carry their contents; format 1 scenes upgrade in place', async () =
     await page.keyboard.press('Control+s');
     await page.getByTestId('save-status').getByText('Saved').waitFor();
     let scene = JSON.parse(await fs.readFile(sceneFile, 'utf8'));
-    assert.equal(scene.schemaVersion, 2);
+    assert.equal(scene.schemaVersion, 3);
     const g = scene.entities.find((e) => e.name === 'group');
     assert.deepEqual(g.transform.rotation, [0, 90, 0]);
     assert.deepEqual(g.transform.position, [512, 0, 0]);
@@ -97,7 +97,7 @@ test('groups carry their contents; format 1 scenes upgrade in place', async () =
     await page.keyboard.press('Control+s');
     await page.getByTestId('save-status').getByText('Saved').waitFor();
     scene = JSON.parse(await fs.readFile(sceneFile, 'utf8'));
-    assert.equal(scene.schemaVersion, 2);
+    assert.equal(scene.schemaVersion, 3);
     assert.ok(backups.length + (await fs.readdir(path.join(projectsDir, 'nested', '.cocoaworlds', 'backups'))).length > 0, 'a backup of the old file was kept');
   } catch (e) {
     await shot(page, 'n-failure');

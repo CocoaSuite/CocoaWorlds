@@ -56,7 +56,9 @@ interface Thread {
 
 export type RunnerEvent =
   | { type: 'enter' | 'leave'; zone: string; other: string }
-  | { type: 'message'; message: string; to: string | null; from: string | null };
+  | { type: 'message'; message: string; to: string | null; from: string | null }
+  /** The player used `targets` (the object looked at and everything it is inside). */
+  | { type: 'use'; targets: string[]; by: string };
 
 export class ScriptRunner {
   private instances: Instance[];
@@ -89,7 +91,9 @@ export class ScriptRunner {
     for (const inst of this.instances) {
       for (const h of inst.program.handlers) {
         const ev = h.event;
-        if (e.type === 'message') {
+        if (e.type === 'use') {
+          if (ev.kind === 'use' && e.targets.includes(inst.program.owner)) this.spawn(inst, h, e.by);
+        } else if (e.type === 'message') {
           if (ev.kind === 'message' && ev.message === e.message && (e.to === null || e.to === inst.program.owner)) this.spawn(inst, h, null);
         } else if ((ev.kind === 'enter' || ev.kind === 'leave') && ev.kind === e.type && ev.zone === e.zone) {
           this.spawn(inst, h, e.other);

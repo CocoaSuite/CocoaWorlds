@@ -55,6 +55,7 @@ export type CompiledEvent =
   | { kind: 'start' }
   | { kind: 'enter' | 'leave'; zone: string }
   | { kind: 'message'; message: string }
+  | { kind: 'use' }
   | { kind: 'every'; seconds: number };
 
 export interface CompiledHandler {
@@ -137,6 +138,7 @@ class HandlerCompiler {
     let event: CompiledEvent | null = null;
     this.stmt = ev.id;
     if (ev.kind === 'start') event = { kind: 'start' };
+    else if (ev.kind === 'use') event = { kind: 'use' };
     else if (ev.kind === 'enter' || ev.kind === 'leave') {
       const zone = this.resolveRef(ev.zone, ev.id, true);
       if (zone) event = { kind: ev.kind, zone };
@@ -168,7 +170,7 @@ class HandlerCompiler {
         return null;
       }
       if (!this.otherAllowed()) {
-        this.problem(block, '“The thing that entered” only works inside “When something enters or leaves”.');
+        this.problem(block, '“The thing that entered” only works inside “When something enters or leaves” or “When the player uses this”.');
         return null;
       }
       return 'other';
@@ -186,7 +188,7 @@ class HandlerCompiler {
   }
 
   private otherAllowed(): boolean {
-    return this.h.event.kind === 'enter' || this.h.event.kind === 'leave';
+    return this.h.event.kind === 'enter' || this.h.event.kind === 'leave' || this.h.event.kind === 'use';
   }
 
   private pushRef(ref: Ref, block: string): void {

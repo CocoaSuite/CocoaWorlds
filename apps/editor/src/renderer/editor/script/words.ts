@@ -11,6 +11,7 @@ const W = {
   enter: ['When something enters', 'Когда что-то входит в'],
   leave: ['When something leaves', 'Когда что-то выходит из'],
   message: ['When this gets the message', 'Когда приходит сообщение'],
+  use: ['When the player uses this', 'Когда игрок использует это'],
   every: ['Every', 'Каждые'],
   seconds: ['seconds', 'с'],
   // actions
@@ -45,6 +46,7 @@ const W = {
   // values
   self: ['this object', 'этот объект'],
   other: ['the thing that entered', 'то, что вошло'],
+  player: ['the player', 'игрок'],
   random: ['random from', 'случайное от'],
   toWord: ['to', 'до'],
   join: ['join', 'соединить'],
@@ -77,6 +79,7 @@ const PALETTE_EVENT: Record<EventKind, Pair> = {
   start: ['When the game starts', 'Когда игра начинается'],
   enter: ['When something enters a zone', 'Когда что-то входит в зону'],
   leave: ['When something leaves a zone', 'Когда что-то выходит из зоны'],
+  use: ['When the player uses this (E)', 'Когда игрок использует это (E)'],
   message: ['When this gets a message', 'Когда приходит сообщение'],
   every: ['Every few seconds', 'Каждые несколько секунд'],
 };

@@ -40,6 +40,7 @@ import {
 import {
   bakeSubtract,
   bounds,
+  classify,
   clipBrush,
   type Plane,
   fitSurface,
@@ -66,7 +67,7 @@ import type { LiveChange } from './viewport/engine';
 import { cloneSnapshot, isGroup, rootsOf, snapshotSubtrees } from './scene-ops';
 import { getLang, setLang, t, type Lang } from './i18n';
 
-export type Tool = 'select' | 'move' | 'rotate' | 'scale' | 'brush' | 'face' | 'paint' | 'vertex' | 'clip';
+export type Tool = 'select' | 'move' | 'rotate' | 'scale' | 'brush' | 'face' | 'paint' | 'vertex' | 'clip' | 'loopcut';
 export type { FaceRef };
 export type Justify = 'left' | 'right' | 'top' | 'bottom' | 'center';
 export type ViewMode = 'perspective' | 'top' | 'front' | 'side';
@@ -520,6 +521,10 @@ export const useEditor = create<State & Actions>()((set, get) => ({
     const doc = get().doc;
     const cur = brushOf(doc?.get(id));
     if (!doc || !cur || cur.role === role) return;
+    if (role === 'subtract' && cur.brush.mesh) {
+      get().notify(meshMsg('subtract'));
+      return;
+    }
     get().execute(setComponentCmd(doc, id, 'brush', brushComponent(cur.brush, role) as never, role === 'subtract' ? 'Make subtract' : 'Make solid'));
   },
 
@@ -528,6 +533,7 @@ export const useEditor = create<State & Actions>()((set, get) => ({
     if (!doc) return;
     const subs = ids.filter((id) => brushOf(doc.get(id))?.role === 'subtract');
     if (!subs.length) return;
+    if (worldBrushes(doc).some((b) => b.role === 'solid' && b.brush.mesh)) get().log('info', 'Brush', meshMsg('cut'));
     const { replace } = bakeSubtract(worldBrushes(doc), subs);
     const h = get().history;
     h.begin('Apply cut');
@@ -556,6 +562,10 @@ export const useEditor = create<State & Actions>()((set, get) => ({
     const e = doc?.get(id);
     const b = brushOf(e);
     if (!doc || !e || !b || b.role !== 'solid') return;
+    if (b.brush.mesh) {
+      get().notify(meshMsg('hollow'));
+      return;
+    }
     const bb = bounds(b.brush);
     if (!bb) return;
     let walls: Brush[];
@@ -589,6 +599,10 @@ export const useEditor = create<State & Actions>()((set, get) => ({
     if (!doc) return;
     const solids = selection.map((id) => ({ id, b: worldBrushOf(doc, doc.get(id)) })).filter((x) => x.b?.role === 'solid');
     if (solids.length < 2) return;
+    if (solids.some((x) => x.b!.brush.mesh)) {
+      get().notify(meshMsg('merge'));
+      return;
+    }
     const merged = mergeAll(solids.map((x) => x.b!.brush));
     if (merged.length === solids.length) {
       get().notify('These brushes don’t form a convex shape together, so they stay separate.');
@@ -837,6 +851,7 @@ export const useEditor = create<State & Actions>()((set, get) => ({
     const h = get().history;
     const result: string[] = [];
     let cut = 0;
+    let meshes = 0;
     h.begin('Clip');
     for (const id of ids) {
       const e = doc.get(id);
@@ -844,6 +859,7 @@ export const useEditor = create<State & Actions>()((set, get) => ({
       if (!e || !b || !isShown(doc, e) || isLocked(doc, e)) continue;
       const space = doc.worldMatrix(id);
       const r = clipBrush(b.brush, plane);
+      if (b.brush.mesh && classify(b.brush, plane) === 'spanning') meshes++;
       if (!r.cut) {
         result.push(id);
         continue;
@@ -866,8 +882,9 @@ export const useEditor = create<State & Actions>()((set, get) => ({
       }
     }
     h.commit();
+    if (meshes) get().notify(meshMsg('clip'));
     if (!cut) {
-      get().notify(t('clip.missed'));
+      if (!meshes) get().notify(t('clip.missed'));
       return;
     }
     set({ selection: result.filter((id) => doc.get(id)) });
@@ -1121,4 +1138,9 @@ export function reparentKeepWorld(doc: SceneDoc, id: string, parent: string | nu
 /** The scene as it goes to disk: prefab copies record what they changed. */
 function sceneForSaving(doc: SceneDoc, prefabs: Map<string, PrefabEntry>): SceneFile {
   return recordAllChanges(doc.toFile(), new Map([...prefabs.values()].map((p) => [p.prefab.id, p.prefab])));
+}
+
+/** Why a brush operation skipped an edited mesh (decision G4). */
+function meshMsg(op: 'subtract' | 'hollow' | 'merge' | 'clip' | 'cut'): string {
+  return t('mesh.noOp').replace('{op}', t(`mesh.op.${op}` as const));
 }

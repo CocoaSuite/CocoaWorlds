@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  CURRENT_SCHEMA_VERSION,
   SceneDoc,
   applyMat4,
   composeTransform,
@@ -77,7 +78,7 @@ describe('format 1 → 2', () => {
       v1([ent('room', null, [16, 0, 16], { group: {} }), ent('wall', 'room', [0, 0, 0], { brush }), ent('lamp', 'room', [64, 100, 64], { light: {} })]),
     );
     expect(migrated).toBe(true);
-    expect(data.schemaVersion).toBe(2);
+    expect(data.schemaVersion).toBe(CURRENT_SCHEMA_VERSION);
     const out = data.entities as ReturnType<typeof ent>[];
     expect(out[0]!.transform.position).toEqual([0, 0, 0]);
     expect(out[1]!.components.brush).toEqual(brush); // exact: parent space is still the world

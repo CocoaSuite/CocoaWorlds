@@ -7,7 +7,7 @@
 | 3 | Brush geometry: creation, manipulation, grid/snap, vertex and face editing, materials per face, carve/union/intersect, validation | **In progress** — brushes can be drawn, sized, cut and saved |
 | 4 | Entities and physics: components, Rapier, colliders, triggers, inspector, interaction infrastructure | **Done** (the player's “use” raycast moves to Phase 6 with the player) |
 | 5 | Visual scripting: blocks editor, script model, compiler, VM, events, debugging, recipes | **In progress** — model, checker, compiler, VM, block editor and Play integration done |
-| 6 | Gameplay: Source-style controller, player, interaction, health/score, doors/plates/buttons/lifts | Not started |
+| 6 | Gameplay: Source-style controller, player, interaction, health/score, doors/plates/buttons/lifts | **Started** — player controller, Play as the player, “use” |
 | 7 | Assets and rendering: asset browser, material editor, textures, lighting, audio | Not started |
 | 8 | Runtime and persistence: standalone runtime, Play isolation, autosave, recovery, migrations | Not started |
 | 9 | Builds: Windows, macOS, Linux packaging; web export; runtime verification | Not started |
@@ -39,6 +39,14 @@ Order may shift where dependencies require it (for example, the project format f
 - [x] Box selection
 - [ ] Run and check on Windows and macOS
 
+## Phase 6 checklist
+
+- [x] Player controller (D4): Source-style ground/air movement, jump, crouch, walk, steps, slopes, pushing physics objects
+- [x] Play as the player: pointer lock, first-person camera, crosshair, Use (E) and “When the player uses this”
+- [ ] Health, damage, pickups, score
+- [ ] Ready-made doors, buttons, pressure plates, lifts
+- [ ] Ladders, water, key rebinding
+
 ## Phase 5 checklist
 
 - [x] Decisions S1 (scripts on objects) and S2 (core block set)
@@ -59,7 +67,7 @@ Order may shift where dependencies require it (for example, the project format f
 - [x] Play in the editor (physics preview from a snapshot)
 - [x] Event bus scripts can listen to (trigger enter/exit; “use” and messages reserved)
 - [x] Prefabs (D5 as amended by P1): files, copies with tracked changes, Apply / Revert / Unlink
-- [ ] “Use” raycasts from the player (with the player in Phase 6)
+- [x] “Use” raycasts from the player (with the player, early Phase 6)
 
 ## Phase 3 checklist
 
@@ -68,6 +76,7 @@ Order may shift where dependencies require it (for example, the project format f
 - [x] Brush entities in the scene format; level rendering with the dev grid texture, hidden-face removal, selection outlines
 - [x] Brush tool: block, cylinder, wedge, stairs — draw footprint → set height → preview → confirm, with exact numeric size/corner, solid or subtract
 - [x] Live subtract brushes, Apply cut (bake), Make hollow, Merge, numeric size and centre, move/rotate/scale brushes with the gizmo (texture lock on move)
+- [x] G4: free vertex editing with edited meshes; loop cut (Ctrl+R)
 - [x] Polygon brush drawing (custom outline, any view)
 - [x] Level building in a background worker
 - [x] Make hollow: walls inward or outward

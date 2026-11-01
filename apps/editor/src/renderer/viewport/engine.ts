@@ -3,7 +3,7 @@
  * and the brush tool. Renders on demand (only after something changes) so an idle editor costs no GPU time.
  */
 import type { EntityData, SceneDoc, Transform, Vec3 } from '@cocoaworlds/core';
-import { bounds, faceAt, transform as transformBrush, translate, vertices, type Brush, type Plane, type V3 } from '@cocoaworlds/geometry';
+import { bounds, faceAt, loopCut, nearestEdge, transform as transformBrush, translate, vertices, type Brush, type Plane, type V3 } from '@cocoaworlds/geometry';
 import * as THREE from 'three';
 import { TransformControls } from 'three/addons/controls/TransformControls.js';
 import { brushOf, isLocked, isShown, worldBrushOf, worldBrushes, worldMatrices, type DrawRole, type Outline, type ShapeOptions } from '../brush/brushes';
@@ -49,6 +49,12 @@ export interface ViewportCallbacks {
   playFrame(frame: PlayFrame, names: Map<string, string>): void;
   /** Play mode: the blocks scripts are running (sent a few times a second, only when it changes). */
   activeBlocks(blocks: Map<string, string[]>): void;
+  /** Play mode as the player: whether the mouse is captured (false = “click to play”). */
+  playerLock(locked: boolean): void;
+  /** Loop cut tool: how many cuts, and whether the cursor is on a brush where a loop fits (null = not on a brush). */
+  loopCutState(cuts: number, fits: boolean | null): void;
+  /** Loop cut tool: replace this brush (world space) with the cut one. */
+  applyLoopCut(id: string, brush: Brush): void;
 }
 
 /** A live gizmo result: a brush in world space, or an entity's new world placement. */
@@ -117,8 +123,14 @@ export class ViewportEngine {
   private gizmoMode: GizmoMode = 'none';
   private brushTool = false;
   private faceTool = false;
-  /** 'vertex' and 'clip' tools work on the selected brushes. */
-  private editTool: 'none' | 'vertex' | 'clip' = 'none';
+  /** 'vertex' and 'clip' tools work on the selected brushes; 'loopcut' on the brush under the cursor. */
+  private editTool: 'none' | 'vertex' | 'clip' | 'loopcut' = 'none';
+  private loopCuts = 1;
+  private loopHover: { id: string; brush: Brush } | null = null;
+  private loopLines = new THREE.LineSegments(
+    new THREE.BufferGeometry(),
+    new THREE.LineBasicMaterial({ color: 0xffc94a, depthTest: false, transparent: true }),
+  );
   private vertexTool = new VertexTool();
   private clipTool = new ClipTool();
   private marquee: HTMLDivElement;
@@ -127,6 +139,9 @@ export class ViewportEngine {
   private blockFrames = 0;
   private blockKey = '';
   private gridWasVisible = true;
+  /** First-person camera while playing as the player. */
+  private fpCam = new THREE.PerspectiveCamera(74, 1, 2, 65536);
+  private gameKeys = new Set<string>();
   private shapeOpts: ShapeOptions = { shape: 'box', sides: 16, steps: 8, facing: 0 };
   private brushRole: DrawRole = 'solid';
   private draft: BrushDraft | null = null;
@@ -202,6 +217,7 @@ export class ViewportEngine {
           this.vertexTool.endDrag();
           const why = this.vertexTool.lastRefusal;
           if (why) this.cb.message(why);
+          else if (this.vertexTool.madeMesh) this.cb.message('mesh');
         }
         this.cb.endEdit();
         this.placeProxy();
@@ -357,6 +373,11 @@ export class ViewportEngine {
     this.grid.object.visible = false;
     this.scene.add(session.group);
     this.lastTick = performance.now();
+    if (session.info.player) {
+      this.gameKeys.clear();
+      this.cb.playerLock(false);
+      this.lockPointer();
+    }
     this.invalidate();
     return session.info;
   }
@@ -366,6 +387,8 @@ export class ViewportEngine {
     const p = this.play;
     if (!p) return;
     this.play = null;
+    this.gameKeys.clear();
+    if (document.pointerLockElement === this.renderer.domElement) document.exitPointerLock();
     this.scene.remove(p.group);
     p.dispose();
     this.world.group.visible = true;
@@ -373,6 +396,88 @@ export class ViewportEngine {
     this.vertexTool.group.visible = this.editTool === 'vertex';
     this.clipTool.group.visible = this.editTool === 'clip';
     this.syncAll();
+  }
+
+  // ── Playing as the player ──
+
+  private get asPlayer(): boolean {
+    return !!this.play?.info.player;
+  }
+
+  private get locked(): boolean {
+    return document.pointerLockElement === this.renderer.domElement;
+  }
+
+  /** “Click to play”. */
+  capturePlayer(): void {
+    if (this.asPlayer) this.lockPointer();
+  }
+
+  private lockPointer(): void {
+    const el = this.renderer.domElement;
+    el.focus();
+    try {
+      // (Refused without a user gesture, e.g. when Play started from the keyboard; a click then captures it.)
+      const r = el.requestPointerLock() as unknown as Promise<void> | undefined;
+      r?.catch?.(() => {});
+    } catch {
+      /* not allowed right now */
+    }
+  }
+
+  private onLockChange = (): void => {
+    if (!this.asPlayer) return;
+    if (!this.locked) {
+      this.gameKeys.clear();
+      this.sendInput();
+    }
+    this.cb.playerLock(this.locked);
+  };
+
+  private onMouseMove = (e: MouseEvent): void => {
+    if (!this.asPlayer || !this.locked || !this.play) return;
+    const k = 0.0022;
+    const { yaw, pitch } = this.play.look;
+    const limit = Math.PI / 2 - 0.01;
+    this.play.setInput({ yaw: yaw - e.movementX * k, pitch: Math.max(-limit, Math.min(limit, pitch - e.movementY * k)) });
+  };
+
+  /** Keys the game uses while the mouse is captured (they never reach the editor's shortcuts). */
+  private static GAME_KEYS = new Set(['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space', 'ControlLeft', 'ControlRight', 'KeyC', 'ShiftLeft', 'ShiftRight', 'KeyE']);
+
+  private sendInput(): void {
+    const k = this.gameKeys;
+    const on = (...c: string[]) => c.some((x) => k.has(x));
+    this.play?.setInput({
+      forward: (on('KeyW', 'ArrowUp') ? 1 : 0) - (on('KeyS', 'ArrowDown') ? 1 : 0),
+      right: (on('KeyD', 'ArrowRight') ? 1 : 0) - (on('KeyA', 'ArrowLeft') ? 1 : 0),
+      jump: on('Space'),
+      crouch: on('ControlLeft', 'ControlRight', 'KeyC'),
+      walk: on('ShiftLeft', 'ShiftRight'),
+    });
+  }
+
+  /** Returns true when the key was the game's. */
+  private gameKey(e: KeyboardEvent, down: boolean): boolean {
+    if (!this.asPlayer || !this.locked) return false;
+    if (e.key === 'Escape') {
+      // First Esc lets go of the mouse; the next one (or Stop) ends the game.
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      document.exitPointerLock();
+      return true;
+    }
+    // F5 still stops the game.
+    if (e.key === 'F5') return false;
+    // Otherwise every key belongs to the game (Ctrl+S, Ctrl+Z… would be surprising mid-jump).
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    if (!ViewportEngine.GAME_KEYS.has(e.code)) return true;
+    if (down && e.code === 'KeyE' && !e.repeat) this.play?.use();
+    if (down) this.gameKeys.add(e.code);
+    else this.gameKeys.delete(e.code);
+    this.sendInput();
+    return true;
   }
 
   setVertexSnap(enabled: boolean): void {
@@ -638,8 +743,9 @@ export class ViewportEngine {
 
   // ── vertex and clip tools (public) ──
 
-  setEditTool(tool: 'none' | 'vertex' | 'clip'): void {
+  setEditTool(tool: 'none' | 'vertex' | 'clip' | 'loopcut'): void {
     if (this.editTool === tool) return;
+    if (this.editTool === 'loopcut') this.showLoop(null);
     if (this.editTool === 'clip') {
       this.clipTool.clear();
       this.cb.clipState(null, this.clipTool.keep);
@@ -648,9 +754,48 @@ export class ViewportEngine {
     this.editTool = tool;
     this.vertexTool.group.visible = tool === 'vertex';
     this.clipTool.group.visible = tool === 'clip';
-    this.renderer.domElement.style.cursor = tool === 'clip' ? 'crosshair' : '';
+    this.renderer.domElement.style.cursor = tool === 'clip' || tool === 'loopcut' ? 'crosshair' : '';
+    if (tool === 'loopcut') this.cb.loopCutState(this.loopCuts, null);
     this.applySelection();
     this.invalidate();
+  }
+
+  // ── loop cut ──
+
+  /** Preview the ring of new edges for the brush under the pointer. */
+  private updateLoop(e: { clientX: number; clientY: number }): void {
+    this.raycaster.setFromCamera(this.ndc(e), this.rig.camera);
+    const hit = this.world.pick(this.raycaster, true);
+    const wb = hit && this.doc && !isLocked(this.doc, this.doc.get(hit.entityId)) ? this.world.brush(hit.entityId) : undefined;
+    if (!hit || !wb) {
+      this.showLoop(null);
+      this.cb.loopCutState(this.loopCuts, null);
+      return;
+    }
+    const edge = nearestEdge(wb.brush, [hit.point.x, hit.point.y, hit.point.z]);
+    const r = edge ? loopCut(wb.brush, edge[0], edge[1], this.loopCuts) : null;
+    this.showLoop(r ? { id: hit.entityId, brush: r.brush, lines: r.lines } : null);
+    this.cb.loopCutState(this.loopCuts, !!r);
+  }
+
+  private showLoop(p: { id: string; brush: Brush; lines: [V3, V3][] } | null): void {
+    this.loopHover = p ? { id: p.id, brush: p.brush } : null;
+    const g = new THREE.BufferGeometry();
+    if (p) g.setAttribute('position', new THREE.Float32BufferAttribute(p.lines.flatMap(([a, b]) => [...a, ...b]), 3));
+    this.loopLines.geometry.dispose();
+    this.loopLines.geometry = g;
+    this.loopLines.renderOrder = 10;
+    if (p && !this.loopLines.parent) this.scene.add(this.loopLines);
+    if (!p) this.scene.remove(this.loopLines);
+    this.invalidate();
+  }
+
+  setLoopCuts(n: number): void {
+    this.loopCuts = Math.max(1, Math.min(32, Math.round(n)));
+    if (this.editTool === 'loopcut') {
+      if (this.loopHover) this.updateLoop({ clientX: this.lastPointer.x, clientY: this.lastPointer.y });
+      else this.cb.loopCutState(this.loopCuts, null);
+    }
   }
 
   setClipKeep(k: ClipKeep): void {
@@ -803,6 +948,8 @@ export class ViewportEngine {
     if (!w || !h) return;
     this.renderer.setSize(w, h, false);
     this.rig.resize(w, h);
+    this.fpCam.aspect = w / h;
+    this.fpCam.updateProjectionMatrix();
     this.grid.update(this.gridSize, this.rig.unitsPerPixel);
     this.invalidate();
   }
@@ -826,7 +973,7 @@ export class ViewportEngine {
     }
     if (this.play) {
       const frame = this.play.tick(dt);
-      if (frame.events.length || frame.logs.length || frame.errors.length) this.cb.playFrame(frame, this.play.info.names);
+      if (frame.events.length || frame.logs.length || frame.errors.length || frame.uses.length) this.cb.playFrame(frame, this.play.info.names);
       if (++this.blockFrames % 6 === 0) {
         const blocks = this.play.activeBlocks();
         const key = JSON.stringify([...blocks]);
@@ -858,6 +1005,10 @@ export class ViewportEngine {
     r.setScissorTest(false);
     r.setViewport(0, 0, size.x, size.y);
     r.clear();
+    if (this.play?.placeCamera(this.fpCam)) {
+      r.render(this.scene, this.fpCam);
+      return;
+    }
     this.grid.setCamera(this.rig.camera.position);
     r.render(this.scene, this.rig.camera);
     const s = 72;
@@ -973,7 +1124,7 @@ export class ViewportEngine {
 
   /** Box selection works in the select/transform tools and the vertex tool. */
   private boxAllowed(): boolean {
-    return !this.brushTool && !this.faceTool && this.editTool !== 'clip';
+    return !this.brushTool && !this.faceTool && this.editTool !== 'clip' && this.editTool !== 'loopcut';
   }
 
   private drawMarquee(x0: number, y0: number, x1: number, y1: number): void {
@@ -1011,6 +1162,10 @@ export class ViewportEngine {
   private onPointerDown = (e: PointerEvent): void => {
     const el = this.renderer.domElement;
     el.focus();
+    if (this.asPlayer) {
+      if (!this.locked && e.button === 0) this.lockPointer();
+      return;
+    }
     if (this.gizmo.dragging || (this.gizmo as unknown as { axis: string | null }).axis) return;
     const persp = this.rig.kind === 'perspective';
     let mode: NonNullable<typeof this.drag>['mode'];
@@ -1039,6 +1194,15 @@ export class ViewportEngine {
       this.scene.add(this.draft.group);
       this.draft.update(this.shapeOpts, this.brushRole);
       this.cb.draft(this.draft.state());
+    }
+    if (mode === 'click' && this.editTool === 'loopcut') {
+      this.updateLoop(e);
+      const h = this.loopHover;
+      if (h) {
+        this.showLoop(null);
+        this.cb.applyLoopCut(h.id, h.brush);
+      }
+      return;
     }
     if (mode === 'click' && this.editTool === 'clip') {
       const p = this.drawPoint(e);
@@ -1130,6 +1294,10 @@ export class ViewportEngine {
         this.cb.draft(this.draft.state());
         this.invalidate();
       }
+      return;
+    }
+    if (!this.drag && this.editTool === 'loopcut' && !this.play) {
+      this.updateLoop(e);
       return;
     }
     const d = this.drag;
@@ -1257,7 +1425,15 @@ export class ViewportEngine {
   };
 
   private onWheel = (e: WheelEvent): void => {
+    if (this.asPlayer) {
+      e.preventDefault();
+      return;
+    }
     e.preventDefault();
+    if (this.editTool === 'loopcut' && this.loopHover && !this.drag) {
+      this.setLoopCuts(this.loopCuts + (e.deltaY < 0 ? 1 : -1));
+      return;
+    }
     if (this.drag?.mode === 'look') {
       this.rig.flySpeed = THREE.MathUtils.clamp(this.rig.flySpeed * Math.exp(-e.deltaY * 0.002), 32, 8192);
       return;
@@ -1269,6 +1445,7 @@ export class ViewportEngine {
   };
 
   private onKeyDown = (e: KeyboardEvent): void => {
+    if (this.gameKey(e, true)) return;
     if (this.isTyping(e)) return;
     if (this.draft?.points && this.draft.stage === 'footprint' && (e.key === 'Enter' || e.key === 'Backspace')) {
       e.preventDefault();
@@ -1320,12 +1497,15 @@ export class ViewportEngine {
   };
 
   private onKeyUp = (e: KeyboardEvent): void => {
+    if (this.gameKey(e, false)) return;
     if (e.code === 'Space') this.spaceHeld = false;
     this.keys.delete(e.code);
   };
 
   private onBlur = (): void => {
     this.keys.clear();
+    this.gameKeys.clear();
+    this.sendInput();
     this.spaceHeld = false;
   };
 
@@ -1349,6 +1529,8 @@ export class ViewportEngine {
     window.addEventListener('keydown', this.onKeyDown, true);
     window.addEventListener('keyup', this.onKeyUp, true);
     window.addEventListener('blur', this.onBlur);
+    document.addEventListener('pointerlockchange', this.onLockChange);
+    document.addEventListener('mousemove', this.onMouseMove);
   }
 
   private unbindInput(): void {
@@ -1364,6 +1546,8 @@ export class ViewportEngine {
     window.removeEventListener('keydown', this.onKeyDown, true);
     window.removeEventListener('keyup', this.onKeyUp, true);
     window.removeEventListener('blur', this.onBlur);
+    document.removeEventListener('pointerlockchange', this.onLockChange);
+    document.removeEventListener('mousemove', this.onMouseMove);
   }
 }
 

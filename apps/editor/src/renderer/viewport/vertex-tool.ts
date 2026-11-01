@@ -27,7 +27,9 @@ export class VertexTool {
   private mids: THREE.Points;
   /** During a drag: the brushes as they were, and the last move that worked. */
   private drag: { originals: VertexBrush[]; good: V3 } | null = null;
-  lastRefusal: 'concave' | 'non-planar' | 'collapsed' | null = null;
+  lastRefusal: 'collapsed' | null = null;
+  /** The last drag turned a normal brush into an edited mesh (G4). */
+  madeMesh = false;
 
   constructor() {
     const mat = (color: number, size: number) => new THREE.PointsMaterial({ color, size, sizeAttenuation: false, depthTest: false, transparent: true });
@@ -138,13 +140,16 @@ export class VertexTool {
   beginDrag(): void {
     this.drag = { originals: this.brushes.map((b) => ({ ...b })), good: [0, 0, 0] };
     this.lastRefusal = null;
+    this.madeMesh = false;
   }
 
   /** Brushes with the picked corners moved by `delta`; if any brush refuses, the last good move is used. */
   dragTo(delta: V3): VertexBrush[] {
     const d = this.drag;
     if (!d) return [];
+    let made = false;
     const attempt = (t: V3): VertexBrush[] | null => {
+      made = false;
       const out: VertexBrush[] = [];
       for (const b of d.originals) {
         const picks = this.picked.get(b.id);
@@ -160,12 +165,14 @@ export class VertexTool {
           return null;
         }
         out.push({ id: b.id, brush: r.brush });
+        if (r.mesh && !b.brush.mesh) made = true;
       }
       return out;
     };
     const ok = attempt(delta);
     if (ok) {
       d.good = delta;
+      this.madeMesh = made;
       return ok;
     }
     return attempt(d.good) ?? d.originals;

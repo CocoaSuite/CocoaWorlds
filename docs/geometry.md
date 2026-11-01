@@ -40,7 +40,9 @@ The editor's tools work in world space. `toWorld` and `toLocal` convert on the w
 | Move | `translate` | Texture lock keeps textures glued to the faces. |
 | Rotate / scale / mirror | `transform` | Planes rebuilt from transformed polygons; mirroring keeps normals outward. |
 | Face drag | `pushFace` | Refuses to collapse the brush. |
-| Vertex edit | `moveVertices` | Refuses moves that make a dent. A face bent out of flat is split into triangles or refused (setting). |
+| Vertex edit | `moveVertices` | Never refuses a shape (G4), only one squashed flat. A bent or dented face is split into triangles; a brush that stops being convex becomes an edited mesh (below). |
+| Loop cut | `loopCut`, `nearestEdge` | A ring of new edges across four-sided faces, starting at an edge, divided into N equal parts. The result is an edited mesh with the new corners. |
+| Mesh ↔ brush | `toEditMesh`, `tryConvex`, `rebuildMesh` | Convert a brush to explicit corners; back to a normal brush when convex with no extra corners; tidy corners after a move. |
 | Clip | `split` | Splits by any plane; new cap faces get a chosen surface. |
 | **Subtract (carve)** | `carve` / `carveDetailed` | See below. |
 | Intersect | `intersect` | The shared volume. |
@@ -86,3 +88,21 @@ Distances under 0.001 u count as "on the plane". Generated coordinates are round
 ## Background builds
 
 The editor builds the level (live subtract, then the mesh) with one plain-data function, `buildLevel`. From 64 brushes it runs in a worker; while a build is running, newer edits wait and only the latest one is built next.
+
+## Edited meshes (decision G4)
+
+A brush normally is its planes. Once its corners are moved into a dent or a twist, planes can't describe it,
+so it keeps its corners and polygons explicitly: `Brush.mesh = { verts, polys }`, where `polys[i]` belongs to
+`faces[i]` (its plane and surface). Everything that works face by face (drawing, picking, painting, texture
+alignment, the vertex tool, moving, rotating, scaling, saving) treats both kinds the same.
+
+- **Always flat and convex polygons.** After a move, corners that land on each other are welded, collapsed
+  polygons are dropped, and any polygon that is bent or dented is split into triangles (ear clipping in its
+  best-fit plane). The shape stays closed.
+- **Back to a brush.** When the mesh is convex and every corner is a real corner (none in the middle of a flat
+  face or edge), it becomes a normal brush again, so carve and clip work on it once more.
+- **What skips it.** Carve (live subtract and Apply cut), clip, merge and Make hollow need convex brushes; they
+  leave edited meshes alone and say so. An edited mesh can't be a subtract brush.
+- **Physics.** Still edited meshes collide with their exact triangles; moving ones use their convex hull.
+- **Saving.** Brush data gains `mesh` (corners rounded to 1/1024 unit, like face points). `faces` keeps three
+  points per face as before. Scene format 3; older scenes have no meshes and open unchanged.

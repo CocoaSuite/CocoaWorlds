@@ -19,7 +19,8 @@ Status values: **Approved** (signed off by the product owner), **Proposed** (rec
 | D10 | Web export | Same runtime bundled as static site | Separate web-only runtime | **Approved** (2026-11-01) |
 | D11 | Custom JS scripting | Deferred; later in a Worker with a capability API | Unrestricted scripts | **Approved — deferred past v1** (2026-11-01) |
 | G1 | Subtract behaviour | Live subtract brushes: a doorway stays an editable brush and solids re-cut instantly; Apply bakes to plain brushes; destructive carve also offered | Destructive carve only (Hammer) | **Approved** (2026-11-01) |
-| G2 | Vertex edits that bend a face | Split the bent face into flat triangles; dents still refused | Refuse the move | **Approved** (2026-11-01) |
+| G2 | Vertex edits that bend a face | Split the bent face into flat triangles; dents still refused | Refuse the move | **Approved** (2026-11-01); dents allowed since G4 |
+| G4 | Free vertex editing (amends D3 and G2) | Corners move anywhere. A brush that stops being convex becomes an **edited mesh**: explicit corners and flat, convex polygons (bent or dented faces become triangles), saved in the brush data (scene format 3). It draws, collides (exact triangles when still), paints and vertex-edits like any brush; carve, clip, merge, hollow and Apply cut skip it with a message. A loop cut (Ctrl+R) adds rings of edges to move. An edited mesh that is convex again, with no extra corners, turns back into a normal brush | Keep refusing dents | **Approved** (2026-11-01, at the user's request) |
 | G3 | Where brush geometry lives once transforms nest | Brush faces are stored relative to their parent; every entity's transform is local to its parent; moving or rotating a group carries its contents without rewriting them | Keep brushes in world space (Hammer-style) | **Approved** (2026-11-01) |
 | P1 | How a placed prefab copy is stored (amends D5) | In full in the scene, with a hidden link per object; on save each object records which values differ from the prefab; editing the prefab updates every copy except those values | Store only the differences and rebuild copies from the prefab file on open | **Approved** (2026-11-01) |
 | S1 | Where scripts live | A Script component on the object it controls (“this door”), travelling with copies and prefabs; game-wide rules go on a “Game rules” object | Separate script files that name the objects they control | **Approved** (2026-11-01) |
@@ -29,6 +30,8 @@ Status values: **Approved** (signed off by the product owner), **Proposed** (rec
 Details and trade-offs for each: [ARCHITECTURE.md](ARCHITECTURE.md).
 
 ## Log
+
+- **2026-11-01** — Approved G4 (free vertex editing, edited meshes, loop cut) at the user's request: the vertex tool was too restrictive. Scenes move to format 3; older scenes open unchanged. Play now puts you in the player's shoes when the scene has a Player start (Source-style movement from D4: a 32 × 72 × 32 box like Source's hull, which steps and slides more cleanly than a capsule); without one, Play stays the physics preview. Routine choices: the first Esc frees the mouse and the second stops; F5 always stops; while the mouse is captured every other key belongs to the game; E uses whatever is within 96 u of the crosshair, and “When the player uses this” fires on that object and every group it is in.
 
 - **2026-11-01** — Approved S1 (scripts on objects) and S2 (core block set) at the start of Phase 5.
 

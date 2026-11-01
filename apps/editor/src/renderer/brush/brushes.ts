@@ -31,6 +31,8 @@ import {
 export interface BrushComponent {
   role: BrushRole;
   faces: BrushData['faces'];
+  /** Edited meshes only (G4). */
+  mesh?: BrushData['mesh'];
 }
 
 export type BrushShape = 'box' | 'cylinder' | 'wedge' | 'stairs' | 'polygon';
@@ -59,14 +61,15 @@ export function brushOf(e: EntityData | undefined): { role: BrushRole; brush: Br
   if (!c || !Array.isArray(c.faces)) return null;
   let b = cache.get(c.faces);
   if (!b) {
-    b = fromData({ faces: c.faces });
+    b = fromData({ faces: c.faces, mesh: c.mesh });
     cache.set(c.faces, b);
   }
   return { role: c.role === 'subtract' ? 'subtract' : 'solid', brush: b };
 }
 
 export function brushComponent(brush: Brush, role: BrushRole): BrushComponent {
-  return { role, faces: toData(brush).faces };
+  const d = toData(brush);
+  return d.mesh ? { role, faces: d.faces, mesh: d.mesh } : { role, faces: d.faces };
 }
 
 export function newBrushEntity(name: string, brush: Brush, role: BrushRole): EntityData {

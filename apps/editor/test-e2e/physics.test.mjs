@@ -61,7 +61,10 @@ test('components, trigger zone, play and stop', async () => {
     // The panels are inert while playing.
     assert.equal(await page.locator('.cw-inert-wrap').first().getAttribute('inert'), '');
 
-    // 4. Stop (Esc): back to editing with the scene exactly as before.
+    // 4. Stop: the first Esc frees the mouse (the starter scene has a Player start, so you play as the
+    //    player), the second goes back to editing with the scene exactly as before.
+    await page.keyboard.press('Escape');
+    await page.getByTestId('click-to-play').waitFor();
     await page.keyboard.press('Escape');
     await until(() => page.getByTestId('play-banner').count(), 0);
     await item('block_2').click();

@@ -18,6 +18,7 @@ export type ExprKind = Expr['kind'];
 export function newEvent(kind: EventKind, zone: Ref = self): EventBlock {
   switch (kind) {
     case 'start':
+    case 'use':
       return { id: id(), kind };
     case 'enter':
     case 'leave':

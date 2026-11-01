@@ -104,6 +104,15 @@ export function BrushInspector({ e }: { e: EntityData }) {
           <span>{t('insp.faces')}</span>
           <span>{polygons(b.brush).length}</span>
         </div>
+        {b.brush.mesh && (
+          <>
+            <div className="cw-f">
+              <span>{t('insp.mesh')}</span>
+              <span>{b.brush.mesh.verts.length} {t('insp.corners')}</span>
+            </div>
+            <p className="cw-hint">{t('insp.meshHint')}</p>
+          </>
+        )}
         {cutBy.length > 0 && (
           <div className="cw-f">
             <span>{t('insp.cutBy')}</span>
@@ -112,7 +121,7 @@ export function BrushInspector({ e }: { e: EntityData }) {
         )}
       </Section>
 
-      {trigger ? null : b.role === 'solid' ? (
+      {trigger || b.brush.mesh ? null : b.role === 'solid' ? (
         <>
           <div className="cw-f">
             <span>{t('insp.hollowDir')}</span>

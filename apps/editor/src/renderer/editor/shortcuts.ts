@@ -18,6 +18,7 @@ export const SHORTCUTS: { label: string; keys: string[] }[] = [
   { label: 'Paint tool (click faces to apply a material)', keys: ['P'] },
   { label: 'Vertex tool (pick corners or edge middles, move with the arrows)', keys: ['X'] },
   { label: 'Clip tool (drag a line across brushes; Tab: what to keep; Enter: clip)', keys: ['C'] },
+  { label: 'Loop cut (hover a brush, wheel for more cuts, click to cut)', keys: [`${mod}+R`] },
   { label: 'Box select (drag on empty space)', keys: ['Left-drag'] },
   { label: 'Paint: pick up a material', keys: [`${mod}+click`] },
   { label: 'Perspective / Top / Front / Side', keys: ['1', '2', '3', '4'] },
@@ -85,6 +86,7 @@ export function useShortcuts(openKeys: () => void): void {
         if (k === 'v') return run(s.paste);
         if (k === 'g') return run(e.shiftKey ? s.ungroupSelection : s.groupSelection);
         if (k === 'a') return run(s.tool === 'face' ? s.selectAllFaces : s.selectAll);
+        if (k === 'r') return run(() => s.setTool('loopcut'));
         return;
       }
       if (flyState.active) return;

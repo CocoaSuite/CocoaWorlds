@@ -24,6 +24,10 @@ test('a door script made from blocks', async () => {
   const consoleText = () => page.getByRole('tab', { name: 'Console' }).click().then(() => page.getByRole('log').textContent());
   try {
     await newProject(page, 'Door Script');
+    // No Player start: Play is the physics preview (the crate does the work here).
+    await item('player_spawn').click();
+    await page.keyboard.press('Delete');
+    await until(() => item('player_spawn').count(), 0);
     await page.keyboard.press('2');
     await addBrush(page, [512, 16, 512], [-256, -16, -256]);
     await addBrush(page, [16, 128, 128], [100, 0, -64]);

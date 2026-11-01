@@ -10,6 +10,7 @@ import { BrushPanel } from './BrushPanel';
 import { PaintPanel } from './PaintPanel';
 import { ClipPanel } from './ClipPanel';
 import { VertexPanel } from './VertexPanel';
+import { LoopCutPanel } from './LoopCutPanel';
 import type { ClipKeep, ClipState } from './clip-tool';
 import { ViewportEngine, type ViewportStats } from './engine';
 
@@ -23,6 +24,9 @@ export function Viewport() {
   const [glError, setGlError] = useState<string | null>(null);
   const [draft, setDraft] = useState<DraftState | null>(null);
   const [vertexCount, setVertexCount] = useState(0);
+  /** Playing as the player: null = not, false = waiting for a click, true = mouse captured. */
+  const [lock, setLock] = useState<boolean | null>(null);
+  const [loop, setLoop] = useState<{ cuts: number; fits: boolean | null }>({ cuts: 1, fits: null });
   const [clip, setClip] = useState<{ state: ClipState | null; keep: ClipKeep }>({ state: null, keep: 'both' });
   const brushOptions = useEditor((s) => s.brushOptions);
   const brushRole = useEditor((s) => s.brushRole);
@@ -66,8 +70,19 @@ export function Viewport() {
           }
           for (const l of frame.logs) st.log('info', names.get(l.owner) ?? 'Script', l.text);
           for (const e of frame.errors) st.log('error', names.get(e.owner) ?? 'Script', e.message);
+          for (const u of frame.uses) st.log('info', 'Player', `The player used ${names.get(u) ?? u}`);
         },
         activeBlocks: (blocks) => useEditor.setState({ activeBlocks: blocks }),
+        playerLock: setLock,
+        loopCutState: (cuts, fits) => setLoop({ cuts, fits }),
+        applyLoopCut: (id, brush) => {
+          const st = useEditor.getState();
+          st.setBrush(id, brush, undefined, 'Loop cut');
+          useEditor.setState({ selection: [id] });
+          // Straight on to moving the new corners.
+          st.setTool('vertex');
+          st.log('info', 'Brush', `Loop cut ${st.doc?.get(id)?.name ?? id}: ${brush.mesh?.verts.length ?? 0} corners`);
+        },
         vertexInfo: setVertexCount,
         clipState: (state, keep) => setClip({ state, keep }),
         clip: (plane, keep) => useEditor.getState().clipSelection(plane, keep),
@@ -105,14 +120,14 @@ export function Viewport() {
     engine.current?.setSelection(selection);
   }, [selection]);
   useEffect(() => {
-    engine.current?.setGizmoMode(tool === 'select' || tool === 'brush' || tool === 'face' || tool === 'paint' || tool === 'vertex' || tool === 'clip' ? 'none' : tool === 'move' ? 'translate' : tool);
+    engine.current?.setGizmoMode(tool === 'select' || tool === 'brush' || tool === 'face' || tool === 'paint' || tool === 'vertex' || tool === 'clip' || tool === 'loopcut' ? 'none' : tool === 'move' ? 'translate' : tool);
   }, [tool]);
   useEffect(() => {
     engine.current?.setBrushTool(tool === 'brush', brushOptions, brushRole);
   }, [tool, brushOptions, brushRole]);
   useEffect(() => {
     engine.current?.setFaceTool(tool === 'face' || tool === 'paint');
-    engine.current?.setEditTool(tool === 'vertex' ? 'vertex' : tool === 'clip' ? 'clip' : 'none');
+    engine.current?.setEditTool(tool === 'vertex' ? 'vertex' : tool === 'clip' ? 'clip' : tool === 'loopcut' ? 'loopcut' : 'none');
   }, [tool]);
   useEffect(() => {
     engine.current?.setFaceSelection(faceSelection);
@@ -131,6 +146,7 @@ export function Viewport() {
     if (!e) return;
     if (!playing) {
       e.stopPlay();
+      setLock(null);
       return;
     }
     let cancelled = false;
@@ -138,7 +154,13 @@ export function Viewport() {
     e.startPlay(playing.scene)
       .then((info) => {
         if (cancelled) return;
-        st.log('info', 'Play', `Playing: ${info.moving} moving object(s), ${info.triggers} trigger zone(s). Esc or Stop returns to editing.`);
+        st.log(
+          'info',
+          'Play',
+          info.player
+            ? `Playing as the player: ${info.moving} moving object(s), ${info.triggers} trigger zone(s). Esc frees the mouse; Esc again or Stop returns to editing.`
+            : `Playing: ${info.moving} moving object(s), ${info.triggers} trigger zone(s). No Player start in the scene, so this is a physics preview. Esc or Stop returns to editing.`,
+        );
         for (const p of info.problems) {
           st.log(p.severity === 'error' ? 'error' : 'warn', info.names.get(p.owner) ?? 'Script', p.severity === 'error' ? `${p.message} (this stack doesn't run)` : p.message);
         }
@@ -228,11 +250,18 @@ export function Viewport() {
       {playing && (
         <div className="cw-ov cw-play-banner" data-testid="play-banner">
           <span className="cw-live-dot" />
-          {t('play.banner')}
+          {lock === null ? t('play.banner') : t('play.bannerPlayer')}
           <button type="button" className="cw-play-stop" onClick={() => useEditor.getState().stopPlaying()}>
             {t('play.stop')}
           </button>
         </div>
+      )}
+      {playing && lock === true && <div className="cw-crosshair" aria-hidden="true" />}
+      {playing && lock === false && (
+        <button type="button" className="cw-ov cw-click-play" data-testid="click-to-play" onClick={() => engine.current?.capturePlayer()}>
+          <strong>{t('play.click')}</strong>
+          <span>{t('play.keys')}</span>
+        </button>
       )}
       {!playing && tool === 'brush' && (
         <BrushPanel
@@ -243,6 +272,7 @@ export function Viewport() {
         />
       )}
       {tool === 'paint' && <PaintPanel />}
+      {!playing && tool === 'loopcut' && <LoopCutPanel cuts={loop.cuts} fits={loop.fits} onCuts={(n) => engine.current?.setLoopCuts(n)} />}
       {tool === 'vertex' && <VertexPanel count={vertexCount} hasBrushes={sel.some((e) => !!e.components.brush) || selection.length > 0} />}
       {tool === 'clip' && (
         <ClipPanel

@@ -232,7 +232,6 @@ describe('face and vertex editing', () => {
       expect(validate(r.brush)).toEqual([]);
       expect(volume(r.brush)).toBeGreaterThan(volume(b));
     }
-    expect(moveVertices(b, new Map([[i, [64, 96, 64] as V3]]), 'reject')).toEqual({ ok: false, reason: 'non-planar' });
   });
 
   it('moving a whole top edge keeps faces flat (a ramp-like shape)', () => {
@@ -247,12 +246,12 @@ describe('face and vertex editing', () => {
     if (r.ok) close(volume(r.brush), 64 * 64 * 16 + (64 * 48 * 64) / 2);
   });
 
-  it('refuses moves that would dent the brush', () => {
+  it('a move that dents the brush makes an edited mesh (G4)', () => {
     const b = box([0, 0, 0], [64, 64, 64]);
     const vs = vertices(b);
     const i = vs.findIndex((p) => p[0] === 64 && p[1] === 64 && p[2] === 64);
     const r = moveVertices(b, new Map([[i, [32, 32, 32] as V3]]), 'split');
-    expect(r.ok).toBe(false);
+    expect(r.ok && r.mesh).toBe(true);
   });
 });
 

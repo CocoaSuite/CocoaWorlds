@@ -4,6 +4,12 @@
  * A brush is a list of faces; each face is a plane (normal pointing out) plus the surface data painted on it.
  * The solid is the space behind every plane. Vertices, edges and polygons are derived by clipping each
  * face's plane by all the others, so a brush made of planes is always closed and convex by construction.
+ *
+ * An **edited mesh** (decision G4) is a brush whose corners were moved freely, possibly into a shape that is
+ * no longer convex. It keeps its corners and polygons explicitly in `mesh`; `faces[i]` is the plane and
+ * surface of `mesh.polys[i]`, so everything that works face by face (painting, picking, drawing) treats both
+ * kinds alike. Every mesh polygon is flat and convex: a corner move that bends or dents one splits it into
+ * triangles.
  */
 import { EPS, baseWinding, cleanWinding, clipWinding, planeFromPoints, samePlane, signedDist, windingArea, type Plane, type Winding } from './plane';
 import { add, cross, dot, eq, quantize, scale, sub, type V3 } from './vec';
@@ -30,9 +36,19 @@ export interface BrushFace {
   surface: FaceSurface;
 }
 
+export interface EditMesh {
+  verts: V3[];
+  /** Corner indices of each polygon, counter-clockwise from outside; `polys[i]` belongs to `faces[i]`. */
+  polys: number[][];
+}
+
 export interface Brush {
   faces: BrushFace[];
+  /** Present on edited meshes (G4): the explicit corners and polygons. */
+  mesh?: EditMesh;
 }
+
+export const isEditMesh = (b: Brush): b is Brush & { mesh: EditMesh } => !!b.mesh;
 
 export interface BrushPolygon {
   face: number;
@@ -57,6 +73,14 @@ export const cloneSurface = (s: FaceSurface): FaceSurface => ({ ...s, offset: [.
 /** The polygon of every face that actually touches the solid. Faces that are fully clipped away are omitted. */
 export function polygons(b: Brush, eps = EPS): BrushPolygon[] {
   const out: BrushPolygon[] = [];
+  if (b.mesh) {
+    const { verts, polys } = b.mesh;
+    polys.forEach((poly, i) => {
+      const f = b.faces[i];
+      if (f && poly.length >= 3) out.push({ face: i, plane: f.plane, surface: f.surface, points: poly.map((k) => verts[k]!) });
+    });
+    return out;
+  }
   b.faces.forEach((f, i) => {
     let w: Winding | null = baseWinding(f.plane);
     for (let j = 0; j < b.faces.length && w; j++) {
@@ -79,6 +103,7 @@ export function polygons(b: Brush, eps = EPS): BrushPolygon[] {
 
 /** Unique corner points of the solid. */
 export function vertices(b: Brush, eps = EPS): V3[] {
+  if (b.mesh) return b.mesh.verts.map((v) => [...v] as V3);
   const out: V3[] = [];
   for (const p of polygons(b, eps)) for (const x of p.points) if (!out.some((y) => eq(x, y, eps * 4))) out.push(x);
   return out;
@@ -133,11 +158,13 @@ export function center(b: Brush): V3 {
 
 /** True if the point is inside (or on the surface of) the solid. */
 export function containsPoint(b: Brush, p: V3, eps = EPS): boolean {
+  if (b.mesh) return meshContains(b, p);
   return b.faces.every((f) => signedDist(f.plane, p) <= eps);
 }
 
 /** Drop faces that don't contribute a polygon (redundant planes). Keeps surfaces of the faces that remain. */
 export function simplify(b: Brush, eps = EPS): Brush {
+  if (b.mesh) return b;
   const keep = new Set(polygons(b, eps).map((p) => p.face));
   return { faces: b.faces.filter((_, i) => keep.has(i)) };
 }
@@ -167,8 +194,8 @@ export function validate(b: Brush): BrushProblem[] {
     }
   }
   if ([...count.values()].some((n) => n !== 2)) problems.push('not-closed');
-  // Thickness: distance across the solid along each face normal.
-  for (const f of b.faces) {
+  // Thickness: distance across the solid along each face normal (meaningful for convex brushes only).
+  for (const f of b.mesh ? [] : b.faces) {
     let depth = 0;
     for (const p of vs) depth = Math.max(depth, -signedDist(f.plane, p));
     if (depth < MIN_THICKNESS) {
@@ -200,9 +227,18 @@ export interface FaceData extends FaceSurface {
 
 export interface BrushData {
   faces: FaceData[];
+  /** Edited meshes (G4): corners (rounded to 1/1024 unit) and polygons; `faces[i]` is `mesh.polys[i]`. */
+  mesh?: EditMesh;
 }
 
 export function toData(b: Brush): BrushData {
+  if (b.mesh) {
+    const verts = b.mesh.verts.map((v) => quantize(v));
+    return {
+      faces: b.mesh.polys.map((poly, i) => ({ ...cloneSurface(b.faces[i]!.surface), points: pickPlanePoints(poly.map((k) => verts[k]!), b.faces[i]!.plane) })),
+      mesh: { verts, polys: b.mesh.polys.map((p) => [...p]) },
+    };
+  }
   const polys = polygons(b);
   return {
     faces: polys.map((p) => {
@@ -213,6 +249,15 @@ export function toData(b: Brush): BrushData {
 }
 
 export function fromData(d: BrushData): Brush {
+  if (d.mesh && d.mesh.polys.length === d.faces.length) {
+    const verts = d.mesh.verts.map((v) => [...v] as V3);
+    const polys = d.mesh.polys.map((p) => [...p]);
+    const faces = polys.map((poly, i) => {
+      const { points: _points, ...surface } = d.faces[i]!;
+      return { plane: polygonPlane(poly.map((k) => verts[k]!)) ?? { n: [0, 0, 1] as V3, d: 0 }, surface: cloneSurface(surface) };
+    });
+    return { faces, mesh: { verts, polys } };
+  }
   const faces: BrushFace[] = [];
   for (const f of d.faces) {
     const plane = planeFromPoints(f.points[0], f.points[1], f.points[2]);
@@ -241,4 +286,46 @@ function pickPlanePoints(w: Winding, plane: Plane): [V3, V3, V3] {
     q.push(q.shift()!);
   }
   return best;
+}
+
+/** The plane of a (nearly) flat polygon by Newell's method: robust for any number of corners. Null if it has no area. */
+export function polygonPlane(pts: V3[]): Plane | null {
+  let nx = 0, ny = 0, nz = 0, cx = 0, cy = 0, cz = 0;
+  for (let i = 0; i < pts.length; i++) {
+    const a = pts[i]!, c = pts[(i + 1) % pts.length]!;
+    nx += (a[1] - c[1]) * (a[2] + c[2]);
+    ny += (a[2] - c[2]) * (a[0] + c[0]);
+    nz += (a[0] - c[0]) * (a[1] + c[1]);
+    cx += a[0];
+    cy += a[1];
+    cz += a[2];
+  }
+  const len = Math.hypot(nx, ny, nz);
+  if (len < 1e-9) return null;
+  const n: V3 = [nx / len, ny / len, nz / len];
+  const k = pts.length;
+  return { n, d: (n[0] * cx + n[1] * cy + n[2] * cz) / k };
+}
+
+/** Inside test for an edited mesh: count crossings of a slightly skewed ray (works for dents too). */
+function meshContains(b: Brush, p: V3): boolean {
+  const dir: V3 = [0.5773, 0.5774, 0.5775];
+  let hits = 0;
+  for (const poly of polygons(b)) {
+    const n = poly.plane.n;
+    const denom = dot(n, dir);
+    if (Math.abs(denom) < 1e-12) continue;
+    const t = (poly.plane.d - dot(n, p)) / denom;
+    if (t < -EPS) continue;
+    if (t <= EPS) return true; // on the surface
+    const x = add(p, scale(dir, t));
+    const w = poly.points;
+    let inside = true;
+    for (let i = 0; i < w.length && inside; i++) {
+      const e = sub(w[(i + 1) % w.length]!, w[i]!);
+      if (dot(cross(e, sub(x, w[i]!)), n) < -1e-9) inside = false;
+    }
+    if (inside) hits++;
+  }
+  return hits % 2 === 1;
 }

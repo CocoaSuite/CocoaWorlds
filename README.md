@@ -4,7 +4,7 @@
 
 A desktop 3D game engine and editor from the Cocoa family. Build levels from editable brushes, add behaviour with plain-language blocks, press Play, and export standalone games.
 
-**Status:** Phase 4 — entities and physics. The editor builds levels from brushes (draw, cut, clip, vertex-edit, texture), groups objects with nested transforms, adds components such as Physics and Trigger zones in the Inspector, and plays a physics preview (F5). Visual scripting, the player and export arrive in later phases; see [FEATURE_STATUS.md](FEATURE_STATUS.md).
+**Status:** Phases 5 and 6 in progress — scripting and gameplay. The editor builds levels from brushes (draw, cut, clip, vertex-edit, texture), groups objects with nested transforms, adds components such as Physics and Trigger zones in the Inspector, moves corners freely (with loop cuts), adds behaviour with plain-language blocks, and lets you play the level as the player (F5). Export arrives in a later phase; see [FEATURE_STATUS.md](FEATURE_STATUS.md).
 
 ## Run it
 

@@ -47,6 +47,7 @@ export function ToolBar() {
       {T('vertex', 'vertex', t('tool.vertex'), 'X')}
       {T('face', 'face', t('tool.face'), 'T')}
       {T('clip', 'clip', t('tool.clip'), 'C')}
+      {T('loopcut', 'loopcut', t('tool.loopcut'), `${navigator.platform.toLowerCase().includes('mac') ? '⌘' : 'Ctrl'}+R`)}
       <Divider />
       <ToolButton
         icon="trigger"

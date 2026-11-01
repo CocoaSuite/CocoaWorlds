@@ -21,7 +21,8 @@ import {
 import { EventBus } from './events';
 import { ScriptRunner, compileScript, type ActionName, type Problem, type Program, type Script, type Value } from '@cocoaworlds/scripting';
 import { scriptTargets } from './script-targets';
-import { brushToWorld, buildWorld, fromData, hullPoints, vertices, type Brush, type BrushData, type WorldBrush } from '@cocoaworlds/geometry';
+import { Player, type PlayerInput } from './player';
+import { brushToWorld, buildMesh, buildWorld, fromData, hullPoints, vertices, type Brush, type BrushData, type WorldBrush } from '@cocoaworlds/geometry';
 
 /** Units per metre (an inch-based world). */
 export const UNITS_PER_METRE = 39.37;
@@ -115,6 +116,12 @@ export class GameWorld {
   private names = new Map<string, string>();
   /** Brushes that are part of the still level (not moved by physics or scripts). */
   levelIds = new Set<string>();
+  /** The player, when the scene has a Player start. */
+  readonly player: Player | null = null;
+  private parentOf = new Map<string, string | null>();
+  private useQueued = false;
+  /** Below this the player has fallen out of the world and starts again. */
+  private killY = -Infinity;
 
   /** Build a world from a scene snapshot. Call `initPhysics()` first. */
   static create(scene: SceneFile): GameWorld {
@@ -131,7 +138,11 @@ export class GameWorld {
       for (let x: EntityData | undefined = e; x; x = x.parent ? doc.get(x.parent) : undefined) if (!x.visible) return false;
       return true;
     };
-    for (const e of doc.entities) this.names.set(e.id, e.name);
+    for (const e of doc.entities) {
+      this.names.set(e.id, e.name);
+      this.parentOf.set(e.id, e.parent);
+    }
+    this.names.set('player', 'The player');
 
     // Scripts (decision S1): every visible object with a Script component.
     const objects = new Map(doc.entities.map((e) => [e.id, { name: e.name, isZone: !!e.components.trigger }]));
@@ -160,7 +171,7 @@ export class GameWorld {
       if (!shown(e)) continue;
       const brushData = e.components.brush as unknown as (BrushData & { role?: string }) | undefined;
       if (brushData?.faces) {
-        const brush = brushToWorld(fromData({ faces: brushData.faces }), doc.worldMatrix(e.id));
+        const brush = brushToWorld(fromData({ faces: brushData.faces, mesh: brushData.mesh }), doc.worldMatrix(e.id));
         if (e.components.trigger) this.addTrigger(e, brush, scriptedZones.has(e.id));
         else if (e.components.rigidBody) this.addBrushBody(e, brush);
         else if (unitOf.has(e.id) && brushData.role !== 'subtract') unitBrushes.get(unitOf.get(e.id)!)!.push(brush);
@@ -172,6 +183,19 @@ export class GameWorld {
     this.addLevel(level);
     this.levelIds = new Set(level.map((b) => b.id));
     for (const root of unitRoots) this.addUnit(root, doc.worldMatrix(root), unitBrushes.get(root)!);
+
+    // The player: at the first visible Player start, facing the way it faces.
+    const spawn = doc.entities.find((e) => e.components.playerSpawn && shown(e));
+    if (spawn) {
+      const m = doc.worldMatrix(spawn.id);
+      const yaw = Math.atan2(m[8]!, m[10]!);
+      const p = new Player(this.world, { x: m[12]!, y: m[13]!, z: m[14]! }, yaw, doc.settings.gravity ?? 800);
+      this.owner.set(p.collider.handle, 'player');
+      this.player = p;
+      let low = m[13]!;
+      for (const b of level) for (const v of vertices(b.brush)) low = Math.min(low, v[1]!);
+      this.killY = low - 2048;
+    }
 
     this.runner = new ScriptRunner(programs, {
       now: () => this.time,
@@ -207,7 +231,8 @@ export class GameWorld {
     const body = this.world.createRigidBody(RAPIER.RigidBodyDesc.fixed());
     for (const s of buildWorld(brushes).solids) {
       for (const piece of s.pieces) {
-        const desc = RAPIER.ColliderDesc.convexHull(hullPoints(piece));
+        // Edited meshes (G4) may have dents: collide with their actual triangles.
+        const desc = piece.mesh ? trimesh(piece) : RAPIER.ColliderDesc.convexHull(hullPoints(piece));
         if (!desc) continue;
         desc.setFriction(0.6);
         const c = this.world.createCollider(desc, body);
@@ -312,6 +337,12 @@ export class GameWorld {
     }
     while (this.accumulator >= STEP) {
       this.applyTweens(this.time + STEP);
+      if (this.player) {
+        this.player.step(STEP);
+        if (this.player.feetPosition.y < this.killY) this.player.respawn();
+        if (this.useQueued) this.doUse();
+      }
+      this.useQueued = false;
       this.world.step(this.events);
       this.accumulator -= STEP;
       this.time += STEP;
@@ -323,6 +354,35 @@ export class GameWorld {
   }
 
   private startedScripts = false;
+
+  // ── The player ──
+
+  /** What the player is pressing (from the keyboard and mouse). */
+  setPlayerInput(input: Partial<PlayerInput>): void {
+    if (this.player) Object.assign(this.player.input, input);
+  }
+
+  /** The player pressed Use: on the next step, whatever they look at within reach gets “When the player uses this”. */
+  use(): void {
+    this.useQueued = true;
+  }
+
+  /** The camera for the player's view, smoothed between physics steps. */
+  playerView(): { eye: [number, number, number]; yaw: number; pitch: number } | null {
+    const p = this.player;
+    if (!p) return null;
+    return { eye: p.eye(Math.min(1, this.accumulator / STEP)), yaw: p.input.yaw, pitch: p.input.pitch };
+  }
+
+  private doUse(): void {
+    const hit = this.player!.aim();
+    const id = hit ? this.owner.get(hit.handle) : undefined;
+    if (!id || id === 'player') return;
+    const targets: string[] = [];
+    for (let x: string | null | undefined = id; x; x = this.parentOf.get(x)) targets.push(x);
+    this.runner.dispatch({ type: 'use', targets, by: 'player' });
+    this.bus.emit({ type: 'use', target: id, by: 'player', time: this.time });
+  }
 
   // ── What scripts can do ──
 
@@ -495,6 +555,7 @@ export class GameWorld {
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
+    this.player?.dispose();
     this.bus.clear();
     this.events.free();
     this.world.free();
@@ -585,4 +646,9 @@ function slerp(a: Quat, b0: Quat, t: number): Quat {
   const th = Math.acos(cos), s = Math.sin(th);
   const ka = Math.sin((1 - t) * th) / s, kb = Math.sin(t * th) / s;
   return { x: a.x * ka + b.x * kb, y: a.y * ka + b.y * kb, z: a.z * ka + b.z * kb, w: a.w * ka + b.w * kb };
+}
+
+function trimesh(b: Brush): RAPIER.ColliderDesc | null {
+  const m = buildMesh([b]);
+  return m.indices.length ? RAPIER.ColliderDesc.trimesh(m.positions, m.indices) : null;
 }

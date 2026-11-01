@@ -7,8 +7,9 @@ import type { Transform } from './math';
 /**
  * 1: first format (transforms and brush faces in world space).
  * 2: nested transforms (decision G3): transforms are relative to the parent; brush faces are in the parent's space.
+ * 3: edited meshes (decision G4): brush data may carry `mesh` (explicit corners and polygons). Older files load unchanged.
  */
-export const CURRENT_SCHEMA_VERSION = 2;
+export const CURRENT_SCHEMA_VERSION = 3;
 
 export const PROJECT_FILE = 'project.cwproj';
 export const SCENE_EXT = '.cwscene';

@@ -50,6 +50,8 @@ export type EventBlock =
   | { id: string; kind: 'enter'; zone: Ref }
   | { id: string; kind: 'leave'; zone: Ref }
   | { id: string; kind: 'message'; message: string }
+  /** The player pressed Use (E) while looking at this object (or anything inside it). */
+  | { id: string; kind: 'use' }
   | { id: string; kind: 'every'; seconds: Expr };
 
 export interface Handler {

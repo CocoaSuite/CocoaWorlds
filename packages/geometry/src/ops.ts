@@ -7,7 +7,9 @@
  * convex, closed and editable, and they keep the original faces' materials and texture alignment.
  */
 import {
+  bounds,
   cloneSurface,
+  polygonPlane,
   polygons,
   simplify,
   validate,
@@ -25,17 +27,18 @@ import { add, applyM4, cross, dot, scale, sub, type M4, type V3 } from './vec';
 export const MIN_PIECE_VOLUME = 0.01;
 
 export function cloneBrush(b: Brush): Brush {
-  return { faces: b.faces.map((f) => ({ plane: { n: [...f.plane.n] as V3, d: f.plane.d }, surface: cloneSurface(f.surface) })) };
+  const faces = b.faces.map((f) => ({ plane: { n: [...f.plane.n] as V3, d: f.plane.d }, surface: cloneSurface(f.surface) }));
+  return b.mesh ? { faces, mesh: { verts: b.mesh.verts.map((v) => [...v] as V3), polys: b.mesh.polys.map((p) => [...p]) } } : { faces };
 }
 
 /** Move a brush. With `textureLock` the textures stay glued to the faces instead of sliding. */
 export function translate(b: Brush, delta: V3, textureLock = true): Brush {
-  return {
-    faces: b.faces.map((f) => ({
-      plane: { n: [...f.plane.n] as V3, d: f.plane.d + dot(f.plane.n, delta) },
-      surface: textureLock ? { ...cloneSurface(f.surface), offset: lockedOffset(f.plane, f.surface, delta) } : cloneSurface(f.surface),
-    })),
-  };
+  const faces = b.faces.map((f) => ({
+    plane: { n: [...f.plane.n] as V3, d: f.plane.d + dot(f.plane.n, delta) },
+    surface: textureLock ? { ...cloneSurface(f.surface), offset: lockedOffset(f.plane, f.surface, delta) } : cloneSurface(f.surface),
+  }));
+  if (!b.mesh) return { faces };
+  return { faces, mesh: { verts: b.mesh.verts.map((v) => add(v, delta)), polys: b.mesh.polys.map((p) => [...p]) } };
 }
 
 /**
@@ -46,6 +49,15 @@ export function transform(b: Brush, m: M4): Brush {
   const polys = polygons(b);
   const det =
     m[0]! * (m[5]! * m[10]! - m[9]! * m[6]!) - m[4]! * (m[1]! * m[10]! - m[9]! * m[2]!) + m[8]! * (m[1]! * m[6]! - m[5]! * m[2]!);
+  if (b.mesh) {
+    const verts = b.mesh.verts.map((v) => applyM4(m, v));
+    const mpolys = b.mesh.polys.map((p) => (det < 0 ? [...p].reverse() : [...p]));
+    const faces = mpolys.map((p, i) => ({
+      plane: polygonPlane(p.map((k) => verts[k]!)) ?? { n: [0, 0, 1] as V3, d: 0 },
+      surface: cloneSurface(b.faces[i]!.surface),
+    }));
+    return { faces, mesh: { verts, polys: mpolys } };
+  }
   const faces: BrushFace[] = [];
   for (const p of polys) {
     let pts = p.points.map((x) => applyM4(m, x));
@@ -113,6 +125,11 @@ function keepSolid(b: Brush): Brush | null {
 
 /** True when the two brushes share interior volume (touching faces don't count). */
 export function overlaps(a: Brush, b: Brush): boolean {
+  if (a.mesh || b.mesh) {
+    // Edited meshes: by their bounds (good enough for "does this touch that").
+    const x = bounds(a), y = bounds(b);
+    return !!x && !!y && [0, 1, 2].every((k) => x.min[k]! < y.max[k]! - EPS && y.min[k]! < x.max[k]! - EPS);
+  }
   // Separating-plane test using both brushes' face planes; enough for convex solids in practice,
   // backed by an intersection-volume check to rule out edge-on cases.
   for (const f of a.faces) if (classify(b, f.plane) === 'front') return false;
@@ -158,7 +175,8 @@ export const SLIVER_VOLUME = 8;
  * hair-thin slivers left by nearly parallel cutter faces are removed when they are negligibly small.
  */
 export function carveDetailed(target: Brush, cutter: Brush): CarveResult {
-  if (!overlaps(target, cutter)) return { pieces: [target], droppedSlivers: 0 };
+  // Edited meshes (G4) are not cut and do not cut: CSG needs convex brushes.
+  if (target.mesh || cutter.mesh || !overlaps(target, cutter)) return { pieces: [target], droppedSlivers: 0 };
   const merged = mergeAll(rawCarve(target, cutter));
   const pieces: Brush[] = [];
   let droppedSlivers = 0;
@@ -198,6 +216,7 @@ export function intersect(a: Brush, b: Brush): Brush | null {
  * Returns null when the union would not be convex; callers then keep them as a group.
  */
 export function mergeConvex(a: Brush, b: Brush): Brush | null {
+  if (a.mesh || b.mesh) return null;
   const pts = [...vertices(a), ...vertices(b)];
   if (!pts.length) return null;
   const faces: BrushFace[] = [];
@@ -236,6 +255,7 @@ export function mergeAll(brushes: Brush[]): Brush[] {
 
 /** Move a single plane of the brush outward/inward along its normal (face drag). Returns null if the result collapses. */
 export function pushFace(b: Brush, faceIndex: number, distance: number): Brush | null {
+  if (b.mesh) return null;
   const faces = b.faces.map((f, i) =>
     i === faceIndex ? { plane: { n: [...f.plane.n] as V3, d: f.plane.d + distance }, surface: cloneSurface(f.surface) } : f,
   );
@@ -263,6 +283,8 @@ export function clipPlane(a: V3, b: V3, along: V3): Plane | null {
  */
 export function clipBrush(b: Brush, p: Plane): { front: Brush | null; back: Brush | null; cut: boolean } {
   const side = classify(b, p);
+  // An edited mesh can't be clipped (G4); it stays whole, on the side most of it is on.
+  if (b.mesh && side === 'spanning') return { front: null, back: b, cut: false };
   if (side !== 'spanning') return { front: side === 'front' ? b : null, back: side === 'back' ? b : null, cut: false };
   const front = split(b, p, matchSurface(b, scale(p.n, -1))).front;
   const back = split(b, p, matchSurface(b, p.n)).back;

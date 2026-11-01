@@ -2,11 +2,12 @@
  * Play mode inside the editor (decision D7): a game world built from a snapshot of the scene, drawn with
  * its own meshes. The editor's scene is never touched; stopping throws all of this away.
  *
- * Until the player arrives (Phase 6) Play is a physics preview watched with the free camera.
+ * With a Player start in the scene you play as the player (first person); without one, Play is a physics
+ * preview watched with the free camera.
  */
 import { SceneDoc, readComponent, type ColliderData, type SceneFile } from '@cocoaworlds/core';
 import { buildMesh, type WorldBrush } from '@cocoaworlds/geometry';
-import { GameWorld, initPhysics, type ScriptLog, type TriggerEvent } from '@cocoaworlds/runtime';
+import { GameWorld, initPhysics, type PlayerInput, type ScriptLog, type TriggerEvent } from '@cocoaworlds/runtime';
 import type { Problem, ScriptError } from '@cocoaworlds/scripting';
 import * as THREE from 'three';
 import { worldBrushes } from '../brush/brushes';
@@ -19,12 +20,16 @@ export interface PlayInfo {
   names: Map<string, string>;
   /** Script problems found when the game was built (stacks with errors don't run). */
   problems: Problem[];
+  /** There is a Player start: you play as the player. */
+  player: boolean;
 }
 
 export interface PlayFrame {
   events: TriggerEvent[];
   logs: ScriptLog[];
   errors: ScriptError[];
+  /** What the player used (entity ids). */
+  uses: string[];
 }
 
 export class PlaySession {
@@ -34,6 +39,7 @@ export class PlaySession {
   private movers: { id: string; obj: THREE.Object3D; base: THREE.Matrix4 }[] = [];
   readonly info: PlayInfo;
   private shapeMat = new THREE.MeshStandardMaterial({ color: 0xc8c8c8, roughness: 0.8 });
+  private uses: string[] = [];
 
   static async start(scene: SceneFile, material: (name: string) => THREE.Material): Promise<PlaySession> {
     await initPhysics();
@@ -86,9 +92,11 @@ export class PlaySession {
     this.info = {
       moving: bodies.size,
       triggers: this.world.stats.triggers,
-      names: new Map(doc.entities.map((e) => [e.id, e.name])),
+      names: new Map([...doc.entities.map((e) => [e.id, e.name] as [string, string]), ['player', 'The player']]),
       problems: this.world.scriptProblems,
+      player: !!this.world.player,
     };
+    this.world.bus.on('use', (e) => void this.uses.push(e.target));
   }
 
   /** Advance the game and move what moved. Returns what happened this frame. */
@@ -102,7 +110,34 @@ export class PlaySession {
       m.obj.matrix.copy(motion.fromArray(mm).multiply(m.base));
       m.obj.matrixWorldNeedsUpdate = true;
     }
-    return { events: this.world.drainEvents(), logs: this.world.drainLogs(), errors: this.world.drainScriptErrors() };
+    const uses = this.uses;
+    this.uses = [];
+    return { events: this.world.drainEvents(), logs: this.world.drainLogs(), errors: this.world.drainScriptErrors(), uses };
+  }
+
+  // ── The player ──
+
+  setInput(input: Partial<PlayerInput>): void {
+    this.world.setPlayerInput(input);
+  }
+
+  get look(): { yaw: number; pitch: number } {
+    const p = this.world.player;
+    return p ? { yaw: p.input.yaw, pitch: p.input.pitch } : { yaw: 0, pitch: 0 };
+  }
+
+  use(): void {
+    this.world.use();
+  }
+
+  /** Place a camera at the player's eyes. Returns false when there is no player. */
+  placeCamera(cam: THREE.PerspectiveCamera): boolean {
+    const v = this.world.playerView();
+    if (!v) return false;
+    cam.position.set(...v.eye);
+    cam.rotation.set(v.pitch, v.yaw, 0, 'YXZ');
+    cam.updateMatrixWorld();
+    return true;
   }
 
   activeBlocks(): Map<string, string[]> {

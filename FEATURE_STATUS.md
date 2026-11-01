@@ -64,7 +64,9 @@ Last updated: 2026-11-01 (Phase 2, first slice).
 | Face tool (T): select faces (Ctrl+click add/remove, Shift+click whole brush), per-face material, World/Face alignment, offset/scale/rotation, Fit, Reset, line up left/right/top/bottom/centre | **Done** | Several faces at once; differing values show as blank. Faces made by a live cut follow the wall and are painted after Apply cut. |
 | Paint tool (P): click a face to apply a material, Shift+click paints the whole brush, Ctrl+click picks up a material | **Done** | |
 | Built-in development materials (9 colours with a 16-unit grid) | **Done** | Placeholders until material assets in Phase 7. |
-| Vertex tool (X): pick corners or edge middles (click, Ctrl+click, box), move them with the gizmo, grid and corner snapping | **Done** | Bent faces split into triangles (G2); moves that would dent or flatten a brush stop at the last good position with a message. |
+| Vertex tool (X): pick corners or edge middles (click, Ctrl+click, box), move them with the gizmo, grid and corner snapping | **Done** | Corners go anywhere (G4): bent or dented faces split into triangles and the brush becomes an edited mesh; only squashing it flat is refused. |
+| Loop cut (Ctrl+R): hover a brush to preview a ring of new edges, wheel for more cuts, click to cut; then straight into the vertex tool | **Done** | Runs across four-sided faces. |
+| Edited meshes: draw, collide, paint, texture, move/rotate/scale, save; turn back into normal brushes when convex | **Done** | Carve, clip, merge, hollow and Apply cut skip them with a message. |
 | Clip tool (C): drag a line across selected brushes in any view; keep both pieces, one side or the other (Tab); Enter clips | **Done** | New faces take the material of the brush face pointing the same way. Brushes the line misses are left alone. |
 | Polygon brush: click corners in any view, finish by clicking the first corner / double-click / Enter, then set the depth | **Done** | Dents are filled in (the outline is made convex) so the brush stays solid. Backspace removes the last corner. |
 
@@ -76,11 +78,13 @@ Last updated: 2026-11-01 (Phase 2, first slice).
 
 | Components in the Inspector: Add component (only what fits the object), remove, edit fields drawn from the component registry; English and Russian | **Done** (Phase 4) |
 | Physics component (fixed / falls and tumbles / moved by scripts; weight, grip, bounce, gravity, stay upright) and collision shapes for point objects (box, ball, capsule) | **Done** (Phase 4) |
-| Trigger zones: tool bar button or Trigger in the brush panel; amber volumes; notice the player, physics objects or anything; once-only option | **Done** (Phase 4). The player arrives in Phase 6, so “The player” zones fire from then on. |
+| Trigger zones: tool bar button or Trigger in the brush panel; amber volumes; notice the player, physics objects or anything; once-only option | **Done** (Phase 4) |
 | Game world (`packages/runtime`): Rapier physics from the scene, the level as convex pieces (live subtract included), fixed 60 Hz steps, trigger enter/exit events | **Done** (Phase 4) |
-| Play in the editor (F5 / Play): physics preview from a snapshot of the scene, free camera, trigger events in the console; Esc/Stop returns with the scene untouched | **Done** (Phase 4). No player yet (Phase 6); lights are not drawn yet (Phase 7). |
+| Play in the editor (F5 / Play): from a snapshot of the scene; trigger events and uses in the console; Stop returns with the scene untouched | **Done** (Phase 4). Lights are not drawn yet (Phase 7). |
+| Play as the player: first person at the Player start, Source-style movement (run 320, Shift walk, Space jump, Ctrl/C crouch, steps up to 18 u, air strafing, pushes physics objects), click to capture the mouse, Esc frees it, E uses; falls out of the world → back to the start. Without a Player start, a free-camera physics preview | **Done** (start of Phase 6) |
+| “When the player uses this” script event | **Done** |
 | Plain-language block scripting, graph view, VM (Phase 5) | Planned |
-| Source-style player controller, gameplay entities (Phase 6) | Planned |
+| Gameplay entities: health, damage, pickups, ready-made doors/buttons/lifts, ladders (rest of Phase 6) | Planned |
 | Assets, materials, lighting, audio (Phase 7) | Planned |
 | Prefabs (P1): Edit › Make prefab…, place copies from the Assets panel, per-copy changes listed in the Inspector with Revert / Apply, Unlink; copies stored in full and synced on Apply and on open | **Done** (Phase 4). See docs/prefabs.md. |
 | Game event bus (trigger enter/exit now; “use” and messages reserved for scripts) | **Done** (Phase 4) |

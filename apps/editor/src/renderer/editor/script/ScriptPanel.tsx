@@ -46,6 +46,8 @@ interface Ctx {
   menu: (x: number, y: number, items: MenuEntry[]) => void;
   /** The handler being drawn (for “the thing that entered”). */
   otherAllowed: boolean;
+  /** In “When the player uses this”, the other thing is the player. */
+  otherIsPlayer?: boolean;
 }
 const C = createContext<Ctx | null>(null);
 const useC = () => useContext(C)!;
@@ -99,7 +101,7 @@ export function ScriptPanel() {
     ctx.menu(
       ev.clientX,
       ev.clientY,
-      (['start', 'enter', 'leave', 'message', 'every'] as EventKind[]).map((k) => ({
+      (['start', 'enter', 'leave', 'use', 'message', 'every'] as EventKind[]).map((k) => ({
         label: eventName(k),
         onSelect: () => {
           const zone: Ref = objects.find((o) => o.id === owner.id)?.isZone ? { self: true } : objects.find((o) => o.isZone) ? { entity: objects.find((o) => o.isZone)!.id } : { self: true };
@@ -120,7 +122,7 @@ export function ScriptPanel() {
         <div className="cw-stacks">
           {!script.handlers.length && <p className="cw-hint">{t('script.empty')}</p>}
           {script.handlers.map((h) => (
-            <C.Provider key={h.id} value={{ ...ctx, otherAllowed: h.event.kind === 'enter' || h.event.kind === 'leave' }}>
+            <C.Provider key={h.id} value={{ ...ctx, otherAllowed: h.event.kind === 'enter' || h.event.kind === 'leave' || h.event.kind === 'use', otherIsPlayer: h.event.kind === 'use' }}>
               <div className="cw-stack" role="group" aria-label={eventName(h.event.kind)}>
                 <EventRow ev={h.event} onRemove={() => ctx.update((s) => removeHandler(s, h.id), 'Remove stack')} />
                 <List listKey={h.id} list={h.body} />
@@ -237,6 +239,7 @@ function EventRow({ ev, onRemove }: { ev: EventBlock; onRemove: () => void }) {
   const set = (patch: Partial<EventBlock>) => c.update((s) => replaceBlock(s, ev.id, (b) => ({ ...b, ...patch }) as EventBlock), 'Edit block');
   let content: ReactNode;
   if (ev.kind === 'start') content = w('start');
+  else if (ev.kind === 'use') content = w('use');
   else if (ev.kind === 'enter' || ev.kind === 'leave')
     content = (
       <>
@@ -465,7 +468,7 @@ function RefSlot({ value, onChange, label, zonesOnly, allowNone }: { value: Ref 
     <select className="cw-input cw-ref" aria-label={label} value={current} onChange={(e) => onChange(dec(e.target.value))}>
       {allowNone && <option value="none">{w('everyone')}</option>}
       <option value="self">{w('self')}</option>
-      {!zonesOnly && (c.otherAllowed || current === 'other') && <option value="other">{w('other')}</option>}
+      {!zonesOnly && (c.otherAllowed || current === 'other') && <option value="other">{c.otherIsPlayer ? w('player') : w('other')}</option>}
       {missing && <option value={current}>?</option>}
       {objs.map((o) => (
         <option key={o.id} value={`e:${o.id}`}>

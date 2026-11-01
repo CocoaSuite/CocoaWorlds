@@ -9,11 +9,14 @@
 - **One scene per project in the UI.** The format supports a scene list; scene management UI comes later.
 - **The clipboard is inside the editor.** Copy/paste works across projects within one session, but not with other apps or after a restart.
 - **Some tools are visible but disabled** (Build), labelled with when it arrives.
-- **Play is a physics preview for now.** There is no player yet (Phase 6) and lights are not drawn (Phase 7); you watch with the free camera. Zones set to notice “The player” stay quiet until then.
+- **Play as the player needs a Player start** (new scenes have one). Without it, Play is the physics preview with the free camera. Lights are not drawn yet (Phase 7), the player has no body or weapon model, and there is no health, ladders or swimming yet (Phase 6).
+- **Keys while playing are fixed** (WASD, Space, Ctrl or C, Shift, E); rebinding comes later. While the mouse is captured, editor shortcuts are off; F5 still stops.
 - **Scripts: variables belong to each object** (no game-wide variables yet; use messages). Blocks are rearranged with ↑ ↓ for now; drag-and-drop comes later. The graph view (V3) and recipes come later in Phase 5.
 - **Applying a change to a prefab writes the prefab file straight away.** Undo restores this scene's copies but not the file; apply the old value again to change the prefab back.
 - **Prefabs are edited through their copies.** Opening a prefab on its own to edit it, and prefabs inside prefabs, come later.
 - **Brushes with Physics move as one solid piece** and aren't cut by subtract brushes while playing.
+- **Edited meshes (moved into a dent or twist) aren't cut, clipped, merged or hollowed** until they are convex again, and can't be subtract brushes. Moving ones collide as their convex hull.
+- **Loop cut runs across four-sided faces only;** it stops at triangles and other shapes.
 - **The vertex tool moves corners with the gizmo only;** dragging a corner handle directly is not supported yet.
 - **Materials are built-in development colours** until material assets and textures arrive in Phase 7.
 - **Surfaces made by a live cut** (the inside of a doorway) follow the wall around them and can't be selected until the cut is applied.
@@ -27,7 +30,7 @@
 - **Exported game size.** Desktop games carry an Electron runtime (Chromium), so even a tiny game is roughly 100 MB.
 - **macOS distribution.** Signing and notarization need a Mac and an Apple Developer ID. Unsigned macOS builds show a Gatekeeper warning.
 - **Windows distribution.** Unsigned builds show a SmartScreen warning until a code-signing certificate is used.
-- **Geometry.** Brushes are convex. Concave shapes are made from several brushes (this is how carve results are represented). Arbitrary mesh booleans on imported models are not planned for v1.
+- **Geometry.** Brushes are convex; edited meshes (G4) can take any closed shape but don't take part in carving. Carve results are several convex brushes. Arbitrary mesh booleans on imported models are not planned for v1.
 - **Level scale.** No visibility precompilation (PVS); very large, dense levels rely on frustum culling and batching.
 - **Web export.** Audio waits for the first click (browser autoplay rules); mouse look needs a click to lock the pointer; large assets download before play.
 - **Custom code.** No user JavaScript in v1; behaviour is built with blocks.

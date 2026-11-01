@@ -6,7 +6,7 @@ Scripts are plain-language blocks on the object they control (decision S1): a do
 
 | Kind | Blocks |
 |---|---|
-| When… | the game starts · something enters a zone · something leaves a zone · this gets a message · every N seconds |
+| When… | the game starts · something enters a zone · something leaves a zone · the player uses this (E, within reach; also fires on the groups it is in) · this gets a message · every N seconds |
 | Do | move (up/down/north/south/east/west by a distance over a time) · turn (degrees around an axis over a time) · return to where it started · show · hide · turn on · turn off · send a message (to everyone or one object) · write in the console |
 | Control | wait · if … otherwise · repeat N times · repeat forever · stop this stack |
 | Variables | set · change by (per object; number, yes/no or text) |

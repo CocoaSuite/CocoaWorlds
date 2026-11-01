@@ -13,9 +13,12 @@ type Step = (data: Raw) => Raw;
 const projectSteps: Record<number, Step> = {
   // Format 2 changed scenes only.
   1: (d) => d,
+  // Format 3 added edited meshes, an optional part of brush data: nothing old changes.
+  2: (d) => d,
 };
 const sceneSteps: Record<number, Step> = {
   1: nestTransforms,
+  2: (d) => d,
 };
 
 interface RawEntity {
@@ -100,4 +103,4 @@ function run(kind: string, data: Raw, steps: Record<number, Step>): { data: Raw;
 export const migrateProject = (data: Raw) => run('project', data, projectSteps);
 export const migrateScene = (data: Raw) => run('scene', data, sceneSteps);
 /** Prefabs first appeared in format 2. */
-export const migratePrefab = (data: Raw) => run('prefab', data, {});
+export const migratePrefab = (data: Raw) => run('prefab', data, { 2: (d) => d });
