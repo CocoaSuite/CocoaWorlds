@@ -29,7 +29,8 @@ With nothing selected, the Inspector shows the scene's settings, all with undo:
 
 **Ambient occlusion** (Scene settings, on by default) darkens corners, creases and the ground under things, so
 objects sit on the floor. It shows with **Lighting: Game**, in Play and in exported games. **Occlusion strength**
-(0–2) is how dark; **Occlusion radius** is how far, in units, things darken each other. Shadows are cast by both
+(0–2) is how dark; **Occlusion radius** is how far, in units, things darken each other. On computers without a
+graphics card (software rendering) it is left out, as it would slow everything down. Shadows are cast by both
 sides of every face, so light doesn't leak under walls and objects where brushes meet. Bounce light (global
 illumination) is planned: see [proposals/lighting-gi.md](proposals/lighting-gi.md).
 

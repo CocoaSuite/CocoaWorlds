@@ -12,12 +12,20 @@ import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 export class AoRenderer {
   private c: { composer: EffectComposer; pass: GTAOPass; scene: THREE.Scene; cam: THREE.Camera; w: number; h: number } | null = null;
 
-  constructor(private r: THREE.WebGLRenderer) {}
+  /** Software rendering (no graphics card): occlusion would slow everything down, so it is left out. */
+  readonly software: boolean;
+
+  constructor(private r: THREE.WebGLRenderer) {
+    const gl = r.getContext();
+    const info = gl.getExtension('WEBGL_debug_renderer_info');
+    const name = String(info ? gl.getParameter(info.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER));
+    this.software = /swiftshader|llvmpipe|software/i.test(name);
+  }
 
   /** Draw `scene` from `cam` with occlusion, if it is on. False: nothing drawn (draw it plainly). */
   render(scene: THREE.Scene, cam: THREE.Camera, settings: { ao?: AoSettings } | undefined): boolean {
     const s = aoOf(settings);
-    if (!s.enabled || s.strength <= 0) return false;
+    if (!s.enabled || s.strength <= 0 || this.software) return false;
     const size = this.r.getSize(new THREE.Vector2());
     if (!this.c || this.c.cam !== cam || this.c.scene !== scene) {
       this.dispose();

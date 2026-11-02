@@ -66,3 +66,4 @@ None open.
   (CM3). Nodes can't be grouped into frames yet, and copied nodes stay inside the editor (not the system clipboard). Curve has four fixed points. Height to
   occlusion is a quick approximation. Graph files keep the name they were made with. Graphs are evaluated
   only in the editor; changing one from another workspace with Undo bakes it again in the background.
+- **Ambient occlusion** is screen space (it only knows what is on screen) and is off with software rendering, so the automated tests (which render in software) don't check its look. Bounce light is not there yet (see docs/proposals/lighting-gi.md).
