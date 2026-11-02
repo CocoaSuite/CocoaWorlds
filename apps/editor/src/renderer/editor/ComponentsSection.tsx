@@ -4,7 +4,8 @@
  */
 import { addableComponents, componentDef, readComponent, type EntityData, type FieldDef } from '@cocoaworlds/core';
 import { Button, ColorField, ContextMenu, IconButton, NumberField, Section, Segmented, Switch } from '@cocoaworlds/ui';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { modelSlots } from '../viewport/models';
 import { getLang, t } from '../i18n';
 import { useEditor } from '../store';
 
@@ -35,6 +36,7 @@ export function ComponentsSection({ e }: { e: EntityData }) {
                   <FieldEditor key={f.key} entity={e.id} component={name} field={f} value={data[f.key]} />
                 ))}
               {!def.fields.length && <p className="cw-hint">{def.description[lang]}</p>}
+              {name === 'model' && typeof data.model === 'string' && data.model && <ModelMaterials entity={e.id} path={data.model} value={(data.materials ?? {}) as Record<string, string>} />}
               {name === 'script' && (
                 <div className="cw-row">
                   <span className="cw-muted">{t('script.stacks').replace('{n}', String(((e.components.script as { handlers?: unknown[] }).handlers ?? []).length))}</span>
@@ -222,5 +224,55 @@ function UnknownComponent({ name, data }: { name: string; data: Record<string, u
         </div>
       ))}
     </Section>
+  );
+}
+
+/**
+ * A model's material slots, each painted with the file's own material or a project material (the parts of a
+ * chicken: feathers, beak, comb …). The Paint tool can do the same by clicking a part of the model.
+ */
+function ModelMaterials({ entity, path, value }: { entity: string; path: string; value: Record<string, string> }) {
+  const [slots, setSlots] = useState<string[] | null>(null);
+  const materials = useEditor((st) => st.session?.project.settings.materials) ?? [];
+  useEffect(() => {
+    let live = true;
+    setSlots(null);
+    modelSlots(path).then(
+      (x) => live && setSlots(x),
+      () => live && setSlots([]),
+    );
+    return () => {
+      live = false;
+    };
+  }, [path]);
+  if (!slots?.length) return null;
+  const set = (slot: string, id: string) => {
+    const next = { ...value };
+    if (id) next[slot] = id;
+    else delete next[slot];
+    useEditor.getState().setComponentField(entity, 'model', 'materials', Object.keys(next).length ? next : undefined);
+  };
+  return (
+    <div className="cw-model-mats" role="group" aria-label={t('model.materials')}>
+      <div className="cw-model-mats-h">{t('model.materials')}</div>
+      {slots.map((slot) => {
+        const v = value[slot] ?? '';
+        return (
+          <div className="cw-f" key={slot}>
+            <span title={slot}>{slot}</span>
+            <select className="cw-input cw-select" aria-label={`${t('model.material')} ${slot}`} value={v} onChange={(ev) => set(slot, ev.target.value)}>
+              <option value="">{t('model.asInFile')}</option>
+              {v && !materials.some((m) => m.id === v) && <option value={v}>{t('model.missing')}</option>}
+              {materials.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        );
+      })}
+      <p className="cw-hint">{materials.length ? t('model.materialsHint') : t('model.noMaterials')}</p>
+    </div>
   );
 }

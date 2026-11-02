@@ -10,7 +10,8 @@ turns it into `apps/editor/samples/chicken.glb`, the ready-made creature in the 
   bobbing), `run` (leaning forward, wings flailing), `peck` (two jabs at the ground), `flap` (a startled hop)
   and `die` (a last flap, then over onto its side);
 - wings that rest pressed flat against the body (scaled thin along their outward axis, also in the rest pose);
-  raising a wing unfolds it to full size.
+  raising a wing unfolds it to full size;
+- material slots named Body, Eye whites and Pupils (for picking project materials per part).
 
 Run it again after changing it (Python 3 with NumPy):
 

@@ -35,7 +35,7 @@
 - **Edited meshes (moved into a dent or twist) aren't cut, clipped, merged or hollowed** until they are convex again, and can't be subtract brushes. Moving ones collide as their convex hull.
 - **Loop cut runs across four-sided faces only;** it stops at triangles and other shapes.
 - **The vertex tool moves corners with the gizmo only;** dragging a corner handle directly is not supported yet.
-- **Materials:** plain materials have one image, one bump map and one glow (graph materials have every map); glowing faces don't light what's around them; reflections are the sky's colours, not the level around them; scroll speeds assume the usual face scale (0.25). Changes to materials are undoable, but they mark the scene as edited too. Models keep the materials from their glTF file.
+- **Materials:** plain materials have one image, one bump map and one glow (graph materials have every map); glowing faces don't light what's around them; reflections are the sky's colours, not the level around them; scroll speeds assume the usual face scale (0.25). Changes to materials are undoable, but they mark the scene as edited too. Models can take project materials per part; their images then follow the model's own texture coordinates (no triplanar mapping until CM2).
 - **Surfaces made by a live cut** (the inside of a doorway) follow the wall around them and can't be selected until the cut is applied.
 - **Big levels update a moment after an edit.** From 64 brushes the level is rebuilt in a background worker, so the view can lag an edit by the build time (shown in the stats). Picking uses the last finished build.
 - **Brush rotation re-projects textures** (world alignment). Texture lock is exact for moves only.

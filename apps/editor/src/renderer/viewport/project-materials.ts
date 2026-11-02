@@ -23,6 +23,8 @@ interface Live {
   version: number;
   /** Texture repeats per dev tile (for scrolling at a speed in units). */
   repeat: [number, number];
+  /** On a model: its images cover the model's own texture coordinates once (no face scale). */
+  modelUv: boolean;
 }
 const live = new Map<THREE.Material, Live>();
 const listeners = new Set<() => void>();
@@ -54,10 +56,10 @@ export function materialLabel(id: string, lang: Lang): string {
 }
 
 /** A new Three.js material showing project material `id` (it follows later edits of it). */
-export function projectMaterial(id: string, onUpdate: () => void): THREE.MeshStandardMaterial {
+export function projectMaterial(id: string, onUpdate: () => void, opts: { modelUv?: boolean } = {}): THREE.MeshStandardMaterial {
   const m = new THREE.MeshStandardMaterial();
   m.name = id;
-  const l: Live = { id, m, onUpdate, version: 0, repeat: [1, 1] };
+  const l: Live = { id, m, onUpdate, version: 0, repeat: [1, 1], modelUv: !!opts.modelUv };
   live.set(m, l);
   restyle(l);
   return m;
@@ -239,7 +241,7 @@ function restyle(l: Live): void {
   const scale = d.scale ?? 1;
   /** Repeats per dev tile: from the world size of graph materials, else from the image's own size. */
   const repeatFor = (img: { width: number; height: number }): [number, number] =>
-    d.tile ? [UNITS_PER_TILE / d.tile, UNITS_PER_TILE / d.tile] : [TEX_SIZE / Math.max(1, img.width * scale), TEX_SIZE / Math.max(1, img.height * scale)];
+    l.modelUv ? [1, 1] : d.tile ? [UNITS_PER_TILE / d.tile, UNITS_PER_TILE / d.tile] : [TEX_SIZE / Math.max(1, img.width * scale), TEX_SIZE / Math.max(1, img.height * scale)];
   const setup = (tex: THREE.Texture, srgb: boolean) => {
     const img = tex.image as { width: number; height: number };
     tex.flipY = false;

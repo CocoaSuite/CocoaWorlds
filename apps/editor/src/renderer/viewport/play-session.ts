@@ -219,7 +219,7 @@ export class PlaySession {
   private attachModel(holder: THREE.Group, data: ModelData, id: string): void {
     void modelInstance(data)
       .then((inst) => {
-        if (this.disposed) return;
+        if (this.disposed) return inst.dispose();
         holder.add(inst.object);
         if (inst.mixer) this.mixers.push(inst.mixer);
         this.models.set(id, inst);
@@ -587,6 +587,7 @@ export class PlaySession {
   dispose(): void {
     this.disposed = true;
     this.effects.dispose();
+    for (const m of this.models.values()) m.dispose();
     for (const s of [...this.sounds]) {
       if (s.audio.isPlaying) s.audio.stop();
       this.dropSound(s);

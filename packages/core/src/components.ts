@@ -10,7 +10,15 @@ export type Lang = 'en' | 'ru';
 export type SoundData = { sound: string; volume: number; loop: boolean; playOnStart: boolean; range: number };
 /** How a model collides: not at all, by its bounding box, by its convex hull, or by its exact triangles. */
 export type ModelCollision = 'none' | 'box' | 'hull' | 'exact';
-export type ModelData = { model: string; units: 'metres' | 'units'; animation: string; castShadows: boolean; collision: ModelCollision };
+export type ModelData = {
+  model: string;
+  units: 'metres' | 'units';
+  animation: string;
+  castShadows: boolean;
+  collision: ModelCollision;
+  /** Project materials in place of the model's own, by the name of the material slot in the file. */
+  materials?: Record<string, string>;
+};
 export type ConveyorData = { speed: number; direction: 'north' | 'south' | 'east' | 'west' };
 export type BreakableData = { health: number };
 

@@ -3,12 +3,14 @@
  * Each marker has an invisible pick volume so it can be clicked.
  */
 import { readComponent, type EntityData, type ModelData, type SignData } from '@cocoaworlds/core';
-import { modelInstance } from './models';
+import { modelInstance, onModelMaterialChange } from './models';
 
 /** Called when a marker's model has loaded (the view needs a redraw). */
 let markerLoaded: () => void = () => {};
 export function onMarkerLoaded(fn: () => void): void {
   markerLoaded = fn;
+  // (Project materials on models draw again as their images arrive.)
+  onModelMaterialChange(fn);
 }
 import * as THREE from 'three';
 import { buildSign } from './sign';
@@ -112,8 +114,9 @@ export function buildMarker(e: EntityData): Marker {
     group.add(b);
     void modelInstance(model)
       .then((inst) => {
-        if (group.userData.disposed) return;
+        if (group.userData.disposed) return inst.dispose();
         group.add(inst.object);
+        group.userData.dispose = inst.dispose;
         p.geometry.dispose();
         p.geometry = new THREE.BoxGeometry(Math.max(8, inst.size.x), Math.max(8, inst.size.y), Math.max(8, inst.size.z)).translate(inst.center.x, inst.center.y, inst.center.z);
         b.geometry.dispose();

@@ -70,6 +70,19 @@ copies made while playing show their original's model.
 
 The **Play animation [name] on [object], looping/once** block switches a model's animation.
 
+### Materials on models
+
+A model's parts are its **material slots**, as named in the file (the chicken has Body, Eye whites and
+Pupils; unnamed ones are called Material 1, Material 2 …). Under the Model component, **Materials** lists them:
+each can stay **As in the file** or take one of the project's materials (plain or graph). Or pick a material
+in the **Paint** tool (or click one in **Assets › Materials**) and click a part of the model: Shift+click paints
+every part, Ctrl+click picks up the part's material. It's one undo step, saved with the scene, and drawn the
+same in Play and in exported games.
+
+On a model, a material's images cover the model's own texture coordinates once (the face size and scale of
+brushes don't apply); models without texture coordinates show the material's colour. Mapping that ignores the
+model's coordinates (triplanar) comes with CM2.
+
 
 ## Materials
 

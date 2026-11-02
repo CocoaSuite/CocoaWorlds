@@ -93,6 +93,7 @@ async function drawModel(key: string, path: string): Promise<void> {
   s.cam.updateProjectionMatrix();
   s.cam.lookAt(inst.center);
   publish(key, snap(inst.object));
+  inst.dispose();
 }
 
 function use(key: string, job: () => Promise<void>): string | null {

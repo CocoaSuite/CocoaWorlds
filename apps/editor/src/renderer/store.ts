@@ -17,6 +17,8 @@ import {
   type PrefabFile,
   componentDef,
   defaultComponent,
+  readComponent,
+  type ModelData,
   composeTransform,
   identityTransform,
   type Vec3,
@@ -69,6 +71,7 @@ import {
   type BrushRole,
 } from '@cocoaworlds/geometry';
 import { create } from 'zustand';
+import { modelSlots } from './viewport/models';
 import { brushBounds, brushComponent, brushOf, isLocked, isShown, newBrushEntity, toLocal, toWorld, worldBrushOf, shapeBrushes, shapeName, worldBrushes, type DrawRole, type Outline, type ShapeOptions } from './brush/brushes';
 import { useShallow } from 'zustand/react/shallow';
 import type { AssetEntry, AssetKind, OpenedProject, PrefabEntry } from '../shared/api';
@@ -227,6 +230,8 @@ interface Actions {
   placePrefab(prefabId: string): void;
   /** Add an object showing a model file where the view is looking. */
   placeModel(path: string): void;
+  /** The Paint tool clicked a part of a model: paint it (Shift: every part; Ctrl: pick its material up). True if painting. */
+  paintModelPart(id: string, slot: string, mode: 'replace' | 'toggle' | 'brush'): boolean;
   /** Pick a material in the Materials workspace (and go there when `open`). */
   pickMaterial(id: string | null, open?: boolean): void;
   revertChange(id: string, path: string | null): void;
@@ -1295,6 +1300,31 @@ export const useEditor = create<State & Actions>()((set, get) => ({
     const e = newEntity(uniqueName(doc, base), { model: { ...defaultComponent('model'), model: path } }, { position: [at[0], at[1], at[2]] });
     get().execute(addEntitiesCmd(doc, [e], `Place ${base}`));
     set({ selection: [e.id] });
+  },
+
+  paintModelPart(id, slot, mode) {
+    const st = get();
+    const e = st.doc?.get(id);
+    if (st.tool !== 'paint' || !e?.components.model) return false;
+    const data = readComponent<ModelData>('model', e.components.model);
+    const now = data.materials ?? {};
+    if (mode === 'toggle') {
+      if (now[slot]) set({ paintMaterial: now[slot] });
+      return true;
+    }
+    const pm = st.paintMaterial;
+    if (!pm.startsWith('mat/')) {
+      st.notify(t('model.paintNeedsMaterial'));
+      return true;
+    }
+    const apply = (slots: string[]) => {
+      const next = { ...now };
+      for (const x of slots) next[x] = pm;
+      get().setComponentField(id, 'model', 'materials', next);
+    };
+    if (mode === 'brush') void modelSlots(data.model).then(apply, () => apply([slot]));
+    else apply([slot]);
+    return true;
   },
 
   pickMaterial(id, open) {

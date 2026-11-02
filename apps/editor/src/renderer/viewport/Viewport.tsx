@@ -96,6 +96,7 @@ export function Viewport() {
             });
         },
         selectFace: (ref, mode, cut) => useEditor.getState().selectFace(ref, mode, cut),
+        modelPart: (id, slot, mode) => useEditor.getState().paintModelPart(id, slot, mode),
         boxSelect: (ids, additive) => useEditor.getState().boxSelect(ids, additive),
         playFrame: (frame, names) => {
           const st = useEditor.getState();

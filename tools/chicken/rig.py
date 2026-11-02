@@ -143,6 +143,11 @@ for pi, prim in enumerate(mesh['primitives']):
 
 REST_FOLD, REST_FLAT = 0, 0.25  # (the same as FOLD and FLAT below)
 
+# ── Material slots: plain names, so they read well where a game picks materials for each part ──
+_slot_names = {'Material.002': 'Body', 'Material.003': 'Eye whites', 'Material.004': 'Pupils'}
+for _m in j.get('materials', []):
+    _m['name'] = _slot_names.get(_m.get('name'), _m.get('name'))
+
 # ── Nodes: a root "Chicken" holding the bones and the skinned mesh ──
 nodes = []
 node_of = {}

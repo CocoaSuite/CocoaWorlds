@@ -49,6 +49,8 @@ export interface ViewportCallbacks {
   cancelTool(): void;
   /** Face tool click: `null` clicks empty space; `cut` is a surface made by a live cut (not editable). */
   selectFace(ref: FaceRef | null, mode: 'replace' | 'toggle' | 'brush', cut?: boolean): void;
+  /** A part (material slot) of an object's model was clicked in the face tools; true if that was used (painting). */
+  modelPart?(id: string, slot: string, mode: 'replace' | 'toggle' | 'brush'): boolean;
   /** Box selection: every object touching the rectangle. */
   boxSelect(ids: string[], additive: boolean): void;
   /** Vertex tool: how many corners are picked. */
@@ -1358,6 +1360,27 @@ export class ViewportEngine {
     return w?.entityId ?? null;
   }
 
+  /** The model part (material slot) under the cursor, when no level face is in front of it. */
+  private pickModelPart(e: { clientX: number; clientY: number }): { id: string; slot: string } | null {
+    this.raycaster.setFromCamera(this.ndc(e), this.rig.camera);
+    const targets: THREE.Object3D[] = [];
+    for (const { m } of this.markers.values()) {
+      if (!m.group.visible || m.group.userData.locked) continue;
+      const model = m.group.children.find((c) => c.name === 'model');
+      if (model) targets.push(model);
+    }
+    if (!targets.length) return null;
+    const hit = this.raycaster.intersectObjects(targets, true).find((h) => (h.object as THREE.Mesh).isMesh);
+    if (!hit) return null;
+    const level = this.world.pick(this.raycaster, true);
+    if (level && level.distance < hit.distance) return null;
+    let o: THREE.Object3D | null = hit.object;
+    while (o && o.userData.entityId === undefined) o = o.parent;
+    const slots = (hit.object.userData.slots ?? []) as string[];
+    const slot = slots[hit.face?.materialIndex ?? 0] ?? slots[0];
+    return o && slot ? { id: o.userData.entityId as string, slot } : null;
+  }
+
   /** The brush face under the cursor (level brushes only; markers are ignored in the face tool). */
   private pickFace(e: { clientX: number; clientY: number }): { ref: FaceRef | null; cut: boolean } | null {
     this.raycaster.setFromCamera(this.ndc(e), this.rig.camera);
@@ -1709,6 +1732,9 @@ export class ViewportEngine {
     }
     if (d.mode === 'click' && this.faceTool) {
       const mode = e.shiftKey ? 'brush' : e.ctrlKey || e.metaKey ? 'toggle' : 'replace';
+      // A model in front of the level: its part (the Paint tool paints that part).
+      const part = this.pickModelPart(e);
+      if (part && this.cb.modelPart?.(part.id, part.slot, mode)) return;
       const hit = this.pickFace(e);
       this.cb.selectFace(hit?.ref ?? null, mode, hit?.cut);
     } else if (d.mode === 'click') {
