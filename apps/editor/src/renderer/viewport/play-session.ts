@@ -5,12 +5,12 @@
  * With a Player start in the scene you play as the player (first person); without one, Play is a physics
  * preview watched with the free camera.
  */
-import { SceneDoc, readComponent, type ParticlesData, type ColliderData, type GameRules, type GameValue, type ModelData, type SceneFile, type SignData } from '@cocoaworlds/core';
+import { SceneDoc, expandRepeats, readComponent, type ParticlesData, type ColliderData, type GameRules, type GameValue, type ModelData, type SceneFile, type SignData } from '@cocoaworlds/core';
 import { buildMesh, isInvisibleMaterial, type WorldBrush } from '@cocoaworlds/geometry';
 import { GameWorld, initPhysics, type BodyInfo, type ModelMesh, type SavedProgress, type Travel, type UiState, type PlayerInput, type PlayerStatus, type ScriptLog, type TriggerEvent } from '@cocoaworlds/runtime';
 import type { Problem, ScriptError } from '@cocoaworlds/scripting';
 import * as THREE from 'three';
-import { worldBrushes } from '../brush/brushes';
+import { brushBounds, worldBrushes } from '../brush/brushes';
 import { WEAR_RING, buildLevel } from './world-build';
 import { toGeometry } from './world-render';
 import { buildSign, type SignObject } from './sign';
@@ -75,7 +75,8 @@ export class PlaySession {
   private constructor(scene: SceneFile, material: (name: string) => THREE.Material, rules: GameRules | undefined, values: GameValue[] | undefined, models: Map<string, ModelMesh>, saved: SavedProgress | null, arrive: Travel | null) {
     this.group.name = 'play';
     this.world = GameWorld.create(scene, { rules, values, models, saved, arrive });
-    const doc = new SceneDoc(structuredClone(scene));
+    // The same copies the game world made (Repeat groups).
+    const doc = new SceneDoc(expandRepeats(structuredClone(scene), brushBounds));
     const bodies = new Set(this.world.movingBodies().map((b) => b.id));
 
     // The level as players see it: only still brushes (no trigger zones, no subtract volumes, nothing that moves).

@@ -47,6 +47,16 @@ test('repeat: a ladder grows from its handle', async () => {
     // One undo step puts it back.
     await page.keyboard.press('Control+z');
     await until(async () => (await info()).rungs, 4, 6000);
+    // In the game the copies are drawn too, not only the saved parts.
+    await page.getByRole('button', { name: 'Play', exact: true }).click();
+    await until(() => page.evaluate(() => window.__cwViewport.play?.doc.entities.filter((e) => e.name === 'rung').length ?? 0), 4, 15000);
+    const tall = await page.evaluate(() => {
+      let top = -Infinity;
+      window.__cwViewport.play.group.traverse((o) => { if (o.isMesh && o.geometry) { o.geometry.computeBoundingBox(); top = Math.max(top, o.geometry.boundingBox.max.y); } });
+      return top;
+    });
+    assert.ok(tall >= 128, `level top ${tall}`);
+    await shot(page, 'repeat03');
   } catch (e) {
     await shot(page, 'repeat-failure');
     throw e;

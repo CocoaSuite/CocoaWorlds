@@ -2,9 +2,10 @@
  * An exported game (B4): one scene played full-window, with the same game code, controls, display and screen
  * UI as Play in the editor. Saved progress is kept in this browser's storage (a desktop game has its own).
  */
-import { SceneDoc, type GameRules, type GameValue, type MaterialDef, type SceneFile } from '@cocoaworlds/core';
+import { SceneDoc, expandRepeats, type GameRules, type GameValue, type MaterialDef, type SceneFile } from '@cocoaworlds/core';
 import { isInvisibleMaterial } from '@cocoaworlds/geometry';
 import * as THREE from 'three';
+import { brushBounds } from '../brush/brushes';
 import { PlaySession } from '../viewport/play-session';
 import { AoRenderer } from '../viewport/ao';
 import type { Travel } from '@cocoaworlds/runtime';
@@ -66,7 +67,7 @@ export class GameRunner {
     private data: GameData,
     private cb: RunnerEvents,
   ) {
-    this.doc = new SceneDoc(structuredClone(data.scene));
+    this.doc = new SceneDoc(expandRepeats(structuredClone(data.scene), brushBounds));
     const r = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
     r.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     r.setClearColor(0x1f1f1f);
@@ -200,7 +201,7 @@ export class GameRunner {
     this.scene.remove(old.group);
     old.dispose();
     this.play = null;
-    this.doc = new SceneDoc(structuredClone(next));
+    this.doc = new SceneDoc(expandRepeats(structuredClone(next), brushBounds));
     this.cb.scene?.(next);
     const play = await PlaySession.start(next, this.materialFor, this.data.rules, this.data.values, loadProgress(this.data.id), t);
     this.going = false;
