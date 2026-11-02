@@ -48,7 +48,13 @@ export interface CocoaApi {
     defaultLocation(): Promise<string>;
     pickFolder(title: string, defaultPath?: string): Promise<string | null>;
     create(parentDir: string, name: string): Promise<Result<OpenedProject>>;
-    open(dir: string): Promise<Result<OpenedProject>>;
+    /** Open a project at its start scene, or at one of its scenes. */
+    open(dir: string, scenePath?: string): Promise<Result<OpenedProject>>;
+    /** Add a scene to the project; returns the project as written and the new scene's path. */
+    createScene(dir: string, name: string): Promise<Result<{ project: ProjectFile; scenePath: string }>>;
+    setStartScene(dir: string, scenePath: string): Promise<Result<ProjectFile>>;
+    /** A scene as saved (for level changes while playing in the editor). */
+    readScene(dir: string, scenePath: string): Promise<Result<SceneFile>>;
     recent(): Promise<RecentProject[]>;
     forget(dir: string): Promise<void>;
     saveScene(dir: string, scenePath: string, scene: SceneFile): Promise<Result<{ savedAt: string }>>;
@@ -97,6 +103,9 @@ export const IPC = {
   listPrefabs: 'projects:listPrefabs',
   savePrefab: 'projects:savePrefab',
   saveSettings: 'projects:saveSettings',
+  createScene: 'projects:createScene',
+  setStartScene: 'projects:setStartScene',
+  readScene: 'projects:readScene',
   listAssets: 'assets:list',
   writeAsset: 'assets:write',
   readAsset: 'assets:read',

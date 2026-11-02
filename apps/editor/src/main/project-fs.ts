@@ -18,6 +18,8 @@ import {
   WORK_DIR,
   fileStem,
   newProject,
+  newScene,
+  SCENES_DIR,
   parseProject,
   PREFAB_EXT,
   parsePrefab,
@@ -107,7 +109,7 @@ async function backup(dir: string, file: string): Promise<void> {
   await fs.copyFile(file, dest);
 }
 
-export async function openProject(dirIn: string): Promise<OpenedProject> {
+export async function openProject(dirIn: string, sceneIn?: string): Promise<OpenedProject> {
   let dir = path.resolve(dirIn);
   if (path.basename(dir) === PROJECT_FILE) dir = path.dirname(dir);
   const projFile = path.join(dir, PROJECT_FILE);
@@ -121,7 +123,8 @@ export async function openProject(dirIn: string): Promise<OpenedProject> {
     throw new ProjectError(err.message, err.problems?.map((p) => `${p.path}: ${p.message}`));
   }
   const { project } = parsed;
-  const scenePath = project.startScene;
+  // A scene of the project, or the one the game starts in.
+  const scenePath = sceneIn && project.scenes.includes(sceneIn) ? sceneIn : project.startScene;
   const sceneFile = resolveInside(dir, scenePath);
   if (!(await exists(sceneFile))) throw new ProjectError(`The start scene “${scenePath}” is missing.`);
 
@@ -157,6 +160,38 @@ export async function openProject(dirIn: string): Promise<OpenedProject> {
     }
   }
   return { dir, project, scenePath, scene: sceneParsed.scene, migrated, recovery };
+}
+
+/** Add a new scene (a Player start and a sun, like a new project's) to the project. Returns its path. */
+export async function createScene(dir: string, name: string): Promise<{ project: ProjectFile; scenePath: string }> {
+  const file = path.join(dir, PROJECT_FILE);
+  const { project } = parseProject(await fs.readFile(file, 'utf8'));
+  const clean = name.trim();
+  if (!clean) throw new ProjectError('The scene needs a name.');
+  const stem = fileStem(clean);
+  let scenePath = `${SCENES_DIR}/${stem}${SCENE_EXT}`;
+  for (let i = 2; project.scenes.includes(scenePath) || (await exists(resolveInside(dir, scenePath))); i++) scenePath = `${SCENES_DIR}/${stem}_${i}${SCENE_EXT}`;
+  await fs.mkdir(resolveInside(dir, SCENES_DIR), { recursive: true });
+  await writeAtomic(resolveInside(dir, scenePath), stringify(newScene(path.basename(scenePath, SCENE_EXT))));
+  const next = { ...project, scenes: [...project.scenes, scenePath] };
+  await writeAtomic(file, stringify(next));
+  return { project: next, scenePath };
+}
+
+/** Make a scene the one the game starts in. */
+export async function setStartScene(dir: string, scenePath: string): Promise<ProjectFile> {
+  const file = path.join(dir, PROJECT_FILE);
+  const { project } = parseProject(await fs.readFile(file, 'utf8'));
+  if (!project.scenes.includes(scenePath)) throw new ProjectError(`“${scenePath}” isn't a scene of this project.`);
+  const next = { ...project, startScene: scenePath };
+  await writeAtomic(file, stringify(next));
+  return next;
+}
+
+/** A scene as saved (upgraded in memory if older), for playing a level change in the editor. */
+export async function readScene(dir: string, scenePath: string): Promise<SceneFile> {
+  if (!scenePath.endsWith(SCENE_EXT)) throw new ProjectError('Not a scene.');
+  return parseScene(await fs.readFile(resolveInside(dir, scenePath), 'utf8')).scene;
 }
 
 function checkScene(scenePath: string, scene: unknown): SceneFile {

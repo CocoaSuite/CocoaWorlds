@@ -122,6 +122,8 @@ export function newStatement(kind: StatementKind, opts: { target?: Ref; variable
       return { id: id(), kind, list: '', text: text('Row') };
     case 'clearList':
       return { id: id(), kind, list: '' };
+    case 'changeScene':
+      return { id: id(), kind, scene: '', landmark: '' };
     case 'forgetProgress':
       return { id: id(), kind };
     case 'showUi':

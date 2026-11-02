@@ -42,14 +42,23 @@ export async function gameData(projectDir: string): Promise<{ project: ProjectFi
   const sv = validateScene(sceneRaw);
   if (!sv.ok) throw new Error(`The scene has problems: ${sv.problems[0]?.message}`);
   const scene = sv.value;
-  // Only the materials the scene uses (and so only their images).
-  const sceneJson = JSON.stringify(scene);
-  const materials = materialsOf(project.settings).filter((m) => sceneJson.includes(`"${m.id}"`));
   if (!scene.entities.some((e) => e.components.playerSpawn)) throw new Error('The scene needs a Player start to be played as a game.');
+  // The other scenes, for level changes, by name (the file name without .cwscene).
+  const stem = (p: string) => path.basename(p, '.cwscene');
+  const scenes: Record<string, SceneFile> = { [stem(scenePath)]: scene };
+  for (const p of project.scenes) {
+    if (p === scenePath) continue;
+    const raw = JSON.parse(await fs.readFile(path.join(projectDir, p), 'utf8').catch(() => 'null'));
+    const v = raw ? validateScene(raw) : null;
+    if (v?.ok) scenes[stem(p)] = v.value;
+  }
+  // Only the materials the scenes use (and so only their images).
+  const sceneJson = JSON.stringify(scenes);
+  const materials = materialsOf(project.settings).filter((m) => sceneJson.includes(`"${m.id}"`));
   return {
     project,
     scene,
-    data: { format: 'cocoaworlds.game', name: project.name, id: project.id, scene, rules: gameRules(project.settings), values: project.settings.values ?? [], materials },
+    data: { format: 'cocoaworlds.game', name: project.name, id: project.id, scene, start: stem(scenePath), scenes, rules: gameRules(project.settings), values: project.settings.values ?? [], materials },
   };
 }
 

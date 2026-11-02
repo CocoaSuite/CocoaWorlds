@@ -1,4 +1,4 @@
-import { Button, Dialog, Divider, Icon, IconButton, MenuBar, Spacer } from '@cocoaworlds/ui';
+import { Button, ContextMenu, Dialog, Divider, Icon, IconButton, MenuBar, Spacer } from '@cocoaworlds/ui';
 import { useEffect, useState } from 'react';
 import logo from '../assets/cocoaworlds-logo.svg';
 import { t } from '../i18n';
@@ -96,7 +96,7 @@ export function TopBar({ onShowKeys }: { onShowKeys: () => void }) {
         ]}
       />
       <div className="cw-crumbs">
-        {session.project.name} <span className="cw-crumb-sep">/</span> <b>{s.doc?.name}</b>
+        {session.project.name} <span className="cw-crumb-sep">/</span> <ScenePicker />
       </div>
       <Workspaces />
       <div className="cw-status" data-testid="save-status">
@@ -150,6 +150,75 @@ export function TopBar({ onShowKeys }: { onShowKeys: () => void }) {
         </Dialog>
       )}
     </header>
+  );
+}
+
+/** The open scene's name; a click lists the project's scenes to open, adds one, or makes this the start. */
+function ScenePicker() {
+  const s = useEditor();
+  const session = s.session!;
+  const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
+  const [naming, setNaming] = useState(false);
+  const [name, setName] = useState('');
+  const stem = (p: string) => p.split('/').pop()!.replace(/\.cwscene$/, '');
+  const start = session.project.startScene;
+  return (
+    <>
+      <button
+        type="button"
+        className="cw-scene-pick"
+        aria-label={t('scenes.pick')}
+        aria-haspopup="menu"
+        disabled={!!s.playing}
+        onClick={(e) => {
+          const r = e.currentTarget.getBoundingClientRect();
+          setMenu({ x: r.left, y: r.bottom + 4 });
+        }}
+      >
+        <b>{s.doc?.name}</b> ▾
+      </button>
+      {menu && (
+        <ContextMenu
+          x={menu.x}
+          y={menu.y}
+          onClose={() => setMenu(null)}
+          items={[
+            ...session.project.scenes.map((p) => ({
+              label: `${stem(p)}${p === start ? `  · ${t('scenes.startTag')}` : ''}${p === session.scenePath ? '  ✓' : ''}`,
+              disabled: p === session.scenePath,
+              onSelect: () => void s.goToScene(p),
+            })),
+            'separator' as const,
+            { label: t('scenes.add'), onSelect: () => (setName(''), setNaming(true)) },
+            { label: t('scenes.makeStart'), disabled: start === session.scenePath, onSelect: () => void s.setStartScene(session.scenePath) },
+          ]}
+        />
+      )}
+      {naming && (
+        <Dialog title={t('scenes.addTitle')} onClose={() => setNaming(false)} width={380}>
+          <form
+            className="cw-form"
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (!name.trim()) return;
+              setNaming(false);
+              void s.addScene(name);
+            }}
+          >
+            <label className="cw-f">
+              <span>{t('scenes.name')}</span>
+              <input className="cw-input" aria-label={t('scenes.name')} autoFocus value={name} placeholder="level_02" onChange={(e) => setName(e.target.value)} onKeyDown={(e) => e.stopPropagation()} />
+            </label>
+            <div className="cw-actions">
+              <Button onClick={() => setNaming(false)}>{t('new.cancel')}</Button>
+              <Button variant="primary" type="submit" disabled={!name.trim()}>
+                {t('scenes.create')}
+              </Button>
+            </div>
+          </form>
+        </Dialog>
+      )}
+    </>
   );
 }
 

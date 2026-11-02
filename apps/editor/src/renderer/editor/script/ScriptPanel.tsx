@@ -715,6 +715,13 @@ function statementWords(s: Statement, set: (patch: Record<string, unknown>, merg
       return w('forever');
     case 'forgetProgress':
       return w('forgetProgress');
+    case 'changeScene':
+      return (
+        <>
+          {w('changeScene')} <SceneSlot value={s.scene} label={w('changeScene')} onChange={(scene) => set({ scene })} /> {w('landmark')}{' '}
+          <TextSlot value={s.landmark} label={w('landmark')} onChange={(landmark) => set({ landmark })} />
+        </>
+      );
     case 'while':
       return (
         <>
@@ -1032,6 +1039,21 @@ function SoundSlot({ value, onChange }: { value: string; onChange: (v: string) =
       {sounds.map((x) => (
         <option key={x.path} value={x.path}>
           {x.name}
+        </option>
+      ))}
+    </select>
+  );
+}
+
+/** A scene of the project, by name. */
+function SceneSlot({ value, onChange, label }: { value: string; onChange: (v: string) => void; label: string }) {
+  const scenes = (useEditor((s) => s.session?.project.scenes) ?? []).map((p) => p.split('/').pop()!.replace(/\.cwscene$/, ''));
+  return (
+    <select className="cw-input cw-var-slot" aria-label={label} value={value} onChange={(e) => onChange(e.target.value)}>
+      {!scenes.includes(value) && <option value={value}>{value || w('pickScene')}</option>}
+      {scenes.map((n) => (
+        <option key={n} value={n}>
+          {n}
         </option>
       ))}
     </select>

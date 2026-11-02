@@ -6,7 +6,7 @@ import { BrowserWindow, Menu, app, dialog, ipcMain, shell, type IpcMainInvokeEve
 import path from 'node:path';
 import { IPC, type Result } from '../shared/api';
 import { listAssets, readAsset, writeAsset } from './assets-fs';
-import { ProjectError, autosaveScene, createProject, discardRecovery, listPrefabs, openProject, savePrefab, saveProjectSettings, saveScene } from './project-fs';
+import { ProjectError, autosaveScene, createProject, discardRecovery, listPrefabs, openProject, savePrefab, saveProjectSettings, saveScene, createScene, setStartScene, readScene } from './project-fs';
 import { SettingsStore } from './settings';
 import { downloadRuntime, gameData, gameFileName, ownRuntime, writeDesktopGame, writeWebGame, type ExportTarget } from './export';
 import { spawn } from 'node:child_process';
@@ -198,8 +198,8 @@ function registerIpc(): void {
     await settings.touch(opened.project.name, opened.dir);
     return opened;
   });
-  handle(IPC.open, async (dir) => {
-    const opened = await openProject(str(dir));
+  handle(IPC.open, async (dir, scene) => {
+    const opened = await openProject(str(dir), typeof scene === 'string' ? scene : undefined);
     await settings.touch(opened.project.name, opened.dir);
     return opened;
   });
@@ -209,6 +209,9 @@ function registerIpc(): void {
   handle(IPC.autosave, async (dir, scenePath, scene) => autosaveScene(str(dir), str(scenePath), scene));
   handle(IPC.listPrefabs, async (dir) => listPrefabs(str(dir)));
   handle(IPC.saveSettings, async (dir, settings) => saveProjectSettings(str(dir), settings));
+  handle(IPC.createScene, async (dir, name) => createScene(str(dir), str(name)));
+  handle(IPC.setStartScene, async (dir, scene) => setStartScene(str(dir), str(scene)));
+  handle(IPC.readScene, async (dir, scene) => readScene(str(dir), str(scene)));
   handle(IPC.listAssets, async (dir) => listAssets(str(dir)));
   handle(IPC.writeAsset, async (dir, kind, name, bytes) => writeAsset(str(dir), kind, name, bytes));
   handle(IPC.readAsset, async (dir, rel) => readAsset(str(dir), rel));

@@ -60,6 +60,9 @@ describe('exported game data', () => {
     const json = JSON.stringify(data);
     expect((data as { materials: { name: string }[] }).materials.map((m) => m.name)).toEqual(['Lava']);
     expect(usedAssets(json)).toEqual(['assets/textures/lava.png']);
+    // Every scene goes along (for level changes), by name.
+    expect(Object.keys((data as { scenes: object }).scenes)).toEqual([scenePath.split('/').pop()!.replace('.cwscene', '')]);
+    expect((data as { start: string }).start).toBe(scenePath.split('/').pop()!.replace('.cwscene', ''));
     await fs.rm(dir, { recursive: true, force: true });
   });
 });

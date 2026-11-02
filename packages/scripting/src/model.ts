@@ -115,6 +115,11 @@ export type Statement =
   | { id: string; kind: 'clearList'; list: string }
   /** Start over: kept game values go back to their starting values (and kept items are emptied). */
   | { id: string; kind: 'forgetProgress' }
+  /**
+   * Go to another scene of the game (by its name). With a landmark (an object of that name, with the Landmark
+   * component, in both scenes) the player arrives where they stand relative to it; without, at the Player start.
+   */
+  | { id: string; kind: 'changeScene'; scene: string; landmark: string }
   /** Show or hide one element of a screen (by id). */
   | { id: string; kind: 'showUi' | 'hideUi'; element: string }
   /** Change what a text or button says. */

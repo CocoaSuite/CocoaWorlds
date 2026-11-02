@@ -156,6 +156,20 @@ function FieldEditor({ entity, component, field, value }: { entity: string; comp
         ))}
       </select>
     );
+  } else if (ty.kind === 'scene') {
+    const v = String(value ?? '');
+    const names = (useEditor.getState().session?.project.scenes ?? []).map((p) => p.split('/').pop()!.replace(/\.cwscene$/, ''));
+    input = (
+      <select className="cw-input cw-select" aria-label={label} value={v} onChange={(ev) => set(ev.target.value)}>
+        <option value="">{t('insp.noObject')}</option>
+        {v && !names.includes(v) && <option value={v}>{v} ?</option>}
+        {names.map((n) => (
+          <option key={n} value={n}>
+            {n}
+          </option>
+        ))}
+      </select>
+    );
   } else if (ty.kind === 'object') {
     const v = String(value ?? '');
     const doc = useEditor.getState().doc;

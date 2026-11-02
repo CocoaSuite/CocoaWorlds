@@ -19,6 +19,7 @@ import {
   type SceneFile,
   type TriggerData,
   type ChargerData,
+  type LevelChangeData,
   type PathPointData,
   type TrainData,
   type LadderData,
@@ -151,6 +152,28 @@ interface Body {
   rb?: RigidBodyData;
 }
 
+/**
+ * A level change: where the player goes and what they take along. The world that ends makes it; the next world
+ * starts from it (`GameWorld.create(…, { arrive })`).
+ */
+export interface Travel {
+  /** The scene to go to (its name), and the landmark to arrive by ('' for the Player start). */
+  scene: string;
+  landmark: string;
+  /** Where the feet were relative to the landmark (null: it wasn't found in the scene left). */
+  offset: [number, number, number] | null;
+  yaw: number;
+  pitch: number;
+  velocity: [number, number, number];
+  health: number;
+  armour: number;
+  score: number;
+  usesScore: boolean;
+  inventory: [string, number][];
+  slot: number;
+  values: Record<string, Value>;
+}
+
 /** The player's state for the screen (health bar, score). */
 export interface PlayerStatus {
   /** The project uses health (otherwise nothing hurts and no health bar shows). */
@@ -255,12 +278,82 @@ export class GameWorld {
   /** `models`: the triangles of the model files that objects collide by (Model component, Collision). */
   static create(
     scene: SceneFile,
-    options: { rules?: Partial<GameRules>; values?: GameValueDef[]; models?: Map<string, ModelMesh>; saved?: SavedProgress | null; clock?: () => number } = {},
+    options: { rules?: Partial<GameRules>; values?: GameValueDef[]; models?: Map<string, ModelMesh>; saved?: SavedProgress | null; clock?: () => number; arrive?: Travel | null } = {},
   ): GameWorld {
     const w = new GameWorld(scene, gameRules({ game: options.rules }), options.values ?? [], options.models ?? new Map());
     if (options.clock) w.clock = options.clock;
     if (options.saved) w.loadProgress(options.saved);
+    if (options.arrive) w.arrive(options.arrive);
     return w;
+  }
+
+  // ── Level changes ──
+
+  /** A level change that has begun (the game stops; whoever runs it starts the next scene from it). */
+  travel: Travel | null = null;
+  private levelZones: { id: string; collider: RAPIER.Collider; data: LevelChangeData }[] = [];
+  /** Level-change zones work only once the player has been outside all of them (not on arrival inside one). */
+  private zonesArmed = false;
+
+  /** Leave for another scene, by a landmark (or to its Player start). */
+  changeScene(scene: string, landmark = ''): void {
+    const p = this.player;
+    if (this.travel || !p || !scene) return;
+    const feet = p.feetPosition;
+    const lm = landmark ? this.landmarkAt(landmark) : null;
+    this.travel = {
+      scene,
+      landmark: lm ? landmark : '',
+      offset: lm ? [feet.x - lm[0], feet.y - lm[1], feet.z - lm[2]] : null,
+      yaw: p.input.yaw,
+      pitch: p.input.pitch,
+      velocity: [p.velocity.x, p.velocity.y, p.velocity.z],
+      health: this.health,
+      armour: this.armour,
+      score: this.score,
+      usesScore: this.usesScore,
+      inventory: [...this.inventory],
+      slot: this.slot,
+      values: Object.fromEntries(this.globals),
+    };
+    this.bus.emit({ type: 'travel', scene, landmark, time: this.time });
+  }
+
+  /** Where the landmark called `name` is in this scene (an object with the Landmark component), or null. */
+  private landmarkAt(name: string): [number, number, number] | null {
+    const e = this.doc.entities.find((x) => x.components.landmark && x.name === name);
+    if (!e) return null;
+    const m = this.doc.worldMatrix(e.id);
+    return [m[12]!, m[13]!, m[14]!];
+  }
+
+  /** Arrive from another scene: what the player carried, and where they stood by the landmark. */
+  private arrive(t: Travel): void {
+    this.health = t.health;
+    this.armour = t.armour;
+    this.score = t.score;
+    this.usesScore = t.usesScore;
+    this.inventory = new Map(t.inventory);
+    this.slot = t.slot;
+    for (const [k, v] of Object.entries(t.values)) if (this.globals.has(k)) this.globals.set(k, v);
+    const p = this.player;
+    if (!p) return;
+    const lm = t.landmark ? this.landmarkAt(t.landmark) : null;
+    if (lm && t.offset) p.teleport({ x: lm[0] + t.offset[0], y: lm[1] + t.offset[1], z: lm[2] + t.offset[2] }, t.yaw);
+    else p.teleport(p.spawn.feet, t.yaw);
+    p.input.pitch = t.pitch;
+    p.velocity = { x: t.velocity[0], y: t.velocity[1], z: t.velocity[2] };
+  }
+
+  /** Walking into a level-change zone (after having been outside them all) begins the change. */
+  private checkLevelZones(): void {
+    const p = this.player;
+    if (!p || !this.levelZones.length || this.travel) return;
+    const shape = new RAPIER.Cylinder((p.crouched ? PLAYER.crouchHeight : PLAYER.height) / 2, PLAYER.radius);
+    const at = p.body.translation();
+    const zone = this.levelZones.find((z) => z.collider.intersectsShape(shape, at, { x: 0, y: 0, z: 0, w: 1 }));
+    if (!zone) this.zonesArmed = true;
+    else if (this.zonesArmed && zone.data.scene) this.changeScene(zone.data.scene, zone.data.landmark.trim());
   }
 
   /** The real time in seconds since 1970 (replaceable for tests). */
@@ -367,7 +460,7 @@ export class GameWorld {
 
     // Objects scripts move or switch become "units": one body for the object and everything inside it.
     // (Water and ladders stay where they are: they are zones, not something that moves.)
-    const own = (e: EntityData) => !!e.components.rigidBody || !!e.components.trigger || !!e.components.water || !!e.components.ladder;
+    const own = (e: EntityData) => !!e.components.rigidBody || !!e.components.trigger || !!e.components.water || !!e.components.ladder || !!e.components.levelChange;
     // (Breakable objects too: they disappear when they break.)
     const breakables = doc.entities.filter((e) => e.components.breakable && shown(e)).map((e) => e.id);
     for (const e of doc.entities) {
@@ -392,7 +485,8 @@ export class GameWorld {
       const brushData = e.components.brush as unknown as (BrushData & { role?: string }) | undefined;
       if (brushData?.faces) {
         const brush = brushToWorld(fromData({ faces: brushData.faces, mesh: brushData.mesh }), doc.worldMatrix(e.id));
-        if (e.components.ladder || e.components.water) this.addVolume(e, brush);
+        if (e.components.levelChange) this.addLevelZone(e, brush);
+        else if (e.components.ladder || e.components.water) this.addVolume(e, brush);
         else if (e.components.trigger) this.addTrigger(e, brush, scriptedZones.has(e.id));
         else if (e.components.rigidBody) this.addBrushBody(e, brush);
         else if (unitOf.has(e.id) && brushData.role !== 'subtract') unitBrushes.get(unitOf.get(e.id)!)!.push(brush);
@@ -506,6 +600,7 @@ export class GameWorld {
       clearList: (id) => void this.uiRows.get(id)?.splice(0),
       clock: () => this.clock(),
       forgetProgress: () => this.forgetProgress(),
+      changeScene: (scene, landmark) => this.changeScene(scene, landmark),
       setUiText: (id, text) => void this.uiText.set(id, text),
       giveItem: (name, amount) => this.giveItem(name, amount),
       itemCount: (name) => this.inventory.get(name) ?? 0,
@@ -639,6 +734,15 @@ export class GameWorld {
     if (kind !== 'zone') this.stats.bodies++;
   }
 
+  /** A level-change zone: a sensor the player walks into. */
+  private addLevelZone(e: EntityData, brush: Brush): void {
+    const desc = RAPIER.ColliderDesc.convexHull(hullPoints(brush));
+    if (!desc) return;
+    const c = this.world.createCollider(desc.setSensor(true), this.world.createRigidBody(RAPIER.RigidBodyDesc.fixed()));
+    this.volumes.add(c.handle);
+    this.levelZones.push({ id: e.id, collider: c, data: readComponent<LevelChangeData>('levelChange', e.components.levelChange) });
+  }
+
   /** Water or a ladder: a sensor zone the player (and, for water, floating things) moves differently in. */
   private addVolume(e: EntityData, brush: Brush): void {
     const desc = RAPIER.ColliderDesc.convexHull(hullPoints(brush));
@@ -721,7 +825,8 @@ export class GameWorld {
 
   /** Advance by `dt` seconds of real time, in fixed physics steps. Returns the number of steps taken. */
   step(dt: number): number {
-    if (this.disposed) return 0;
+    // (Once a level change has begun, this scene is over.)
+    if (this.disposed || this.travel) return 0;
     this.accumulator = Math.min(this.accumulator + Math.max(0, dt), STEP * MAX_STEPS_PER_FRAME);
     let n = 0;
     if (!this.startedScripts) {
@@ -745,6 +850,7 @@ export class GameWorld {
           else this.player.respawn();
         }
         if (this.useQueued) this.doUse();
+        this.checkLevelZones();
         if (this.player.input.use) this.charge();
         this.fireWeapon();
         this.breathe();
@@ -867,7 +973,7 @@ export class GameWorld {
         if (dist <= left) {
           pos = [...target];
           left -= dist;
-          this.arrive(t);
+          this.trainArrives(t);
         } else {
           pos = [pos[0] + (d[0]! / dist) * left, pos[1] + (d[1]! / dist) * left, pos[2] + (d[2]! / dist) * left];
           left = 0;
@@ -884,7 +990,7 @@ export class GameWorld {
   }
 
   /** A train reached its next point. */
-  private arrive(t: GameWorld['trains'][number]): void {
+  private trainArrives(t: GameWorld['trains'][number]): void {
     const point = this.pathPoints.get(t.to!)!;
     t.at = t.to;
     if (point.data.speed > 0) t.speed = point.data.speed;

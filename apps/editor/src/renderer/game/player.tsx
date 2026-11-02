@@ -4,7 +4,7 @@
 import '@cocoaworlds/ui/styles.css';
 import '../editor.css';
 import './player.css';
-import { uiOf } from '@cocoaworlds/core';
+import { uiOf, type SceneFile } from '@cocoaworlds/core';
 import { useEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { setAssetReader } from '../assets';
@@ -28,6 +28,8 @@ function Player() {
   const [hud, setHud] = useState<Hud | null>(null);
   const [locked, setLocked] = useState(false);
   const [uiMouse, setUiMouse] = useState(false);
+  /** The scene being played (it changes with level changes). */
+  const [scene, setScene] = useState<SceneFile | null>(null);
 
   useEffect(() => {
     setAssetReader(fetchBytes);
@@ -46,7 +48,8 @@ function Player() {
   useEffect(() => {
     if (!data || !host.current) return;
     if (!data.scene.entities.some((e) => e.components.playerSpawn)) return setError('This game has no Player start.');
-    const r = new GameRunner(host.current, data, { hud: setHud, lock: setLocked, uiMouse: setUiMouse });
+    setScene(data.scene);
+    const r = new GameRunner(host.current, data, { hud: setHud, lock: setLocked, uiMouse: setUiMouse, scene: setScene });
     runner.current = r;
     (window as unknown as { __cwGame?: GameRunner }).__cwGame = r;
     r.start().catch((e: Error) => setError(e.message));
@@ -55,7 +58,7 @@ function Player() {
 
   return (
     <div className="cw-player" ref={host}>
-      {data && hud && <UiLayer ui={uiOf(data.scene.settings)} live={hud.ui} values={hud.allValues} onClick={(id) => runner.current?.clickUi(id)} onRow={(l, row) => runner.current?.pickRow(l, row)} />}
+      {scene && hud && <UiLayer ui={uiOf(scene.settings)} live={hud.ui} values={hud.allValues} onClick={(id) => runner.current?.clickUi(id)} onRow={(l, row) => runner.current?.pickRow(l, row)} />}
       {hud && <HudView hud={hud} />}
       {locked && <div className="cw-crosshair" aria-hidden="true" />}
       {data && hud && !locked && !uiMouse && (

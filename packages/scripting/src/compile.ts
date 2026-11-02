@@ -95,6 +95,7 @@ export type Op =
   | { op: 'clock' }
   /** Kept values and items back to the start. */
   | { op: 'forget' }
+  | { op: 'scene'; scene: string; landmark: string }
   /** Pops text: change what an element says. */
   | { op: 'uitext'; id: string }
   /** Pops an amount: give (or with a minus, take) some of an item. */
@@ -519,6 +520,10 @@ class HandlerCompiler {
         break;
       case 'forgetProgress':
         this.emit({ op: 'forget' });
+        break;
+      case 'changeScene':
+        if (!s.scene.trim()) this.problem(s.id, 'Pick the scene to go to.');
+        this.emit({ op: 'scene', scene: s.scene.trim(), landmark: s.landmark.trim() });
         break;
       case 'showUi':
       case 'hideUi':

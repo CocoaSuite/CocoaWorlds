@@ -53,6 +53,8 @@ export interface ScriptHost {
   clock?(): number;
   /** Kept game values and items back to the start. */
   forgetProgress?(): void;
+  /** Go to another scene (a level change). */
+  changeScene?(scene: string, landmark: string): void;
   /** Add a row to a list, or remove the first row with this text; empty a list. */
   listRow?(id: string, text: string, add: boolean): void;
   clearList?(id: string): void;
@@ -529,6 +531,9 @@ export class ScriptRunner {
           break;
         case 'forget':
           this.host.forgetProgress?.();
+          break;
+        case 'scene':
+          this.host.changeScene?.(op.scene, op.landmark);
           break;
         case 'halt':
           return this.finish(t);

@@ -1,5 +1,5 @@
 /** React wrapper around ViewportEngine plus the viewport overlays (view switcher, grid/snap pill, stats, selection readout). */
-import { uiOf, type Vec3 } from '@cocoaworlds/core';
+import { uiOf, type SceneFile, type Vec3 } from '@cocoaworlds/core';
 import { UiLayer } from '../ui/UiLayer';
 import { HudView } from '../ui/Hud';
 import { ContextMenu, Segmented, type MenuEntry } from '@cocoaworlds/ui';
@@ -39,7 +39,10 @@ export function Viewport() {
   const rev = useEditor((s) => s.rev);
   const selection = useEditor((s) => s.selection);
   const playing = useEditor((s) => s.playing);
-  const playScene = playing?.scene;
+  // (After a level change, the scene the player is in now.)
+  const [sceneNow, setSceneNow] = useState<SceneFile | null>(null);
+  useEffect(() => setSceneNow(null), [playing]);
+  const playScene = sceneNow ?? playing?.scene;
   // Playing as the player: the editor's own overlays (views, grid, the selection) make way for the game's screen.
   const asPlayer = !!playing && lock !== null;
   const faceSelection = useEditor((s) => s.faceSelection);
@@ -68,6 +71,30 @@ export function Viewport() {
         draft: setDraft,
         createBrush: (min, max, outline) => useEditor.getState().createBrushes(min, max, outline),
         cancelTool: () => useEditor.getState().setTool('select'),
+        // A level change: the next scene comes from the editor (this scene) or from its saved file.
+        travel: (t) => {
+          const st = useEditor.getState();
+          const session = st.session;
+          const playing = st.playing;
+          if (!session || !playing) return;
+          const path = session.project.scenes.find((p) => p.split('/').pop()!.replace(/\.cwscene$/, '') === t.scene);
+          if (!path) {
+            st.log('error', 'Play', `There is no scene called “${t.scene}” to go to.`);
+            st.stopPlaying();
+            return;
+          }
+          const load = path === session.scenePath ? Promise.resolve(playing.scene) : window.cocoa.projects.readScene(session.dir, path).then((r) => (r.ok ? r.value : Promise.reject(new Error(r.error))));
+          void load
+            .then((scene) => {
+              setSceneNow(scene);
+              return engine.current?.travelTo(scene, t, playing.rules, playing.values);
+            })
+            .then(() => st.log('info', 'Play', `Level change: now in ${t.scene}${t.landmark ? ` by the landmark ${t.landmark}` : ''}.`))
+            .catch((err: Error) => {
+              st.log('error', 'Play', `Could not go to ${t.scene}: ${err.message}`);
+              st.stopPlaying();
+            });
+        },
         selectFace: (ref, mode, cut) => useEditor.getState().selectFace(ref, mode, cut),
         boxSelect: (ids, additive) => useEditor.getState().boxSelect(ids, additive),
         playFrame: (frame, names) => {

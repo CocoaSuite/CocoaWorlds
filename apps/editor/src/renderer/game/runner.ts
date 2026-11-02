@@ -6,6 +6,7 @@ import { SceneDoc, type GameRules, type GameValue, type MaterialDef, type SceneF
 import { isInvisibleMaterial } from '@cocoaworlds/geometry';
 import * as THREE from 'three';
 import { PlaySession } from '../viewport/play-session';
+import type { Travel } from '@cocoaworlds/runtime';
 import { SceneLighting } from '../viewport/scene-lighting';
 import { setProjectMaterials, tickMaterials } from '../viewport/project-materials';
 import { sceneMaterial } from '../viewport/world-render';
@@ -24,6 +25,9 @@ export interface GameData {
   values: GameValue[];
   /** The project's materials (older exports have none). */
   materials?: MaterialDef[];
+  /** Every scene by name, for level changes (older exports have only `scene`), and the start scene's name. */
+  scenes?: Record<string, SceneFile>;
+  start?: string;
 }
 
 export interface RunnerEvents {
@@ -32,6 +36,8 @@ export interface RunnerEvents {
   lock(locked: boolean): void;
   /** A screen freed the mouse for its buttons. */
   uiMouse(free: boolean): void;
+  /** A level change brought the player into another scene (its screens replace the last one's). */
+  scene?(scene: SceneFile): void;
 }
 
 export class GameRunner {
@@ -76,19 +82,21 @@ export class GameRunner {
     this.bind();
   }
 
+  private hidden = new THREE.MeshBasicMaterial({ visible: false });
+  /** The Three.js material for a face material (shared by every scene of the game). */
+  private materialFor = (name: string): THREE.Material => {
+    let m = this.materials.get(name);
+    if (!m) {
+      m = isInvisibleMaterial(name) ? this.hidden : sceneMaterial(name, () => {});
+      this.materials.set(name, m);
+    }
+    return m;
+  };
+
   /** Load the game (physics, models) and start it. */
   async start(): Promise<void> {
     setProjectMaterials(this.data.materials ?? []);
-    const hidden = new THREE.MeshBasicMaterial({ visible: false });
-    const material = (name: string) => {
-      let m = this.materials.get(name);
-      if (!m) {
-        m = isInvisibleMaterial(name) ? hidden : sceneMaterial(name, () => {});
-        this.materials.set(name, m);
-      }
-      return m;
-    };
-    const play = await PlaySession.start(this.data.scene, material, this.data.rules, this.data.values, loadProgress(this.data.id));
+    const play = await PlaySession.start(this.data.scene, this.materialFor, this.data.rules, this.data.values, loadProgress(this.data.id));
     if (this.disposed) return play.dispose();
     this.play = play;
     play.setEars(this.cam);
@@ -166,11 +174,42 @@ export class GameRunner {
     this.lighting.update(this.doc, (id) => this.doc.worldMatrix(id), bounds, this.scene);
     this.lighting.applyTo(this.scene);
     this.renderer.shadowMap.enabled = this.lighting.shadows;
+    if (play.travel) return void this.go(play.travel);
     if (play.placeCamera(this.cam)) {
       play.applyWater(this.scene, this.cam);
       this.renderer.render(this.scene, this.cam);
     }
   };
+
+  private going = false;
+
+  /** A level change: the same game goes on in the next scene, from where the last one left the player. */
+  private async go(t: Travel): Promise<void> {
+    if (this.going) return;
+    const next = this.data.scenes?.[t.scene];
+    if (!next) {
+      console.error(`There is no scene called “${t.scene}” in this game.`);
+      return;
+    }
+    this.going = true;
+    cancelAnimationFrame(this.raf);
+    this.saveProgress();
+    const old = this.play!;
+    this.scene.remove(old.group);
+    old.dispose();
+    this.play = null;
+    this.doc = new SceneDoc(structuredClone(next));
+    this.cb.scene?.(next);
+    const play = await PlaySession.start(next, this.materialFor, this.data.rules, this.data.values, loadProgress(this.data.id), t);
+    this.going = false;
+    if (this.disposed) return play.dispose();
+    this.play = play;
+    play.setEars(this.cam);
+    this.scene.add(play.group);
+    this.send();
+    this.last = performance.now();
+    this.loop();
+  }
 
   private saveProgress(): void {
     const p = this.play?.progress() ?? null;

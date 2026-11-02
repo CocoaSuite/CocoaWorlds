@@ -233,6 +233,12 @@ interface Actions {
   setSceneSettings(patch: Partial<SceneSettings>, label: string, mergeKey?: string): void;
   /** Replace the project's game values (saved to the project file at once). */
   setGameValues(values: GameValue[], label: string): Promise<boolean>;
+  /** Open another scene of the project (saving this one first). */
+  goToScene(scenePath: string): Promise<boolean>;
+  /** Add a scene to the project and open it. */
+  addScene(name: string): Promise<void>;
+  /** The scene the game starts in. */
+  setStartScene(scenePath: string): Promise<void>;
   /** Replace the project's materials, with undo (saved to the project file a moment later). */
   setMaterials(materials: MaterialDef[], label: string, mergeKey?: string): void;
   setBottomTab(tab: State['bottomTab']): void;
@@ -1088,6 +1094,43 @@ export const useEditor = create<State & Actions>()((set, get) => ({
     set({ session: { ...get().session!, project: r.value }, rev: get().rev + 1 });
     get().log('info', 'Project', label);
     return true;
+  },
+
+  async goToScene(scenePath) {
+    const st = get();
+    const session = st.session;
+    if (!session || session.scenePath === scenePath || st.playing) return false;
+    if (st.dirty && !(await st.save())) return false;
+    await flushProjectSave();
+    const r = await window.cocoa.projects.open(session.dir, scenePath);
+    if (!r.ok) {
+      get().notify(r.error);
+      return false;
+    }
+    get().openSession(r.value);
+    return true;
+  },
+
+  async addScene(name) {
+    const session = get().session;
+    if (!session) return;
+    if (get().dirty && !(await get().save())) return;
+    await flushProjectSave();
+    const r = await window.cocoa.projects.createScene(session.dir, name);
+    if (!r.ok) return get().notify(r.error);
+    set({ session: { ...get().session!, project: r.value.project } });
+    await get().goToScene(r.value.scenePath);
+    get().log('info', 'Project', `Added scene ${r.value.scenePath}`);
+  },
+
+  async setStartScene(scenePath) {
+    const session = get().session;
+    if (!session) return;
+    await flushProjectSave();
+    const r = await window.cocoa.projects.setStartScene(session.dir, scenePath);
+    if (!r.ok) return get().notify(r.error);
+    set({ session: { ...get().session!, project: { ...r.value, settings: get().session!.project.settings } }, rev: get().rev + 1 });
+    get().log('info', 'Project', `The game now starts in ${scenePath}`);
   },
 
   setMaterials(materials, label, mergeKey) {

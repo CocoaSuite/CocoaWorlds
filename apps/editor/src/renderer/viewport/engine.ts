@@ -19,7 +19,7 @@ import { tickMaterials } from './project-materials';
 import { VertexTool } from './vertex-tool';
 import { ClipTool, type ClipKeep, type ClipState } from './clip-tool';
 import type { PlayFrame, PlayInfo, PlaySession } from './play-session';
-import type { UiState } from '@cocoaworlds/runtime';
+import type { Travel, UiState } from '@cocoaworlds/runtime';
 import { GAME_KEYS, inputFromKeys, isScriptKey, lookFromMouse } from '../game/controls';
 import { hudOf, type Hud } from '../ui/Hud';
 import { loadProgress, storeProgress } from '../game/progress';
@@ -74,6 +74,8 @@ export interface ViewportCallbacks {
   applyLoopCut(id: string, brush: Brush): void;
   /** Edit pivot mode: the pivot was dragged to this world position. */
   livePivot(id: string, world: V3): void;
+  /** Play mode: the player left for another scene (a level change). */
+  travel(t: Travel): void;
 }
 
 /** A live gizmo result: a brush in world space, or an entity's new world placement. */
@@ -440,19 +442,28 @@ export class ViewportEngine {
 
   // ── Play mode ──
 
+  /** A level change is loading the next scene. */
+  private travelling = false;
+
+  /** Go on playing in another scene (a level change): the same game, from where the last scene left the player. */
+  travelTo(scene: SceneFile, t: Travel, rules?: GameRules, values?: GameValue[]): Promise<PlayInfo> {
+    this.travelling = true;
+    return this.startPlay(scene, rules, values, this.saveId ?? undefined, t);
+  }
+
   get playing(): boolean {
     return !!this.play;
   }
 
   /** Build a game world from a scene snapshot and show it instead of the editor's scene. */
-  async startPlay(scene: SceneFile, rules?: GameRules, values?: GameValue[], saveId?: string): Promise<PlayInfo> {
+  async startPlay(scene: SceneFile, rules?: GameRules, values?: GameValue[], saveId?: string, arrive?: Travel | null): Promise<PlayInfo> {
     this.stopPlay();
     const token = ++this.playToken;
     // Physics (and its WebAssembly) loads on first Play, so opening the editor stays quick.
     const { PlaySession } = await import('./play-session');
     // Saved progress (kept values and items) carries over from the last Play of this project.
     this.saveId = saveId ?? null;
-    const session = await PlaySession.start(scene, (name) => this.world.material(name), rules, values, saveId ? loadProgress(saveId) : null);
+    const session = await PlaySession.start(scene, (name) => this.world.material(name), rules, values, saveId ? loadProgress(saveId) : null, arrive);
     if (token !== this.playToken || this.disposed) {
       // Stopped while loading.
       session.dispose();
@@ -472,11 +483,12 @@ export class ViewportEngine {
     this.grid.object.visible = false;
     this.scene.add(session.group);
     this.lastTick = performance.now();
-    if (session.info.player) {
+    if (session.info.player && !arrive) {
       this.gameKeys.clear();
       this.cb.playerLock(false);
       this.lockPointer();
-    }
+    } else if (arrive) this.sendInput();
+    this.travelling = false;
     this.invalidate();
     return session.info;
   }
@@ -494,7 +506,8 @@ export class ViewportEngine {
       this.uiFree = false;
       this.cb.uiMouse(false);
     }
-    if (document.pointerLockElement === this.renderer.domElement) document.exitPointerLock();
+    // (A level change keeps the mouse captured: the game goes straight on in the next scene.)
+    if (!this.travelling && document.pointerLockElement === this.renderer.domElement) document.exitPointerLock();
     this.scene.remove(p.group);
     p.dispose();
     this.world.group.visible = true;
@@ -1183,6 +1196,11 @@ export class ViewportEngine {
     }
     if (this.play) {
       const frame = this.play.tick(dt);
+      const travel = this.play.travel;
+      if (travel && !this.travelling) {
+        this.travelling = true;
+        this.cb.travel(travel);
+      }
       if (frame.events.length || frame.logs.length || frame.errors.length || frame.uses.length || frame.notes.length) this.cb.playFrame(frame, this.play.info.names);
       {
         const hud = hudOf(this.play, this.locked);

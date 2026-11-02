@@ -34,7 +34,9 @@ export type FieldType =
   /** A project asset of one kind, by its project path (empty: none). */
   | { kind: 'asset'; asset: 'textures' | 'sounds' | 'models' }
   /** Another object of the scene, by id (empty: none); only objects with `component`, when given. */
-  | { kind: 'object'; component?: string };
+  | { kind: 'object'; component?: string }
+  /** A scene of the project, by name (its file name without `.cwscene`). */
+  | { kind: 'scene' };
 
 export interface FieldDef {
   key: string;
@@ -283,6 +285,39 @@ export const COMPONENTS: ComponentDef[] = [
     ],
   },
   {
+    name: 'levelChange',
+    label: e('Level change', 'Смена уровня'),
+    description: e(
+      'A zone that takes the player to another scene when they walk in, keeping their health, armour, items, score and game values. With a landmark, they arrive just where they were relative to it.',
+      'Зона, которая переносит игрока в другую сцену, когда он в неё входит; здоровье, броня, предметы, счёт и игровые значения сохраняются. С ориентиром игрок появляется там же относительно него.',
+    ),
+    appliesTo: 'brush',
+    conflicts: ['rigidBody', 'trigger', 'water', 'ladder', 'conveyor', 'train'],
+    fields: [
+      { key: 'scene', label: e('Goes to', 'Ведёт в'), type: { kind: 'scene' }, default: '' },
+      {
+        key: 'landmark',
+        label: e('Landmark', 'Ориентир'),
+        hint: e(
+          'The name of an object with the Landmark component in both scenes, at the same spot of the shared corridor (empty: arrive at the Player start).',
+          'Имя объекта с компонентом «Ориентир» в обеих сценах, в одном и том же месте общего коридора (пусто — появиться у старта игрока).',
+        ),
+        type: { kind: 'text' },
+        default: '',
+      },
+    ],
+  },
+  {
+    name: 'landmark',
+    label: e('Landmark', 'Ориентир'),
+    description: e(
+      'A point both scenes of a level change share, found by its object name: the player keeps where they stand relative to it.',
+      'Точка, общая для двух сцен при смене уровня (по имени объекта): игрок сохраняет своё положение относительно неё.',
+    ),
+    appliesTo: 'point',
+    fields: [],
+  },
+  {
     name: 'pathPoint',
     label: e('Path point', 'Точка пути'),
     description: e(
@@ -512,5 +547,11 @@ export interface TrainData {
   speed: number;
   moving: boolean;
   turns: boolean;
+  [k: string]: unknown;
+}
+
+export interface LevelChangeData {
+  scene: string;
+  landmark: string;
   [k: string]: unknown;
 }

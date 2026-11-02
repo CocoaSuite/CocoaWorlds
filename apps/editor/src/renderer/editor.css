@@ -39,6 +39,9 @@ code { font: 12px var(--mono); color: var(--fg); }
 .cw-brand { height: 26px; width: auto; display: block; }
 .cw-crumbs { margin-left: 8px; color: var(--mute); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .cw-crumbs b { color: var(--fg); font-weight: 400; }
+.cw-scene-pick { all: unset; cursor: pointer; padding: 2px 6px; border-radius: 6px; color: var(--mute); }
+.cw-scene-pick:hover:not(:disabled) { background: var(--panel2); }
+.cw-scene-pick:disabled { cursor: default; }
 .cw-crumb-sep { color: #5a5a5a; }
 .cw-status { color: var(--mute); font-size: 12px; margin-left: 10px; display: flex; align-items: center; gap: 5px; white-space: nowrap; }
 .cw-dot { width: 6px; height: 6px; border-radius: 3px; background: var(--cw-brand-hi); display: inline-block; }
