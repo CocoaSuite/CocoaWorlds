@@ -11,3 +11,4 @@ export * from './surface';
 export * from './spatial';
 export * from './space';
 export * from './scatter';
+export * from './voxels';
