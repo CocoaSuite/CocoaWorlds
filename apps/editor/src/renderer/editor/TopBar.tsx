@@ -86,6 +86,7 @@ export function TopBar({ onShowKeys }: { onShowKeys: () => void }) {
               { label: t('add.sign'), onSelect: () => s.add('sign') },
             { label: t('add.chicken'), onSelect: () => void s.addChicken(false) },
             { label: t('add.chickenFriend'), onSelect: () => void s.addChicken(true) },
+            { label: t('add.ladder'), onSelect: () => s.addLadder() },
             ],
           },
           {

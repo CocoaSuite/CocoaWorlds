@@ -69,6 +69,7 @@ import {
   validate,
   type Brush,
   type BrushRole,
+  type V3,
 } from '@cocoaworlds/geometry';
 import { create } from 'zustand';
 import { modelSlots } from './viewport/models';
@@ -179,6 +180,8 @@ interface Actions {
   add(kind: AddKind, at?: [number, number, number]): void;
   /** Add the ready-made chicken (its model is copied into the project the first time): an enemy or a friend. */
   addChicken(friendly: boolean, at?: [number, number, number]): Promise<void>;
+  /** A ready-made ladder: a Repeat group of rail-and-rung segments with a climbing zone in each, and a top cap. */
+  addLadder(at?: [number, number, number]): void;
   deleteSelection(): void;
   duplicateSelection(): void;
   rename(id: string, name: string): void;
@@ -442,6 +445,33 @@ export const useEditor = create<State & Actions>()((set, get) => ({
     get().execute(addEntitiesCmd(doc, [e], `Add ${e.name}`));
     set({ selection: [e.id] });
     get().log('info', 'Scene', `Added ${e.name}`);
+  },
+
+  addLadder(at = [0, 0, 0]) {
+    const doc = get().doc;
+    if (!doc) return;
+    const root = newEntity(uniqueName(doc, 'ladder'), { group: {}, repeat: { ...defaultComponent('repeat'), length: 128 } }, { position: [at[0], at[1], at[2]] });
+    const seg = newEntity('segment', { group: {} });
+    const cap = newEntity('top', { group: {} });
+    const part = (name: string, parent: EntityData, a: V3, b: V3, extra: Record<string, unknown> = {}) => {
+      const e = newBrushEntity(name, box(a, b), 'solid');
+      Object.assign(e.components, extra);
+      e.parent = parent.id;
+      return e;
+    };
+    seg.parent = cap.parent = root.id;
+    const parts = [
+      part('rail_left', seg, [-18, 0, -2], [-14, 32, 2]),
+      part('rail_right', seg, [14, 0, -2], [18, 32, 2]),
+      part('rung', seg, [-14, 14, -1.5], [14, 17, 1.5]),
+      part('climb', seg, [-18, 0, 2], [18, 32, 14], { ladder: defaultComponent('ladder') }),
+      part('cap_left', cap, [-18, 32, -2], [-14, 48, 2]),
+      part('cap_right', cap, [14, 32, -2], [18, 48, 2]),
+    ];
+    root.components.repeat = { ...(root.components.repeat as object), segment: seg.id, endCap: cap.id } as never;
+    get().execute(addEntitiesCmd(doc, [root, seg, cap, ...parts], `Add ${root.name}`));
+    set({ selection: [root.id] });
+    get().log('info', 'Scene', 'Added a ladder: drag the blue knob at its top (or set Length) to make it taller');
   },
 
   async addChicken(friendly, at = [0, 0, 0]) {

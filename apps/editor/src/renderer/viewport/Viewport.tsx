@@ -66,6 +66,7 @@ export function Viewport() {
       e = new ViewportEngine(host.current, {
         select: (ids, mode) => useEditor.getState().select(ids, mode),
         beginEdit: (label) => useEditor.getState().begin(label),
+        repeatLength: (id, length) => useEditor.getState().setComponentField(id, 'repeat', 'length', length, `repeat-${id}`),
         clickSelect: (id, additive, deep) => useEditor.getState().clickSelect(id, additive, deep),
         liveMany: (changes) => useEditor.getState().applyLive(changes),
         draft: setDraft,
@@ -250,6 +251,7 @@ export function Viewport() {
         { label: t('add.sign'), onSelect: () => s.add('sign', ctx?.ground ?? undefined) },
         { label: t('add.chicken'), onSelect: () => void s.addChicken(false, ctx?.ground ?? undefined) },
         { label: t('add.chickenFriend'), onSelect: () => void s.addChicken(true, ctx?.ground ?? undefined) },
+        { label: t('add.ladder'), onSelect: () => s.addLadder(ctx?.ground ?? undefined) },
         { label: `${t('add.empty')}`, onSelect: () => s.add('empty', ctx?.ground ?? undefined) },
       ];
 

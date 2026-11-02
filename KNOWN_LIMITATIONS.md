@@ -67,3 +67,4 @@ None open.
   occlusion is a quick approximation. Graph files keep the name they were made with. Graphs are evaluated
   only in the editor; changing one from another workspace with Undo bakes it again in the background.
 - **Ambient occlusion** is screen space (it only knows what is on screen) and is off with software rendering, so the automated tests (which render in software) don't check its look. Bounce light is not there yet (see docs/proposals/lighting-gi.md).
+- **Repeat** copies are made when the scene is shown or played, so they can't be picked or edited one by one (a click picks the group), the selection outline covers only the parts, and a segment can't be cut short at the end (whole or stretched only). A model segment needs Step set, as only brushes are measured. Copies of a segment with a script don't run it.

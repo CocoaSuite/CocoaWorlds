@@ -2,7 +2,7 @@
  * The editor viewport: draws the level, grid and gizmos, handles camera navigation, picking, transform dragging
  * and the brush tool. Renders on demand (only after something changes) so an idle editor costs no GPU time.
  */
-import type { EntityData, SceneDoc, Transform, Vec3 } from '@cocoaworlds/core';
+import { SceneDoc, expandRepeats, ownerOf, type EntityData, type Transform, type Vec3 } from '@cocoaworlds/core';
 import { bounds, faceAt, loopCut, nearestEdge, transform as transformBrush, translate, vertices, type Brush, type Plane, type V3 } from '@cocoaworlds/geometry';
 import * as THREE from 'three';
 import { AoRenderer } from './ao';
@@ -10,7 +10,7 @@ import { TransformControls } from 'three/addons/controls/TransformControls.js';
 import { brushBounds, brushOf, isLocked, isShown, worldBrushOf, worldBrushes, worldMatrices, type DrawRole, type Outline, type ShapeOptions } from '../brush/brushes';
 import { rootsOf } from '../scene-ops';
 import { isGroup } from '../scene-ops';
-import { PIVOT, applyMat4, mat4Key, pivotOf, type Mat4 } from '@cocoaworlds/core';
+import { PIVOT, REPEAT_AXES, applyMat4, mat4Key, pivotOf, repeatEnd, type Mat4 } from '@cocoaworlds/core';
 import { BrushDraft, draftAxes, type DraftState } from './brush-draft';
 import { CameraRig, type ViewKind } from './camera';
 import { EditorGrid } from './grid';
@@ -39,6 +39,8 @@ export interface ViewportCallbacks {
   /** A click in the view: the store resolves groups (`deep` = double-click, pick the object itself). */
   clickSelect(id: string | null, additive: boolean, deep: boolean): void;
   beginEdit(label: string): void;
+  /** The length handle of a Repeat group was dragged. */
+  repeatLength?(id: string, length: number): void;
   /** Live result of a gizmo drag for every moving object. */
   liveMany(changes: LiveChange[]): void;
   endEdit(): void;
@@ -141,6 +143,12 @@ export class ViewportEngine {
     new THREE.OctahedronGeometry(1),
     new THREE.MeshBasicMaterial({ color: 0xffc94a, depthTest: false, transparent: true, opacity: 0.95 }),
   );
+  /** Repeat groups: the knob at the far end that sets the length. */
+  private repeatHandle = new THREE.Mesh(
+    new THREE.BoxGeometry(2, 2, 2),
+    new THREE.MeshBasicMaterial({ color: 0x4ad7ff, depthTest: false, transparent: true, opacity: 0.95 }),
+  );
+  private repeatDrag: { id: string; origin: THREE.Vector3; axis: THREE.Vector3; unit: number; length: number; start: number } | null = null;
   private axisScene = new THREE.Scene();
   private axisCam = new THREE.OrthographicCamera(-1.4, 1.4, 1.4, -1.4, -10, 10);
   private raycaster = new THREE.Raycaster();
@@ -148,7 +156,7 @@ export class ViewportEngine {
   private raf = 0;
   private lastTick = performance.now();
   private keys = new Set<string>();
-  private drag: { button: number; x: number; y: number; moved: boolean; mode: 'look' | 'pan' | 'orbit' | 'click' | 'draw' | 'height' | 'box' | 'clip'; sx: number; sy: number } | null = null;
+  private drag: { button: number; x: number; y: number; moved: boolean; mode: 'look' | 'pan' | 'orbit' | 'click' | 'draw' | 'height' | 'box' | 'clip' | 'repeat'; sx: number; sy: number } | null = null;
   private spaceHeld = false;
   private doc: SceneDoc | null = null;
   private selection: string[] = [];
@@ -231,6 +239,10 @@ export class ViewportEngine {
     this.pivotMarker.renderOrder = 21;
     this.pivotMarker.visible = false;
     this.scene.add(this.pivotMarker);
+    this.repeatHandle.renderOrder = 21;
+    this.repeatHandle.visible = false;
+    this.repeatHandle.name = 'repeat-handle';
+    this.scene.add(this.repeatHandle);
     // Editor preview lighting: flat and even, for building. The scene's own lighting replaces it in Play and
     // when “Game lighting” is on.
     this.previewLights.add(new THREE.HemisphereLight(0xe8eef5, 0x3a3530, 1.4));
@@ -314,7 +326,8 @@ export class ViewportEngine {
 
   /** Re-read entities from the doc (called after any scene change). */
   syncAll(): void {
-    const doc = this.doc;
+    // What is shown: the scene with Repeat groups built out (their copies are drawn, never saved).
+    const doc = this.doc ? this.shownDoc(this.doc) : null;
     this.mats = doc ? worldMatrices(doc) : new Map();
     const seen = new Set<string>();
     if (doc) {
@@ -343,6 +356,12 @@ export class ViewportEngine {
     }
     this.applySelection();
     this.invalidate();
+  }
+
+  /** The scene as drawn: with Repeat groups' copies (the doc itself when there are none). */
+  private shownDoc(doc: SceneDoc): SceneDoc {
+    if (!doc.entities.some((e) => e.components.repeat)) return doc;
+    return new SceneDoc(expandRepeats(doc.toFile(), brushBounds));
   }
 
   /** Lines from each path point to the next (arrows halfway), so routes can be seen while editing. */
@@ -687,6 +706,54 @@ export class ViewportEngine {
     this.pivotMarker.scale.setScalar(Math.max(0.5, d));
   }
 
+  /** The selected Repeat group (one, while editing), or null. */
+  private repeatTarget(): string | null {
+    if (this.play || this.selection.length !== 1 || !this.doc) return null;
+    const id = this.selection[0]!;
+    return this.doc.get(id)?.components.repeat ? id : null;
+  }
+
+  private showRepeatHandle(): void {
+    const id = this.repeatTarget();
+    const end = id && this.doc ? repeatEnd(this.doc, id, brushBounds) : null;
+    this.repeatHandle.visible = !!end;
+    if (!end || !id || !this.doc) return;
+    this.repeatHandle.position.set(...(applyMat4(this.doc.worldMatrix(id), end) as V3));
+    const d = this.rig.kind === 'perspective' ? this.repeatHandle.position.distanceTo(this.rig.camera.position) * 0.005 : this.rig.unitsPerPixel * 5;
+    this.repeatHandle.scale.setScalar(Math.max(0.5, d));
+  }
+
+  /** Where along the dragged Repeat axis the mouse ray passes closest (world units from the drag origin). */
+  private repeatAlong(e: { clientX: number; clientY: number }, r: { origin: THREE.Vector3; axis: THREE.Vector3 }): number {
+    this.raycaster.setFromCamera(this.ndc(e), this.rig.camera);
+    const a = r.origin.clone().addScaledVector(r.axis, -1e5);
+    const b = r.origin.clone().addScaledVector(r.axis, 1e5);
+    const on = new THREE.Vector3();
+    this.raycaster.ray.distanceSqToSegment(a, b, undefined, on);
+    return on.sub(r.origin).dot(r.axis);
+  }
+
+  /** Starts a length drag if the mouse is on the Repeat handle. */
+  private startRepeatDrag(e: PointerEvent): boolean {
+    const id = this.repeatTarget();
+    if (!id || !this.doc || !this.repeatHandle.visible) return false;
+    this.raycaster.setFromCamera(this.ndc(e), this.rig.camera);
+    if (!this.raycaster.intersectObject(this.repeatHandle).length) return false;
+    const g = this.doc.get(id)!;
+    const rep = g.components.repeat as { axis?: keyof typeof REPEAT_AXES; length?: number };
+    const m = this.doc.worldMatrix(id);
+    const o = applyMat4(m, [0, 0, 0]);
+    const tip = applyMat4(m, REPEAT_AXES[rep.axis ?? 'up'] as Vec3);
+    const axis = new THREE.Vector3(tip[0] - o[0], tip[1] - o[1], tip[2] - o[2]);
+    const unit = axis.length() || 1;
+    axis.divideScalar(unit);
+    const r = { id, origin: this.repeatHandle.position.clone(), axis, unit, length: rep.length ?? 128, start: 0 };
+    r.start = this.repeatAlong(e, r);
+    this.repeatDrag = r;
+    this.cb.beginEdit('Repeat length');
+    return true;
+  }
+
   setVertexSnap(enabled: boolean): void {
     this.vertexSnap = enabled;
   }
@@ -820,6 +887,7 @@ export class ViewportEngine {
       target = this.proxy;
     }
     this.showPivotMarker();
+    this.showRepeatHandle();
     if (target) {
       if (this.gizmo.object !== target) this.gizmo.attach(target);
       this.gizmo.setMode(this.editTool === 'vertex' || this.gizmoMode === 'none' || this.pivotTarget() ? 'translate' : this.gizmoMode);
@@ -1260,6 +1328,7 @@ export class ViewportEngine {
     r.setViewport(0, 0, size.x, size.y);
     r.clear();
     if (this.pivotMarker.visible) this.showPivotMarker();
+    if (this.repeatHandle.visible) this.showRepeatHandle();
     // (Paths are an editing aid: not shown while playing.)
     if (this.pathLines) this.pathLines.visible = !this.play;
     this.updateLighting();
@@ -1365,8 +1434,9 @@ export class ViewportEngine {
     const worldHit = this.world.pick(this.raycaster);
     const locked = (id: string) => !!this.doc && isLocked(this.doc, this.doc.get(id));
     const w = worldHit && !locked(worldHit.entityId) ? worldHit : null;
-    if (markerHit && (!w || markerHit.distance <= w.distance)) return (markerHit.object.userData.entityId as string) ?? null;
-    return w?.entityId ?? null;
+    // (A Repeat group's copies pick the group.)
+    if (markerHit && (!w || markerHit.distance <= w.distance)) return markerHit.object.userData.entityId ? ownerOf(markerHit.object.userData.entityId as string) : null;
+    return w ? ownerOf(w.entityId) : null;
   }
 
   /** The model part (material slot) under the cursor, when no level face is in front of it. */
@@ -1395,7 +1465,8 @@ export class ViewportEngine {
     this.raycaster.setFromCamera(this.ndc(e), this.rig.camera);
     // Subtract volumes never appear in the level, so the face tools click straight through them.
     const hit = this.world.pick(this.raycaster, true);
-    if (!hit || !this.doc || isLocked(this.doc, this.doc.get(hit.entityId))) return null;
+    // (Faces of a Repeat group's copies aren't faces of the scene: edit the segment.)
+    if (!hit || !this.doc || !this.doc.get(hit.entityId) || isLocked(this.doc, this.doc.get(hit.entityId))) return null;
     const wb = this.world.brush(hit.entityId);
     if (!wb) return null;
     const face = faceAt(wb.brush, [hit.point.x, hit.point.y, hit.point.z], [hit.normal.x, hit.normal.y, hit.normal.z], 0.05);
@@ -1498,6 +1569,7 @@ export class ViewportEngine {
       mode = 'clip';
       this.invalidate();
     }
+    if (mode === 'click' && this.editTool === 'none' && this.startRepeatDrag(e)) mode = 'repeat';
     this.drag = { button: e.button, x: e.clientX, y: e.clientY, sx: e.clientX, sy: e.clientY, moved: false, mode };
     el.setPointerCapture(e.pointerId);
     if (mode === 'look') this.cb.setFlying(true);
@@ -1633,6 +1705,16 @@ export class ViewportEngine {
     if (!d) return;
     const dx = e.clientX - d.x;
     const dy = e.clientY - d.y;
+    if (d.mode === 'repeat') {
+      const r = this.repeatDrag;
+      if (!r) return;
+      let len = r.length + (this.repeatAlong(e, r) - r.start) / r.unit;
+      if (this.snap) len = Math.round(len / this.gridSize) * this.gridSize;
+      len = Math.max(this.snap ? this.gridSize : 1, len);
+      this.cb.repeatLength?.(r.id, len);
+      d.moved = true;
+      return;
+    }
     if (d.mode === 'draw') {
       const start = this.draft;
       if (!start) return;
@@ -1688,6 +1770,11 @@ export class ViewportEngine {
       /* already released */
     }
     if (this.play) return;
+    if (d.mode === 'repeat') {
+      this.repeatDrag = null;
+      this.cb.endEdit();
+      return;
+    }
     if (d.mode === 'draw') {
       const dr = this.draft;
       if (!dr || !dr.hasArea) return this.cancelDraft();

@@ -502,6 +502,36 @@ export const COMPONENTS: ComponentDef[] = [
     ],
   },
   {
+    name: 'repeat',
+    label: e('Repeat', 'Повтор'),
+    description: e(
+      'Builds this group from a segment repeated to a length (ladders, pipes, railings, columns), with optional caps at each end. The copies are made when the scene is shown or played; only the parts are saved.',
+      'Строит эту группу из сегмента, повторённого на нужную длину (лестницы, трубы, перила, колонны), с концами по желанию. Копии делаются при показе и игре; сохраняются только части.',
+    ),
+    appliesTo: 'point',
+    fields: [
+      { key: 'segment', label: e('Segment', 'Сегмент'), hint: e('The part to repeat: a child of this group (a brush, a group or a model).', 'Повторяемая часть: потомок этой группы (браш, группа или модель).'), type: { kind: 'object' }, default: '' },
+      { key: 'startCap', label: e('Start cap', 'Начало'), hint: e('Stays where it is, before the first segment (optional).', 'Остаётся на месте перед первым сегментом (необязательно).'), type: { kind: 'object' }, default: '' },
+      { key: 'endCap', label: e('End cap', 'Конец'), hint: e('Placed as for one segment; it moves to the end as the length grows (optional).', 'Ставится как для одного сегмента; с ростом длины уходит к концу (необязательно).'), type: { kind: 'object' }, default: '' },
+      {
+        key: 'axis',
+        label: e('Along', 'Вдоль'),
+        type: { kind: 'enum', options: [{ value: 'up', label: e('Up', 'Вверх') }, { value: 'north', label: e('North', 'Север') }, { value: 'east', label: e('East', 'Восток') }] },
+        default: 'up',
+      },
+      { key: 'length', label: e('Length', 'Длина'), hint: e('How long the repeated part is (drag the handle in the view).', 'Длина повторённой части (тяните ручку в окне).'), type: { kind: 'number', min: 1, step: 16, unit: 'u' }, default: 128 },
+      {
+        key: 'fit',
+        label: e('Fit', 'Подгонка'),
+        hint: e('Whole segments: the length snaps to a whole number of them. Stretch: the segments stretch a little to fit exactly.', 'Целые сегменты: длина округляется до целого числа. Растянуть: сегменты слегка растягиваются, чтобы точно уложиться.'),
+        type: { kind: 'enum', options: [{ value: 'whole', label: e('Whole', 'Целые') }, { value: 'stretch', label: e('Stretch', 'Растянуть') }] },
+        default: 'whole',
+      },
+      { key: 'gap', label: e('Gap', 'Зазор'), type: { kind: 'number', min: 0, step: 4, unit: 'u' }, default: 0 },
+      { key: 'step', label: e('Segment size', 'Размер сегмента'), hint: e('0: measured from the segment’s brushes. Set it for models.', '0 — измерить по брашам сегмента. Задайте для моделей.'), type: { kind: 'number', min: 0, step: 4, unit: 'u' }, default: 0 },
+    ],
+  },
+  {
     name: 'ladder',
     label: e('Ladder', 'Лестница'),
     description: e(

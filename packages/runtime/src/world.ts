@@ -36,6 +36,7 @@ import {
   weaponOf,
   uiOf,
   UI_SCRIPT_OWNER,
+  expandRepeats,
   uiShown,
 } from '@cocoaworlds/core';
 import { EventBus } from './events';
@@ -445,7 +446,8 @@ export class GameWorld {
     this.rules = rules;
     this.valueDefs = values;
     for (const v of values) this.globals.set(v.name, v.initial);
-    const doc = new SceneDoc(structuredClone(scene));
+    // Repeat groups (ladders, railings …) built out into their copies first.
+    const doc = new SceneDoc(expandRepeats(structuredClone(scene), boundsOfEntity));
     this.doc = doc;
     this.world = new RAPIER.World({ x: 0, y: -(doc.settings.gravity ?? 800), z: 0 });
     this.world.lengthUnit = UNITS_PER_METRE;

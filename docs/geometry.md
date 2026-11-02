@@ -120,3 +120,16 @@ The Sphere brush (tool bar, or Sphere in the Brush tool) fits the drawn box, so 
 ellipsoid. **Sides** sets how many faces go around (4–48); there are half as many rings from pole to pole.
 Every band is a flat face, so a sphere is an ordinary convex brush: it can be cut, clipped, painted and
 vertex-edited like any other.
+
+## Repeat (R1)
+
+A **Repeat** component on a group builds it from one of its children, the **segment**, repeated along an axis
+(up, north or east, in the group's space) to a **length**. **Fit** chooses whole segments (the count is the
+nearest whole number) or stretched (the copies are scaled along the axis to fill the length exactly; only for an
+unrotated segment). **Gap** adds space between copies. **Step** is the segment's size along the axis; 0 measures
+its brushes. An optional **start cap** stays where it is; an **end cap** is placed as if after one segment and
+moves out as the ladder grows. Only the parts are saved: `expandRepeats` (core) makes the copies, with ids
+`group~n~source` and the `generated` tag, whenever the scene is shown in the editor or played. Copies keep
+everything else (materials, ladder and trigger zones, colliders) but not scripts or nested repeats. Selecting a
+Repeat group shows a blue knob at its far end; dragging it sets the length (in grid steps while snapping), as
+one undo step. **Add › Ladder** makes one ready to climb.
