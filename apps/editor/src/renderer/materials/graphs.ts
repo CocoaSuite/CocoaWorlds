@@ -7,7 +7,7 @@
  * `assets/textures/generated/` and its map fields pointed at them.
  */
 import { MAP_FIELDS, materialsOf, newMaterial, type MaterialDef } from '@cocoaworlds/core';
-import { GraphEvaluator, NODES, OUTPUT_ROLES, newGraph, outputNodes, paramsOf, nodeDef, validateGraph, type MatGraph, type OutputRole } from '@cocoaworlds/materials';
+import { GraphEvaluator, NODES, OUTPUT_ROLES, withOverrides, newGraph, outputNodes, paramsOf, nodeDef, validateGraph, type MatGraph, type OutputRole } from '@cocoaworlds/materials';
 import { create } from 'zustand';
 import { assetUrl, forgetAsset } from '../assets';
 import { useEditor } from '../store';
@@ -318,40 +318,50 @@ async function bakeOnce(path: string): Promise<void> {
   if (!users.length) return;
   useGraphs.setState((s) => ({ baking: { ...s.baking, [path]: 'baking' } }));
   const stem = path.slice('materials/'.length, -'.cwmat'.length);
-  // (Materials sharing a graph share its maps; the largest size asked for is baked.)
-  const size = Math.max(...users.map((m) => m.bakeSize ?? 512));
   try {
     await Promise.all(imagesOf(g).map((p) => loadBitmap(p).catch(() => null)));
-    const ev = new GraphEvaluator(context(), { loadImage: loadBitmap });
-    ev.evaluate(g, size);
-    // (Images arrive a moment after they are asked for.)
-    await new Promise((r) => setTimeout(r, 0));
-    ev.evaluate(g, size);
-    const patch: Partial<MaterialDef> = {};
-    const outs = outputNodes(g);
-    for (const role of OUTPUT_ROLES) {
-      const n = outs.get(role);
-      const field = MAP_FIELDS[role];
-      if (!n) {
-        (patch as Record<string, unknown>)[field] = undefined;
-        continue;
+    // Each material bakes with its own values for the exposed settings (a graph's only material keeps the
+    // graph's name for its maps; variants add a piece of their id).
+    for (const m of users) {
+      const size = m.bakeSize ?? 512;
+      const gm = withOverrides(g, m.overrides);
+      const name = users.length === 1 ? stem : `${stem}_${m.id.slice(4, 10)}`;
+      const ev = new GraphEvaluator(context(), { loadImage: loadBitmap });
+      ev.evaluate(gm, size);
+      // (Images arrive a moment after they are asked for.)
+      await new Promise((r) => setTimeout(r, 0));
+      ev.evaluate(gm, size);
+      const patch: Partial<MaterialDef> = {};
+      const outs = outputNodes(gm);
+      for (const role of OUTPUT_ROLES) {
+        const n = outs.get(role);
+        const field = MAP_FIELDS[role];
+        if (!n) {
+          (patch as Record<string, unknown>)[field] = undefined;
+          continue;
+        }
+        const px = ev.read(n.id);
+        if (!px) continue;
+        const r = await window.cocoa.projects.writeGenerated(dir, `${name}_${role}.png`, await pngBytes(px, size));
+        if (!r.ok) throw new Error(r.error);
+        forgetAsset(r.value);
+        forgetMaterialImage(r.value);
+        (patch as Record<string, unknown>)[field] = r.value;
       }
-      const px = ev.read(n.id);
-      if (!px) continue;
-      const r = await window.cocoa.projects.writeGenerated(dir, `${stem}_${role}.png`, await pngBytes(px, size));
-      if (!r.ok) throw new Error(r.error);
-      forgetAsset(r.value);
-      forgetMaterialImage(r.value);
-      (patch as Record<string, unknown>)[field] = r.value;
+      ev.dispose();
+      if (useEditor.getState().session?.dir !== dir) return;
+      useEditor.getState().patchMaterialQuietly(m.id, patch);
     }
-    ev.dispose();
-    if (useEditor.getState().session?.dir !== dir) return;
-    for (const m of users) useEditor.getState().patchMaterialQuietly(m.id, patch);
     useGraphs.setState((s) => ({ baking: { ...s.baking, [path]: bakeTimers.has(path) ? 'waiting' : 'done' } }));
   } catch (e) {
     useGraphs.setState((s) => ({ baking: { ...s.baking, [path]: 'failed' } }));
     useEditor.getState().log('error', 'Materials', `Baking ${stem} failed: ${(e as Error).message}`);
   }
+}
+
+/** Bake a graph again a moment from now (a material's own settings changed, or a variant was made). */
+export function bakeLater(path: string): void {
+  bakeSoon(path);
 }
 
 // ── Pictures for the node library ──

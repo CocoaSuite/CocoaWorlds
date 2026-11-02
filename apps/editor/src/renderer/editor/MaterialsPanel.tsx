@@ -14,7 +14,7 @@ import { projectMaterial, releaseMaterial, tickMaterials } from '../viewport/pro
 import type { FaceRef } from '../viewport/world-render';
 import { MaterialSwatch } from './MaterialSwatch';
 import { GraphWorkspace } from './MaterialGraph';
-import { createGraphMaterial, useGraphs } from '../materials/graphs';
+import { bakeLater, createGraphMaterial, useGraphs } from '../materials/graphs';
 
 export type Shape = 'sphere' | 'cube' | 'wall';
 
@@ -263,6 +263,12 @@ export function MaterialsPanel() {
           edit={edit}
           used={used.length}
           onDuplicate={() => void duplicateGraphMaterial(mat)}
+          onVariant={() => {
+            const name = unique(`${mat.name} ${t('cm.variantName')}`, list.map((m) => m.name));
+            const { id } = newMaterial(name);
+            add({ ...mat, id, name, map: undefined, normalMap: undefined, roughnessMap: undefined, metalnessMap: undefined, occlusionMap: undefined, glowMap: undefined, heightMap: undefined, opacityMap: undefined }, `Make variant ${name}`);
+            bakeLater(mat.graph!);
+          }}
           onRemove={removeMat}
           tools={useRow}
           wideLibrary={listShut}

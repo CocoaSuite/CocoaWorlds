@@ -32,6 +32,46 @@ export interface MatGraph {
   version: typeof GRAPH_VERSION;
   nodes: GraphNode[];
   links: GraphLink[];
+  /**
+   * Exposed settings: node settings each material using the graph can set for itself (“brick colour”, “wear”),
+   * so one graph makes a family of materials (variants). Missing: none.
+   */
+  exposed?: Exposed[];
+}
+
+export interface Exposed {
+  id: string;
+  node: string;
+  param: string;
+  /** What materials call it. */
+  label: string;
+}
+
+/** Expose a node's setting (once). */
+export function expose(g: MatGraph, node: string, param: string, label: string): MatGraph {
+  if ((g.exposed ?? []).some((e) => e.node === node && e.param === param)) return g;
+  return { ...g, exposed: [...(g.exposed ?? []), { id: nodeId(), node, param, label }] };
+}
+
+export function unexpose(g: MatGraph, node: string, param: string): MatGraph {
+  const exposed = (g.exposed ?? []).filter((e) => !(e.node === node && e.param === param));
+  return { ...g, exposed };
+}
+
+/** Exposed settings whose node and setting still exist. */
+export function exposedOf(g: MatGraph): Exposed[] {
+  return (g.exposed ?? []).filter((e) => {
+    const n = g.nodes.find((x) => x.id === e.node);
+    return !!n && !!nodeDef(n.type)?.params.some((p) => p.id === e.param);
+  });
+}
+
+/** The graph as a material using it sees it: its own values for exposed settings in place of the graph's. */
+export function withOverrides(g: MatGraph, overrides: Record<string, unknown> | undefined): MatGraph {
+  if (!overrides || !Object.keys(overrides).length) return g;
+  let out = g;
+  for (const e of exposedOf(g)) if (overrides[e.id] !== undefined) out = setParam(out, e.node, e.param, overrides[e.id] as ParamValue);
+  return out;
 }
 
 const ID_CHARS = 'abcdefghijklmnopqrstuvwxyz0123456789';
@@ -118,7 +158,7 @@ export function disconnect(g: MatGraph, to: string, input: string): MatGraph {
 /** Take nodes out, with their links. */
 export function removeNodes(g: MatGraph, ids: Iterable<string>): MatGraph {
   const gone = new Set(ids);
-  return { ...g, nodes: g.nodes.filter((n) => !gone.has(n.id)), links: g.links.filter((l) => !gone.has(l.from) && !gone.has(l.to)) };
+  return { ...g, nodes: g.nodes.filter((n) => !gone.has(n.id)), links: g.links.filter((l) => !gone.has(l.from) && !gone.has(l.to)), ...(g.exposed ? { exposed: g.exposed.filter((e) => !gone.has(e.node)) } : {}) };
 }
 
 export function setParam(g: MatGraph, id: string, key: string, value: ParamValue): MatGraph {
@@ -236,6 +276,10 @@ export function validateGraph(g: unknown): string | null {
     const key = `${l.to}:${l.input}`;
     if (taken.has(key)) return 'An input has two links.';
     taken.add(key);
+  }
+  if (g.exposed !== undefined) {
+    if (!Array.isArray(g.exposed)) return 'The exposed settings are broken.';
+    for (const e of g.exposed) if (!isObj(e) || typeof e.id !== 'string' || typeof e.node !== 'string' || typeof e.param !== 'string' || typeof e.label !== 'string') return 'An exposed setting is broken.';
   }
   const graph = g as unknown as MatGraph;
   for (const l of graph.links) if (wouldLoop({ ...graph, links: graph.links.filter((x) => x !== l) }, l.from, l.to)) return 'The graph loops back on itself.';

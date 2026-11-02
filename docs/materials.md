@@ -112,6 +112,14 @@ right shows the material **On a shape** (sphere, cube, wall) or **Flat** (the pi
 Everything tiles: the patterns repeat over their square, so the material never shows a seam. Random nodes
 have a **Seed**; **New** picks another random pattern of the same kind.
 
+### Exposed settings and variants
+
+Any node setting can be **exposed**: pick the node and press **◇** beside the setting (◆ when exposed). A material
+using the graph then lists it under **Its own settings**, where it can be set for that material alone (**↺** goes
+back to the graph's value). **Make a variant** makes another material from the same graph, with its own values:
+red bricks and grey bricks from one graph. Changing the graph changes every variant; each bakes its own maps
+(their file names carry a piece of the material's id).
+
 ### Maps and baking
 
 Graphs run on the graphics card while you edit, and the level shows the changes at once. A moment after the

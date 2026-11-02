@@ -10,6 +10,10 @@ import {
   NODES,
   connect,
   disconnect,
+  expose,
+  exposedOf,
+  unexpose,
+  withOverrides,
   newNode,
   nodeDef,
   paramsOf,
@@ -43,7 +47,7 @@ import {
 import '@xyflow/react/dist/style.css';
 import { createContext, memo, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { getLang, t } from '../i18n';
-import { LiveGraph, bakeNow, endGraphGesture, loadGraph, nodeIcons, setGraph, setGraphLive, useGraphs } from '../materials/graphs';
+import { LiveGraph, bakeLater, bakeNow, endGraphGesture, loadGraph, nodeIcons, setGraph, setGraphLive, useGraphs } from '../materials/graphs';
 import { useEditor } from '../store';
 import { ImagePick, MaterialPreview, Row, Slider, type Shape } from './MaterialsPanel';
 
@@ -605,8 +609,8 @@ function RampField({ value, onChange }: { value: RampStop[]; onChange: (v: RampS
   );
 }
 
-function ParamField({ p, value, onChange, textures }: { p: Param; value: ParamValue; onChange: (v: ParamValue, key?: string) => void; textures: { path: string; name: string }[] }) {
-  const label = say(p.label);
+function ParamField({ p, value, onChange, textures, label: named }: { p: Param; value: ParamValue; onChange: (v: ParamValue, key?: string) => void; textures: { path: string; name: string }[]; label?: string }) {
+  const label = named ?? say(p.label);
   switch (p.kind) {
     case 'number':
       return <Slider label={label} value={Number(value)} max={p.max} min={p.min} step={p.step ?? (p.max - p.min > 20 ? 1 : 0.01)} onChange={(v) => onChange(v, p.id)} />;
@@ -661,11 +665,32 @@ function NodeProps({ path, graph, node, onSelect }: { path: string; graph: MatGr
       </div>
       <p className="cw-muted cw-screens-note">{say(def.hint)}</p>
       {errors.get(node.id) && <p className="cw-screens-note cm-bad">{errors.get(node.id)}</p>}
-      {def.params.map((p) => (
-        <Row key={p.id} label={say(p.label)}>
-          <ParamField p={p} value={params[p.id]!} textures={textures} onChange={(v, key) => change(p.id, v, key)} />
-        </Row>
-      ))}
+      {def.params.map((p) => {
+        const shown = (graph.exposed ?? []).some((e) => e.node === node.id && e.param === p.id);
+        return (
+          <Row key={p.id} label={say(p.label)}>
+            <span className="cm-param">
+              <ParamField p={p} value={params[p.id]!} textures={textures} onChange={(v, key) => change(p.id, v, key)} />
+              <button
+                type="button"
+                className={`cw-iconbtn cm-expose${shown ? ' on' : ''}`}
+                aria-pressed={shown}
+                aria-label={`${t('cm.expose')} ${say(p.label)}`}
+                title={shown ? t('cm.exposedHint') : t('cm.exposeHint')}
+                onClick={() =>
+                  setGraph(
+                    path,
+                    shown ? unexpose(graph, node.id, p.id) : expose(graph, node.id, p.id, `${say(def.label)}: ${say(p.label)}`),
+                    shown ? 'Stop exposing a setting' : 'Expose a setting',
+                  )
+                }
+              >
+                {shown ? '◆' : '◇'}
+              </button>
+            </span>
+          </Row>
+        );
+      })}
       {!def.params.length && <p className="cw-muted cw-screens-note">{t('cm.noSettings')}</p>}
       <div className="cw-screens-pair">
         <Button
@@ -692,7 +717,26 @@ function NodeProps({ path, graph, node, onSelect }: { path: string; graph: MatGr
   );
 }
 
-function GraphMaterialProps({ m, edit, onDuplicate, onRemove, used }: { m: MaterialDef; edit: (patch: Partial<MaterialDef>, label: string, key?: string) => void; onDuplicate: () => void; onRemove: () => void; used: number }) {
+function GraphMaterialProps({
+  m,
+  graph,
+  edit,
+  onDuplicate,
+  onVariant,
+  onRemove,
+  used,
+}: {
+  m: MaterialDef;
+  graph: MatGraph | undefined;
+  edit: (patch: Partial<MaterialDef>, label: string, key?: string) => void;
+  onDuplicate: () => void;
+  onVariant: () => void;
+  onRemove: () => void;
+  used: number;
+}) {
+  const exposed = graph ? exposedOf(graph) : [];
+  const textures = useEditor((s) => s.assets.textures).map((x) => ({ path: x.path, name: x.name }));
+  const own = (m.overrides ?? {}) as Record<string, ParamValue>;
   const [name, setName] = useState(m.name);
   useEffect(() => setName(m.name), [m.id, m.name]);
   const scroll = m.scroll ?? [0, 0];
@@ -711,6 +755,33 @@ function GraphMaterialProps({ m, edit, onDuplicate, onRemove, used }: { m: Mater
           onBlur={() => (name.trim() && name.trim() !== m.name ? edit({ name: name.trim() }, 'Rename material') : setName(m.name))}
         />
       </Row>
+      {exposed.length > 0 && (
+        <div className="cm-own" role="group" aria-label={t('cm.ownSettings')}>
+          <div className="cw-model-mats-h">{t('cm.ownSettings')}</div>
+          {exposed.map((e) => {
+            const n = graph!.nodes.find((x) => x.id === e.node)!;
+            const p = nodeDef(n.type)!.params.find((x) => x.id === e.param)!;
+            const value = own[e.id] ?? paramsOf(n)[e.param]!;
+            const set = (v: ParamValue | undefined, key?: string) => {
+              const next = { ...own };
+              if (v === undefined) delete next[e.id];
+              else next[e.id] = v;
+              edit({ overrides: Object.keys(next).length ? next : undefined }, `Material setting ${e.label}`, key ? `mat-own-${m.id}-${e.id}` : undefined);
+            };
+            return (
+              <Row key={e.id} label={e.label}>
+                <span className="cm-param">
+                  <ParamField p={p} value={value} textures={textures} label={e.label} onChange={(v, key) => set(v, key)} />
+                  <button type="button" className="cw-iconbtn" aria-label={`${t('cm.resetOwn')} ${e.label}`} title={t('cm.resetOwn')} disabled={own[e.id] === undefined} onClick={() => set(undefined)}>
+                    ↺
+                  </button>
+                </span>
+              </Row>
+            );
+          })}
+          <p className="cw-muted cw-screens-note">{t('cm.ownHint')}</p>
+        </div>
+      )}
       <Row label={t('cm.tile')}>
         <NumberField label="u" ariaLabel={t('cm.tile')} value={m.tile ?? 128} step={16} onCommit={(v) => v > 0 && edit({ tile: v }, 'Material size in the world')} />
       </Row>
@@ -757,6 +828,9 @@ function GraphMaterialProps({ m, edit, onDuplicate, onRemove, used }: { m: Mater
       </Row>
       <p className="cw-muted cw-screens-note">{t('cm.pickNodeHint')}</p>
       <div className="cw-screens-pair">
+        <Button size="sm" onClick={onVariant} title={t('cm.variantHint')}>
+          {t('cm.variant')}
+        </Button>
         <Button size="sm" onClick={onDuplicate}>
           {t('mat.duplicate')}
         </Button>
@@ -791,6 +865,7 @@ export function GraphWorkspace({
   m,
   edit,
   onDuplicate,
+  onVariant,
   onRemove,
   used,
   tools,
@@ -799,6 +874,8 @@ export function GraphWorkspace({
   m: MaterialDef;
   edit: (patch: Partial<MaterialDef>, label: string, key?: string) => void;
   onDuplicate: () => void;
+  /** A new material sharing the graph, with its own values for the exposed settings. */
+  onVariant: () => void;
   onRemove: () => void;
   used: number;
   tools: React.ReactNode;
@@ -826,9 +903,16 @@ export function GraphWorkspace({
   const size = liveSize(m);
   useEffect(() => {
     if (!graph || !live) return;
-    live.run(graph, size);
+    live.run(withOverrides(graph, m.overrides), size);
     setErrors(new Map(live.errors));
-  }, [graph, live, size, imagesIn]);
+  }, [graph, live, size, imagesIn, m.overrides]);
+  // The material's own settings changed (an edit or Undo): bake again. (Not on opening.)
+  const lastOverrides = useRef(m.overrides);
+  useEffect(() => {
+    if (lastOverrides.current === m.overrides) return;
+    lastOverrides.current = m.overrides;
+    bakeLater(path);
+  }, [m.overrides, path]);
   useEffect(() => endGraphGesture, []);
 
   const node = sel.length === 1 ? graph?.nodes.find((n) => n.id === sel[0]) : undefined;
@@ -883,7 +967,7 @@ export function GraphWorkspace({
           )}
         </div>
         <div className="cm-preview">{view === '3d' ? <MaterialPreview id={m.id} shape={shape} /> : <FlatPreview id={node?.id ?? graph?.nodes.find((n) => n.type === 'outColor')?.id ?? null} />}</div>
-        {node && graph ? <NodeProps path={path} graph={graph} node={node} onSelect={setSel} /> : <GraphMaterialProps m={m} edit={edit} onDuplicate={onDuplicate} onRemove={onRemove} used={used} />}
+        {node && graph ? <NodeProps path={path} graph={graph} node={node} onSelect={setSel} /> : <GraphMaterialProps m={m} graph={graph} edit={edit} onDuplicate={onDuplicate} onVariant={onVariant} onRemove={onRemove} used={used} />}
       </aside>
     </GraphCtx.Provider>
   );

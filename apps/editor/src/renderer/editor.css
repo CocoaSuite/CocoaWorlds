@@ -524,3 +524,8 @@ code { font: 12px var(--mono); color: var(--fg); }
 .cw-model-mats .cw-f > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* The screens' own blocks, under the screen in the Screens workspace. */
 .cw-screens-script { flex: none; height: 38%; min-height: 160px; overflow: auto; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); padding: 8px 10px; }
+/* A setting with a button beside it (expose, reset). */
+.cm-param { display: flex; align-items: center; gap: 6px; width: 100%; min-width: 0; }
+.cm-param > :first-child { flex: 1; min-width: 0; }
+.cm-expose.on { color: var(--cw-brand-hi); border-color: var(--cw-brand); }
+.cm-own { display: flex; flex-direction: column; gap: 6px; padding: 8px 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }

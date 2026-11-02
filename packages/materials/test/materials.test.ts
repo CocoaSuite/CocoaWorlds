@@ -128,3 +128,24 @@ describe('graphs', () => {
     expect(validateGraph(cyc)).toMatch(/loops back/);
   });
 });
+
+describe('exposed settings and variants', () => {
+  it('a material’s own values replace the exposed settings; others stay the graph’s', async () => {
+    const { expose, unexpose, exposedOf, withOverrides } = await import('../src');
+    let g = newGraph();
+    const noise = g.nodes.find((n) => n.type === 'noise')!;
+    g = expose(g, noise.id, 'scale', 'Noise: Scale');
+    g = expose(g, noise.id, 'scale', 'again');
+    expect(exposedOf(g).map((e) => e.label)).toEqual(['Noise: Scale']);
+    expect(validateGraph(g)).toBeNull();
+    const id = exposedOf(g)[0]!.id;
+    const v = withOverrides(g, { [id]: 9, nope: 3 });
+    expect(paramsOf(v.nodes.find((n) => n.id === noise.id)!).scale).toBe(9);
+    expect(withOverrides(g, undefined)).toBe(g);
+    // A different value is a different picture (redrawn); removing the node drops the exposed setting.
+    expect(fingerprints(v).get(noise.id)).not.toBe(fingerprints(g).get(noise.id));
+    expect(exposedOf(removeNodes(g, [noise.id]))).toEqual([]);
+    expect(exposedOf(unexpose(g, noise.id, 'scale'))).toEqual([]);
+    expect(validateGraph({ ...g, exposed: [{ id: 1 }] })).toMatch(/exposed setting is broken/);
+  });
+});

@@ -59,6 +59,8 @@ export interface MaterialDef {
    * from the object (triplanar: no seams, and no texture coordinates needed).
    */
   mapping?: 'face' | 'world' | 'object';
+  /** A graph material's own values for the graph's exposed settings, by exposed id (variants differ here). */
+  overrides?: Record<string, unknown>;
 }
 
 /** The map fields, by the output of a graph that makes them. */
@@ -112,6 +114,7 @@ export function validateMaterials(list: unknown): string | null {
     if (m.graph !== undefined && !(typeof m.graph === 'string' && /^materials\/[\w-]+\.cwmat$/.test(m.graph))) return `${label}: its graph must be a file in the materials folder.`;
     if (m.bakeSize !== undefined && !(BAKE_SIZES as readonly unknown[]).includes(m.bakeSize)) return `${label}: the baked size must be 256, 512, 1024 or 2048.`;
     if (m.tile !== undefined && !(isNum(m.tile) && m.tile > 0)) return `${label}: the size in the world must be above 0.`;
+    if (m.overrides !== undefined && !isObj(m.overrides)) return `${label}: its own settings are broken.`;
     if (m.mapping !== undefined && !['face', 'world', 'object'].includes(m.mapping as string)) return `${label}: mapping must be face, world or object.`;
     if (!isNum(m.roughness) || m.roughness < 0 || m.roughness > 1) return `${label}: roughness must be between 0 and 1.`;
     if (!isNum(m.metalness) || m.metalness < 0 || m.metalness > 1) return `${label}: metalness must be between 0 and 1.`;
