@@ -52,8 +52,13 @@ export interface MaterialDef {
   graph?: string;
   /** How big the baked images are, in pixels (256–2048). */
   bakeSize?: number;
-  /** How many units of the world one repeat of the images covers (graph materials; 128 when unset). */
+  /** How many units of the world one repeat of the images covers (graph and triplanar materials; 128 when unset). */
   tile?: number;
+  /**
+   * Where the images come from: each face's own alignment (face, the default), or projected from the world or
+   * from the object (triplanar: no seams, and no texture coordinates needed).
+   */
+  mapping?: 'face' | 'world' | 'object';
 }
 
 /** The map fields, by the output of a graph that makes them. */
@@ -107,6 +112,7 @@ export function validateMaterials(list: unknown): string | null {
     if (m.graph !== undefined && !(typeof m.graph === 'string' && /^materials\/[\w-]+\.cwmat$/.test(m.graph))) return `${label}: its graph must be a file in the materials folder.`;
     if (m.bakeSize !== undefined && !(BAKE_SIZES as readonly unknown[]).includes(m.bakeSize)) return `${label}: the baked size must be 256, 512, 1024 or 2048.`;
     if (m.tile !== undefined && !(isNum(m.tile) && m.tile > 0)) return `${label}: the size in the world must be above 0.`;
+    if (m.mapping !== undefined && !['face', 'world', 'object'].includes(m.mapping as string)) return `${label}: mapping must be face, world or object.`;
     if (!isNum(m.roughness) || m.roughness < 0 || m.roughness > 1) return `${label}: roughness must be between 0 and 1.`;
     if (!isNum(m.metalness) || m.metalness < 0 || m.metalness > 1) return `${label}: metalness must be between 0 and 1.`;
     if (m.emissive !== undefined && !isColor(m.emissive)) return `${label}: the glow colour must be like #a0b0c0.`;

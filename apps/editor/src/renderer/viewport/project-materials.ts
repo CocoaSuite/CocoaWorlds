@@ -8,6 +8,7 @@ import * as THREE from 'three';
 import { DEV_TEXTURE_SIZE, devMaterial } from '../brush/materials';
 import type { Lang } from '../i18n';
 import { assetUrl } from '../assets';
+import { setMapping } from './triplanar';
 
 const TEX_SIZE = DEV_TEXTURE_SIZE;
 /** Face coordinates are in texels at 0.25 units each (the usual face scale): 64 units across one dev tile. */
@@ -200,6 +201,7 @@ function restyle(l: Live): void {
   }
   if (!d) {
     // Deleted (or never made): the missing-texture checker, so the faces are easy to find.
+    setMapping(m, 'face', 128);
     m.color.set(0xffffff);
     m.map = missingTexture();
     m.envMap = null;
@@ -217,6 +219,7 @@ function restyle(l: Live): void {
   const livePics = liveMaps.get(d.id);
   const has = (role: MapRole) => !!(livePics?.[role] ?? d[MAP_FIELDS[role]]);
   m.color.set(d.color);
+  setMapping(m, d.mapping ?? 'face', d.tile ?? 128);
   // A map replaces its slider (Three.js multiplies the two).
   m.roughness = has('roughness') ? 1 : d.roughness;
   m.metalness = has('metalness') ? 1 : d.metalness;

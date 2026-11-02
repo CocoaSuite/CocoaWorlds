@@ -56,6 +56,19 @@ Below the preview, the workspace shows how many faces in the open scene use the 
 **Delete** removes a material. Faces still using it show the pink and black “missing” check until they get
 another material; undo brings the material back.
 
+## Mapping
+
+**Mapping** decides where a material's images come from:
+
+| Mapping | Use |
+|---|---|
+| Face (default) | Brushes: each face's own alignment (offset, scale, rotation, Fit); models: their own texture coordinates. |
+| Triplanar, world | Projected from the world along X, Y and Z, blended by which way the surface faces: no seams, no alignment, and neighbouring pieces line up (rock, concrete, terrain-like levels). |
+| Triplanar, object | Projected from the object itself, so the pattern stays on things that move, and on models (no texture coordinates needed). |
+
+With triplanar mapping, **Size in the world** sets how many units one repeat covers. Every map is projected,
+bumps included.
+
 ## Graph materials (Cocoa Materials)
 
 **+ Graph material** makes a material from a graph of nodes, in the spirit of Substance Designer. Instead of

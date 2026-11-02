@@ -392,6 +392,19 @@ function MaterialProps({
           {t('mat.cutout')}
         </label>
       )}
+      <Row label={t('mat.mapping')}>
+        <select className="cw-input" aria-label={t('mat.mapping')} value={m.mapping ?? 'face'} onChange={(e) => edit({ mapping: e.currentTarget.value === 'face' ? undefined : (e.currentTarget.value as 'world' | 'object') }, 'Material mapping')}>
+          <option value="face">{t('mat.mapFace')}</option>
+          <option value="world">{t('mat.mapWorld')}</option>
+          <option value="object">{t('mat.mapObject')}</option>
+        </select>
+      </Row>
+      {m.mapping && m.mapping !== 'face' && (
+        <Row label={t('cm.tile')}>
+          <NumberField label="u" ariaLabel={t('cm.tile')} value={m.tile ?? 128} step={16} onCommit={(v) => v > 0 && edit({ tile: v }, 'Material size in the world')} />
+        </Row>
+      )}
+      <p className="cw-muted cw-screens-note">{t('mat.mappingHint')}</p>
       <Row label={t('mat.normal')}>
         <ImagePick label={t('mat.normal')} value={m.normalMap} textures={textures} onChange={(v) => edit({ normalMap: v, normalStrength: v ? m.normalStrength : undefined }, 'Material surface map')} />
       </Row>
