@@ -86,7 +86,8 @@ export async function setDraft(page, size, corner) {
 }
 
 /** A GLB model for tests: a 1 m box (in metres, like Blender) with a one-second “Spin” animation about Y. */
-export function boxGlb() {
+/** A 1 m box model (glTF binary), with a short spin animation unless `still`. */
+export function boxGlb({ still = false } = {}) {
   const pos = new Float32Array([-0.5, 0, -0.5, 0.5, 0, -0.5, 0.5, 1, -0.5, -0.5, 1, -0.5, -0.5, 0, 0.5, 0.5, 0, 0.5, 0.5, 1, 0.5, -0.5, 1, 0.5]);
   const idx = new Uint16Array([0, 2, 1, 0, 3, 2, 4, 5, 6, 4, 6, 7, 0, 1, 5, 0, 5, 4, 3, 7, 6, 3, 6, 2, 0, 4, 7, 0, 7, 3, 1, 2, 6, 1, 6, 5]);
   const times = new Float32Array([0, 0.5, 1]);
@@ -119,6 +120,7 @@ export function boxGlb() {
     ],
     animations: [{ name: 'Spin', samplers: [{ input: 2, output: 3, interpolation: 'LINEAR' }], channels: [{ sampler: 0, target: { node: 0, path: 'rotation' } }] }],
   };
+  if (still) delete json.animations;
   let jsonBuf = Buffer.from(JSON.stringify(json));
   jsonBuf = Buffer.concat([jsonBuf, Buffer.alloc(pad4(jsonBuf.length) - jsonBuf.length, 0x20)]);
   const header = Buffer.alloc(12);

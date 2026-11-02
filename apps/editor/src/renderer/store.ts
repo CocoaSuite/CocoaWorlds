@@ -1587,3 +1587,6 @@ export function chickenScript(friendly: boolean): Script {
   const handlers = friendly ? [stack(newEvent('hit'), runAway(3))] : [stack(near, side('hostile')), stack(far, side('neutral')), stack(newEvent('hit'), runAway(2))];
   return { ...emptyScript(), handlers };
 }
+
+// (For the automated tests, as the view is: `window.__cwStore`.)
+(window as unknown as { __cwStore?: typeof useEditor }).__cwStore = useEditor;

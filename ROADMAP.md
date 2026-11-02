@@ -31,7 +31,7 @@ From here the order follows the benchmark: [BENCHMARK.md](BENCHMARK.md) — can 
 | R1 ✅ | Procedural objects: Repeat with caps (ladders, pipes, railings) | Half-Life, Roblox builds | 7 |
 | A2a ✅ | Navigation: where creatures can walk, measured from the level; paths round walls, through doors and between floors; shown in the editor | Half-Life NPCs, Slime Rancher creatures | 7, 10 |
 | A2b ✅ | Scattering foliage: grass tufts over a brush’s upward-facing surfaces (Foliage component: spacing, density, size, slope, colour, seed); drawn in the editor and in Play | Slime Rancher, outdoor maps | 7 |
-| A2c | Many-objects performance: instancing and culling for thousands of copies | Slime Rancher, Roblox builds | 7 |
+| A2c ✅ | Many-objects performance: still models drawn as instanced batches by area (culled as a whole) in Play and exported games; grass in culled chunks with levels of detail | Slime Rancher, Roblox builds | 7 |
 | T1 | Voxel terrain with heightmap import: sculpt, dig and paint | Slime Rancher, outdoor maps | 7 |
 | M1 | Hosting and joining games (single-player until then) | Roblox-style online play | after 9 |
 
@@ -111,7 +111,7 @@ Order may shift where dependencies require it (for example, the project format f
 
 ## Next
 
-A2b (scattering foliage), A2c (many-objects performance), then T1 (voxel terrain). Installers and signing for exported games come with packaging the editor itself (Phase 9).
+T1 (voxel terrain). Installers and signing for exported games come with packaging the editor itself (Phase 9).
 
 ## Pinned
 

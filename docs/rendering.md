@@ -138,3 +138,12 @@ next with a screen-door dither (the two keep complementary pixels), so there's n
 
 Only the component is saved. Placement is in `@cocoaworlds/geometry` (`scatterTufts`); drawing (instanced meshes per chunk
 and level) in `viewport/foliage.ts`, shared by the editor and Play.
+
+## Many copies of a model (A2c)
+
+In Play and exported games, still copies of one model that are drawn the same way (same file, units, shadows and
+material slots) are drawn together: one instanced mesh per part of the model per 1024 u area, each area culled as a
+whole. A copy counts as still when it has no animation or bones, and no physics body or only a fixed one that
+can't break and that no script names (scripts can hide or show objects). Anything else is drawn by itself so it
+can move, animate, break or vanish. 256 crates take 7 draw calls instead of 259. (`viewport/model-batches.ts`.)
+

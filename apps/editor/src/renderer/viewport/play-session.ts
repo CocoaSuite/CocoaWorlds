@@ -12,6 +12,7 @@ import type { Problem, ScriptError } from '@cocoaworlds/scripting';
 import * as THREE from 'three';
 import { brushBounds, worldBrushes } from '../brush/brushes';
 import { FoliageRenderer } from './foliage';
+import { BATCH_MIN, ModelBatches, batchKey } from './model-batches';
 import { WEAR_RING, buildLevel } from './world-build';
 import { toGeometry } from './world-render';
 import { buildSign, type SignObject } from './sign';
@@ -44,6 +45,8 @@ export class PlaySession {
   readonly group = new THREE.Group();
   private world: GameWorld;
   private foliage = new FoliageRenderer();
+  /** Still models drawn many at a time (A2c). */
+  readonly batches = new ModelBatches();
   /** Grass detail by distance from the camera. */
   updateFoliage(cam: THREE.Camera, unitsPerPixel?: number): void {
     this.foliage.update(cam, unitsPerPixel);
@@ -118,6 +121,9 @@ export class PlaySession {
     for (const b of this.world.movingBodies()) if (doc.get(b.id)) this.addMover(b);
 
     // Models of objects without a body of their own: still, or carried by the moving object they are inside.
+    // Still ones of the same model are drawn together (A2c); the rest one by one.
+    const scripted = JSON.stringify(doc.entities.filter((x) => x.components.script).map((x) => x.components.script)) + JSON.stringify(doc.settings.ui ?? '');
+    const stillModels = new Map<string, { data: ModelData; copies: { id: string; matrix: THREE.Matrix4 }[] }>();
     for (const e of doc.entities) {
       // (Creatures draw their own model, where they walk.)
       if (!e.components.model || bodies.has(e.id) || e.components.npc) continue;
@@ -125,14 +131,36 @@ export class PlaySession {
       for (let x = doc.get(e.id); x; x = x.parent ? doc.get(x.parent) : undefined) if (!x.visible) shownE = false;
       const data = this.modelOf(e.id);
       if (!shownE || !data) continue;
+      const mover = this.world.bodyOf(e.id);
+      // Batched: still for good. No body, or a fixed one that can't break and that no script names (scripts can
+      // hide or show it); everything else is drawn by itself so it can change.
+      const fixed = !mover || (!bodies.has(mover) && !e.components.breakable && !scripted.includes(e.id));
+      if (fixed) {
+        const k = batchKey(data);
+        const b = stillModels.get(k) ?? { data, copies: [] };
+        b.copies.push({ id: e.id, matrix: new THREE.Matrix4().fromArray(doc.worldMatrix(e.id)) });
+        stillModels.set(k, b);
+        continue;
+      }
       const holder = new THREE.Group();
       holder.matrixAutoUpdate = false;
       holder.matrix.fromArray(doc.worldMatrix(e.id));
       this.group.add(holder);
-      const mover = this.world.bodyOf(e.id);
       if (mover) this.movers.push({ id: mover, obj: holder, base: holder.matrix.clone() });
       this.attachModel(holder, data, e.id);
     }
+    const alone = (data: ModelData) => (c: { id: string; matrix: THREE.Matrix4 }) => {
+      const holder = new THREE.Group();
+      holder.matrixAutoUpdate = false;
+      holder.matrix.copy(c.matrix);
+      this.group.add(holder);
+      this.attachModel(holder, data, c.id);
+    };
+    for (const { data, copies } of stillModels.values()) {
+      if (copies.length >= BATCH_MIN) void this.batches.add(data, copies, alone(data));
+      else copies.forEach(alone(data));
+    }
+    this.group.add(this.batches.group);
 
     // Creatures: their model, or a plain figure (red enemies, blue friends, grey others) with a visor at the front.
     for (const e of doc.entities) {
@@ -605,6 +633,7 @@ export class PlaySession {
     this.disposed = true;
     this.effects.dispose();
     this.foliage.dispose();
+    this.batches.dispose();
     for (const m of this.models.values()) m.dispose();
     for (const s of [...this.sounds]) {
       if (s.audio.isPlaying) s.audio.stop();
