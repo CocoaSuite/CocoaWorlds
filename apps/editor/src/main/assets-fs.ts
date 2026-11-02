@@ -7,7 +7,7 @@
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import { ProjectError, resolveInside, writeAtomic } from './project-fs';
-import type { AssetEntry, AssetKind } from '../shared/api';
+import type { AssetEntry, AssetKind, LibrarySound } from '../shared/api';
 
 export const ASSET_KINDS: Record<AssetKind, { dir: string; ext: string[] }> = {
   textures: { dir: 'assets/textures', ext: ['.png', '.jpg', '.jpeg', '.webp'] },
@@ -77,12 +77,17 @@ const SAMPLES: Record<string, { file: string; as: string; kind: AssetKind }> = {
 export async function addSample(dir: string, samplesDir: string, name: unknown): Promise<AssetEntry> {
   const s = typeof name === 'string' ? SAMPLES[name] : undefined;
   if (!s) throw new ProjectError('There is no ready-made asset by that name.');
-  const { dir: sub } = ASSET_KINDS[s.kind];
-  const src = await fs.readFile(path.join(samplesDir, s.file));
-  const ext = path.extname(s.as), stem = path.basename(s.as, ext);
-  // The same file already there is used again; a different file of that name (the user's own) is left alone.
+  return copyIn(dir, ASSET_KINDS[s.kind].dir, s.as, await fs.readFile(path.join(samplesDir, s.file)));
+}
+
+/**
+ * Put a file the editor ships with into the project as `sub/as`. The same file there already is used again; a
+ * different file of that name (the user's own) is left alone and this one gets a number.
+ */
+async function copyIn(dir: string, sub: string, as: string, src: Buffer): Promise<AssetEntry> {
+  const ext = path.extname(as), stem = path.basename(as, ext);
   for (let i = 1; ; i++) {
-    const name = i === 1 ? s.as : `${stem}_${i}${ext}`;
+    const name = i === 1 ? as : `${stem}_${i}${ext}`;
     const rel = `${sub}/${name}`;
     const to = resolveInside(dir, rel);
     const have = await fs.readFile(to).catch(() => null);
@@ -93,6 +98,48 @@ export async function addSample(dir: string, samplesDir: string, name: unknown):
     }
     return { path: rel, name: path.basename(name, ext), bytes: src.length };
   }
+}
+
+// ── The sound library (shipped in samples/sounds, one folder per kind of sound) ──
+
+const LIBRARY_EXT = ['.ogg', '.mp3', '.wav'];
+
+/** Every sound in the library, by folder (its top folder: `Footsteps/digital/…` is in Footsteps). */
+export async function librarySounds(samplesDir: string): Promise<LibrarySound[]> {
+  const root = path.join(samplesDir, 'sounds');
+  const out: LibrarySound[] = [];
+  const walk = async (rel: string): Promise<void> => {
+    const names = await fs.readdir(path.join(root, rel), { withFileTypes: true }).catch(() => []);
+    for (const d of names.sort((a, b) => a.name.localeCompare(b.name))) {
+      const r = rel ? `${rel}/${d.name}` : d.name;
+      if (d.isDirectory()) await walk(r);
+      else if (rel && LIBRARY_EXT.includes(path.extname(d.name).toLowerCase())) {
+        const st = await fs.stat(path.join(root, r));
+        out.push({ path: r, name: path.basename(d.name, path.extname(d.name)), group: rel.split('/')[0]!, bytes: st.size });
+      }
+    }
+  };
+  await walk('');
+  return out;
+}
+
+/** A library sound's file, only from inside the library. */
+function libraryFile(samplesDir: string, rel: unknown): string {
+  if (typeof rel !== 'string' || !LIBRARY_EXT.includes(path.extname(rel).toLowerCase())) throw new ProjectError('That is not a sound in the library.');
+  const root = path.resolve(samplesDir, 'sounds');
+  const full = path.resolve(root, rel);
+  if (!full.startsWith(root + path.sep)) throw new ProjectError('That is not a sound in the library.');
+  return full;
+}
+
+export async function readLibrarySound(samplesDir: string, rel: unknown): Promise<Uint8Array> {
+  return new Uint8Array(await fs.readFile(libraryFile(samplesDir, rel)));
+}
+
+/** Copy a library sound into the project's sounds (kept by its own name, e.g. `assets/sounds/foley_creak_1.ogg`). */
+export async function addLibrarySound(dir: string, samplesDir: string, rel: unknown): Promise<AssetEntry> {
+  const file = libraryFile(samplesDir, rel);
+  return copyIn(dir, ASSET_KINDS.sounds.dir, safeName(path.basename(file)), await fs.readFile(file));
 }
 
 /** The bytes of an asset (only files inside the project's assets folder). */

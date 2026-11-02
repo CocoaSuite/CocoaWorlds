@@ -500,6 +500,11 @@ code { font: 12px var(--mono); color: var(--fg); }
 .cw-lib-cats button:hover { background: var(--panel2); }
 .cw-lib-cats button.on { background: var(--panel2); border-color: var(--line); font-weight: 600; }
 .cw-lib-cats button.on .cw-icon { color: var(--cw-brand-hi); }
+.cw-lib-cats button.sub { padding-left: 22px; font-size: 12.5px; }
+.cw-lib-cats button.sub2 { padding-left: 46px; font-size: 12px; }
+.cw-lib-use { position: absolute; top: 6px; right: 6px; padding: 1px 8px; border-radius: 999px; border: 1px solid var(--line); background: rgba(18, 18, 18, 0.85); color: var(--fg); font: inherit; font-size: 11px; cursor: pointer; }
+.cw-lib-use:hover { border-color: var(--cw-brand-hi); color: var(--cw-brand-hi); }
+.cw-lib-use.done { display: grid; place-items: center; padding: 2px; color: var(--cw-brand-hi); cursor: default; }
 .cw-lib-n { margin-left: auto; font-size: 11px; color: var(--mute); font-variant-numeric: tabular-nums; }
 .cw-lib-import { text-transform: none; letter-spacing: 0; }
 .cw-lib-grid { flex: 1; min-width: 0; overflow: auto; padding: 12px; display: grid; grid-template-columns: repeat(auto-fill, minmax(112px, 1fr)); grid-auto-rows: 128px; gap: 10px; align-content: start; background: var(--bg); }

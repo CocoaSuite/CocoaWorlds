@@ -5,11 +5,13 @@
  * - Materials and textures: click to paint faces with them. Double-click a material to open it in Materials.
  * - Prefabs and models: click to place one where the view is looking.
  * - Sounds: click to listen (again to stop).
+ * - Sound library (under Sounds): the editor's own sounds, by folder. Click to listen; Use copies one into the
+ *   project, where Sound components can play it.
  */
 import { readComponent, type MaterialDef, type ModelData } from '@cocoaworlds/core';
 import { Button, Icon } from '@cocoaworlds/ui';
-import { useEffect, useRef, useState } from 'react';
-import type { AssetEntry, AssetKind } from '../../shared/api';
+import { Fragment, useEffect, useRef, useState } from 'react';
+import type { AssetEntry, AssetKind, LibrarySound } from '../../shared/api';
 import { assetUrl } from '../assets';
 import { t } from '../i18n';
 import { useEditor } from '../store';
@@ -37,11 +39,41 @@ const NO_MATERIALS: MaterialDef[] = [];
 
 // (The category and search are kept while the tab is closed and opened again.)
 let lastCategory: Category = 'all';
+/** The sound library is open (with one of its folders, or '' for all of it); null when it isn't. */
+let lastLibrary: string | null = null;
+
+/** The editor's own sound library, read once. */
+let library: LibrarySound[] | null = null;
+let libraryLoad: Promise<LibrarySound[]> | null = null;
+function useLibrary(): LibrarySound[] {
+  const [list, setList] = useState<LibrarySound[]>(library ?? []);
+  useEffect(() => {
+    if (library) return;
+    libraryLoad ??= window.cocoa.projects.librarySounds().then((r) => (library = r.ok ? r.value : []));
+    void libraryLoad.then(setList);
+  }, []);
+  return list;
+}
+
+/** A library sound to listen to (kept, so it's read once). */
+const libraryUrls = new Map<string, Promise<string>>();
+function libraryUrl(path: string): Promise<string> {
+  let u = libraryUrls.get(path);
+  if (!u) {
+    u = window.cocoa.projects.readLibrarySound(path).then((r) => {
+      if (!r.ok) throw new Error(r.error);
+      return URL.createObjectURL(new Blob([r.value as BlobPart], { type: 'audio/ogg' }));
+    });
+    libraryUrls.set(path, u);
+  }
+  return u;
+}
 
 type Tile =
   | { kind: 'materials'; id: string; name: string; def: MaterialDef }
   | { kind: 'prefabs'; id: string; name: string; prefabId: string; path: string; objects: number; model: string | null }
-  | { kind: 'models' | 'textures' | 'sounds'; id: string; name: string; asset: AssetEntry };
+  | { kind: 'models' | 'textures' | 'sounds'; id: string; name: string; asset: AssetEntry }
+  | { kind: 'library'; id: string; name: string; sound: LibrarySound; inProject: boolean };
 
 const kb = (n: number) => (n >= 1024 * 1024 ? `${(n / 1024 / 1024).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`);
 
@@ -51,11 +83,23 @@ export function AssetLibrary() {
   // (The list itself, not a fresh empty one each time: that would re-render for ever.)
   const materials = useEditor((s) => s.session?.project.settings.materials) ?? NO_MATERIALS;
   const [cat, setCatState] = useState<Category>(lastCategory);
+  const [lib, setLibState] = useState<string | null>(lastLibrary);
   const [q, setQ] = useState('');
   const setCat = (c: Category) => {
     lastCategory = c;
+    lastLibrary = null;
     setCatState(c);
+    setLibState(null);
   };
+  const setLib = (group: string) => {
+    lastCategory = 'sounds';
+    lastLibrary = group;
+    setCatState('sounds');
+    setLibState(group);
+  };
+  const sounds = useLibrary();
+  const groups = [...new Set(sounds.map((x) => x.group))];
+  const have = new Set(assets.sounds.map((a) => a.name));
 
   const all: Tile[] = [
     ...materials.map((m): Tile => ({ kind: 'materials', id: m.id, name: m.name, def: m })),
@@ -67,7 +111,12 @@ export function AssetLibrary() {
   ];
   const count = (c: Category) => (c === 'all' ? all.length : all.filter((x) => x.kind === c).length);
   const query = q.trim().toLowerCase();
-  const shown = all.filter((x) => (cat === 'all' || x.kind === cat) && (!query || x.name.toLowerCase().includes(query))).sort((a, b) => a.name.localeCompare(b.name));
+  const shown: Tile[] =
+    lib !== null
+      ? sounds
+          .filter((x) => (!lib || x.group === lib) && (!query || x.name.toLowerCase().includes(query)))
+          .map((x): Tile => ({ kind: 'library', id: x.path, name: x.name, sound: x, inProject: have.has(x.name) }))
+      : all.filter((x) => (cat === 'all' || x.kind === cat) && (!query || x.name.toLowerCase().includes(query))).sort((a, b) => a.name.localeCompare(b.name));
 
   // Import: the files go to their own kind (images, sounds, models); the view switches to what came in.
   const importFiles = async (files: File[]) => {
@@ -100,11 +149,30 @@ export function AssetLibrary() {
         </div>
         <div className="cw-lib-cats" role="tablist" aria-label={t('assets.categories')}>
           {CATEGORIES.map((c) => (
-            <button key={c} type="button" role="tab" aria-selected={cat === c} className={cat === c ? 'on' : ''} onClick={() => setCat(c)}>
-              <Icon name={ICON[c]} />
-              <span>{t(LABEL[c])}</span>
-              <span className="cw-lib-n">{count(c)}</span>
-            </button>
+            <Fragment key={c}>
+              <button type="button" role="tab" aria-selected={cat === c && lib === null} className={cat === c && lib === null ? 'on' : ''} onClick={() => setCat(c)}>
+                <Icon name={ICON[c]} />
+                <span>{t(LABEL[c])}</span>
+                <span className="cw-lib-n">{count(c)}</span>
+              </button>
+              {c === 'sounds' && sounds.length > 0 && (
+                // The editor's own sounds: a folder under Sounds, its own folders under that while it's open.
+                <>
+                  <button type="button" role="tab" aria-selected={lib === ''} className={`sub${lib === '' ? ' on' : ''}`} onClick={() => setLib('')}>
+                    <Icon name="folder" />
+                    <span>{t('assets.library')}</span>
+                    <span className="cw-lib-n">{sounds.length}</span>
+                  </button>
+                  {lib !== null &&
+                    groups.map((g) => (
+                      <button key={g} type="button" role="tab" aria-selected={lib === g} className={`sub2${lib === g ? ' on' : ''}`} onClick={() => setLib(g)}>
+                        <span>{g}</span>
+                        <span className="cw-lib-n">{sounds.filter((x) => x.group === g).length}</span>
+                      </button>
+                    ))}
+                </>
+              )}
+            </Fragment>
           ))}
         </div>
         <input
@@ -139,9 +207,9 @@ export function AssetLibrary() {
           />
         ))}
       </aside>
-      <div className="cw-lib-grid" role="list" aria-label={t(LABEL[cat])}>
+      <div className="cw-lib-grid" role="list" aria-label={lib !== null ? lib || t('assets.library') : t(LABEL[cat])}>
         {shown.map((x) => (
-          <AssetTile key={`${x.kind}:${x.id}`} tile={x} showKind={cat === 'all'} />
+          <AssetTile key={`${x.kind}:${x.id}`} tile={x} showKind={cat === 'all' && lib === null} />
         ))}
         {!shown.length && <div className="cw-muted cw-lib-empty">{query ? t('assets.noMatch') : t(EMPTY[cat])}</div>}
       </div>
@@ -170,7 +238,7 @@ function ModelPicture({ path }: { path: string }) {
 
 /** Plays a sound file while asked (one at a time). */
 let playing: { path: string; audio: HTMLAudioElement; done: () => void } | null = null;
-function useListening(path: string): [boolean, () => void] {
+function useListening(path: string, url: (path: string) => Promise<string> = assetUrl): [boolean, () => void] {
   const [on, setOn] = useState(playing?.path === path);
   useEffect(() => () => void (playing?.path === path && (playing.audio.pause(), (playing = null))), [path]);
   const toggle = () => {
@@ -181,8 +249,8 @@ function useListening(path: string): [boolean, () => void] {
       playing = null;
       if (was === path) return;
     }
-    void assetUrl(path).then((url) => {
-      const audio = new Audio(url);
+    void url(path).then((src) => {
+      const audio = new Audio(src);
       const done = () => setOn(false);
       audio.onended = () => {
         if (playing?.audio === audio) playing = null;
@@ -198,7 +266,10 @@ function useListening(path: string): [boolean, () => void] {
 
 function AssetTile({ tile, showKind }: { tile: Tile; showKind: boolean }) {
   const st = useEditor.getState();
-  const [listening, listen] = useListening(tile.kind === 'sounds' ? tile.asset.path : '');
+  const [listening, listen] = useListening(tile.kind === 'sounds' ? tile.asset.path : tile.kind === 'library' ? `lib:${tile.sound.path}` : '', (p) =>
+    p.startsWith('lib:') ? libraryUrl(p.slice(4)) : assetUrl(p),
+  );
+  let extra: React.ReactNode = null;
   let picture: React.ReactNode;
   let action: string;
   let title: string;
@@ -247,6 +318,41 @@ function AssetTile({ tile, showKind }: { tile: Tile; showKind: boolean }) {
       title = `${tile.asset.path} · ${kb(tile.asset.bytes)}`;
       onClick = listen;
       break;
+    case 'library': {
+      const sound = tile.sound;
+      picture = (
+        <span className={`cw-lib-pic icon${listening ? ' on' : ''}`}>
+          <Icon name="sound" />
+        </span>
+      );
+      action = listening ? t('assets.stopListening') : t('assets.listen');
+      title = `${sound.group} · ${sound.name} · ${kb(sound.bytes)}`;
+      onClick = listen;
+      // Use: into the project's sounds (where Sound components can pick it); a tick once it's there.
+      extra = tile.inProject ? (
+        <span className="cw-lib-use done" title={t('assets.inProject')} aria-label={t('assets.inProject')}>
+          ✓
+        </span>
+      ) : (
+        <button
+          type="button"
+          className="cw-lib-use"
+          aria-label={t('assets.useNamed').replace('{name}', sound.name)}
+          title={t('assets.useHint')}
+          onClick={async () => {
+            const dir = st.session?.dir;
+            if (!dir) return;
+            const r = await window.cocoa.projects.addLibrarySound(dir, sound.path);
+            if (!r.ok) return st.notify(r.error);
+            await useEditor.getState().loadAssets();
+            st.log('info', 'Assets', t('assets.added').replace('{name}', r.value.name));
+          }}
+        >
+          {t('assets.use')}
+        </button>
+      );
+      break;
+    }
   }
   return (
     <div className={`cw-lib-tile k-${tile.kind}`} role="listitem" aria-label={tile.name} title={title}>
@@ -254,7 +360,8 @@ function AssetTile({ tile, showKind }: { tile: Tile; showKind: boolean }) {
         {picture}
         <span className="cw-lib-name">{tile.name}</span>
       </button>
-      {showKind && <span className="cw-lib-kind">{t(LABEL[tile.kind])}</span>}
+      {extra}
+      {showKind && tile.kind !== 'library' && <span className="cw-lib-kind">{t(LABEL[tile.kind])}</span>}
     </div>
   );
 }

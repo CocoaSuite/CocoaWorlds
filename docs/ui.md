@@ -65,3 +65,13 @@ button.
 Under the screen is the **screen script**: blocks that belong to the screens, not to any object, run like any
 object's script. Pick a button and press **+ When clicked (blocks)** (or a list: **+ When a row is picked**) to
 start a stack for it, then add blocks below. Object scripts can still listen for the same clicks.
+
+## Sound library
+
+The editor ships with a library of 400 sounds in folders (UI, Footsteps, Weapons, Combat and Gore, Environment,
+Machines, Items, Retro and more). In the Assets tab they are under **Sounds › Sound library**; while it's open, its
+folders show beneath it. Click a sound to listen (again to stop). **Use** copies it into the project's sounds
+(`assets/sounds/<name>.ogg`), where Sound components and blocks can pick it, and it's ticked off in the library.
+The same file is never copied twice; a different file of the same name gets a number. Exported games carry only the
+sounds a project uses.
+

@@ -37,6 +37,15 @@ export interface AssetEntry {
   bytes: number;
 }
 
+/** A sound in the editor's own library: its path in the library (`Footsteps/foley_creak_1.ogg`) and folder. */
+export interface LibrarySound {
+  path: string;
+  name: string;
+  /** The library folder it's in (`Footsteps`). */
+  group: string;
+  bytes: number;
+}
+
 export type ExportTarget = 'web' | 'win32' | 'darwin' | 'linux';
 
 export type Result<T> = { ok: true; value: T } | { ok: false; error: string; details?: string[] };
@@ -71,6 +80,12 @@ export interface CocoaApi {
     readAsset(dir: string, path: string): Promise<Result<Uint8Array>>;
     /** Put a ready-made asset the editor ships with (“chicken”) into the project's assets, once. */
     addSample(dir: string, name: string): Promise<Result<AssetEntry>>;
+    /** The sound library that ships with the editor: every sound, by folder. */
+    librarySounds(): Promise<Result<LibrarySound[]>>;
+    /** A library sound's bytes (to listen to it before using it). */
+    readLibrarySound(path: string): Promise<Result<Uint8Array>>;
+    /** Copy a library sound into the project's sounds (once: the same file there already is used again). */
+    addLibrarySound(dir: string, path: string): Promise<Result<AssetEntry>>;
     /** A graph material's graph (`materials/….cwmat`), unchecked. */
     readGraph(dir: string, path: string): Promise<Result<unknown>>;
     /** Save a graph; with `create`, as a new file (renamed if taken). Returns its path. */
@@ -118,6 +133,9 @@ export const IPC = {
   writeAsset: 'assets:write',
   readAsset: 'assets:read',
   addSample: 'assets:addSample',
+  librarySounds: 'assets:librarySounds',
+  readLibrarySound: 'assets:readLibrarySound',
+  addLibrarySound: 'assets:addLibrarySound',
   readGraph: 'materials:readGraph',
   writeGraph: 'materials:writeGraph',
   writeGenerated: 'materials:writeGenerated',
