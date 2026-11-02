@@ -310,6 +310,8 @@ export class GameWorld {
   private nextShotAt = 0;
   private fireHeld = false;
   private fireQueued = false;
+  /** Objects scripts turned on (true) or off (false), by body. */
+  private switched = new Map<string, boolean>();
 
   /** Model triangles by file (see `create`). */
   private models: Map<string, ModelMesh>;
@@ -1000,6 +1002,7 @@ export class GameWorld {
       case 'turnOn':
       case 'turnOff':
         this.setColliders(b, name === 'turnOn');
+        this.switched.set(b.info.id, name === 'turnOn');
         return null;
       case 'remove':
         this.remove(target);
@@ -1382,6 +1385,11 @@ export class GameWorld {
 
   scriptVariables(owner: string) {
     return this.runner.variables(owner);
+  }
+
+  /** Whether a script last turned an object (its body) on or off; undefined if none has. */
+  switchedOn(id: string): boolean | undefined {
+    return this.switched.get(id);
   }
 
   /** Whether a body is shown (scripts can hide things). */

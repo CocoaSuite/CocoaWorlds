@@ -281,6 +281,36 @@ export const COMPONENTS: ComponentDef[] = [
     ],
   },
   {
+    name: 'particles',
+    label: e('Particles', 'Частицы'),
+    description: e(
+      'Smoke, fire, sparks, steam or dust coming from this point, upwards (+Y) — turn the object to aim it. Turn on and Turn off blocks start and stop it.',
+      'Дым, огонь, искры, пар или пыль из этой точки вверх (+Y) — поверните объект, чтобы направить. Блоки «Включить» и «Выключить» запускают и останавливают.',
+    ),
+    appliesTo: 'point',
+    fields: [
+      {
+        key: 'kind',
+        label: e('What', 'Что'),
+        type: {
+          kind: 'enum',
+          options: [
+            { value: 'smoke', label: e('Smoke', 'Дым') },
+            { value: 'fire', label: e('Fire', 'Огонь') },
+            { value: 'sparks', label: e('Sparks', 'Искры') },
+            { value: 'steam', label: e('Steam', 'Пар') },
+            { value: 'dust', label: e('Dust', 'Пыль') },
+          ],
+        },
+        default: 'smoke',
+      },
+      { key: 'rate', label: e('Per second', 'В секунду'), type: { kind: 'number', min: 0, step: 5 }, default: 20 },
+      { key: 'size', label: e('Size', 'Размер'), type: { kind: 'number', min: 0.1, step: 0.25, unit: '×' }, default: 1 },
+      { key: 'speed', label: e('Speed', 'Скорость'), type: { kind: 'number', min: 0, step: 0.25, unit: '×' }, default: 1 },
+      { key: 'on', label: e('On at the start', 'Включено в начале'), type: { kind: 'boolean' }, default: true },
+    ],
+  },
+  {
     name: 'charger',
     label: e('Charger', 'Зарядник'),
     description: e(
@@ -412,5 +442,14 @@ export interface ChargerData {
   gives: 'health' | 'armour';
   capacity: number;
   rate: number;
+  [k: string]: unknown;
+}
+
+export interface ParticlesData {
+  kind: 'smoke' | 'fire' | 'sparks' | 'steam' | 'dust';
+  rate: number;
+  size: number;
+  speed: number;
+  on: boolean;
   [k: string]: unknown;
 }

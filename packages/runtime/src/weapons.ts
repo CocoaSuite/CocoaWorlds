@@ -35,7 +35,7 @@ export type WeaponEvent =
   /** A bullet or a swing hit a surface (`target` is its object, if any). */
   | { type: 'impact'; at: V3; normal: V3; target: string | null; melee: boolean }
   /** A blast went off. */
-  | { type: 'explosion'; at: V3; radius: number };
+  | { type: 'explosion'; at: V3; radius: number; normal: V3 | null };
 
 export interface Projectile {
   id: number;
@@ -99,7 +99,7 @@ export class Weapons {
       this.host.announce({ type: 'impact', at: hit.point, normal: hit.normal, target, melee });
       this.push(hit.collider, hit.point, [d[0] * weapon.push, d[1] * weapon.push, d[2] * weapon.push]);
       if (target) this.host.damage(target, weapon.damage, by, name);
-      if (weapon.blast > 0) this.explode(hit.point, weapon, by, name);
+      if (weapon.blast > 0) this.explode(hit.point, weapon, by, name, hit.normal);
     }
   }
 
@@ -146,7 +146,7 @@ export class Weapons {
     // (Lifted off the surface, so the wall it hit doesn't hide everything.)
     const c: V3 = normal ? [at[0] + normal[0] * 2, at[1] + normal[1] * 2, at[2] + normal[2] * 2] : at;
     const r = weapon.blast;
-    this.host.announce({ type: 'explosion', at: c, radius: r });
+    this.host.announce({ type: 'explosion', at: c, radius: r, normal: normal ?? null });
     const hurt = new Set<string>();
     const w = this.host.world;
     const pushed = new Set<number>();

@@ -2,7 +2,7 @@
 // ammo (shown on screen) and breaks a breakable crate.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { drawBrush, launch, newProject, quit, setDraft, shot, tempDirs, until } from './helpers.mjs';
+import { drawBrush, launch, newProject, quit, setDraft, setField, shot, tempDirs, until } from './helpers.mjs';
 
 async function addBrush(page, size, corner) {
   await page.keyboard.press('b');
@@ -26,6 +26,15 @@ test('weapons: a pistol with ammo breaks a crate', async () => {
     const insp = page.getByRole('complementary', { name: 'Inspector' });
     await insp.getByRole('button', { name: 'Add component' }).click();
     await page.getByRole('menuitem', { name: /^Breakable/ }).click();
+
+    // A fire beside the crate: an empty object with Particles (fire).
+    await page.getByRole('menubar').getByRole('button', { name: 'Add' }).click();
+    await page.getByRole('menuitem', { name: 'Empty object' }).click();
+    await insp.getByRole('button', { name: 'Add component' }).click();
+    await page.getByRole('menuitem', { name: /^Particles/ }).click();
+    await insp.getByRole('group', { name: 'Particles' }).getByRole('combobox', { name: 'What' }).selectOption({ label: 'Fire' });
+    await setField(insp, 'Position X', 96);
+    await setField(insp, 'Position Z', -240);
 
     // Items: a pistol (ready-made weapon) and its 9mm ammo.
     const ws = page.getByRole('tablist', { name: 'Workspace' });
@@ -65,6 +74,9 @@ test('weapons: a pistol with ammo breaks a crate', async () => {
       return w.healthOf(w.doc.entities.find((e) => e.name === 'block_2').id);
     });
     await until(crate, 42);
+    // A bullet hole where it hit, and the fire burning.
+    await until(() => world(() => window.__cwViewport.play.effects.decals.length > 0), true);
+    await until(() => world(() => window.__cwViewport.play.effects.particles.count > 0), true);
     await shot(page, 'g02-shooting');
     // More shots (the game's clock runs slower than real time on this slow test renderer: wait well over a
     // pistol's quarter second between them) until broken.

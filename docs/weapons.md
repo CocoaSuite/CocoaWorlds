@@ -36,3 +36,15 @@ a ready-made weapon. Every setting can be changed afterwards.
   shootable buttons, targets, alarms.
 
 A **Sound** from the project plays on each shot.
+
+## Marks and particles
+
+Bullets and swings leave a mark where they hit, with a few sparks and a puff of dust. Blasts leave a scorch on
+the surface they hit, with fire, sparks and smoke. A mark on something that moves goes with it. The newest
+160 marks are kept.
+
+A **Particles** component on a point object (Add › Empty object) gives off **Smoke**, **Fire**, **Sparks**,
+**Steam** or **Dust**, upwards along the object's +Y; turn the object to aim it. **Per second**, **Size** and
+**Speed** set how much and how big. **On at the start** decides whether it runs from the beginning, and the
+**Turn on** and **Turn off** blocks start and stop it (as does hiding the object). Emitters inside an object
+that moves go with it. Particles show while playing, not while editing.

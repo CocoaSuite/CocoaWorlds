@@ -5,7 +5,7 @@
  * With a Player start in the scene you play as the player (first person); without one, Play is a physics
  * preview watched with the free camera.
  */
-import { SceneDoc, readComponent, type ColliderData, type GameRules, type GameValue, type ModelData, type SceneFile, type SignData } from '@cocoaworlds/core';
+import { SceneDoc, readComponent, type ParticlesData, type ColliderData, type GameRules, type GameValue, type ModelData, type SceneFile, type SignData } from '@cocoaworlds/core';
 import { buildMesh, isInvisibleMaterial, type WorldBrush } from '@cocoaworlds/geometry';
 import { GameWorld, initPhysics, type BodyInfo, type ModelMesh, type SavedProgress, type UiState, type PlayerInput, type PlayerStatus, type ScriptLog, type TriggerEvent } from '@cocoaworlds/runtime';
 import type { Problem, ScriptError } from '@cocoaworlds/scripting';
@@ -15,6 +15,7 @@ import { buildLevel } from './world-build';
 import { toGeometry } from './world-render';
 import { buildSign, type SignObject } from './sign';
 import { Effects } from './effects';
+import { EMITTER_DEFAULTS } from './particles';
 import { assetUrl } from '../assets';
 import { modelGeometry, modelInstance, type ModelInstance } from './models';
 
@@ -116,6 +117,21 @@ export class PlaySession {
       this.attachModel(holder, data, e.id);
     }
 
+    // Particle emitters, where they stand (carried by what moves them).
+    for (const e of doc.entities) {
+      if (!e.components.particles) continue;
+      let shownE = true;
+      for (let x = doc.get(e.id); x; x = x.parent ? doc.get(x.parent) : undefined) if (!x.visible) shownE = false;
+      if (!shownE) continue;
+      const holder = new THREE.Group();
+      holder.matrixAutoUpdate = false;
+      holder.matrix.fromArray(doc.worldMatrix(e.id));
+      this.group.add(holder);
+      const body = this.world.bodyOf(e.id);
+      if (body) this.movers.push({ id: body, obj: holder, base: holder.matrix.clone() });
+      this.emitters.push({ data: readComponent<ParticlesData>('particles', e.components.particles), holder, body, owed: 0 });
+    }
+
     // Text signs, where they stand (redrawn when blocks change their text).
     const shown = (id: string) => {
       for (let x = doc.get(id); x; x = x.parent ? doc.get(x.parent) : undefined) if (!x.visible) return false;
@@ -148,7 +164,9 @@ export class PlaySession {
       const yaw = this.world.player?.input.yaw ?? 0;
       this.effects.tracer(e.from, e.to, e.by === 'player', [Math.cos(yaw), 0, -Math.sin(yaw)]);
     });
-    this.world.bus.on('explosion', (e) => this.effects.explosion(e.at, e.radius));
+    this.world.bus.on('explosion', (e) => this.effects.explosion(e.at, e.radius, e.normal));
+    // Marks stick to what was hit: the level, or an object that moves (so they move with it).
+    this.world.bus.on('impact', (e) => this.effects.impact(e.at, e.normal, e.melee, this.moverObject(e.target)));
     this.world.bus.on('anim', (e) => {
       const inst = this.models.get(e.target);
       if (inst && !inst.play(e.name, e.loop)) this.notes.push(`The model has no animation called “${e.name}”`);
@@ -324,6 +342,7 @@ export class PlaySession {
   tick(dt: number): PlayFrame {
     this.world.step(dt);
     this.effects.syncProjectiles(this.world.projectilesNow());
+    this.emit(dt);
     this.effects.tick(dt);
     const changes = this.world.drainChanges();
     for (const b of changes.spawned) this.addMover(b);
@@ -449,6 +468,34 @@ export class PlaySession {
   }
 
   private effects = new Effects();
+  private emitters: { data: ParticlesData; holder: THREE.Group; body: string | null; owed: number }[] = [];
+
+  /** Emitters put out their particles for this frame (where they are now, if on and shown). */
+  private emit(dt: number): void {
+    const at = new THREE.Vector3(), q = new THREE.Quaternion(), s = new THREE.Vector3();
+    for (const em of this.emitters) {
+      const on = em.body ? (this.world.switchedOn(em.body) ?? em.data.on) && this.world.isVisible(em.body) : em.data.on;
+      if (!on || em.data.rate <= 0) continue;
+      em.owed += em.data.rate * dt;
+      const n = Math.floor(em.owed);
+      if (!n) continue;
+      em.owed -= n;
+      em.holder.updateMatrixWorld();
+      em.holder.matrixWorld.decompose(at, q, s);
+      const d = EMITTER_DEFAULTS[em.data.kind] ?? EMITTER_DEFAULTS.smoke;
+      this.effects.particles.burst(
+        { kind: em.data.kind, at: at.clone(), dir: new THREE.Vector3(0, 1, 0).applyQuaternion(q), spread: d.spread, speed: d.speed * em.data.speed, size: d.size * em.data.size, life: d.life },
+        Math.min(n, 50),
+      );
+    }
+  }
+
+  /** What draws the moving object `id` is part of (null: it doesn't move, or it isn't an object). */
+  private moverObject(id: string | null): THREE.Object3D | null {
+    if (!id || id === 'player') return null;
+    const body = this.world.bodyOf(id);
+    return (body && this.movers.find((m) => m.id === body)?.obj) || null;
+  }
   private waterFog: { key: string; fog: THREE.Fog; color: THREE.Color } | null = null;
 
   /** With the camera under water: the water's colour all round, and only as far as it is clear. */
