@@ -52,6 +52,7 @@ export function Viewport() {
   const vertexSnap = useEditor((s) => s.vertexSnap);
   const pivotEdit = useEditor((s) => s.pivotEdit);
   const showGrid = useEditor((s) => s.showGrid);
+  const showNav = useEditor((s) => s.showNav);
   const gameLighting = useEditor((s) => s.gameLighting);
   const showStats = useEditor((s) => s.showStats);
   const gridSize = useEditor((s) => s.session?.project.settings.gridSize ?? 16);
@@ -221,6 +222,9 @@ export function Viewport() {
   useEffect(() => {
     engine.current?.setGridVisible(showGrid);
   }, [showGrid]);
+  useEffect(() => {
+    engine.current?.setNavVisible(showNav);
+  }, [showNav]);
   useEffect(() => {
     engine.current?.setGameLighting(gameLighting);
   }, [gameLighting]);

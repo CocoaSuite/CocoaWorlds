@@ -7,7 +7,7 @@
  */
 import { SceneDoc, expandRepeats, readComponent, type ParticlesData, type ColliderData, type GameRules, type GameValue, type ModelData, type SceneFile, type SignData } from '@cocoaworlds/core';
 import { buildMesh, isInvisibleMaterial, type WorldBrush } from '@cocoaworlds/geometry';
-import { GameWorld, initPhysics, type BodyInfo, type ModelMesh, type SavedProgress, type Travel, type UiState, type PlayerInput, type PlayerStatus, type ScriptLog, type TriggerEvent } from '@cocoaworlds/runtime';
+import { GameWorld, initPhysics, type NavGrid, type BodyInfo, type ModelMesh, type SavedProgress, type Travel, type UiState, type PlayerInput, type PlayerStatus, type ScriptLog, type TriggerEvent } from '@cocoaworlds/runtime';
 import type { Problem, ScriptError } from '@cocoaworlds/scripting';
 import * as THREE from 'three';
 import { brushBounds, worldBrushes } from '../brush/brushes';
@@ -42,6 +42,10 @@ export interface PlayFrame {
 export class PlaySession {
   readonly group = new THREE.Group();
   private world: GameWorld;
+  /** Where the game's creatures can walk. */
+  navigation(): NavGrid | null {
+    return this.world.navigation();
+  }
   /** Objects drawn where their body is: base placement, then the body's motion on top. */
   private movers: { id: string; obj: THREE.Object3D; base: THREE.Matrix4 }[] = [];
   readonly info: PlayInfo;

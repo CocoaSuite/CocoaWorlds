@@ -114,6 +114,8 @@ interface State {
   tool: Tool;
   view: ViewMode;
   showGrid: boolean;
+  /** View › Navigation: where creatures can walk. */
+  showNav: boolean;
   /** Show the scene's own lighting (lights, sky, fog) in the editor instead of the flat preview lights. */
   gameLighting: boolean;
   showStats: boolean;
@@ -169,7 +171,7 @@ interface Actions {
   selectAll(): void;
   setTool(t: Tool): void;
   setView(v: ViewMode): void;
-  toggle(k: 'showGrid' | 'showStats' | 'showBottom' | 'snap' | 'vertexSnap' | 'pivotEdit' | 'gameLighting'): void;
+  toggle(k: 'showGrid' | 'showNav' | 'showStats' | 'showBottom' | 'snap' | 'vertexSnap' | 'pivotEdit' | 'gameLighting'): void;
   /** Put an object's pivot at a world position (null: back to the default, its middle). */
   setPivot(id: string, world: Vec3 | null, mergeKey?: string): void;
   execute(cmd: Command): void;
@@ -297,6 +299,7 @@ export const useEditor = create<State & Actions>()((set, get) => ({
   tool: 'select',
   view: 'perspective',
   showGrid: true,
+  showNav: false,
   gameLighting: false,
   assets: { textures: [], sounds: [], models: [] },
   showStats: true,

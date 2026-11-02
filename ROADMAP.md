@@ -29,7 +29,9 @@ From here the order follows the benchmark: [BENCHMARK.md](BENCHMARK.md) — can 
 | CM2 ✅ | Cocoa Materials: triplanar mapping (world, object) for every material and model, exposed settings and variants, Slope blur, Distance, grunge styles | Every target looks its best | 7 |
 | CM3 ✅ | Cocoa Materials: node-graph materials baked on the GPU, triplanar mapping, variants, wear from mesh edges ([proposal](docs/proposals/cocoa-materials.md)) | Every target looks its best | 7 |
 | R1 ✅ | Procedural objects: Repeat with caps (ladders, pipes, railings) | Half-Life, Roblox builds | 7 |
-| A2 | Animated models, creature behaviours, navigation meshes, scattering foliage, many-objects performance | Half-Life NPCs, Slime Rancher creatures | 7, 10 |
+| A2a ✅ | Navigation: where creatures can walk, measured from the level; paths round walls, through doors and between floors; shown in the editor | Half-Life NPCs, Slime Rancher creatures | 7, 10 |
+| A2b | Scattering foliage (grass, flowers, rocks) over surfaces | Slime Rancher, outdoor maps | 7 |
+| A2c | Many-objects performance: instancing and culling for thousands of copies | Slime Rancher, Roblox builds | 7 |
 | T1 | Voxel terrain with heightmap import: sculpt, dig and paint | Slime Rancher, outdoor maps | 7 |
 | M1 | Hosting and joining games (single-player until then) | Roblox-style online play | after 9 |
 
@@ -109,4 +111,8 @@ Order may shift where dependencies require it (for example, the project format f
 
 ## Next
 
-A2 (navigation meshes so creatures find their way, animated models, creature behaviours for Slime Rancher, foliage, many-objects performance), then T1 (voxel terrain). Installers and signing for exported games come with packaging the editor itself (Phase 9).
+A2b (scattering foliage), A2c (many-objects performance), then T1 (voxel terrain). Installers and signing for exported games come with packaging the editor itself (Phase 9).
+
+## Pinned
+
+- Ready-made ladder from models: waiting on a ladder segment and top cap (`.glb`, Y up, origin at the bottom centre, 1 m = 32 u, segment exactly one step tall). Add › Ladder uses brushes until then.

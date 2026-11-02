@@ -43,6 +43,8 @@ export interface NpcWorld {
   animate(npc: Npc, role: AnimRole, loop: boolean): void;
   /** 0…1 (replaceable in tests). */
   random(): number;
+  /** A walkable way there (corners to head for, ending at `to`), or null when there's no navigation or no way. */
+  route?(from: V, to: V): V[] | null;
 }
 
 export class Npc {
@@ -84,6 +86,10 @@ export class Npc {
   private stuckFor = 0;
   /** While set, it keeps going round on `side` (after getting stuck). */
   private detourUntil = 0;
+  /** The way being followed (navigation), where it leads and when it was worked out. */
+  private route: V[] | null = null;
+  private routeTo: V | null = null;
+  private routeAt = -Infinity;
 
   constructor(
     private w: NpcWorld,
@@ -300,6 +306,8 @@ export class Npc {
     }
 
     let dx = 0, dz = 0;
+    if (move) move = this.waypoint(move, now);
+    else this.route = null;
     if (move) {
       const d = { x: move.x - this.feet.x, z: move.z - this.feet.z };
       const len = Math.hypot(d.x, d.z);
@@ -411,6 +419,28 @@ export class Npc {
     }
     // Boxed in: push on (sliding along whatever it is).
     return { x, z };
+  }
+
+  /**
+   * Where to head for on the way to `to`: the next corner of a walkable way round walls and through doors, worked
+   * out again when the target moves or every second and a half. Close by, or with no way found, straight there.
+   */
+  private waypoint(to: V, now: number): V {
+    if (!this.w.route || (this.flatDistance(to) < 48 && Math.abs(to.y - this.feet.y) < 24)) {
+      this.route = null;
+      return to;
+    }
+    // (Again when the target has moved a good part of the way off: a quarter of the distance, at least 48 u.)
+    const moved = !this.routeTo || Math.hypot(to.x - this.routeTo.x, to.z - this.routeTo.z) > Math.max(48, this.flatDistance(to) / 4);
+    if (moved || now - this.routeAt > 1.5) {
+      this.route = this.w.route(this.feet, to);
+      this.routeTo = { ...to };
+      this.routeAt = now;
+    }
+    const r = this.route;
+    if (!r?.length) return to;
+    while (r.length > 1 && this.flatDistance(r[0]!) < 12) r.shift();
+    return r[0]!;
   }
 
   private turnTowards(yaw: number, dt: number): void {

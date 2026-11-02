@@ -52,10 +52,20 @@ Under **Creatures**:
 The value **distance from … to …** measures how far apart two things are (objects, creatures, the player), for
 conditions such as “the player is within 300 of the nest”.
 
-Creatures go towards where they're heading, climbing steps and steering round what's in the way: crates,
-pillars, other creatures. They go round one side, and if that gets them nowhere, the other. A wandering
-creature gives up on a spot it can't reach and picks another. Finding a way through a maze of rooms comes
-with navigation meshes (A2).
+## Finding the way (navigation)
+
+When play starts, the game measures where creatures can walk. It probes the level straight down on a 16 u
+grid, so every floor counts (a room, the storey above, a bridge), and keeps the spots where a person-sized
+creature fits: half its width from walls and with room overhead. Neighbouring spots join if one step (up to
+20 u) or a short drop (up to 64 u) gets from one to the other; slopes up to 46° are walkable.
+
+A creature heading somewhere further than about 48 u away asks for a way there and walks it corner by corner:
+out of a dead end, round a wall to its gap, up stairs to another floor. It works the way out again every second
+and a half, or sooner when what it's after moves off. On the way it still steers round crates and other
+creatures, and with no way found it heads straight there as before (and a wandering one gives up on that spot).
+
+**View › Show where creatures can walk** draws the spots (green dots) and their links in the editor. It is
+worked out again a moment after each change, and while playing shows what the game itself measured.
 
 ## The chicken
 

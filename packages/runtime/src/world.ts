@@ -45,6 +45,7 @@ import { scriptTargets } from './script-targets';
 import { PLAYER, Player, fallDamage, type PlayerInput } from './player';
 import { Weapons, type V3 } from './weapons';
 import { ANIM_ROLES, Npc, type AnimRole } from './npc';
+import { NavGrid } from './navgrid';
 import { bounds, brushToWorld, buildMesh, buildWorld, fromData, hullPoints, vertices, type Brush, type BrushData, type WorldBrush } from '@cocoaworlds/geometry';
 
 /** Units per metre (an inch-based world). */
@@ -245,6 +246,9 @@ export class GameWorld {
   private names = new Map<string, string>();
   /** Brushes that are part of the still level (not moved by physics or scripts). */
   levelIds = new Set<string>();
+  /** Where the level is (world bounds of every brush and fixed object), for measuring navigation. */
+  private extent: { min: [number, number, number]; max: [number, number, number] } | null = null;
+  private nav: NavGrid | null | undefined;
   /** The player, when the scene has a Player start. */
   readonly player: Player | null = null;
   private parentOf = new Map<string, string | null>();
@@ -530,6 +534,10 @@ export class GameWorld {
       }
     }
     this.addLevel(level, conveyors);
+    for (const b of level) {
+      const bb = bounds(b.brush);
+      if (bb) this.grow(bb);
+    }
     this.levelIds = new Set(level.map((b) => b.id));
     // A unit turns around its pivot (the centre of what it holds unless one was set).
     const boundsOf = (x: EntityData) => {
@@ -553,6 +561,8 @@ export class GameWorld {
       this.owner.set(npc.collider.handle, e.id);
       this.npcs.set(e.id, npc);
     }
+    // Measured now (while loading) rather than on the first creature's first walk.
+    if (this.npcs.size) this.navigation();
 
     // The player: at the first visible Player start, facing the way it faces.
     const spawn = doc.entities.find((e) => e.components.playerSpawn && shown(e));
@@ -742,11 +752,44 @@ export class GameWorld {
    * A point object (empty, light, model …) with a collision shape: a Collision shape component, or its model's
    * shape. Without Physics it stays put.
    */
+  private grow(b: { min: number[]; max: number[] }): void {
+    const x = (this.extent ??= { min: [Infinity, Infinity, Infinity], max: [-Infinity, -Infinity, -Infinity] });
+    for (let k = 0; k < 3; k++) {
+      x.min[k] = Math.min(x.min[k]!, b.min[k]!);
+      x.max[k] = Math.max(x.max[k]!, b.max[k]!);
+    }
+  }
+
+  /**
+   * Where creatures can walk (A2), measured from the level the first time it's asked for (null for an empty
+   * level). Fixed pieces count as ground and walls; zones, doors, crates and creatures don't.
+   */
+  navigation(): NavGrid | null {
+    if (this.nav !== undefined) return this.nav;
+    const x = this.extent;
+    if (!x) return (this.nav = null);
+    // (Queries only see colliders once the physics has stepped: a step of no time, collecting no events.)
+    const dt = this.world.timestep;
+    this.world.timestep = 0;
+    this.world.step();
+    this.world.timestep = dt;
+    this.nav = NavGrid.build(
+      { world: this.world, solid: (c) => !!c.parent()?.isFixed() && !this.triggers.has(c.handle) && !this.volumes.has(c.handle) && !this.standIns.has(c.handle) && !this.standInOf.has(c.handle) },
+      [x.min[0] - 32, x.min[1] - 32, x.min[2] - 32],
+      [x.max[0] + 32, x.max[1] + 32, x.max[2] + 32],
+    );
+    return this.nav;
+  }
+
   private addPointBody(e: EntityData, world: number[]): void {
     const rb = e.components.rigidBody ? readComponent<RigidBodyData>('rigidBody', e.components.rigidBody) : { ...readComponent<RigidBodyData>('rigidBody', {}), motion: 'fixed' as const };
     const t = decomposeMat4(world);
     const scale = t.scale.map(Math.abs) as Q3;
     const model = this.modelShape(e);
+    if (rb.motion === 'fixed') {
+      const r = model ? 256 * Math.max(...scale) : 64;
+      this.grow({ min: [world[12]! - r, world[13]! - r, world[14]! - r], max: [world[12]! + r, world[13]! + r, world[14]! + r] });
+    }
     const shape = model ? null : readComponent<ColliderData>('collider', e.components.collider);
     const descs = model ? modelColliders(model.data, model.mesh, scale, rb.motion === 'dynamic') : [pointCollider(shape!, scale)];
     // Body placement: position and rotation only (scale went into the shape).
@@ -1037,6 +1080,7 @@ export class GameWorld {
         if (name) this.bus.emit({ type: 'anim', target: npc.id, name, loop, time: this.time });
       },
       random: () => this.random(),
+      route: (from, to) => this.navigation()?.path(from, to) ?? null,
     };
   }
 

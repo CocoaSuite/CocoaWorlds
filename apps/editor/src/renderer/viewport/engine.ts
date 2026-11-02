@@ -20,7 +20,7 @@ import { tickMaterials } from './project-materials';
 import { VertexTool } from './vertex-tool';
 import { ClipTool, type ClipKeep, type ClipState } from './clip-tool';
 import type { PlayFrame, PlayInfo, PlaySession } from './play-session';
-import type { Travel, UiState } from '@cocoaworlds/runtime';
+import { GameWorld, initPhysics, type NavGrid, type Travel, type UiState } from '@cocoaworlds/runtime';
 import { GAME_KEYS, inputFromKeys, isScriptKey, lookFromMouse } from '../game/controls';
 import { hudOf, type Hud } from '../ui/Hud';
 import { loadProgress, storeProgress } from '../game/progress';
@@ -328,6 +328,7 @@ export class ViewportEngine {
   syncAll(): void {
     // What is shown: the scene with Repeat groups built out (their copies are drawn, never saved).
     const doc = this.doc ? this.shownDoc(this.doc) : null;
+    if (this.navOn) this.queueNav();
     this.mats = doc ? worldMatrices(doc) : new Map();
     const seen = new Set<string>();
     if (doc) {
@@ -494,6 +495,7 @@ export class ViewportEngine {
       return session.info;
     }
     this.play = session;
+    this.queueNav(0);
     // Heard from where it's seen: the player's eyes, or the editor camera in a physics preview.
     session.setEars(session.info.player ? this.fpCam : this.rig.camera);
     this.cancelDraft();
@@ -523,6 +525,7 @@ export class ViewportEngine {
     if (!p) return;
     this.saveProgress();
     this.play = null;
+    this.queueNav(0);
     this.hudKey = '';
     this.cb.hud(null);
     this.gameKeys.clear();
@@ -766,6 +769,77 @@ export class ViewportEngine {
     this.gizmo.setRotationSnap(enabled ? 15 * DEG : null);
     this.gizmo.setScaleSnap(enabled ? 0.25 : null);
     this.grid.update(gridSize, this.rig.unitsPerPixel);
+    this.invalidate();
+  }
+
+  private navOn = false;
+  private navTimer: ReturnType<typeof setTimeout> | null = null;
+  private navDraw: THREE.Group | null = null;
+
+  /** View › Navigation: draw where creatures can walk (worked out again a moment after each change). */
+  setNavVisible(on: boolean): void {
+    this.navOn = on;
+    this.queueNav(0);
+  }
+
+  private queueNav(delay = 600): void {
+    if (this.navTimer) clearTimeout(this.navTimer);
+    this.navTimer = null;
+    if (!this.navOn) return this.showNav(null);
+    this.navTimer = setTimeout(() => void this.buildNav(), delay);
+  }
+
+  private async buildNav(): Promise<void> {
+    this.navTimer = null;
+    let nav: NavGrid | null = null;
+    if (this.play) nav = this.play.navigation();
+    else if (this.doc) {
+      await initPhysics();
+      if (!this.doc || this.play) return;
+      // (Measured in a throwaway game world built from the scene as it is now.)
+      const w = GameWorld.create(expandRepeats(this.doc.toFile(), brushBounds));
+      try {
+        nav = w.navigation();
+      } finally {
+        w.dispose();
+      }
+    }
+    if (this.navOn) this.showNav(nav);
+  }
+
+  private showNav(nav: NavGrid | null): void {
+    if (this.navDraw) {
+      this.scene.remove(this.navDraw);
+      this.navDraw.traverse((o) => {
+        const m = o as THREE.Mesh;
+        m.geometry?.dispose();
+        (m.material as THREE.Material | undefined)?.dispose?.();
+      });
+      this.navDraw = null;
+    }
+    if (nav?.count) {
+      const g = new THREE.Group();
+      g.name = 'navigation';
+      const lift = (a: Float32Array) => {
+        for (let i = 1; i < a.length; i += 3) a[i]! += 1;
+        return a;
+      };
+      const pts = new THREE.BufferGeometry();
+      pts.setAttribute('position', new THREE.BufferAttribute(lift(nav.xyz.slice()), 3));
+      g.add(new THREE.Points(pts, new THREE.PointsMaterial({ color: 0x6fdc8c, size: 3, sizeAttenuation: false })));
+      const links = nav.links();
+      const seg = new Float32Array(links.length * 6);
+      links.forEach(([a, b], k) => {
+        seg.set(nav.xyz.subarray(a * 3, a * 3 + 3), k * 6);
+        seg.set(nav.xyz.subarray(b * 3, b * 3 + 3), k * 6 + 3);
+      });
+      const lines = new THREE.BufferGeometry();
+      lines.setAttribute('position', new THREE.BufferAttribute(lift(seg), 3));
+      g.add(new THREE.LineSegments(lines, new THREE.LineBasicMaterial({ color: 0x3fae62, transparent: true, opacity: 0.5 })));
+      g.userData.spots = nav.count;
+      this.navDraw = g;
+      this.scene.add(g);
+    }
     this.invalidate();
   }
 
