@@ -222,6 +222,13 @@ outColor = vec4(vec3(v), 1.);`,
     inputs: [],
     output: 'grey',
     params: [
+      {
+        id: 'style',
+        label: l('Style', 'Вид'),
+        kind: 'choice',
+        options: [opt('blotches', 'Blotches', 'Пятна'), opt('streaks', 'Streaks (running down)', 'Потёки'), opt('speckles', 'Speckles', 'Крапинки'), opt('rust', 'Rust', 'Ржавчина')],
+        default: 'blotches',
+      },
       { id: 'scale', label: l('Scale', 'Масштаб'), kind: 'int', min: 1, max: 32, default: 3 },
       { id: 'warp', label: l('Swirl', 'Завихрение'), kind: 'number', min: 0, max: 1, default: 0.4 },
       { id: 'contrast', label: l('Contrast', 'Контраст'), kind: 'number', min: 0, max: 1, default: 0.5 },
@@ -229,7 +236,14 @@ outColor = vec4(vec3(v), 1.);`,
       seed,
     ],
     glsl: `vec2 q = uv + p_warp * 0.25 * (vec2(fbm(uv, p_scale, 4., 0.5, 0., p_seed), fbm(uv, p_scale, 4., 0.5, 0., p_seed + 11.)) - 0.5);
-float v = fbm(q, p_scale * 2., 7., 0.55, 0., p_seed + 23.);
+float v;
+if (p_style < 0.5) v = fbm(q, p_scale * 2., 7., 0.55, 0., p_seed + 23.);
+// Streaks: stretched up and down (eight times finer across, still tiling).
+else if (p_style < 1.5) v = fbm(vec2(q.x * 8., q.y), p_scale * 2., 6., 0.5, 0., p_seed + 23.) * (0.6 + 0.4 * fbm(q, p_scale, 3., 0.5, 0., p_seed + 5.));
+// Speckles: small spots, more where a broad noise says so.
+else if (p_style < 2.5) v = valueNoise(q * p_scale * 24., p_scale * 24., p_seed + 31.) * (0.4 + 0.8 * fbm(uv, p_scale, 3., 0.5, 0., p_seed + 7.));
+// Rust: veined patches.
+else v = fbm(q, p_scale * 2., 6., 0.6, 2., p_seed + 41.) * fbm(uv, p_scale, 4., 0.5, 0., p_seed + 3.) * 1.4;
 float c = mix(0.5, 0.02, p_contrast); float m = 1. - p_amount;
 outColor = vec4(vec3(smoothstep(m - c, m + c, v)), 1.);`,
   },
@@ -370,6 +384,45 @@ outColor = vec4(inC_in(uv + off).rgb, 1.);`,
     glsl: `vec2 q = uv - 0.5;
 if (p_turn > 0.5 && p_turn < 1.5) q = vec2(-q.y, q.x); else if (p_turn > 1.5 && p_turn < 2.5) q = -q; else if (p_turn > 2.5) q = vec2(q.y, -q.x);
 outColor = vec4(inC_in((q + 0.5) * p_tiles + vec2(p_x, p_y)).rgb, 1.);`,
+  },
+  {
+    type: 'slopeBlur',
+    group: 'change',
+    label: l('Slope blur', 'Размытие по склону'),
+    hint: l('Smear a picture along the slopes of another: melted, eroded or flowing looks.', 'Размазать картинку вдоль склонов другой: оплавленный, выветренный, текучий вид.'),
+    inputs: [IN_COLOR(), IN_GREY('slope', l('Slope', 'Склон'), [0.5, 0.5, 0.5])],
+    output: 'color',
+    params: [
+      { id: 'amount', label: l('Amount', 'Сила'), kind: 'number', min: 0, max: 0.2, step: 0.002, default: 0.04 },
+      { id: 'mode', label: l('Mode', 'Режим'), kind: 'choice', options: [opt('blur', 'Blur', 'Размыть'), opt('min', 'Darkest', 'Темнее'), opt('max', 'Lightest', 'Светлее')], default: 'blur' },
+    ],
+    glsl: `float e = 1. / 256.;
+vec2 g = vec2(inG_slope(uv + vec2(e, 0.)) - inG_slope(uv - vec2(e, 0.)), inG_slope(uv + vec2(0., e)) - inG_slope(uv - vec2(0., e)));
+vec2 dir = length(g) > 1e-5 ? -normalize(g) : vec2(0.);
+vec3 acc = inC_in(uv).rgb; vec3 lo = acc, hi = acc;
+for (int i = 1; i <= 12; i++) {
+  vec3 c = inC_in(uv + dir * p_amount * float(i) / 12.).rgb;
+  acc += c; lo = min(lo, c); hi = max(hi, c);
+}
+outColor = vec4(p_mode < 0.5 ? acc / 13. : p_mode < 1.5 ? lo : hi, 1.);`,
+  },
+  {
+    type: 'distance',
+    group: 'change',
+    label: l('Distance', 'Расстояние'),
+    hint: l('A soft edge growing out from white shapes: bevels, glows and wear around marks.', 'Мягкий край вокруг белых фигур: фаски, свечение, износ вокруг отметин.'),
+    inputs: [IN_GREY('in', l('Shapes', 'Фигуры'))],
+    output: 'grey',
+    params: [{ id: 'distance', label: l('How far', 'Как далеко'), kind: 'number', min: 0.005, max: 0.25, step: 0.005, default: 0.05 }],
+    glsl: `float best = inG_in(uv) > 0.5 ? 0. : 1e3;
+for (int r = 1; r <= 10; r++) {
+  float rad = p_distance * float(r) / 10.;
+  for (int a = 0; a < 16; a++) {
+    float t = float(a) / 16. * 6.2831853 + float(r) * 0.37;
+    if (inG_in(uv + vec2(cos(t), sin(t)) * rad) > 0.5) best = min(best, rad);
+  }
+}
+outColor = vec4(vec3(clamp(1. - best / p_distance, 0., 1.)), 1.);`,
   },
   {
     type: 'edges',

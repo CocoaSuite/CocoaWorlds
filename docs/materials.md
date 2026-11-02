@@ -102,8 +102,8 @@ right shows the material **On a shape** (sphere, cube, wall) or **Flat** (the pi
 
 | Group | Nodes |
 |---|---|
-| Make | Noise (Perlin, value, ridged), Cells, Bricks and tiles, Shape (circle, square, polygon, star), Gradient, Checker, Scratches, Grunge, Image (a project texture), Colour, Number |
-| Change | Levels, Curve, Invert, Clamp, Blur, Warp, Transform (repeat, slide, quarter turns), Edge detect |
+| Make | Noise (Perlin, value, ridged), Cells, Bricks and tiles, Shape (circle, square, polygon, star), Gradient, Checker, Scratches, Grunge (blotches, streaks, speckles, rust), Image (a project texture), Colour, Number |
+| Change | Levels, Curve, Invert, Clamp, Blur, Warp, Slope blur (blur, darkest, lightest), Distance, Transform (repeat, slide, quarter turns), Edge detect |
 | Combine | Blend (mix, add, subtract, multiply, screen, overlay, lighter, darker, difference, through a mask), Switch |
 | Colour | Gradient map, Hue / saturation / lightness, Colourise |
 | Surface | Height to normal, Height to occlusion, Height to curvature |

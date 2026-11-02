@@ -61,9 +61,9 @@ None open.
 
 - Newer Chromium returns a Promise from `scrollIntoView`; an effect that returned it implicitly crashed the editor when the console updated. Effects now never return values implicitly.
 - Line-segment grids disappeared near the camera on software renderers; the grid is now drawn by a shader on a single plane.
-- **Cocoa Materials (CM1):** materials map with each face's own alignment only (triplanar mapping, exposed
-  settings and variants come in CM2, with Slope blur, Distance and Flood fill); no wear from mesh edges yet
-  (CM3). Nodes can't be grouped into frames yet, and copied nodes stay inside the editor (not the system clipboard). Curve has four fixed points. Height to
+- **Cocoa Materials:** no wear from mesh edges yet (CM3); Flood fill (random per island) isn't there yet; triplanar mapping blends
+  three projections, so very busy patterns can look doubled on slopes; bumps from a Height output (without a
+  Normal output) follow face coordinates even when triplanar. Nodes can't be grouped into frames yet, and copied nodes stay inside the editor (not the system clipboard). Curve has four fixed points. Height to
   occlusion is a quick approximation. Graph files keep the name they were made with. Graphs are evaluated
   only in the editor; changing one from another workspace with Undo bakes it again in the background.
 - **Ambient occlusion** is screen space (it only knows what is on screen) and is off with software rendering, so the automated tests (which render in software) don't check its look. Bounce light is not there yet (see docs/proposals/lighting-gi.md).
