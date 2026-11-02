@@ -108,7 +108,7 @@ export type Op =
 export type GameAction = 'hurt' | 'heal' | 'addScore' | 'giveArmour';
 export type GameValue = 'health' | 'score' | 'armour';
 
-export type ActionName = 'move' | 'turn' | 'turnTo' | 'return' | 'show' | 'hide' | 'turnOn' | 'turnOff' | 'remove' | 'scale' | 'physical' | 'push' | 'moveTo' | 'teleport' | 'damage';
+export type ActionName = 'move' | 'turn' | 'turnTo' | 'return' | 'show' | 'hide' | 'turnOn' | 'turnOff' | 'startTrain' | 'stopTrain' | 'remove' | 'scale' | 'physical' | 'push' | 'moveTo' | 'teleport' | 'damage';
 
 export type CompiledEvent =
   | { kind: 'start' }
@@ -382,6 +382,8 @@ class HandlerCompiler {
       case 'hide':
       case 'turnOn':
       case 'turnOff':
+      case 'startTrain':
+      case 'stopTrain':
         this.actTarget(s.target, s.id);
         this.emit({ op: 'act', name: s.kind, argc: 0 });
         break;

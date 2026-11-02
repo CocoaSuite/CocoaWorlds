@@ -57,6 +57,8 @@ export function newStatement(kind: StatementKind, opts: { target?: Ref; variable
     case 'hide':
     case 'turnOn':
     case 'turnOff':
+    case 'startTrain':
+    case 'stopTrain':
       return { id: id(), kind, target };
     case 'wait':
       return { id: id(), kind, seconds: num(1) };

@@ -30,6 +30,9 @@ export type { Hud } from '../ui/Hud';
 
 import type { GameRules, GameValue, SceneFile } from '@cocoaworlds/core';
 
+/** Path lines in the editor (cyan, like a route on a map). */
+const PATH_LINE = new THREE.LineBasicMaterial({ color: 0x4fd0d6, transparent: true, opacity: 0.9, depthTest: false });
+
 export interface ViewportCallbacks {
   select(ids: string[], mode: 'replace' | 'toggle'): void;
   /** A click in the view: the store resolves groups (`deep` = double-click, pick the object itself). */
@@ -322,6 +325,7 @@ export class ViewportEngine {
         this.markers.delete(id);
       }
     }
+    this.syncPaths();
     // Rebuild level geometry only when brushes actually changed.
     const wb = doc ? worldBrushes(doc) : [];
     // Faces and where each brush sits (a moved group moves its brushes without touching their faces).
@@ -332,6 +336,36 @@ export class ViewportEngine {
     }
     this.applySelection();
     this.invalidate();
+  }
+
+  /** Lines from each path point to the next (arrows halfway), so routes can be seen while editing. */
+  private pathLines: THREE.LineSegments | null = null;
+  private syncPaths(): void {
+    const pts: number[] = [];
+    const doc = this.doc;
+    for (const e of doc?.entities ?? []) {
+      const next = (e.components.pathPoint as { next?: string } | undefined)?.next;
+      if (!next || !doc!.get(next)) continue;
+      const a = this.mats.get(e.id), b = this.mats.get(next);
+      if (!a || !b) continue;
+      const [ax, ay, az, bx, by, bz] = [a[12]!, a[13]!, a[14]!, b[12]!, b[13]!, b[14]!];
+      pts.push(ax, ay, az, bx, by, bz);
+      // An arrowhead in the middle, pointing along the path.
+      const dx = bx - ax, dz = bz - az, len = Math.hypot(dx, by - ay, dz) || 1;
+      const mx = (ax + bx) / 2, my = (ay + by) / 2, mz = (az + bz) / 2;
+      const ux = dx / len, uz = dz / len, s = 10;
+      pts.push(mx, my, mz, mx - ux * s - uz * s * 0.6, my, mz - uz * s + ux * s * 0.6, mx, my, mz, mx - ux * s + uz * s * 0.6, my, mz - uz * s - ux * s * 0.6);
+    }
+    this.pathLines?.removeFromParent();
+    this.pathLines?.geometry.dispose();
+    this.pathLines = null;
+    if (!pts.length) return;
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3));
+    this.pathLines = new THREE.LineSegments(g, PATH_LINE);
+    this.pathLines.name = 'paths';
+    this.pathLines.renderOrder = 9;
+    this.scene.add(this.pathLines);
   }
 
   setSelection(ids: string[]): void {
@@ -1197,6 +1231,8 @@ export class ViewportEngine {
     r.setViewport(0, 0, size.x, size.y);
     r.clear();
     if (this.pivotMarker.visible) this.showPivotMarker();
+    // (Paths are an editing aid: not shown while playing.)
+    if (this.pathLines) this.pathLines.visible = !this.play;
     this.updateLighting();
     if (this.play?.placeCamera(this.fpCam)) {
       this.play.applyWater(this.scene, this.fpCam);

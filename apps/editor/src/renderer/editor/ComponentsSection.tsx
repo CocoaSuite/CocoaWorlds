@@ -156,6 +156,21 @@ function FieldEditor({ entity, component, field, value }: { entity: string; comp
         ))}
       </select>
     );
+  } else if (ty.kind === 'object') {
+    const v = String(value ?? '');
+    const doc = useEditor.getState().doc;
+    const list = (doc?.entities ?? []).filter((x) => !ty.component || x.components[ty.component] !== undefined);
+    input = (
+      <select className="cw-input cw-select" aria-label={label} value={v} onChange={(ev) => set(ev.target.value)}>
+        <option value="">{t('insp.noObject')}</option>
+        {v && !list.some((x) => x.id === v) && <option value={v}>{t('insp.missingObject')}</option>}
+        {list.map((x) => (
+          <option key={x.id} value={x.id}>
+            {x.name}
+          </option>
+        ))}
+      </select>
+    );
   } else {
     input = (
       <input

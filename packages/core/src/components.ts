@@ -32,7 +32,9 @@ export type FieldType =
   | { kind: 'vec3'; step?: number; min?: number }
   | { kind: 'text' }
   /** A project asset of one kind, by its project path (empty: none). */
-  | { kind: 'asset'; asset: 'textures' | 'sounds' | 'models' };
+  | { kind: 'asset'; asset: 'textures' | 'sounds' | 'models' }
+  /** Another object of the scene, by id (empty: none); only objects with `component`, when given. */
+  | { kind: 'object'; component?: string };
 
 export interface FieldDef {
   key: string;
@@ -281,6 +283,49 @@ export const COMPONENTS: ComponentDef[] = [
     ],
   },
   {
+    name: 'pathPoint',
+    label: e('Path point', 'Точка пути'),
+    description: e(
+      'A point on a path that trains follow, to the next point. Chain points to make a route; point the last back at the first for a loop.',
+      'Точка пути, по которому едут поезда, — к следующей точке. Соедините точки в маршрут; укажите у последней первую, чтобы замкнуть круг.',
+    ),
+    appliesTo: 'point',
+    fields: [
+      { key: 'next', label: e('Next point', 'Следующая точка'), type: { kind: 'object', component: 'pathPoint' }, default: '' },
+      { key: 'speed', label: e('New speed', 'Новая скорость'), hint: e('From here on (0: keep the speed).', 'Отсюда и дальше (0 — не менять).'), type: { kind: 'number', min: 0, step: 10, unit: 'u/s' }, default: 0 },
+      { key: 'wait', label: e('Wait here', 'Ждать здесь'), type: { kind: 'number', min: 0, step: 0.5, unit: 's' }, default: 0 },
+      {
+        key: 'message',
+        label: e('Message when reached', 'Сообщение по прибытии'),
+        hint: e('Sent to every script when a train gets here (empty: none).', 'Отправляется всем скриптам, когда сюда приходит поезд (пусто — нет).'),
+        type: { kind: 'text' },
+        default: '',
+      },
+    ],
+  },
+  {
+    name: 'train',
+    label: e('Train', 'Поезд'),
+    description: e(
+      'Moves this object along a path, point to point, carrying the player. It starts at the first point. Start and Stop blocks control it.',
+      'Ведёт объект по пути от точки к точке и везёт игрока. Начинает с первой точки. Блоки «Запустить» и «Остановить» им управляют.',
+    ),
+    appliesTo: 'any',
+    conflicts: ['rigidBody', 'trigger', 'water', 'ladder'],
+    fields: [
+      { key: 'start', label: e('First point', 'Первая точка'), type: { kind: 'object', component: 'pathPoint' }, default: '' },
+      { key: 'speed', label: e('Speed', 'Скорость'), type: { kind: 'number', min: 1, step: 10, unit: 'u/s' }, default: 100 },
+      { key: 'moving', label: e('Moves at the start', 'Едет с начала'), type: { kind: 'boolean' }, default: true },
+      {
+        key: 'turns',
+        label: e('Turns to face its way', 'Поворачивается по ходу'),
+        hint: e('Build it facing −Z (forward); it turns left and right to follow the path.', 'Стройте его лицом к −Z (вперёд); он поворачивает влево и вправо по пути.'),
+        type: { kind: 'boolean' },
+        default: false,
+      },
+    ],
+  },
+  {
     name: 'particles',
     label: e('Particles', 'Частицы'),
     description: e(
@@ -451,5 +496,21 @@ export interface ParticlesData {
   size: number;
   speed: number;
   on: boolean;
+  [k: string]: unknown;
+}
+
+export interface PathPointData {
+  next: string;
+  speed: number;
+  wait: number;
+  message: string;
+  [k: string]: unknown;
+}
+
+export interface TrainData {
+  start: string;
+  speed: number;
+  moving: boolean;
+  turns: boolean;
   [k: string]: unknown;
 }

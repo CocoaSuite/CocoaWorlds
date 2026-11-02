@@ -36,4 +36,4 @@ packages/ui        CocoaCanvas design tokens and components
 
 ## Documents
 
-[PROJECT_OVERVIEW.md](PROJECT_OVERVIEW.md) · [ARCHITECTURE.md](ARCHITECTURE.md) · [DESIGN_SYSTEM.md](DESIGN_SYSTEM.md) · [DECISIONS.md](DECISIONS.md) · [ROADMAP.md](ROADMAP.md) · [BENCHMARK.md](BENCHMARK.md) · [docs/rendering.md](docs/rendering.md) · [docs/materials.md](docs/materials.md) · [docs/movement.md](docs/movement.md) · [docs/weapons.md](docs/weapons.md) · [docs/ui.md](docs/ui.md) · [docs/export.md](docs/export.md) · [FEATURE_STATUS.md](FEATURE_STATUS.md) · [KNOWN_LIMITATIONS.md](KNOWN_LIMITATIONS.md)
+[PROJECT_OVERVIEW.md](PROJECT_OVERVIEW.md) · [ARCHITECTURE.md](ARCHITECTURE.md) · [DESIGN_SYSTEM.md](DESIGN_SYSTEM.md) · [DECISIONS.md](DECISIONS.md) · [ROADMAP.md](ROADMAP.md) · [BENCHMARK.md](BENCHMARK.md) · [docs/rendering.md](docs/rendering.md) · [docs/materials.md](docs/materials.md) · [docs/movement.md](docs/movement.md) · [docs/weapons.md](docs/weapons.md) · [docs/trains.md](docs/trains.md) · [docs/ui.md](docs/ui.md) · [docs/export.md](docs/export.md) · [FEATURE_STATUS.md](FEATURE_STATUS.md) · [KNOWN_LIMITATIONS.md](KNOWN_LIMITATIONS.md)

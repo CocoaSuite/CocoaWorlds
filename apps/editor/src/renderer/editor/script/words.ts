@@ -58,6 +58,8 @@ const W = {
   show: ['Show', 'Показать'],
   hide: ['Hide', 'Скрыть'],
   turnOn: ['Turn on', 'Включить'],
+  startTrain: ['Start the train', 'Запустить поезд'],
+  stopTrain: ['Stop the train', 'Остановить поезд'],
   turnOff: ['Turn off', 'Выключить'],
   wait: ['Wait', 'Ждать'],
   send: ['Send the message', 'Отправить сообщение'],
@@ -179,6 +181,8 @@ const PALETTE_STMT: Record<StatementKind, Pair> = {
   show: ['Show', 'Показать'],
   hide: ['Hide', 'Скрыть'],
   turnOn: ['Turn on', 'Включить'],
+  startTrain: ['Start the train', 'Запустить поезд'],
+  stopTrain: ['Stop the train', 'Остановить поезд'],
   turnOff: ['Turn off', 'Выключить'],
   wait: ['Wait', 'Ждать'],
   send: ['Send a message', 'Отправить сообщение'],
@@ -223,7 +227,7 @@ const PALETTE_STMT: Record<StatementKind, Pair> = {
 export const statementName = (k: StatementKind) => pick(PALETTE_STMT[k]);
 
 export const STATEMENT_GROUPS: { title: Pair; kinds: StatementKind[] }[] = [
-  { title: ['Do', 'Действия'], kinds: ['move', 'turn', 'turnTo', 'return', 'show', 'hide', 'turnOn', 'turnOff', 'send', 'log'] },
+  { title: ['Do', 'Действия'], kinds: ['move', 'turn', 'turnTo', 'return', 'show', 'hide', 'turnOn', 'turnOff', 'startTrain', 'stopTrain', 'send', 'log'] },
   { title: ['Objects', 'Объекты'], kinds: ['spawn', 'remove', 'moveTo', 'scale', 'physical', 'push', 'damage'] },
   { title: ['Player and score', 'Игрок и счёт'], kinds: ['teleport', 'hurt', 'heal', 'giveArmour', 'addScore'] },
   { title: ['Screen and signs', 'Экран и таблички'], kinds: ['say', 'showScreen', 'hideScreen', 'toggleScreen', 'showUi', 'hideUi', 'setUiText', 'addRow', 'removeRow', 'clearList', 'setText'] },

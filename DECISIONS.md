@@ -31,6 +31,8 @@ Details and trade-offs for each: [ARCHITECTURE.md](ARCHITECTURE.md).
 
 ## Log
 
+- **2026-11-02** — Routine choices for paths and trains (A1, reversible): Hammer's path_track and func_train become two components. Path points link with a new Inspector field that picks another object of the scene. A train is a scripted unit that the world moves at constant speed from point to point, so riding it uses the lift code. Messages on arrival replace Hammer's outputs, and Start and Stop are blocks.
+
 - **2026-11-02** — Routine choices for weapons (A1, reversible): a weapon is an item with weapon settings, so the hotbar, the inventory, shops and saved progress already work with weapons, and ammo is just another item. Ready-made weapons follow Half-Life's numbers. Bullets are instant rays, swings are short rays, and projectiles are simulated by the game rather than as physics bodies, so they never tunnel. Blasts fall off linearly, are blocked by fixed and scripted geometry, and hurt their own shooter. Hits run a new event, “When this is hit”, on the object and everything it is inside (as Use does). Weapon code lives in its own module that takes a shooter and a direction, so creatures can use it later.
 
 - **2026-11-02** — Routine choices for armour and chargers (A1, reversible): armour follows Half-Life's numbers (ratio 0.2, bonus 0.5, at most 100, lost on dying) and is skipped by falls and drowning. It shows under health only once the player has some. Scripts give and read it like health. The battery is a recipe of ordinary blocks, like the health pack. A charger is a component, because holding a key is a game rule rather than a script event. The game now passes whether Use is held, and chargers give a little on each physics step.

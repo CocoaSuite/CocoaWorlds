@@ -19,6 +19,8 @@ import {
   type SceneFile,
   type TriggerData,
   type ChargerData,
+  type PathPointData,
+  type TrainData,
   type LadderData,
   type WaterData,
   gameRules,
@@ -312,6 +314,8 @@ export class GameWorld {
   private fireQueued = false;
   /** Objects scripts turned on (true) or off (false), by body. */
   private switched = new Map<string, boolean>();
+  private pathPoints = new Map<string, { p: [number, number, number]; data: PathPointData }>();
+  private trains: { id: string; data: TrainData; at: string | null; to: string | null; speed: number; moving: boolean; waitUntil: number }[] = [];
 
   /** Model triangles by file (see `create`). */
   private models: Map<string, ModelMesh>;
@@ -372,7 +376,9 @@ export class GameWorld {
       this.chargers.set(e.id, { data, left: data.capacity });
     }
     for (const id of breakables) this.breakHealth.set(id, readComponent<BreakableData>('breakable', doc.get(id)!.components.breakable).health);
-    const targets = [...new Set([...scriptTargets(scripts), ...breakables])].filter((id) => doc.get(id) && !own(doc.get(id)!));
+    // (Trains too: they move as one along their path.)
+    const trainIds = doc.entities.filter((e) => e.components.train && shown(e)).map((e) => e.id);
+    const targets = [...new Set([...scriptTargets(scripts), ...breakables, ...trainIds])].filter((id) => doc.get(id) && !own(doc.get(id)!));
     const unitRoots = targets.filter((id) => !targets.some((o) => o !== id && doc.isAncestor(o, id)));
     const unitOf = this.unitOf;
     for (const root of unitRoots) for (const e of doc.subtree(root)) if (!own(e) || e.id === root) unitOf.set(e.id, root);
@@ -405,6 +411,14 @@ export class GameWorld {
       return d?.faces ? bounds(fromData({ faces: d.faces, mesh: d.mesh })) : null;
     };
     for (const root of unitRoots) this.addUnit(root, doc.worldMatrix(root), unitBrushes.get(root)!, pivotOf(doc, root, boundsOf));
+
+    // Paths and the trains on them, at their first points.
+    for (const e of doc.entities) {
+      if (!e.components.pathPoint) continue;
+      const m = doc.worldMatrix(e.id);
+      this.pathPoints.set(e.id, { p: [m[12]!, m[13]!, m[14]!], data: readComponent<PathPointData>('pathPoint', e.components.pathPoint) });
+    }
+    for (const id of trainIds) this.addTrain(id, readComponent<TrainData>('train', doc.get(id)!.components.train));
 
     // The player: at the first visible Player start, facing the way it faces.
     const spawn = doc.entities.find((e) => e.components.playerSpawn && shown(e));
@@ -718,6 +732,7 @@ export class GameWorld {
     }
     while (this.accumulator >= STEP) {
       this.applyTweens(this.time + STEP);
+      this.moveTrains();
       if (this.player) {
         this.player.step(STEP);
         if (this.player.landingSpeed) {
@@ -822,6 +837,71 @@ export class GameWorld {
   /** Projectiles in flight, for drawing. */
   projectilesNow(): { id: number; at: V3; arc: boolean }[] {
     return this.weapons.projectiles.map((p) => ({ id: p.id, at: [...p.at] as V3, arc: p.weapon.arc }));
+  }
+
+  // ── Paths and trains ──
+
+  private addTrain(id: string, data: TrainData): void {
+    const b = this.bodies.get(id);
+    const first = this.pathPoints.get(data.start);
+    if (!b || !first) return;
+    // Starts at its first point, heading for the next.
+    b.body.setTranslation({ x: first.p[0], y: first.p[1], z: first.p[2] }, true);
+    const next = this.pathPoints.has(first.data.next) ? first.data.next : null;
+    this.trains.push({ id, data, at: data.start, to: next, speed: first.data.speed > 0 ? first.data.speed : data.speed, moving: data.moving && next !== null, waitUntil: this.time + first.data.wait });
+  }
+
+  /** Trains move along their paths by one step: on to the next point, waiting, changing speed, sending messages. */
+  private moveTrains(): void {
+    for (const t of this.trains) {
+      if (!t.moving || t.to === null || this.time < t.waitUntil) continue;
+      const b = this.bodies.get(t.id);
+      if (!b) continue;
+      const cur = b.body.translation();
+      let pos: [number, number, number] = [cur.x, cur.y, cur.z];
+      let left = t.speed * STEP;
+      for (let guard = 0; guard < 16 && left > 1e-6 && t.moving && t.to !== null && this.time >= t.waitUntil; guard++) {
+        const target = this.pathPoints.get(t.to)!.p;
+        const d = [target[0] - pos[0], target[1] - pos[1], target[2] - pos[2]];
+        const dist = Math.hypot(d[0]!, d[1]!, d[2]!);
+        if (dist <= left) {
+          pos = [...target];
+          left -= dist;
+          this.arrive(t);
+        } else {
+          pos = [pos[0] + (d[0]! / dist) * left, pos[1] + (d[1]! / dist) * left, pos[2] + (d[2]! / dist) * left];
+          left = 0;
+        }
+      }
+      b.body.setNextKinematicTranslation({ x: pos[0], y: pos[1], z: pos[2] });
+      // Facing its way (turning about the vertical only).
+      const dx = pos[0] - cur.x, dz = pos[2] - cur.z;
+      if (t.data.turns && Math.hypot(dx, dz) > 1e-4) {
+        const yaw = Math.atan2(-dx, -dz);
+        b.body.setNextKinematicRotation(qmul({ x: 0, y: Math.sin(yaw / 2), z: 0, w: Math.cos(yaw / 2) }, b.start.q));
+      }
+    }
+  }
+
+  /** A train reached its next point. */
+  private arrive(t: GameWorld['trains'][number]): void {
+    const point = this.pathPoints.get(t.to!)!;
+    t.at = t.to;
+    if (point.data.speed > 0) t.speed = point.data.speed;
+    if (point.data.wait > 0) t.waitUntil = this.time + point.data.wait;
+    const msg = point.data.message.trim();
+    if (msg) {
+      this.bus.emit({ type: 'message', name: msg, from: t.at, time: this.time });
+      this.runner.dispatch({ type: 'message', message: msg, to: null, from: t.at });
+    }
+    t.to = this.pathPoints.has(point.data.next) ? point.data.next : null;
+    if (t.to === null) t.moving = false;
+  }
+
+  /** Where a train is: the point it last reached, the one it is heading for, and whether it is moving. */
+  trainState(id: string): { at: string | null; to: string | null; moving: boolean } | null {
+    const t = this.trains.find((x) => x.id === id);
+    return t ? { at: t.at, to: t.to, moving: t.moving } : null;
   }
 
   /** Holding Use on a charger: it gives health or armour, a little each step, until it is empty or the player is full. */
@@ -969,6 +1049,12 @@ export class GameWorld {
   private act(name: ActionName, target: string, args: Value[]): (() => boolean) | null {
     if (target === 'player') return this.actOnPlayer(name, args);
     const label = this.names.get(target) ?? 'That object';
+    if (name === 'startTrain' || name === 'stopTrain') {
+      const t = this.trains.find((x) => x.id === target || x.id === this.unitOf.get(target));
+      if (!t) throw new Error(`${label} isn't a train. Add the Train component to it.`);
+      t.moving = name === 'startTrain' && t.to !== null;
+      return null;
+    }
     if (name === 'damage') return this.damage(target, typeof args[0] === 'number' ? args[0] : 0), null;
     const b = this.bodies.get(target) ?? this.bodies.get(this.unitOf.get(target) ?? '');
     if (!b) throw new Error(`${label} can't be moved or switched by scripts here.`);

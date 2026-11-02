@@ -61,6 +61,9 @@ export type Statement =
   | { id: string; kind: 'show'; target: Ref }
   | { id: string; kind: 'hide'; target: Ref }
   | { id: string; kind: 'turnOn'; target: Ref }
+  /** Set a train (an object with the Train component) going along its path, or stop it where it is. */
+  | { id: string; kind: 'startTrain'; target: Ref }
+  | { id: string; kind: 'stopTrain'; target: Ref }
   | { id: string; kind: 'turnOff'; target: Ref }
   | { id: string; kind: 'wait'; seconds: Expr }
   | { id: string; kind: 'send'; message: string; to: Ref | null }

@@ -660,6 +660,8 @@ function statementWords(s: Statement, set: (patch: Record<string, unknown>, merg
     case 'hide':
     case 'turnOn':
     case 'turnOff':
+    case 'startTrain':
+    case 'stopTrain':
       return (
         <>
           {w(s.kind)} <RefSlot value={s.target} onChange={(target) => set({ target })} label={w(s.kind)} />
