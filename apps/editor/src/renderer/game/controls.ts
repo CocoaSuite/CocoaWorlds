@@ -17,6 +17,7 @@ export function inputFromKeys(keys: Set<string>): Partial<PlayerInput> {
     jump: on('Space'),
     crouch: on('ControlLeft', 'ControlRight', 'KeyC'),
     walk: on('ShiftLeft', 'ShiftRight'),
+    use: on('KeyE'),
   };
 }
 

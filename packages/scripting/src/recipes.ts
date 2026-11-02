@@ -70,6 +70,7 @@ const st = {
   forever: (body: Statement[]): Statement => ({ id: id(), kind: 'forever', body }),
   hurt: (amount: number): Statement => ({ id: id(), kind: 'hurt', amount: num(amount) }),
   heal: (amount: number): Statement => ({ id: id(), kind: 'heal', amount: num(amount) }),
+  armour: (amount: number): Statement => ({ id: id(), kind: 'giveArmour', amount: num(amount) }),
   score: (amount: number): Statement => ({ id: id(), kind: 'addScore', amount: num(amount) }),
   stop: (): Statement => ({ id: id(), kind: 'stop' }),
 };
@@ -288,6 +289,36 @@ export const RECIPES: Recipe[] = [
               b: { id: id(), kind: 'compare', op: '<', a: { id: id(), kind: 'health' }, b: num(100) },
             },
             then: [st.set('taken', true), st.heal(25), st.hide()],
+            otherwise: null,
+          },
+        ]),
+      ],
+    }),
+  },
+  {
+    id: 'armour-pickup',
+    group: 'gameplay',
+    name: { en: 'Armour battery: +15 armour', ru: 'Батарея брони: +15 брони' },
+    description: {
+      en: 'Adds a zone around it. The player gets 15 armour (as from a Half-Life battery) and it disappears — unless their armour is already full. Armour takes most of the damage until it runs out.',
+      ru: 'Добавляет зону вокруг. Игрок получает 15 брони (как от батареи в Half-Life), и батарея исчезает — если броня ещё не полная. Броня принимает на себя большую часть урона, пока не кончится.',
+    },
+    zone: (t) => ({ name: `${t.name}_zone`, ...around(t, 8, 8, 8), detects: 'player', once: false }),
+    build: (_t, zone) => ({
+      variables: [{ name: 'taken', type: 'boolean', initial: false }],
+      handlers: [
+        handler(ev.enter(zone!), [
+          {
+            id: id(),
+            kind: 'if',
+            condition: {
+              id: id(),
+              kind: 'logic',
+              op: 'and',
+              a: isNot('taken'),
+              b: { id: id(), kind: 'compare', op: '<', a: { id: id(), kind: 'armour' }, b: num(100) },
+            },
+            then: [st.set('taken', true), st.armour(15), st.hide()],
             otherwise: null,
           },
         ]),

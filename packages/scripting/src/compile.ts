@@ -105,8 +105,8 @@ export type Op =
   | { op: 'selitem' }
   | { op: 'halt' };
 
-export type GameAction = 'hurt' | 'heal' | 'addScore';
-export type GameValue = 'health' | 'score';
+export type GameAction = 'hurt' | 'heal' | 'addScore' | 'giveArmour';
+export type GameValue = 'health' | 'score' | 'armour';
 
 export type ActionName = 'move' | 'turn' | 'turnTo' | 'return' | 'show' | 'hide' | 'turnOn' | 'turnOff' | 'remove' | 'scale' | 'physical' | 'push' | 'moveTo' | 'teleport' | 'damage';
 
@@ -598,8 +598,9 @@ class HandlerCompiler {
         break;
       case 'hurt':
       case 'heal':
+      case 'giveArmour':
       case 'addScore':
-        this.expect(s.amount, 'number', s.kind === 'addScore' ? 'The score changes by a number.' : 'Health changes by a number.');
+        this.expect(s.amount, 'number', s.kind === 'addScore' ? 'The score changes by a number.' : s.kind === 'giveArmour' ? 'Armour changes by a number.' : 'Health changes by a number.');
         this.ruleOff(s.kind === 'addScore' ? 'score' : 'health', s.id);
         this.emit({ op: 'game', name: s.kind });
         break;
@@ -704,6 +705,10 @@ class HandlerCompiler {
         if (this.h.event.kind !== 'listPick') this.problem(e.id, '“The picked row” only works inside “When the player picks a row”.');
         this.emit({ op: 'picked' });
         return 'text';
+      case 'armour':
+        this.ruleOff('health', e.id);
+        this.emit({ op: 'read', name: 'armour' });
+        return 'number';
       case 'health':
       case 'score':
         this.ruleOff(e.kind, e.id);

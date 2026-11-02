@@ -82,6 +82,7 @@ const W = {
   stop: ['Stop this stack', 'Остановить этот стек'],
   hurt: ['Hurt the player by', 'Ранить игрока на'],
   heal: ['Heal the player by', 'Вылечить игрока на'],
+  giveArmour: ['Give the player armour', 'Дать игроку броню'],
   addScore: ['Change the score by', 'Изменить счёт на'],
   say: ['Show on screen', 'Показать на экране'],
   usePrompt: ['showing', 'с подсказкой'],
@@ -117,6 +118,7 @@ const W = {
   setText: ['Set the text of', 'Задать текст'],
   gameValue: ['game', 'игра'],
   health: ['the player’s health', 'здоровье игрока'],
+  armour: ['the player’s armour', 'броня игрока'],
   score: ['the score', 'счёт'],
   // values
   self: ['this object', 'этот объект'],
@@ -188,6 +190,7 @@ const PALETTE_STMT: Record<StatementKind, Pair> = {
   stop: ['Stop this stack', 'Остановить стек'],
   hurt: ['Hurt the player', 'Ранить игрока'],
   heal: ['Heal the player', 'Вылечить игрока'],
+  giveArmour: ['Give armour', 'Дать броню'],
   addScore: ['Change the score', 'Изменить счёт'],
   say: ['Show a message on screen', 'Показать сообщение на экране'],
   setText: ['Set the text of a sign', 'Задать текст таблички'],
@@ -220,7 +223,7 @@ export const statementName = (k: StatementKind) => pick(PALETTE_STMT[k]);
 export const STATEMENT_GROUPS: { title: Pair; kinds: StatementKind[] }[] = [
   { title: ['Do', 'Действия'], kinds: ['move', 'turn', 'turnTo', 'return', 'show', 'hide', 'turnOn', 'turnOff', 'send', 'log'] },
   { title: ['Objects', 'Объекты'], kinds: ['spawn', 'remove', 'moveTo', 'scale', 'physical', 'push', 'damage'] },
-  { title: ['Player and score', 'Игрок и счёт'], kinds: ['teleport', 'hurt', 'heal', 'addScore'] },
+  { title: ['Player and score', 'Игрок и счёт'], kinds: ['teleport', 'hurt', 'heal', 'giveArmour', 'addScore'] },
   { title: ['Screen and signs', 'Экран и таблички'], kinds: ['say', 'showScreen', 'hideScreen', 'toggleScreen', 'showUi', 'hideUi', 'setUiText', 'addRow', 'removeRow', 'clearList', 'setText'] },
   { title: ['Inventory', 'Инвентарь'], kinds: ['giveItem', 'takeItem'] },
   { title: ['Sound', 'Звук'], kinds: ['playSound', 'stopSound'] },
@@ -244,6 +247,7 @@ const VALUE: Record<ExprKind, Pair> = {
   object: ['An object', 'Объект'],
   time: ['Seconds since start', 'Секунд с начала'],
   health: ['The player’s health', 'Здоровье игрока'],
+  armour: ['The player’s armour', 'Броня игрока'],
   score: ['The score', 'Счёт'],
   copy: ['The new copy', 'Новая копия'],
   varOf: ['Another object’s variable', 'Переменная другого объекта'],
@@ -257,8 +261,8 @@ export const valueName = (k: ExprKind) => pick(VALUE[k]);
 
 /** Which value blocks fit a slot of a given type. */
 export const VALUES_FOR: Record<'number' | 'boolean' | 'text' | 'any', ExprKind[]> = {
-  number: ['number', 'variable', 'varOf', 'maths', 'random', 'time', 'clock', 'health', 'score', 'itemCount'],
+  number: ['number', 'variable', 'varOf', 'maths', 'random', 'time', 'clock', 'health', 'armour', 'score', 'itemCount'],
   boolean: ['boolean', 'inside', 'variable', 'varOf', 'compare', 'logic', 'not'],
   text: ['text', 'variable', 'varOf', 'join', 'number', 'object', 'score', 'itemCount', 'selectedItem', 'pickedRow'],
-  any: ['number', 'text', 'boolean', 'variable', 'varOf', 'maths', 'compare', 'logic', 'not', 'inside', 'random', 'join', 'time', 'clock', 'health', 'score', 'itemCount', 'selectedItem', 'pickedRow', 'object', 'copy'],
+  any: ['number', 'text', 'boolean', 'variable', 'varOf', 'maths', 'compare', 'logic', 'not', 'inside', 'random', 'join', 'time', 'clock', 'health', 'armour', 'score', 'itemCount', 'selectedItem', 'pickedRow', 'object', 'copy'],
 };

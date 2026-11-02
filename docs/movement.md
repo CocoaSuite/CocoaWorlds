@@ -1,4 +1,4 @@
-# Ladders and water
+# Ladders, water, armour and chargers
 
 Both are brushes you draw with the Brush tool. Pick the kind **Water** or **Ladder** next to Solid, Cut,
 Trigger and COL. You can also add a **Water** or **Ladder** component to any brush. Neither kind is solid,
@@ -37,3 +37,18 @@ Physics objects float. Heavy or light, they settle with their middle a little un
 slows them down.
 
 Under water, the view takes on **Colour under water** and only reaches as far as **Seeing distance**.
+
+# Armour and chargers
+
+**Armour** works like Half-Life's suit power. It takes 80% of each hit, losing one point of armour for every
+two points of damage it stops. Once it runs out, the rest of the damage goes to health. Falls and drowning go
+straight past it. The player can carry up to 100 armour; it shows under health once there is any, and it's
+lost on dying.
+
+- Blocks: **Give the player armour** (Player and score), and the value **the player's armour**.
+- Recipe: **Armour battery: +15 armour** works like the health pack: walk into it to pick it up.
+
+A **Charger** component turns any object into a wall charger. While the player looks at it and holds **E**,
+it gives **Health** or **Armour** at **Per second** (10 by default), until the player is full or the charger
+has given all it **Holds** (50 by default, Half-Life's health charger). The use prompt shows while it has some
+left.

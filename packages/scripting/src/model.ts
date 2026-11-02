@@ -31,6 +31,8 @@ export type Expr =
   | { id: string; kind: 'time' }
   /** The player's health (0–100) and the game's score. */
   | { id: string; kind: 'health' }
+  /** The player's armour (0–100, Half-Life's suit power). */
+  | { id: string; kind: 'armour' }
   | { id: string; kind: 'score' }
   /** The copy made last by “Make a copy” in this stack. */
   | { id: string; kind: 'copy' }
@@ -74,6 +76,8 @@ export type Statement =
   /** Hurt or heal the player; change the game's score (all by an amount, which may be negative). */
   | { id: string; kind: 'hurt'; amount: Expr }
   | { id: string; kind: 'heal'; amount: Expr }
+  /** Give the player armour (up to 100): it takes most of the damage until it runs out. */
+  | { id: string; kind: 'giveArmour'; amount: Expr }
   | { id: string; kind: 'addScore'; amount: Expr }
   /** Show text in the middle of the screen for a while (doesn't wait). */
   | { id: string; kind: 'say'; text: Expr; seconds: Expr }

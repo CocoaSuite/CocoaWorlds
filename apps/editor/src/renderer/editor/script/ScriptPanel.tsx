@@ -869,6 +869,7 @@ function statementWords(s: Statement, set: (patch: Record<string, unknown>, merg
       );
     case 'hurt':
     case 'heal':
+    case 'giveArmour':
     case 'addScore':
       return (
         <>
@@ -1104,6 +1105,7 @@ function ExprSlot({ expr, type, label }: { expr: Expr; type: 'number' | 'boolean
       break;
     case 'time':
     case 'health':
+    case 'armour':
     case 'score':
     case 'copy':
       body = <span className="cw-pill-text">{w(expr.kind)}</span>;

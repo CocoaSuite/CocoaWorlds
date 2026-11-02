@@ -281,6 +281,31 @@ export const COMPONENTS: ComponentDef[] = [
     ],
   },
   {
+    name: 'charger',
+    label: e('Charger', 'Зарядник'),
+    description: e(
+      'A wall charger, as in Half-Life: while the player holds Use on it, it gives health or armour until it runs dry.',
+      'Настенный зарядник, как в Half-Life: пока игрок держит «Использовать», он даёт здоровье или броню, пока не опустеет.',
+    ),
+    appliesTo: 'any',
+    fields: [
+      {
+        key: 'gives',
+        label: e('Gives', 'Даёт'),
+        type: {
+          kind: 'enum',
+          options: [
+            { value: 'health', label: e('Health', 'Здоровье') },
+            { value: 'armour', label: e('Armour', 'Броню') },
+          ],
+        },
+        default: 'health',
+      },
+      { key: 'capacity', label: e('Holds', 'Запас'), hint: e('How much it gives in all before it is empty.', 'Сколько всего он отдаст, прежде чем опустеет.'), type: { kind: 'number', min: 1, step: 5 }, default: 50 },
+      { key: 'rate', label: e('Per second', 'В секунду'), type: { kind: 'number', min: 1, step: 1 }, default: 10 },
+    ],
+  },
+  {
     name: 'ladder',
     label: e('Ladder', 'Лестница'),
     description: e(
@@ -380,5 +405,12 @@ export interface WaterData {
   tint: string;
   clearness: number;
   drowns: boolean;
+  [k: string]: unknown;
+}
+
+export interface ChargerData {
+  gives: 'health' | 'armour';
+  capacity: number;
+  rate: number;
   [k: string]: unknown;
 }

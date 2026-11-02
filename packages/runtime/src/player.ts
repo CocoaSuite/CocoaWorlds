@@ -63,6 +63,8 @@ export interface PlayerInput {
   jump: boolean;
   crouch: boolean;
   walk: boolean;
+  /** Use is held (chargers give while it is). */
+  use?: boolean;
   /** View angles in radians: yaw turns left/right around Y (0 looks along −Z), pitch looks up/down. */
   yaw: number;
   pitch: number;

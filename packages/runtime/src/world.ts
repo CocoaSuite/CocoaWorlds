@@ -18,6 +18,7 @@ import {
   type RigidBodyData,
   type SceneFile,
   type TriggerData,
+  type ChargerData,
   type LadderData,
   type WaterData,
   gameRules,
@@ -72,6 +73,8 @@ export interface ModelMesh {
 }
 /** Physics runs at a fixed rate whatever the frame rate. */
 export const STEP = 1 / 60;
+/** Most armour the player can carry (Half-Life's suit holds 100). */
+export const MAX_ARMOUR = 100;
 const MAX_STEPS_PER_FRAME = 5;
 /** How far behind the player the third-person camera sits. */
 const THIRD_PERSON_DISTANCE = 160;
@@ -149,6 +152,8 @@ export interface PlayerStatus {
   showHealth: boolean;
   health: number;
   maxHealth: number;
+  /** Armour (0–100); shown once the player has some. */
+  armour: number;
   score: number;
   /** Whether any script uses the score (otherwise the screen doesn't show it). */
   showScore: boolean;
@@ -203,6 +208,9 @@ export class GameWorld {
   /** Below this the player has fallen out of the world and starts again. */
   private killY = -Infinity;
   private health: number = PLAYER.maxHealth;
+  private armour = 0;
+  /** Chargers on the walls: what each has left to give, and fractions given but not yet whole. */
+  private chargers = new Map<string, { data: ChargerData; left: number }>();
   private score = 0;
   private usesScore = false;
   private hurtAt = -Infinity;
@@ -346,6 +354,11 @@ export class GameWorld {
     const own = (e: EntityData) => !!e.components.rigidBody || !!e.components.trigger || !!e.components.water || !!e.components.ladder;
     // (Breakable objects too: they disappear when they break.)
     const breakables = doc.entities.filter((e) => e.components.breakable && shown(e)).map((e) => e.id);
+    for (const e of doc.entities) {
+      if (!e.components.charger || !shown(e)) continue;
+      const data = readComponent<ChargerData>('charger', e.components.charger);
+      this.chargers.set(e.id, { data, left: data.capacity });
+    }
     for (const id of breakables) this.breakHealth.set(id, readComponent<BreakableData>('breakable', doc.get(id)!.components.breakable).health);
     const targets = [...new Set([...scriptTargets(scripts), ...breakables])].filter((id) => doc.get(id) && !own(doc.get(id)!));
     const unitRoots = targets.filter((id) => !targets.some((o) => o !== id && doc.isAncestor(o, id)));
@@ -415,9 +428,10 @@ export class GameWorld {
       game: (name, amount, owner) => {
         if (name === 'addScore') this.addScore(amount);
         else if (name === 'hurt') this.hurt(amount, this.names.get(owner) ?? owner);
+        else if (name === 'giveArmour') this.giveArmour(amount);
         else this.heal(amount);
       },
-      read: (name) => (name === 'health' ? this.health : this.score),
+      read: (name) => (name === 'health' ? this.health : name === 'armour' ? this.armour : this.score),
       getGlobal: (name) => this.globals.get(name) ?? null,
       setGlobal: (name, value) => void this.globals.set(name, value),
       say: (text, seconds, from) => this.say(text, seconds, from),
@@ -641,7 +655,7 @@ export class GameWorld {
     this.underwaterFor += STEP;
     if (this.underwaterFor >= 12 && this.time - this.drownedAt >= 1) {
       this.drownedAt = this.time;
-      this.hurt(10, 'drowning');
+      this.hurt(10, 'drowning', true);
     }
   }
 
@@ -682,13 +696,14 @@ export class GameWorld {
         if (this.player.landingSpeed) {
           const damage = fallDamage(this.player.landingSpeed);
           this.player.landingSpeed = 0;
-          if (damage > 0) this.hurt(damage, 'a fall');
+          if (damage > 0) this.hurt(damage, 'a fall', true);
         }
         if (this.player.feetPosition.y < this.killY) {
           if (this.rules.health) this.die('falling out of the world');
           else this.player.respawn();
         }
         if (this.useQueued) this.doUse();
+        if (this.player.input.use) this.charge();
         this.breathe();
       }
       this.useQueued = false;
@@ -724,7 +739,30 @@ export class GameWorld {
     if (!id || id === 'player') return null;
     const targets: string[] = [];
     for (let x: string | null | undefined = id; x; x = this.parentOf.get(x)) targets.push(x);
-    return this.runner.usePrompt(targets);
+    const prompt = this.runner.usePrompt(targets);
+    if (prompt !== null) return prompt;
+    return targets.some((t) => (this.chargers.get(t)?.left ?? 0) > 0) ? '' : null;
+  }
+
+  /** Holding Use on a charger: it gives health or armour, a little each step, until it is empty or the player is full. */
+  private charge(): void {
+    const hit = this.player!.aim();
+    let id = hit ? this.owner.get(hit.handle) : undefined;
+    let c: { data: ChargerData; left: number } | undefined;
+    for (; id && id !== 'player' && !c; id = this.parentOf.get(id) ?? undefined) c = this.chargers.get(id);
+    if (!c || c.left <= 0 || !this.rules.health) return;
+    const armour = c.data.gives === 'armour';
+    const room = armour ? MAX_ARMOUR - this.armour : PLAYER.maxHealth - this.health;
+    const give = Math.min(c.data.rate * STEP, c.left, room);
+    if (give <= 0) return;
+    c.left -= give;
+    if (armour) this.giveArmour(give);
+    else this.heal(give);
+  }
+
+  /** What a charger has left to give (for tests and the inspector), or undefined. */
+  chargerLeft(id: string): number | undefined {
+    return this.chargers.get(id)?.left;
   }
 
   /** The player pressed Use: on the next step, whatever they look at within reach gets “When the player uses this”. */
@@ -761,15 +799,35 @@ export class GameWorld {
 
   // ── Health and score ──
 
-  /** Take health from the player (a negative amount heals). At 0 the player dies. */
-  hurt(amount: number, cause = 'something'): void {
+  /**
+   * Take health from the player (a negative amount heals). At 0 the player dies. Armour takes 80% of the
+   * damage, spending one point for every two it stops, as in Half-Life; falls and drowning go past it.
+   */
+  hurt(amount: number, cause = 'something', pastArmour = false): void {
     if (!this.player || !this.rules.health || !Number.isFinite(amount)) return;
     if (amount < 0) return this.heal(-amount);
     if (amount === 0) return;
-    this.health = Math.max(0, this.health - amount);
+    let toHealth = amount;
+    if (this.armour > 0 && !pastArmour) {
+      toHealth = amount * 0.2;
+      let cost = (amount - toHealth) * 0.5;
+      if (cost > this.armour) {
+        // Not enough armour: it stops what it can.
+        toHealth = amount - this.armour * 2;
+        cost = this.armour;
+      }
+      this.armour = Math.max(0, this.armour - cost);
+    }
+    this.health = Math.max(0, this.health - toHealth);
     this.hurtAt = this.time;
     this.bus.emit({ type: 'player.hurt', amount, health: this.health, cause, time: this.time });
     if (this.health <= 0) this.die(cause);
+  }
+
+  /** Give the player armour, up to 100. */
+  giveArmour(amount: number): void {
+    if (!this.player || !this.rules.health || !Number.isFinite(amount)) return;
+    this.armour = Math.max(0, Math.min(MAX_ARMOUR, this.armour + amount));
   }
 
   /** Give health back, up to the maximum. */
@@ -791,6 +849,7 @@ export class GameWorld {
     if (!this.player) return;
     this.deaths++;
     this.health = PLAYER.maxHealth;
+    this.armour = 0;
     this.player.respawn();
     this.bus.emit({ type: 'player.die', cause, time: this.time });
     this.runner.dispatch({ type: 'die' });
@@ -822,7 +881,7 @@ export class GameWorld {
 
   playerStatus(): PlayerStatus | null {
     if (!this.player) return null;
-    return { showHealth: this.rules.health, health: this.health, maxHealth: PLAYER.maxHealth, score: this.score, showScore: this.usesScore, sinceHurt: this.time - this.hurtAt, deaths: this.deaths };
+    return { showHealth: this.rules.health, health: this.health, maxHealth: PLAYER.maxHealth, armour: this.armour, score: this.score, showScore: this.usesScore, sinceHurt: this.time - this.hurtAt, deaths: this.deaths };
   }
 
   // ── What scripts can do ──

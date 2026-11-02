@@ -8,6 +8,8 @@ export interface Hud {
   showHealth: boolean;
   health: number;
   maxHealth: number;
+  /** Shown once the player has any. */
+  armour: number;
   score: number;
   showScore: boolean;
   /** Just hurt: flash red. */
@@ -37,6 +39,7 @@ export function hudOf(play: PlaySession, locked: boolean): Hud {
     showHealth: !!status?.showHealth,
     health: Math.ceil(status?.health ?? 0),
     maxHealth: status?.maxHealth ?? 100,
+    armour: Math.floor(status?.armour ?? 0),
     score: status?.score ?? 0,
     showScore: !!status?.showScore,
     hurt: (status?.sinceHurt ?? Infinity) < 0.35,
@@ -44,7 +47,7 @@ export function hudOf(play: PlaySession, locked: boolean): Hud {
     messages: screen.messages,
     use: locked ? play.usePrompt() : null,
     ui: play.uiState(),
-    allValues: { ...Object.fromEntries(screen.values.map((v) => [v.name, v.value])), health: Math.ceil(status?.health ?? 0), score: status?.score ?? 0 },
+    allValues: { ...Object.fromEntries(screen.values.map((v) => [v.name, v.value])), health: Math.ceil(status?.health ?? 0), armour: Math.floor(status?.armour ?? 0), score: status?.score ?? 0 },
   };
 }
 
@@ -79,6 +82,17 @@ export function HudView({ hud }: { hud: Hud }) {
             </span>
             <span className="cw-hud-bar">
               <span style={{ width: `${(100 * hud.health) / hud.maxHealth}%` }} />
+            </span>
+          </div>
+        )}
+        {hud.showHealth && hud.armour > 0 && (
+          <div className="cw-hud-item armour" role="meter" aria-label={t('hud.armour')} aria-valuemin={0} aria-valuemax={100} aria-valuenow={hud.armour}>
+            <span className="cw-hud-label">{t('hud.armour')}</span>
+            <span className="cw-hud-value" data-testid="hud-armour">
+              {hud.armour}
+            </span>
+            <span className="cw-hud-bar">
+              <span style={{ width: `${hud.armour}%` }} />
             </span>
           </div>
         )}

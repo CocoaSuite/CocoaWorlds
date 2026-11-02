@@ -81,6 +81,8 @@ export function newStatement(kind: StatementKind, opts: { target?: Ref; variable
       return { id: id(), kind, amount: num(10) };
     case 'heal':
       return { id: id(), kind, amount: num(25) };
+    case 'giveArmour':
+      return { id: id(), kind, amount: num(15) };
     case 'addScore':
       return { id: id(), kind, amount: num(1) };
     case 'say':
@@ -156,6 +158,7 @@ export function newExpr(kind: ExprKind, opts: { variable?: string } = {}): Expr 
       return { id: id(), kind, ref: self };
     case 'time':
     case 'health':
+    case 'armour':
     case 'score':
     case 'copy':
       return { id: id(), kind };
