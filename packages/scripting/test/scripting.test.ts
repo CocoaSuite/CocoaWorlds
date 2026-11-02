@@ -429,3 +429,51 @@ describe('while, “is inside” and messages that keep coming', () => {
     expect(host.log).toEqual(['0.6 open', '1.1 open', '1.6 open']);
   });
 });
+
+describe('creatures: the player coming near and going away', () => {
+  const self = { self: true } as const;
+  const s: Script = {
+    version: 1,
+    variables: [],
+    handlers: [
+      { id: 'n', event: { id: 'ne', kind: 'near', distance: num(160) }, body: [{ id: 'nl', kind: 'log', text: text('near') }] },
+      { id: 'f', event: { id: 'fe', kind: 'far', distance: num(400) }, body: [{ id: 'fl', kind: 'log', text: text('far') }] },
+      { id: 'r', event: { id: 're', kind: 'hit' }, body: [{ id: 'rs', kind: 'runAway', target: self, seconds: num(2) }, { id: 'rw', kind: 'wander', target: self, on: false }] },
+    ],
+  };
+
+  it('start once on crossing the distance, not every frame', () => {
+    let d = 300;
+    const log: string[] = [];
+    const vm = new ScriptRunner([compileScript('hen', s, scene).program], { now: () => 0, random: () => 0, nameOf: (x) => x, act: () => null, send: () => {}, log: (t) => void log.push(t), distance: () => d });
+    vm.start();
+    const tick = (n = 3) => { for (let i = 0; i < n; i++) vm.tick(0.1); };
+    tick();
+    expect(log).toEqual([]);
+    d = 100;
+    tick();
+    d = 250;
+    tick();
+    d = 120;
+    tick();
+    expect(log).toEqual(['near', 'near']);
+    d = 500;
+    tick();
+    d = 450;
+    tick();
+    expect(log).toEqual(['near', 'near', 'far']);
+  });
+
+  it('run away and wander are creature actions; distance is a number', () => {
+    const acts: string[] = [];
+    const vm = new ScriptRunner([compileScript('hen', s, scene).program], { now: () => 0, random: () => 0, nameOf: (x) => x, act: (name, target, args) => (acts.push(`${name} ${target} ${args.join(',')}`), null), send: () => {}, log: () => {}, distance: () => 300 });
+    vm.start();
+    vm.dispatch({ type: 'hit', targets: ['hen'] });
+    vm.tick(0.1);
+    expect(acts).toEqual(['runAway hen 2', 'wander hen false']);
+    const bad: Script = { version: 1, variables: [], handlers: [{ id: 'x', event: { id: 'xe', kind: 'near', distance: num(0) }, body: [] }] };
+    expect(compileScript('hen', bad, scene).problems.map((p) => p.message)).toEqual(['The distance needs to be a number above 0.']);
+    const sum: Script = { version: 1, variables: [], handlers: [{ id: 'y', event: { id: 'ye', kind: 'start' }, body: [{ id: 'yl', kind: 'log', text: { id: 'm', kind: 'maths', op: '+', a: { id: 'dd', kind: 'distance', from: { player: true }, to: self }, b: num(1) } }] }] };
+    expect(compileScript('hen', sum, scene).problems).toEqual([]);
+  });
+});

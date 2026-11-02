@@ -74,7 +74,7 @@ import { useShallow } from 'zustand/react/shallow';
 import type { AssetEntry, AssetKind, OpenedProject, PrefabEntry } from '../shared/api';
 import { setAssetProject } from './assets';
 import { setProjectMaterials } from './viewport/project-materials';
-import { emptyScript, recipe as findRecipe, type Script } from '@cocoaworlds/scripting';
+import { blockId, emptyScript, newEvent, newStatement, num, recipe as findRecipe, type EventBlock, type Script, type Statement } from '@cocoaworlds/scripting';
 import { copyRootOf, recordAllChanges, repivot, syncCommands, unlinked } from './prefabs';
 import { DEV_TEXTURE_SIZE } from './brush/materials';
 import type { FaceRef } from './viewport/world-render';
@@ -439,7 +439,7 @@ export const useEditor = create<State & Actions>()((set, get) => ({
     const e = newEntity(friendly ? 'chicken_friend' : 'chicken', chickenComponents(r.value.path, friendly), { position: [at[0], at[1], at[2]], scale: [0.5, 0.5, 0.5] });
     get().execute(addEntitiesCmd(doc, [e], `Add ${e.name}`));
     set({ selection: [e.id] });
-    get().log('info', 'Scene', `Added a chicken (${friendly ? 'a friend: it follows you when you press E' : 'an enemy: it pecks'})`);
+    get().log('info', 'Scene', `Added a chicken (${friendly ? 'a friend: it follows you when you press E' : 'an enemy: it pecks when you come close'})`);
   },
 
   deleteSelection() {
@@ -1452,7 +1452,7 @@ export function chickenComponents(model: string, friendly: boolean): EntityData[
     model: { ...defaultComponent('model'), model, collision: 'none' },
     npc: {
       ...defaultComponent('npc'),
-      side: friendly ? 'friendly' : 'hostile',
+      side: friendly ? 'friendly' : 'neutral',
       health: 20,
       speed: 110,
       sight: 640,
@@ -1461,11 +1461,29 @@ export function chickenComponents(model: string, friendly: boolean): EntityData[
       rate: 1.2,
       reach: 24,
       wander: true,
-      flee: 'hurt',
+      // (Running away and turning on the player are in its script, where they can be changed.)
+      flee: 'never',
       clumsy: true,
       height: 56,
       radius: 14,
       anims: 'idle, walk, peck, die, run, peck, flap',
     },
+    script: chickenScript(friendly) as unknown as EntityData['components'][string],
   };
+}
+
+/**
+ * The chicken's behaviour as blocks, so it can be read and changed in the Visual script tab. Both run away when
+ * hit; the enemy kind is neutral until the player comes close, then pecks, and calms down once they've gone.
+ */
+export function chickenScript(friendly: boolean): Script {
+  const stack = (event: EventBlock, ...body: Statement[]) => ({ id: blockId(), event, body });
+  const near = newEvent('near');
+  const far = newEvent('far');
+  if (near.kind === 'near') near.distance = num(160);
+  if (far.kind === 'far') far.distance = num(400);
+  const side = (to: 'hostile' | 'neutral'): Statement => ({ ...(newStatement('setSide') as Extract<Statement, { kind: 'setSide' }>), side: to });
+  const runAway = (seconds: number): Statement => ({ ...(newStatement('runAway') as Extract<Statement, { kind: 'runAway' }>), seconds: num(seconds) });
+  const handlers = friendly ? [stack(newEvent('hit'), runAway(3))] : [stack(near, side('hostile')), stack(far, side('neutral')), stack(newEvent('hit'), runAway(2))];
+  return { ...emptyScript(), handlers };
 }

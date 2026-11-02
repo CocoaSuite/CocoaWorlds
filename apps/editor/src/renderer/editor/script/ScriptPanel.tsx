@@ -147,7 +147,7 @@ export function ScriptPanel() {
       ev.clientX,
       ev.clientY,
       [
-        ...(['start', 'enter', 'leave', 'use', 'message', 'messageStop', 'every', 'die', 'breaks', 'hit', 'dies', 'uiClick', 'useItem', 'listPick', 'key'] as EventKind[]).map((k) => ({
+        ...(['start', 'enter', 'leave', 'use', 'message', 'messageStop', 'every', 'die', 'breaks', 'hit', 'dies', 'near', 'far', 'uiClick', 'useItem', 'listPick', 'key'] as EventKind[]).map((k) => ({
           label: eventName(k),
           onSelect: () => {
             const zone: Ref = objects.find((o) => o.id === owner.id)?.isZone ? { self: true } : objects.find((o) => o.isZone) ? { entity: objects.find((o) => o.isZone)!.id } : { self: true };
@@ -465,7 +465,12 @@ function EventRow({ ev, onRemove, onCopy, pick }: { ev: EventBlock; onRemove: ()
       {w('keyEv')} <KeySlot value={ev.key} label={w('keyEv')} onChange={(key) => set({ key } as Partial<EventBlock>)} />
     </>
   );
-  else content = (
+  else if (ev.kind === 'near' || ev.kind === 'far') content = (
+    <>
+      {w(ev.kind === 'near' ? 'nearEv' : 'farEv')} <ExprSlot expr={ev.distance} type="number" label={w(ev.kind === 'near' ? 'nearEv' : 'farEv')} /> {w(ev.kind === 'near' ? 'unitsOfThis' : 'unitsFromThis')}
+    </>
+  );
+  else if (ev.kind === 'every') content = (
     <>
       {w('every')} <ExprSlot expr={ev.seconds} type="number" label={w('every')} /> {w('seconds')}
     </>
@@ -789,6 +794,23 @@ function statementWords(s: Statement, set: (patch: Record<string, unknown>, merg
             <option value="hostile">{w('sideHostile')}</option>
             <option value="friendly">{w('sideFriendly')}</option>
             <option value="neutral">{w('sideNeutral')}</option>
+          </select>
+        </>
+      );
+    case 'runAway':
+      return (
+        <>
+          {w('setSide')} <RefSlot value={s.target} onChange={(target) => set({ target })} label={w('runAway')} /> {w('runAway')}{' '}
+          <ExprSlot expr={s.seconds} type="number" label={`${w('runAway')} ${w('for')}`} /> {w('seconds')}
+        </>
+      );
+    case 'wander':
+      return (
+        <>
+          {w('setSide')} <RefSlot value={s.target} onChange={(target) => set({ target })} label={statementName('wander')} />{' '}
+          <select className="cw-input cw-var-slot" aria-label={statementName('wander')} value={s.on ? 'on' : 'off'} onChange={(e) => set({ on: e.target.value === 'on' })}>
+            <option value="on">{w('wanderOn')}</option>
+            <option value="off">{w('wanderOff')}</option>
           </select>
         </>
       );
@@ -1186,6 +1208,14 @@ function ExprSlot({ expr, type, label }: { expr: Expr; type: 'number' | 'boolean
     case 'pickedRow':
     case 'clock':
       body = <span className="cw-pill-text">{w(expr.kind)}</span>;
+      break;
+    case 'distance':
+      body = (
+        <>
+          {w('distanceFrom')} <RefSlot value={expr.from} allowPlayer onChange={(from) => set({ from })} label={`${label} ${w('distanceFrom')}`} /> {w('toWord')}{' '}
+          <RefSlot value={expr.to} allowPlayer onChange={(to) => set({ to })} label={`${label} ${w('distanceFrom')} ${w('toWord')}`} />
+        </>
+      );
       break;
     case 'inside':
       body = (

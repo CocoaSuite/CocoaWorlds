@@ -104,6 +104,14 @@ const W = {
   hit: ['When this is hit (shot, struck or blasted)', 'Когда в это попадают (выстрел, удар, взрыв)'],
   dies: ['When this creature dies', 'Когда это существо погибает'],
   walkTo: ['Walk', 'Отвести'],
+  runAway: ['run away from the player for', 'убегать от игрока в течение'],
+  wanderOn: ['wander about', 'бродить вокруг'],
+  wanderOff: ['stay where it is', 'стоять на месте'],
+  nearEv: ['When the player comes within', 'Когда игрок подходит ближе чем на'],
+  farEv: ['When the player gets further than', 'Когда игрок отходит дальше чем на'],
+  unitsOfThis: ['units of this', 'ед. к этому'],
+  unitsFromThis: ['units from this', 'ед. от этого'],
+  distanceFrom: ['distance from', 'расстояние от'],
   setSide: ['Make', 'Сделать'],
   sideIs: ['side', 'сторона'],
   sideHostile: ['an enemy', 'врагом'],
@@ -185,6 +193,8 @@ const PALETTE_EVENT: Record<EventKind, Pair> = {
   breaks: ['When this breaks', 'Когда это ломается'],
   hit: ['When this is hit (shot, struck or blasted)', 'Когда в это попадают (выстрел, удар, взрыв)'],
   dies: ['When this creature dies', 'Когда это существо погибает'],
+  near: ['When the player comes near this', 'Когда игрок подходит к этому'],
+  far: ['When the player goes away from this', 'Когда игрок уходит от этого'],
 };
 export const eventName = (k: EventKind) => pick(PALETTE_EVENT[k]);
 
@@ -198,6 +208,8 @@ const PALETTE_STMT: Record<StatementKind, Pair> = {
   turnOn: ['Turn on', 'Включить'],
   walkTo: ['Walk a creature to a place', 'Отвести существо к месту'],
   setSide: ['Make a creature an enemy, a friend or neutral', 'Сделать существо врагом, другом или нейтральным'],
+  runAway: ['Make a creature run away', 'Заставить существо убегать'],
+  wander: ['Make a creature wander or stay', 'Существо бродит или стоит'],
   freezePlayer: ['Freeze the player', 'Остановить игрока'],
   unfreezePlayer: ['Let the player move again', 'Снова дать игроку двигаться'],
   viewFrom: ['Look through an object (camera)', 'Смотреть через объект (камера)'],
@@ -249,7 +261,8 @@ export const statementName = (k: StatementKind) => pick(PALETTE_STMT[k]);
 
 export const STATEMENT_GROUPS: { title: Pair; kinds: StatementKind[] }[] = [
   { title: ['Do', 'Действия'], kinds: ['move', 'turn', 'turnTo', 'return', 'show', 'hide', 'turnOn', 'turnOff', 'startTrain', 'stopTrain', 'send', 'log'] },
-  { title: ['Objects', 'Объекты'], kinds: ['spawn', 'remove', 'moveTo', 'walkTo', 'setSide', 'scale', 'physical', 'push', 'damage'] },
+  { title: ['Objects', 'Объекты'], kinds: ['spawn', 'remove', 'moveTo', 'scale', 'physical', 'push', 'damage'] },
+  { title: ['Creatures', 'Существа'], kinds: ['walkTo', 'setSide', 'runAway', 'wander'] },
   { title: ['Player and score', 'Игрок и счёт'], kinds: ['teleport', 'hurt', 'heal', 'giveArmour', 'addScore', 'freezePlayer', 'unfreezePlayer', 'viewFrom', 'changeScene'] },
   { title: ['Screen and signs', 'Экран и таблички'], kinds: ['say', 'showScreen', 'hideScreen', 'toggleScreen', 'showUi', 'hideUi', 'setUiText', 'addRow', 'removeRow', 'clearList', 'setText'] },
   { title: ['Inventory', 'Инвентарь'], kinds: ['giveItem', 'takeItem'] },
@@ -283,13 +296,14 @@ const VALUE: Record<ExprKind, Pair> = {
   selectedItem: ['The item in the player’s hand', 'Предмет в руке игрока'],
   pickedRow: ['The picked row (of a list)', 'Выбранная строка (списка)'],
   clock: ['The time now (real clock)', 'Текущее время (настоящие часы)'],
+  distance: ['Distance between two things', 'Расстояние между двумя объектами'],
 };
 export const valueName = (k: ExprKind) => pick(VALUE[k]);
 
 /** Which value blocks fit a slot of a given type. */
 export const VALUES_FOR: Record<'number' | 'boolean' | 'text' | 'any', ExprKind[]> = {
-  number: ['number', 'variable', 'varOf', 'maths', 'random', 'time', 'clock', 'health', 'armour', 'score', 'itemCount'],
+  number: ['number', 'variable', 'varOf', 'maths', 'random', 'distance', 'time', 'clock', 'health', 'armour', 'score', 'itemCount'],
   boolean: ['boolean', 'inside', 'variable', 'varOf', 'compare', 'logic', 'not'],
   text: ['text', 'variable', 'varOf', 'join', 'number', 'object', 'score', 'itemCount', 'selectedItem', 'pickedRow'],
-  any: ['number', 'text', 'boolean', 'variable', 'varOf', 'maths', 'compare', 'logic', 'not', 'inside', 'random', 'join', 'time', 'clock', 'health', 'armour', 'score', 'itemCount', 'selectedItem', 'pickedRow', 'object', 'copy'],
+  any: ['number', 'text', 'boolean', 'variable', 'varOf', 'maths', 'compare', 'logic', 'not', 'inside', 'random', 'distance', 'join', 'time', 'clock', 'health', 'armour', 'score', 'itemCount', 'selectedItem', 'pickedRow', 'object', 'copy'],
 };

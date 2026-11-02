@@ -65,6 +65,8 @@ export interface ScriptHost {
   itemCount?(name: string): number;
   /** The item in the picked hotbar slot ('' for none). */
   selectedItem?(): string;
+  /** How far apart two things are (object ids or 'player'); null when either isn't in the game. */
+  distance?(a: string, b: string): number | null;
   /** Whether `what` (an object or 'player') is inside the trigger zone `zone` right now. */
   isInside?(zone: string, what: string): boolean;
   /** Make a copy of `template` at a place (an object, or 'aim'); returns the copy's id, or null if it couldn't. */
@@ -84,6 +86,8 @@ interface Instance {
   vars: Value[];
   /** Handlers by id, with "every" timers. */
   timers: Map<string, number>;
+  /** “When the player comes near / goes away” handlers by id: whether the player was within the distance. */
+  near: Map<string, boolean>;
 }
 
 interface Thread {
@@ -143,6 +147,7 @@ export class ScriptRunner {
       program,
       vars: program.variables.map((v) => v.initial),
       timers: new Map(program.handlers.filter((h) => h.event.kind === 'every').map((h) => [h.id, 0])),
+      near: new Map(),
     }));
   }
 
@@ -152,6 +157,7 @@ export class ScriptRunner {
       program,
       vars: program.variables.map((v) => v.initial),
       timers: new Map(program.handlers.filter((h) => h.event.kind === 'every').map((h) => [h.id, 0])),
+      near: new Map(),
     };
     this.instances.push(inst);
     if (!this.started) return;
@@ -242,6 +248,17 @@ export class ScriptRunner {
     }
     for (const inst of this.instances) {
       for (const h of inst.program.handlers) {
+        const ev = h.event;
+        if (ev.kind === 'near' || ev.kind === 'far') {
+          // (Starts on crossing the distance; the player starting close counts as coming near.)
+          const d = this.host.distance?.(inst.program.owner, 'player');
+          if (d === null || d === undefined) continue;
+          const within = d <= ev.distance;
+          const was = inst.near.get(h.id);
+          inst.near.set(h.id, within);
+          if (ev.kind === 'near' ? within && was !== true : !within && was === true) this.spawn(inst, h, null);
+          continue;
+        }
         if (h.event.kind !== 'every') continue;
         const t = (inst.timers.get(h.id) ?? 0) + dt;
         if (t >= h.event.seconds - 1e-6) {
@@ -499,6 +516,13 @@ export class ScriptRunner {
           const txt = this.text(s.pop() ?? null);
           const target = s.pop();
           if (target && typeof target === 'object') this.host.setText?.(target.ref, txt);
+          break;
+        }
+        case 'dist': {
+          const b = s.pop(), a = s.pop();
+          const d = a && typeof a === 'object' && b && typeof b === 'object' ? this.host.distance?.(a.ref, b.ref) : null;
+          if (d === null || d === undefined) return this.fail(t, 'Can’t measure the distance: one of the two isn’t in the game.');
+          s.push(d);
           break;
         }
         case 'inside': {

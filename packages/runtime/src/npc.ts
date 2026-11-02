@@ -156,6 +156,23 @@ export class Npc {
     if (side === 'hostile') this.seenAt = Math.max(this.seenAt, this.w.time() - 2.5);
   }
 
+  /** A script makes it run away from the player for a while; true once it has stopped (or died). */
+  runAway(seconds: number): () => boolean {
+    const until = this.w.time() + Math.max(0, seconds);
+    this.fleeUntil = Math.max(this.fleeUntil, until);
+    this.busyUntil = 0;
+    return () => !this.alive || this.w.time() >= until;
+  }
+
+  /** A script lets it potter about, or keeps it where it is. */
+  setWander(on: boolean): void {
+    this.data.wander = on;
+    if (!on) {
+      this.wanderTo = null;
+      this.busyUntil = 0;
+    }
+  }
+
   /** Used by the player: friends start or stop following. */
   use(): void {
     if (!this.alive || this.data.side !== 'friendly' || this.goal) return;

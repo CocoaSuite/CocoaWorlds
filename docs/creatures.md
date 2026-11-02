@@ -34,10 +34,23 @@ Blocks for creatures:
 
 - **When this is hit** runs when it is shot, struck or blasted. **When this creature dies** runs when it dies.
 - **Damage** works on creatures as on breakable objects.
-- **Make a creature an enemy, a friend or neutral** (Objects) changes its side while playing: a nest's
-  guard turns on the player who took an egg. A new enemy that can see the player comes for them at once.
-- **Walk a creature to a place** (Objects) walks it to an object, the player, or where the player looks. The
-  stack waits until it gets there; meanwhile it does nothing else.
+- **When the player comes near this** runs when the player comes within a distance of it (and when the game
+  starts with them that close). **When the player goes away from this** runs when they go further away than a
+  distance. Both work on any object, not only creatures.
+- **Damage** works on creatures as on breakable objects.
+
+Under **Creatures**:
+
+- **Make a creature an enemy, a friend or neutral** changes its side while playing: a nest's guard turns on
+  the player who took an egg. A new enemy that can see the player comes for them at once.
+- **Make a creature run away from the player for … seconds**: as fast as it can. The stack waits until it
+  stops.
+- **Make a creature wander about / stay where it is** turns its pottering about on or off.
+- **Walk a creature to a place** walks it to an object, the player, or where the player looks. The stack waits
+  until it gets there; meanwhile it does nothing else.
+
+The value **distance from … to …** measures how far apart two things are (objects, creatures, the player), for
+conditions such as “the player is within 300 of the nest”.
 
 Creatures go towards where they're heading, climbing steps and steering round what's in the way: crates,
 pillars, other creatures. They go round one side, and if that gets them nowhere, the other. A wandering
@@ -53,14 +66,27 @@ that name is never replaced) at half size, with clumsy animations (`idle`,
 
 | | Enemy | Friend |
 |---|---|---|
-| Is | An enemy | A friend (follows when you press E) |
+| Is | Neutral until you come close, then an enemy | A friend (follows when you press E) |
 | Attacks | Up close: pecks for 4, 1.2 a second | Never |
 | Wanders about, pecking the ground | yes | yes |
-| Runs away | when hurt | when hurt |
+| Runs away | for 2 s when hit, then comes back | for 3 s when hit |
 | Clumsy | yes | yes |
 | Health, speed, size | 20, 110 u/s, 56 × 14 | the same |
 
-They are ordinary Creature and Model components, so every setting can be changed. How the chicken was rigged
+Its behaviour is ordinary blocks in its **Visual script** tab, to read and change:
+
+| Enemy | Friend |
+|---|---|
+| When the player comes within 160 units of this → Make this object an enemy | |
+| When the player gets further than 400 units from this → Make this object neutral | |
+| When this is hit → Make this object run away from the player for 2 seconds | When this is hit → … for 3 seconds |
+
+A nest is a short step from here: replace the first stack with one that checks the nest, for example
+**Every 0.5 seconds → If (distance from the player to nest < 300) and (the nest's eggs < 3) → Make this
+object an enemy**.
+
+The rest are ordinary Creature and Model components, so every setting can be changed. Selected in the editor,
+a model shows a box round its whole size. How the chicken was rigged
 and animated, and how to redo it, is in `tools/chicken/README.md`.
 
 ## Scripted scenes

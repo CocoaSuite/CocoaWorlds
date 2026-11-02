@@ -84,6 +84,8 @@ export type Op =
   | { op: 'anim'; name: string; loop: boolean }
   /** Pops the zone, then the thing: pushes whether it is inside the zone now. */
   | { op: 'inside' }
+  /** Pops two places (objects or the player): pushes how far apart they are. */
+  | { op: 'dist' }
   /** Show or hide a screen or one element of the screen UI. */
   | { op: 'ui'; what: 'screen' | 'element'; id: string; show: boolean | 'toggle' }
   /** Pops text: add it to a list, or remove the first row with it. */
@@ -109,7 +111,7 @@ export type Op =
 export type GameAction = 'hurt' | 'heal' | 'addScore' | 'giveArmour';
 export type GameValue = 'health' | 'score' | 'armour';
 
-export type ActionName = 'move' | 'turn' | 'turnTo' | 'return' | 'show' | 'hide' | 'turnOn' | 'turnOff' | 'startTrain' | 'stopTrain' | 'walkTo' | 'setSide' | 'freeze' | 'unfreeze' | 'viewFrom' | 'remove' | 'scale' | 'physical' | 'push' | 'moveTo' | 'teleport' | 'damage';
+export type ActionName = 'move' | 'turn' | 'turnTo' | 'return' | 'show' | 'hide' | 'turnOn' | 'turnOff' | 'startTrain' | 'stopTrain' | 'walkTo' | 'runAway' | 'wander' | 'setSide' | 'freeze' | 'unfreeze' | 'viewFrom' | 'remove' | 'scale' | 'physical' | 'push' | 'moveTo' | 'teleport' | 'damage';
 
 export type CompiledEvent =
   | { kind: 'start' }
@@ -121,6 +123,7 @@ export type CompiledEvent =
   | { kind: 'hit' }
   | { kind: 'dies' }
   | { kind: 'every'; seconds: number }
+  | { kind: 'near' | 'far'; distance: number }
   | { kind: 'uiClick'; element: string }
   | { kind: 'useItem'; item: string }
   | { kind: 'listPick'; list: string }
@@ -248,6 +251,9 @@ class HandlerCompiler {
     } else if (ev.kind === 'every') {
       if (ev.seconds.kind !== 'number' || !(ev.seconds.value > 0)) this.problem(ev.seconds.id, '“Every” needs a number of seconds above 0.');
       else event = { kind: 'every', seconds: Math.max(0.05, ev.seconds.value) };
+    } else if (ev.kind === 'near' || ev.kind === 'far') {
+      if (ev.distance.kind !== 'number' || !(ev.distance.value > 0)) this.problem(ev.distance.id, 'The distance needs to be a number above 0.');
+      else event = { kind: ev.kind, distance: ev.distance.value };
     }
     this.statements(this.h.body);
     this.emit({ op: 'halt' });
@@ -603,6 +609,17 @@ class HandlerCompiler {
         this.emit({ op: 'act', name: 'walkTo', argc: 1 });
         this.waits = true;
         break;
+      case 'runAway':
+        this.actTarget(s.target, s.id);
+        this.expect(s.seconds, 'number', 'The time must be a number of seconds.');
+        this.emit({ op: 'act', name: 'runAway', argc: 1 });
+        this.waits = true;
+        break;
+      case 'wander':
+        this.actTarget(s.target, s.id);
+        this.emit({ op: 'push', v: s.on });
+        this.emit({ op: 'act', name: 'wander', argc: 1 });
+        break;
       case 'teleport':
         this.emit({ op: 'ref', ref: { player: true } });
         this.pushPlace(s.to, s.id);
@@ -733,6 +750,13 @@ class HandlerCompiler {
         return 'text';
       case 'clock':
         this.emit({ op: 'clock' });
+        return 'number';
+      case 'distance':
+        for (const r of [e.from, e.to]) {
+          if ('player' in r) this.emit({ op: 'ref', ref: r });
+          else this.pushRef(r, e.id);
+        }
+        this.emit({ op: 'dist' });
         return 'number';
       case 'pickedRow':
         if (this.h.event.kind !== 'listPick') this.problem(e.id, '“The picked row” only works inside “When the player picks a row”.');

@@ -221,6 +221,64 @@ describe('creatures', () => {
     w.dispose();
   });
 
+  it('the chicken’s behaviour in blocks: pecks when the player comes near, runs when hit, calms down when they go', () => {
+    const hen = npc('hen', [0, 0, -120], { side: 'neutral', attack: 'melee', damage: 4, rate: 1.2, reach: 24, speed: 110, wander: true, flee: 'never', height: 56, radius: 14 });
+    const self = { self: true } as const;
+    hen.components.script = {
+      version: 1,
+      variables: [],
+      handlers: [
+        { id: 'a', event: { id: 'ae', kind: 'near', distance: { id: 'ad', kind: 'number', value: 160 } }, body: [{ id: 'as', kind: 'setSide', target: self, side: 'hostile' }] },
+        { id: 'b', event: { id: 'be', kind: 'far', distance: { id: 'bd', kind: 'number', value: 400 } }, body: [{ id: 'bs', kind: 'setSide', target: self, side: 'neutral' }] },
+        { id: 'c', event: { id: 'ce', kind: 'hit' }, body: [{ id: 'cs', kind: 'runAway', target: self, seconds: { id: 'cn', kind: 'number', value: 2 } }] },
+      ],
+    } satisfies Script as never;
+    const w = GameWorld.create(scene(floor(), spawn(), hen));
+    expect(w.scriptProblems).toEqual([]);
+    // Within 160: it turns on the player and pecks.
+    run(w, 4);
+    expect(['chase', 'attack']).toContain(state(w, hen.id).state);
+    expect(w.playerStatus()!.health).toBeLessThan(100);
+    // Hit: off it runs for 2 seconds, then comes back for more.
+    (w as unknown as { weaponDamage(t: string, a: number, b: string, c: string): void }).weaponDamage(hen.id, 5, 'player', 'a kick');
+    run(w, 0.5);
+    expect(state(w, hen.id).state).toBe('flee');
+    run(w, 2);
+    expect(state(w, hen.id).state).not.toBe('flee');
+    // The player leaves (past 400): it calms down and goes back to pottering about.
+    w.player!.teleport({ x: 0, y: 0, z: 1200 });
+    run(w, 1);
+    expect(['idle', 'wander', 'busy']).toContain(state(w, hen.id).state);
+    w.dispose();
+  });
+
+  it('“Make a creature wander or stay” and “distance between”', () => {
+    const hen = npc('hen', [0, 0, -300], { side: 'friendly', attack: 'none', wander: true });
+    hen.components.script = {
+      version: 1,
+      variables: [{ name: 'd', type: 'number', initial: 0 }],
+      handlers: [
+        {
+          id: 'h',
+          event: { id: 'e', kind: 'start' },
+          body: [
+            { id: 's1', kind: 'wander', target: { self: true }, on: false },
+            { id: 's2', kind: 'set', variable: 'd', value: { id: 'x', kind: 'distance', from: { player: true }, to: { self: true } } },
+          ],
+        },
+      ],
+    } satisfies Script as never;
+    const w = GameWorld.create(scene(floor(), spawn(), hen));
+    expect(w.scriptProblems).toEqual([]);
+    const start = state(w, hen.id).feet;
+    run(w, 6);
+    const end = state(w, hen.id).feet;
+    expect(Math.hypot(end[0] - start[0], end[2] - start[2])).toBeLessThan(2);
+    expect(w.scriptVariables(hen.id).d as number).toBeGreaterThan(295);
+    expect(w.scriptVariables(hen.id).d as number).toBeLessThan(305);
+    w.dispose();
+  });
+
   it('a script can make a friend an enemy (a nest missing its egg)', () => {
     const hen = npc('hen', [0, 0, -300], { side: 'friendly', attack: 'melee', damage: 5 });
     hen.components.script = {

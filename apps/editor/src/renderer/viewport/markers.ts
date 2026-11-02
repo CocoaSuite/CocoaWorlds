@@ -25,6 +25,8 @@ export interface Marker {
   lines: THREE.LineSegments[];
   pick: THREE.Mesh;
   baseColor: number;
+  /** A box round the whole model, shown only while selected (models are too busy to outline). */
+  box?: THREE.LineSegments;
 }
 
 const pickMat = new THREE.MeshBasicMaterial({ visible: false });
@@ -81,6 +83,7 @@ export function buildMarker(e: EntityData): Marker {
   group.rotation.order = 'YXZ';
   const lines: THREE.LineSegments[] = [];
   let pick: THREE.Mesh;
+  let box: THREE.LineSegments | undefined;
   let baseColor = COLORS.idle;
   const light = e.components.light as { kind?: string; range?: number; angle?: number } | undefined;
 
@@ -103,12 +106,18 @@ export function buildMarker(e: EntityData): Marker {
     );
     pick = new THREE.Mesh(new THREE.BoxGeometry(24, 24, 24), pickMat);
     const p = pick;
+    const b = (box = new THREE.LineSegments(boxEdges(new THREE.Vector3(24, 24, 24), new THREE.Vector3()), new THREE.LineBasicMaterial({ color: COLORS.selected })));
+    b.name = 'selection-box';
+    b.visible = false;
+    group.add(b);
     void modelInstance(model)
       .then((inst) => {
         if (group.userData.disposed) return;
         group.add(inst.object);
         p.geometry.dispose();
         p.geometry = new THREE.BoxGeometry(Math.max(8, inst.size.x), Math.max(8, inst.size.y), Math.max(8, inst.size.z)).translate(inst.center.x, inst.center.y, inst.center.z);
+        b.geometry.dispose();
+        b.geometry = boxEdges(inst.size, inst.center);
         markerLoaded();
       })
       .catch(() => {
@@ -205,11 +214,19 @@ export function buildMarker(e: EntityData): Marker {
   for (const l of lines) group.add(l);
   pick.userData.entityId = e.id;
   group.add(pick);
-  return { group, lines, pick, baseColor };
+  return { group, lines, pick, baseColor, box };
+}
+
+/** The 12 edges of a box of `size` round `center` (a hair bigger, so it isn't hidden in the model's surface). */
+function boxEdges(size: THREE.Vector3, center: THREE.Vector3): THREE.BufferGeometry {
+  const pad = 1.02;
+  const g = new THREE.EdgesGeometry(new THREE.BoxGeometry(Math.max(8, size.x) * pad, Math.max(8, size.y) * pad, Math.max(8, size.z) * pad));
+  return g.translate(center.x, center.y, center.z);
 }
 
 export function setMarkerSelected(m: Marker, selected: boolean): void {
   for (const l of m.lines) (l.material as THREE.LineBasicMaterial).color.setHex(selected ? COLORS.selected : m.baseColor);
+  if (m.box) m.box.visible = selected;
 }
 
 export function disposeMarker(m: Marker): void {

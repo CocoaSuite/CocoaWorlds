@@ -1,5 +1,6 @@
 // End-to-end: the ready-made chicken (a rigged, animated model). Add › Chicken copies the model into the project
-// once; in Play the enemy chicken comes and pecks the player, animated; the friendly one potters about.
+// once; its behaviour is ordinary blocks; selected, it shows a box round the model; in Play the enemy chicken
+// turns on the player who comes near and pecks, animated; the friendly one potters about.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { promises as fs } from 'node:fs';
@@ -26,10 +27,28 @@ test('the chicken: enemy and friend', async () => {
     // An enemy chicken ahead, facing the player; a friendly one off to the side.
     await addMenu('Chicken (enemy)');
     await page.getByRole('tree').getByRole('treeitem', { name: 'chicken', exact: true }).waitFor();
-    await setField(insp, 'Position Z', -300);
+    await setField(insp, 'Position Z', -140);
     await setField(insp, 'Rotation Y', 180);
     assert.equal(await insp.getByLabel('Scale X', { exact: true }).inputValue(), '0.5');
     await insp.getByRole('group', { name: 'Creature' }).waitFor();
+    // Its behaviour, as blocks anyone can change.
+    await page.getByRole('tab', { name: 'Visual script' }).click();
+    const blocks = page.getByRole('region', { name: 'Script of chicken' });
+    await blocks.getByRole('group', { name: 'When the player comes near this' }).waitFor();
+    await blocks.getByRole('group', { name: 'When the player goes away from this' }).waitFor();
+    await blocks.getByRole('group', { name: 'When this is hit (shot, struck or blasted)' }).waitFor();
+    assert.equal(await page.getByRole('tab', { name: /Problems \d/ }).count(), 0, 'no problems');
+    // Selected: a box round the whole model (once it has loaded).
+    const boxSize = () =>
+      page.evaluate(() => {
+        const box = window.__cwViewport.scene.getObjectsByProperty('name', 'selection-box').find((b) => b.visible);
+        if (!box) return null;
+        box.geometry.computeBoundingBox();
+        const s = box.geometry.boundingBox.max.clone().sub(box.geometry.boundingBox.min);
+        return [s.x, s.y, s.z].map((v) => Math.round(v));
+      });
+    // (Taller than wide, unlike the 24-unit cube used until the model has loaded.)
+    await until(async () => { const s = await boxSize(); return !!s && s[1] > s[0]; }, true, 10000);
     await addMenu('Chicken (friend)');
     await page.getByRole('tree').getByRole('treeitem', { name: 'chicken_friend' }).waitFor();
     await setField(insp, 'Position X', 300);

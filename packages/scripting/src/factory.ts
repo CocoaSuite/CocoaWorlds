@@ -33,6 +33,10 @@ export function newEvent(kind: EventKind, zone: Ref = self): EventBlock {
       return { id: id(), kind, message: 'open' };
     case 'every':
       return { id: id(), kind, seconds: num(1) };
+    case 'near':
+      return { id: id(), kind, distance: num(160) };
+    case 'far':
+      return { id: id(), kind, distance: num(400) };
     case 'uiClick':
       return { id: id(), kind, element: '' };
     case 'useItem':
@@ -111,6 +115,10 @@ export function newStatement(kind: StatementKind, opts: { target?: Ref; variable
       return { id: id(), kind, target, side: 'hostile' };
     case 'walkTo':
       return { id: id(), kind, target, to: { player: true } };
+    case 'runAway':
+      return { id: id(), kind, target, seconds: num(3) };
+    case 'wander':
+      return { id: id(), kind, target, on: true };
     case 'moveTo':
       return { id: id(), kind, target, to: { player: true }, seconds: num(0.5), gap: num(64) };
     case 'teleport':
@@ -181,6 +189,8 @@ export function newExpr(kind: ExprKind, opts: { variable?: string } = {}): Expr 
       return { id: id(), kind, variable: opts.variable ?? 'value', of: other };
     case 'inside':
       return { id: id(), kind, what: player, zone: self };
+    case 'distance':
+      return { id: id(), kind, from: player, to: self };
     case 'itemCount':
       return { id: id(), kind, item: '' };
     case 'selectedItem':

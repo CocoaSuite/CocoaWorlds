@@ -608,6 +608,10 @@ export class GameWorld {
       playAnimation: (target, name, loop) => this.bus.emit({ type: 'anim', target, name, loop, time: this.time }),
       spawn: (template, place) => this.spawn(template, place),
       isInside: (zone, what) => this.isInside(zone, what),
+      distance: (a, b) => {
+        const p = this.placePoint({ ref: a }), q = this.placePoint({ ref: b });
+        return p && q ? Math.hypot(p[0] - q[0], p[1] - q[1], p[2] - q[2]) : null;
+      },
       showUi: (what, id, show) => {
         if (what === 'screen') {
           const on = show === 'toggle' ? !this.uiShown.has(id) : show;
@@ -1289,6 +1293,11 @@ export class GameWorld {
       const to = this.placePoint(args[0] ?? null);
       return to ? npc.walkTo({ x: to[0], y: to[1], z: to[2] }) : null;
     }
+    if (name === 'runAway' || name === 'wander') {
+      if (!npc) throw new Error(`${label} isn't a creature. Add the Creature component to it.`);
+      if (name === 'wander') return npc.setWander(args[0] !== false), null;
+      return npc.runAway(typeof args[0] === 'number' ? args[0] : 0);
+    }
     if (name === 'viewFrom') {
       const seconds = typeof args[0] === 'number' ? Math.max(0, args[0]) : 0;
       const until = this.time + seconds;
@@ -1413,6 +1422,9 @@ export class GameWorld {
       const f = this.player?.feetPosition;
       return f ? [f.x, f.y, f.z] : null;
     }
+    // A creature: where it has walked to (its feet).
+    const npc = this.npcs.get(place.ref);
+    if (npc) return [npc.feet.x, npc.feet.y, npc.feet.z];
     const b = this.bodies.get(place.ref) ?? this.bodies.get(this.unitOf.get(place.ref) ?? '');
     if (b && b.info.id === place.ref) {
       const t = b.body.translation();

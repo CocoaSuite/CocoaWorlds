@@ -47,7 +47,9 @@ export type Expr =
   /** The row the player picked in a list (in “When the player picks a row”). */
   | { id: string; kind: 'pickedRow' }
   /** The real time now, in seconds since 1970 (for things that grow while the game is closed). */
-  | { id: string; kind: 'clock' };
+  | { id: string; kind: 'clock' }
+  /** How far apart two things are (objects, creatures, the player), in units. */
+  | { id: string; kind: 'distance'; from: Ref; to: Ref };
 
 export type Direction = 'up' | 'down' | 'north' | 'south' | 'east' | 'west';
 export type Axis = 'up' | 'north' | 'east';
@@ -106,6 +108,10 @@ export type Statement =
   | { id: string; kind: 'setSide'; target: Ref; side: 'hostile' | 'friendly' | 'neutral' }
   /** Walk a creature to a place (a scripted scene); the stack waits until it gets there. */
   | { id: string; kind: 'walkTo'; target: Ref; to: Place }
+  /** A creature runs away from the player, as fast as it can, for a while (the stack waits meanwhile). */
+  | { id: string; kind: 'runAway'; target: Ref; seconds: Expr }
+  /** A creature potters about near where it started, or stays where it is. */
+  | { id: string; kind: 'wander'; target: Ref; on: boolean }
   /** Put the player at a place (facing the way that object faces). */
   | { id: string; kind: 'teleport'; to: Place }
   /** Take health from a breakable object; at 0 it breaks. */
@@ -159,6 +165,8 @@ export type EventBlock =
   | { id: string; kind: 'hit' }
   /** This creature died. */
   | { id: string; kind: 'dies' }
+  /** The player came within `distance` units of this object (`far`: went further away than that). */
+  | { id: string; kind: 'near' | 'far'; distance: Expr }
   /** The player clicked a button of the screen UI (by id). */
   | { id: string; kind: 'uiClick'; element: string }
   /** The player used (clicked with) an item from the hotbar; '' for any item. */
@@ -233,6 +241,7 @@ export function* walk(script: Script): Generator<{ id: string; kind: string }> {
     yield { id: h.id, kind: 'handler' };
     yield h.event;
     if (h.event.kind === 'every') yield* expr(h.event.seconds);
+    if (h.event.kind === 'near' || h.event.kind === 'far') yield* expr(h.event.distance);
     yield* stmts(h.body);
   }
 }

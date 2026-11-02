@@ -95,7 +95,9 @@ export async function modelInstance(data: ModelData): Promise<ModelInstance> {
     }
   });
   root.add(inner);
-  const box = new THREE.Box3().setFromObject(root);
+  // (Skinned meshes are measured through their bones, so the bones' world matrices must be up to date first.)
+  root.updateMatrixWorld(true);
+  const box = new THREE.Box3().setFromObject(root, true);
   const mixer = m.animations.length ? new THREE.AnimationMixer(inner) : null;
   // One animation at a time, blending from the last over a moment (a walk eases into a peck).
   let current: THREE.AnimationAction | null = null;
