@@ -1,5 +1,6 @@
 /** Structural validation for files read from disk. Returns readable problems instead of throwing deep inside the editor. */
 import { isFiniteVec3 } from './math';
+import { validateMaterials } from './materials';
 import { validateUi } from './ui';
 import type { EntityData, ProjectFile, SceneFile } from './schema';
 
@@ -48,6 +49,10 @@ export function validateProject(data: unknown): Result<ProjectFile> {
       );
     need(p, ok, 'settings.values', 'Each game value needs a name, a type (number, yes/no or text), a starting value of that type, and whether it is shown.');
     if (ok) need(p, new Set((vs as { name: string }[]).map((v) => v.name)).size === vs.length, 'settings.values', 'Two game values have the same name.');
+  }
+  if (isObj(s)) {
+    const bad = validateMaterials(s.materials);
+    need(p, !bad, 'settings.materials', bad ?? '');
   }
   if (Array.isArray(data.scenes) && isStr(data.startScene)) {
     need(p, data.scenes.includes(data.startScene), 'startScene', 'Start scene is not in the scene list.');

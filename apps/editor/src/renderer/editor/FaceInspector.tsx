@@ -5,7 +5,7 @@
 import type { FaceSurface } from '@cocoaworlds/geometry';
 import { Button, NumberField, Section, Segmented } from '@cocoaworlds/ui';
 import { brushOf } from '../brush/brushes';
-import { devMaterial } from '../brush/materials';
+import { materialLabel } from '../viewport/project-materials';
 import { getLang, t } from '../i18n';
 import { useEditor, type Justify } from '../store';
 import { MaterialPicker } from './MaterialPicker';
@@ -57,7 +57,7 @@ export function FaceInspector() {
     />
   );
   const mk = (k: string) => `face-${k}`;
-  const materialName = material ? (devMaterial(material)?.label[getLang()] ?? material) : t('face.mixed');
+  const materialName = material ? materialLabel(material, getLang()) : t('face.mixed');
   const justify: { side: Justify; label: string }[] = [
     { side: 'left', label: t('face.left') },
     { side: 'right', label: t('face.right') },

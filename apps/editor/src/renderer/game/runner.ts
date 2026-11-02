@@ -2,11 +2,12 @@
  * An exported game (B4): one scene played full-window, with the same game code, controls, display and screen
  * UI as Play in the editor. Saved progress is kept in this browser's storage (a desktop game has its own).
  */
-import { SceneDoc, type GameRules, type GameValue, type SceneFile } from '@cocoaworlds/core';
+import { SceneDoc, type GameRules, type GameValue, type MaterialDef, type SceneFile } from '@cocoaworlds/core';
 import { isInvisibleMaterial } from '@cocoaworlds/geometry';
 import * as THREE from 'three';
 import { PlaySession } from '../viewport/play-session';
 import { SceneLighting } from '../viewport/scene-lighting';
+import { setProjectMaterials, tickMaterials } from '../viewport/project-materials';
 import { sceneMaterial } from '../viewport/world-render';
 import { hudOf, type Hud } from '../ui/Hud';
 import { GAME_KEYS, inputFromKeys, isScriptKey, lookFromMouse } from './controls';
@@ -21,6 +22,8 @@ export interface GameData {
   scene: SceneFile;
   rules: GameRules;
   values: GameValue[];
+  /** The project's materials (older exports have none). */
+  materials?: MaterialDef[];
 }
 
 export interface RunnerEvents {
@@ -75,6 +78,7 @@ export class GameRunner {
 
   /** Load the game (physics, models) and start it. */
   async start(): Promise<void> {
+    setProjectMaterials(this.data.materials ?? []);
     const hidden = new THREE.MeshBasicMaterial({ visible: false });
     const material = (name: string) => {
       let m = this.materials.get(name);
@@ -145,6 +149,7 @@ export class GameRunner {
     this.last = now;
     const play = this.play;
     play.tick(dt);
+    tickMaterials(now);
     const hud = hudOf(play, this.locked);
     this.followUiMouse(hud.ui.freesMouse);
     const key = JSON.stringify(hud);

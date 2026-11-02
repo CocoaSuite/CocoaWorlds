@@ -2,6 +2,7 @@
  * On-disk formats. Every file is JSON with a `format` tag and a `schemaVersion`.
  * Bump CURRENT_SCHEMA_VERSION and add a migration in migrate.ts whenever a format changes shape.
  */
+import type { MaterialDef } from './materials';
 import type { Transform } from './math';
 import type { UiSettings } from './ui';
 
@@ -30,6 +31,8 @@ export interface ProjectSettings {
   game?: Partial<GameRules>;
   /** Game values shared by every script (Cash, Gems, Round …). */
   values?: GameValue[];
+  /** Materials made in the Materials workspace, shared by every scene. */
+  materials?: MaterialDef[];
 }
 
 /** A value every script in the game shares, defined once for the project. */

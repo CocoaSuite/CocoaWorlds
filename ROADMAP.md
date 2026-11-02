@@ -8,7 +8,7 @@
 | 4 | Entities and physics: components, Rapier, colliders, triggers, inspector, interaction infrastructure | **Done** (the player's “use” raycast moves to Phase 6 with the player) |
 | 5 | Visual scripting: blocks editor, script model, compiler, VM, events, debugging, recipes | **In progress** — model, checker, compiler, VM, block editor, Play integration and recipes done |
 | 6 | Gameplay: Source-style controller, player, interaction, health/score, doors/plates/buttons/lifts | **In progress** — player controller, Play as the player, “use”, health, damage, pickups and score done |
-| 7 | Assets and rendering: asset browser, material editor, textures, lighting, audio | Not started |
+| 7 | Assets and rendering: asset browser, material editor, textures, lighting, audio | **In progress** — textures, lights, sky, sound, models and the Materials workspace done |
 | 8 | Runtime and persistence: standalone runtime, Play isolation, autosave, recovery, migrations | Not started |
 | 9 | Builds: Windows, macOS, Linux packaging; web export; runtime verification | Not started |
 | 10 | Polish: usability, performance, demo level, documentation | Not started |
@@ -60,7 +60,7 @@ Order may shift where dependencies require it (for example, the project format f
 - [x] Player controller (D4): Source-style ground/air movement, jump, crouch, walk, steps, slopes, pushing physics objects
 - [x] Play as the player: pointer lock, first-person camera, crosshair, Use (E) and “When the player uses this”
 - [x] Health, damage, pickups, score: on-screen health and score, death and restart, fall damage, blocks and recipes
-- [ ] Ready-made doors, buttons, pressure plates, lifts
+- [x] Ready-made doors (sliding and hinged), buttons, pressure plates, lifts — as recipes, with lifts carrying the player
 - [ ] Ladders, water, key rebinding
 
 ## Phase 5 checklist
@@ -104,4 +104,4 @@ Order may shift where dependencies require it (for example, the project format f
 
 ## Next
 
-The Materials workspace (a full-window material editor, beside Scene and Screens), then A1 (the Half-Life set) and T1 (voxel terrain). Installers and signing for exported games come with packaging the editor itself (Phase 9).
+A1 (the Half-Life set), then A2 and T1 (voxel terrain). Installers and signing for exported games come with packaging the editor itself (Phase 9).

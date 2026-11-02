@@ -11,3 +11,4 @@ export * from './components';
 export * from './prefab';
 export * from './pivot';
 export * from './ui';
+export * from './materials';

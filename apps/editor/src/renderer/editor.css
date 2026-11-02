@@ -350,3 +350,21 @@ code { font: 12px var(--mono); color: var(--fg); }
 .cw-export-target span { font-size: 12px; }
 .cw-export-error { color: var(--bad); }
 .cw-export-done { word-break: break-all; }
+
+/* Materials workspace */
+.cw-mats-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.cw-mats-list > li { display: flex; align-items: center; gap: 8px; padding: 4px 6px; border: 1px solid var(--line); border-radius: 8px; cursor: pointer; font-weight: 600; font-size: 13px; }
+.cw-mats-list > li.on { border-color: var(--sel); }
+.cw-mats-list > li:hover:not(.on) { background: var(--panel2); }
+.cw-mats-sw { display: block; flex: none; width: 28px; height: 28px; border-radius: 6px; border: 1px solid var(--line); }
+.cw-mat-proj { background-size: cover; background-position: center; }
+.cw-mat-missing { background: repeating-conic-gradient(#ff00dc 0 25%, #000 0 50%) 0 0 / 12px 12px; }
+.cw-mats-stage { flex: 1; min-height: 0; position: relative; border-radius: 8px; overflow: hidden; border: 1px solid var(--line);
+  background: repeating-conic-gradient(#2b2b2b 0 25%, #333 0 50%) 0 0 / 24px 24px; }
+.cw-mats-preview { position: absolute; inset: 0; cursor: grab; }
+.cw-mats-preview canvas { display: block; width: 100%; height: 100%; }
+.cw-mats-use { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 12px; }
+.cw-mats-use > span { margin-right: auto; }
+.cw-mats-slider { display: flex; align-items: center; gap: 6px; width: 100%; }
+.cw-mats-slider input { flex: 1; min-width: 0; accent-color: var(--sel); }
+.cw-mats-slider .mono { width: 34px; text-align: right; font-size: 12px; color: var(--mute); }

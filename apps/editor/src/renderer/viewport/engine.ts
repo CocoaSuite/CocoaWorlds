@@ -15,6 +15,7 @@ import { CameraRig, type ViewKind } from './camera';
 import { EditorGrid } from './grid';
 import { buildMarker, disposeMarker, markerKey, onMarkerLoaded, setMarkerSelected, type Marker } from './markers';
 import { WorldRenderer, type FaceRef } from './world-render';
+import { tickMaterials } from './project-materials';
 import { VertexTool } from './vertex-tool';
 import { ClipTool, type ClipKeep, type ClipState } from './clip-tool';
 import type { PlayFrame, PlayInfo, PlaySession } from './play-session';
@@ -1171,6 +1172,8 @@ export class ViewportEngine {
       }
       this.needsRender = true;
     }
+    // Scrolling materials (water, lava, conveyors) move.
+    if (tickMaterials(now)) this.needsRender = true;
     if (!this.needsRender) return;
     this.needsRender = false;
     const t0 = performance.now();

@@ -8,6 +8,7 @@
  */
 import { readComponent, sceneSettings, type EntityData, type SceneDoc } from '@cocoaworlds/core';
 import * as THREE from 'three';
+import { setReflection } from './project-materials';
 
 type LightData = {
   kind: 'point' | 'spot' | 'directional';
@@ -148,6 +149,10 @@ export class SceneLighting {
     this.skyMat.uniforms.horizon!.value.set(sky.horizon);
     this.skyMat.uniforms.ground!.value.set(sky.ground);
     if (sky.enabled) this.group.add(this.sky);
+    // What shiny and metal project materials reflect: the sky, or the ambient light without one.
+    const a = amb.clone().multiplyScalar(Math.min(1.5, settings.ambientIntensity * 2.2));
+    if (sky.enabled) setReflection(sky.top, sky.horizon, sky.ground);
+    else setReflection(`#${a.getHexString()}`, `#${a.clone().multiplyScalar(0.7).getHexString()}`, `#${a.clone().multiplyScalar(0.3).getHexString()}`);
     this.background = new THREE.Color(settings.backgroundColor);
     this.fog = settings.fog.enabled ? new THREE.Fog(settings.fog.color, settings.fog.near, settings.fog.far) : null;
     this.applyTo(scene);

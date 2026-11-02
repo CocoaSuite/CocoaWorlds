@@ -17,10 +17,10 @@
 - **Copies:** a copy is one body: brushes inside a copied object with Physics are left out unless they have Physics too, text signs inside copies aren't drawn, and trigger zones inside a copy stay where they were made. Only objects in the scene can be copied (hide one to use it as a template); prefab files can't be copied directly yet.
 - **Object actions:** a Scale and a Move on the same object at once replace each other (the newer one wins); point objects' collision shapes are rescaled, but their drawn shape isn't. Breakable objects break only from the Damage block (no damage from hits or falls yet), and a broken object stays in the game, invisible and not colliding, so its “When this breaks” stacks can finish.
 - **Third-person camera:** a simple capsule body, no animation; Use still aims from the player's eyes.
-- **Assets:** GLB files and glTF files with embedded data only (a .gltf with a separate .bin or image files can't be imported yet). Models don't animate in the editor, and models inside copied brush objects aren't drawn. Textures are colour images only (no normal, roughness or emissive maps yet, no material editor). Lighting is real-time; there are no baked lightmaps.
+- **Assets:** GLB files and glTF files with embedded data only (a .gltf with a separate .bin or image files can't be imported yet). Models don't animate in the editor, and models inside copied brush objects aren't drawn. Lighting is real-time; there are no baked lightmaps.
 - **Moving platforms carry the player's feet, not their view:** on a turning platform the player goes round with it but keeps facing the same way. While a lift moves the player can't jump.
 - **The player is an upright cylinder** (radius 16, 72 tall) rather than Source's box, so they slide round pillars and balls; they also step off a ledge a little sooner at its corners.
-- **Screen UI:** one font, no animations or transitions, and no text input boxes; screens belong to the scene (a second scene would need its own); lists hold text rows or the inventory (not other data). The Materials workspace is a placeholder.
+- **Screen UI:** one font, no animations or transitions, and no text input boxes; screens belong to the scene (a second scene would need its own); lists hold text rows or the inventory (not other data).
 - **Player speeds are fixed** (Half-Life 2's: run 190, walk 100, crouch 64 u/s); a per-scene setting comes later.
 - **Keys while playing are fixed** (WASD, Space, Ctrl or C, Shift, E); rebinding comes later. While the mouse is captured, editor shortcuts are off; F5 still stops.
 - **Scripts:** blocks are rearranged with ↑ ↓ and copy and paste for now; drag-and-drop comes later. A message counts as “stopped coming” after 0.1 s without it, so a loop that sends it less often than that starts and stops it each time. The graph view (V3) comes later in Phase 5.
@@ -30,7 +30,7 @@
 - **Edited meshes (moved into a dent or twist) aren't cut, clipped, merged or hollowed** until they are convex again, and can't be subtract brushes. Moving ones collide as their convex hull.
 - **Loop cut runs across four-sided faces only;** it stops at triangles and other shapes.
 - **The vertex tool moves corners with the gizmo only;** dragging a corner handle directly is not supported yet.
-- **Materials are built-in development colours** until material assets and textures arrive in Phase 7.
+- **Materials:** one image, one bump map and one glow per material (no separate roughness, metal or glow images); glowing faces don't light what's around them; reflections are the sky's colours, not the level around them; scroll speeds assume the usual face scale (0.25). Changes to materials are undoable, but they mark the scene as edited too. Models keep the materials from their glTF file.
 - **Surfaces made by a live cut** (the inside of a doorway) follow the wall around them and can't be selected until the cut is applied.
 - **Big levels update a moment after an edit.** From 64 brushes the level is rebuilt in a background worker, so the view can lag an edit by the build time (shown in the stats). Picking uses the last finished build.
 - **Brush rotation re-projects textures** (world alignment). Texture lock is exact for moves only.

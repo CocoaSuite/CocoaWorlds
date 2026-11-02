@@ -53,13 +53,19 @@ export function inField(target: EventTarget | null): boolean {
   return !!el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT' || el.isContentEditable);
 }
 
+/** Sliders, switches, colour wells: no text to edit, so Ctrl+Z and the like still mean the editor's. */
+function noText(target: EventTarget | null): boolean {
+  const el = target as HTMLInputElement | null;
+  return el?.tagName === 'INPUT' && ['range', 'checkbox', 'radio', 'color', 'button'].includes(el.type);
+}
+
 /** True while the viewport is in a right-drag fly mode; letters then steer the camera instead of switching tools. */
 export const flyState = { active: false };
 
 export function useShortcuts(openKeys: () => void): void {
   useEffect(() => {
     const down = (e: KeyboardEvent) => {
-      if (inField(e.target) || document.querySelector('.cw-modal')) return;
+      if ((inField(e.target) && !(noText(e.target) && (e.ctrlKey || e.metaKey))) || document.querySelector('.cw-modal')) return;
       const s = useEditor.getState();
       if (e.code === 'F5') {
         e.preventDefault();

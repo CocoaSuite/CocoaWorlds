@@ -2,7 +2,7 @@ import { Button, Dialog, Divider, Icon, IconButton, MenuBar, Spacer } from '@coc
 import { useEffect, useState } from 'react';
 import logo from '../assets/cocoaworlds-logo.svg';
 import { t } from '../i18n';
-import { useEditor } from '../store';
+import { flushProjectSave, useEditor } from '../store';
 
 const mod = navigator.platform.toLowerCase().includes('mac') ? '⌘' : 'Ctrl+';
 
@@ -161,7 +161,7 @@ function Workspaces() {
   const tabs: { id: 'scene' | 'screens' | 'materials'; label: string; soon?: boolean }[] = [
     { id: 'scene', label: t('ws.scene') },
     { id: 'screens', label: t('ws.screens') },
-    { id: 'materials', label: t('ws.materials'), soon: true },
+    { id: 'materials', label: t('ws.materials') },
   ];
   return (
     <div className="cw-ws" role="tablist" aria-label={t('ws.label')}>
@@ -174,7 +174,7 @@ function Workspaces() {
           className={ws === x.id ? 'on' : ''}
           disabled={x.soon || (playing && x.id !== 'scene')}
           title={x.soon ? t('ws.soon') : undefined}
-          onClick={() => x.id !== 'materials' && set(x.id)}
+          onClick={() => set(x.id)}
         >
           {x.label}
         </button>
@@ -204,6 +204,7 @@ function BuildDialog({ onClose }: { onClose: () => void }) {
     setDone(null);
     try {
       if (st.dirty && !(await st.save())) throw new Error(t('export.failed'));
+      await flushProjectSave();
       const r = await window.cocoa.game.export(dir, target);
       if (!r.ok) throw new Error(r.error);
       if (r.value) {

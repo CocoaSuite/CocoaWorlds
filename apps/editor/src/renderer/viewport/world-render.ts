@@ -8,6 +8,8 @@ import WorldWorker from './world-worker?worker&inline';
 import * as THREE from 'three';
 import { DEV_TEXTURE_SIZE, devMaterial, paintDevTexture, paintToolTexture } from '../brush/materials';
 import { assetUrl, isTexture } from '../assets';
+import { isMaterialId } from '@cocoaworlds/core';
+import { missingTexture, projectMaterial, releaseMaterial } from './project-materials';
 
 const TEX_SIZE = DEV_TEXTURE_SIZE;
 
@@ -34,6 +36,7 @@ export function sceneMaterial(name: string, onUpdate: () => void): THREE.Materia
   if (dev?.tool) return new THREE.MeshBasicMaterial({ map: devTexture(dev.base, 'COL'), transparent: true, opacity: 0.45, depthWrite: false, side: THREE.DoubleSide });
   if (dev) return new THREE.MeshStandardMaterial({ map: devTexture(dev.base), roughness: 0.9, metalness: 0 });
   if (isTexture(name)) return imageMaterial(name, onUpdate);
+  if (isMaterialId(name)) return projectMaterial(name, onUpdate);
   return new THREE.MeshStandardMaterial({ color: hashColor(name), roughness: 0.9 });
 }
 
@@ -270,7 +273,9 @@ export class WorldRenderer {
     clear(this.outlineGroup);
     clear(this.faceGroup);
     for (const m of this.materials.values()) {
-      (m as THREE.MeshStandardMaterial).map?.dispose();
+      releaseMaterial(m);
+      const map = (m as THREE.MeshStandardMaterial).map;
+      if (map && map !== missingTexture()) map.dispose();
       m.dispose();
     }
   }
@@ -312,26 +317,6 @@ function clear(g: THREE.Group): void {
 }
 
 const loader = new THREE.TextureLoader();
-let missing: THREE.Texture | null = null;
-
-/** Source's missing-texture checker, for images that can't be loaded. */
-function missingTexture(): THREE.Texture {
-  if (missing) return missing;
-  const c = document.createElement('canvas');
-  c.width = c.height = 64;
-  const g = c.getContext('2d')!;
-  g.fillStyle = '#000';
-  g.fillRect(0, 0, 64, 64);
-  g.fillStyle = '#ff00dc';
-  g.fillRect(0, 0, 32, 32);
-  g.fillRect(32, 32, 32, 32);
-  missing = new THREE.CanvasTexture(c);
-  missing.wrapS = missing.wrapT = THREE.RepeatWrapping;
-  missing.magFilter = THREE.NearestFilter;
-  missing.repeat.set(TEX_SIZE / 64, TEX_SIZE / 64);
-  return missing;
-}
-
 /**
  * A material from a project image. Face coordinates are in texels, so the texture repeats every image width
  * (a 512-pixel image at the usual 0.25 scale covers 128 units). Grey until the image has loaded; pixels with

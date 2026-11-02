@@ -44,6 +44,8 @@ import {
   gameRules,
   type GameRules,
   type GameValue,
+  type MaterialDef,
+  materialsOf,
   type SceneSettings,
   setSceneSettingsCmd,
 } from '@cocoaworlds/core';
@@ -71,6 +73,7 @@ import { brushBounds, brushComponent, brushOf, isLocked, isShown, newBrushEntity
 import { useShallow } from 'zustand/react/shallow';
 import type { AssetEntry, AssetKind, OpenedProject, PrefabEntry } from '../shared/api';
 import { setAssetProject } from './assets';
+import { setProjectMaterials } from './viewport/project-materials';
 import { emptyScript, recipe as findRecipe, type Script } from '@cocoaworlds/scripting';
 import { copyRootOf, recordAllChanges, repivot, syncCommands, unlinked } from './prefabs';
 import { DEV_TEXTURE_SIZE } from './brush/materials';
@@ -145,7 +148,7 @@ interface State {
   /** The bottom workspace's open tab. */
   bottomTab: 'script' | 'assets' | 'console' | 'problems';
   /** Which workspace fills the window: the scene (3D view and panels) or the screen UI editor. */
-  workspace: 'scene' | 'screens';
+  workspace: 'scene' | 'screens' | 'materials';
   /** While playing: the blocks each object's script is running (for highlighting). */
   activeBlocks: Map<string, string[]>;
 }
@@ -230,6 +233,8 @@ interface Actions {
   setSceneSettings(patch: Partial<SceneSettings>, label: string, mergeKey?: string): void;
   /** Replace the project's game values (saved to the project file at once). */
   setGameValues(values: GameValue[], label: string): Promise<boolean>;
+  /** Replace the project's materials, with undo (saved to the project file a moment later). */
+  setMaterials(materials: MaterialDef[], label: string, mergeKey?: string): void;
   setBottomTab(tab: State['bottomTab']): void;
   setWorkspace(w: State['workspace']): void;
   /** Change an object's script (the whole `script` component) as one undo step, merging with `mergeKey`. */
@@ -344,6 +349,7 @@ export const useEditor = create<State & Actions>()((set, get) => ({
   },
 
   closeSession() {
+    void flushProjectSave();
     unsubDoc?.();
     unsubHist?.();
     unsubDoc = unsubHist = null;
@@ -461,6 +467,7 @@ export const useEditor = create<State & Actions>()((set, get) => ({
     const { session, doc, history } = get();
     if (!session || !doc) return false;
     set({ saving: true });
+    await flushProjectSave();
     const r = await window.cocoa.projects.saveScene(session.dir, session.scenePath, sceneForSaving(doc, get().prefabs));
     set({ saving: false });
     if (!r.ok) {
@@ -1083,6 +1090,19 @@ export const useEditor = create<State & Actions>()((set, get) => ({
     return true;
   },
 
+  setMaterials(materials, label, mergeKey) {
+    const dir = get().session?.dir;
+    if (!dir) return;
+    const before = materialsOf(get().session!.project.settings);
+    const put = (list: MaterialDef[]) => {
+      const s = get().session;
+      if (s?.dir !== dir) return;
+      set({ session: { ...s, project: { ...s.project, settings: { ...s.project.settings, materials: list } } }, rev: get().rev + 1 });
+      saveProjectSoon(get);
+    };
+    get().execute({ label, mergeKey, apply: () => put(materials), revert: () => put(before) });
+  },
+
   async setGameRule(rule, on) {
     const session = get().session;
     if (!session) return;
@@ -1315,6 +1335,37 @@ export function reparentKeepWorld(doc: SceneDoc, id: string, parent: string | nu
   return cmds;
 }
 
+// Project settings changed in quick succession (dragging a colour) are written once, a moment after the last.
+let saveTimer: ReturnType<typeof setTimeout> | null = null;
+let pendingSave: { dir: string; get: () => State & Actions } | null = null;
+let saving: Promise<void> = Promise.resolve();
+
+function saveProjectSoon(get: () => State & Actions): void {
+  const dir = get().session?.dir;
+  if (!dir) return;
+  if (saveTimer) clearTimeout(saveTimer);
+  pendingSave = { dir, get };
+  saveTimer = setTimeout(() => void flushProjectSave(), 300);
+}
+
+/** Write any project settings still waiting (before exporting, closing or quitting). */
+export function flushProjectSave(): Promise<void> {
+  if (saveTimer) clearTimeout(saveTimer);
+  saveTimer = null;
+  const p = pendingSave;
+  pendingSave = null;
+  const s = p?.get().session;
+  if (p && s?.dir === p.dir) {
+    // (The settings as they are now: the project may be closed before the write runs.)
+    const settings = s.project.settings;
+    saving = saving.then(async () => {
+      const r = await window.cocoa.projects.saveSettings(p.dir, settings);
+      if (!r.ok) p.get().log('error', 'Project', r.error);
+    });
+  }
+  return saving;
+}
+
 /** The scene as it goes to disk: prefab copies record what they changed. */
 function sceneForSaving(doc: SceneDoc, prefabs: Map<string, PrefabEntry>): SceneFile {
   return recordAllChanges(doc.toFile(), new Map([...prefabs.values()].map((p) => [p.prefab.id, p.prefab])));
@@ -1324,3 +1375,12 @@ function sceneForSaving(doc: SceneDoc, prefabs: Map<string, PrefabEntry>): Scene
 function meshMsg(op: 'subtract' | 'hollow' | 'merge' | 'clip' | 'cut'): string {
   return t('mesh.noOp').replace('{op}', t(`mesh.op.${op}` as const));
 }
+
+// The 3D view, Play and previews draw project materials from the open project's list.
+let shownMaterials: MaterialDef[] | undefined;
+useEditor.subscribe((s) => {
+  const list = s.session?.project.settings.materials;
+  if (list === shownMaterials) return;
+  shownMaterials = list;
+  setProjectMaterials(list ?? []);
+});

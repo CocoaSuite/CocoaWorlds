@@ -1,0 +1,469 @@
+/**
+ * The Materials workspace: the project's materials on the left, a lit preview of the picked one in the middle
+ * (sphere, cube or wall, turned with the mouse), and its settings on the right. Materials belong to the
+ * project, so every scene can use them; changes show at once on every face that uses one, and are undoable.
+ */
+import { newMaterial, type MaterialDef } from '@cocoaworlds/core';
+import { Button, ColorField, NumberField, Segmented, Switch } from '@cocoaworlds/ui';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import * as THREE from 'three';
+import { brushOf } from '../brush/brushes';
+import { t } from '../i18n';
+import { useEditor } from '../store';
+import { projectMaterial, releaseMaterial, tickMaterials } from '../viewport/project-materials';
+import type { FaceRef } from '../viewport/world-render';
+import { MaterialSwatch } from './MaterialSwatch';
+
+type Shape = 'sphere' | 'cube' | 'wall';
+
+/** A unique name: base, base 2, … */
+function unique(base: string, taken: Iterable<string>): string {
+  const set = new Set(taken);
+  if (!set.has(base)) return base;
+  let i = 2;
+  while (set.has(`${base} ${i}`)) i++;
+  return `${base} ${i}`;
+}
+
+// Dragging a slider or a colour is one undo step: changes with the same key join until it rests a moment.
+let gesture: { key: string; timer: ReturnType<typeof setTimeout> } | null = null;
+function endGesture(): void {
+  if (!gesture) return;
+  clearTimeout(gesture.timer);
+  gesture = null;
+  useEditor.getState().commit();
+}
+
+function setAll(list: MaterialDef[], label: string, key?: string): void {
+  const st = useEditor.getState();
+  if (key) {
+    if (gesture?.key !== key) {
+      endGesture();
+      st.begin(label);
+    } else clearTimeout(gesture.timer);
+    gesture = { key, timer: setTimeout(endGesture, 700) };
+  } else endGesture();
+  st.setMaterials(list, label, key);
+}
+
+/** Faces in the open scene that use material `id`. */
+function facesUsing(id: string): FaceRef[] {
+  const doc = useEditor.getState().doc;
+  const out: FaceRef[] = [];
+  for (const e of doc?.entities ?? []) {
+    const b = brushOf(e);
+    b?.brush.faces.forEach((f, face) => f.surface.material === id && out.push({ id: e.id, face }));
+  }
+  return out;
+}
+
+export function MaterialsPanel() {
+  useEditor((s) => s.rev);
+  const list = useEditor((s) => s.session?.project.settings.materials) ?? [];
+  const textures = useEditor((s) => s.assets.textures);
+  const picked = useEditor((s) => s.faceSelection.length);
+  const [selected, setSelected] = useState<string | null>(null);
+  const [shape, setShape] = useState<Shape>('sphere');
+  const fileRef = useRef<HTMLInputElement>(null);
+  const mat = list.find((m) => m.id === selected) ?? list[0] ?? null;
+  const used = mat ? facesUsing(mat.id) : [];
+
+  useEffect(() => endGesture, []);
+
+  const edit = (patch: Partial<MaterialDef>, label: string, key?: string) => {
+    if (!mat) return;
+    const cur = useEditor.getState().session?.project.settings.materials ?? [];
+    setAll(
+      cur.map((m) => {
+        if (m.id !== mat.id) return m;
+        const next = { ...m, ...patch };
+        // (Settings switched back off are left out of the file.)
+        for (const k of Object.keys(next) as (keyof MaterialDef)[]) if (next[k] === undefined) delete next[k];
+        return next;
+      }),
+      label,
+      key,
+    );
+  };
+  const add = (m: MaterialDef, label: string) => {
+    const cur = useEditor.getState().session?.project.settings.materials ?? [];
+    setAll([...cur, m], label);
+    setSelected(m.id);
+  };
+  const fromImages = async (files: File[]) => {
+    const st = useEditor.getState();
+    const paths = await st.importAssets('textures', files);
+    const cur = useEditor.getState().session?.project.settings.materials ?? [];
+    const names = cur.map((m) => m.name);
+    const made = paths.map((p) => {
+      const base = p.split('/').pop()!.replace(/\.[^.]+$/, '').replace(/[_-]+/g, ' ');
+      const name = unique(base.charAt(0).toUpperCase() + base.slice(1), names);
+      names.push(name);
+      return newMaterial(name, { color: '#ffffff', map: p });
+    });
+    if (!made.length) return;
+    setAll([...cur, ...made], made.length === 1 ? `Add material ${made[0]!.name}` : 'Add materials');
+    setSelected(made[made.length - 1]!.id);
+  };
+
+  const goToScene = () => useEditor.getState().setWorkspace('scene');
+
+  return (
+    <div className="cw-screens cw-mats" role="region" aria-label={t('ws.materials')}>
+      <aside className="cw-screens-side" aria-label={t('mat.list')}>
+        <div className="cw-screens-h">
+          <span>{t('mat.list')}</span>
+          <Button size="sm" onClick={() => add(newMaterial(unique(t('mat.newName'), list.map((m) => m.name))), 'Add material')}>
+            {t('mat.add')}
+          </Button>
+        </div>
+        <Button size="sm" onClick={() => fileRef.current?.click()}>
+          {t('mat.fromImage')}
+        </Button>
+        <input
+          ref={fileRef}
+          type="file"
+          multiple
+          hidden
+          accept=".png,.jpg,.jpeg,.webp"
+          data-testid="material-images"
+          onChange={(e) => {
+            const files = [...(e.currentTarget.files ?? [])];
+            e.currentTarget.value = '';
+            if (files.length) void fromImages(files);
+          }}
+        />
+        {!list.length && <p className="cw-muted cw-screens-hint">{t('mat.none')}</p>}
+        <ul className="cw-mats-list" role="listbox" aria-label={t('mat.list')}>
+          {list.map((m) => (
+            <li key={m.id} role="option" aria-selected={m.id === mat?.id} aria-label={m.name} className={m.id === mat?.id ? 'on' : ''} onClick={() => setSelected(m.id)}>
+              <MaterialSwatch def={m} className="cw-mats-sw" />
+              <span>{m.name}</span>
+            </li>
+          ))}
+        </ul>
+        <p className="cw-muted cw-screens-hint">{t('mat.hint')}</p>
+      </aside>
+
+      <div className="cw-screens-main">
+        <div className="cw-screens-tools">
+          <Segmented<Shape>
+            label={t('mat.shape')}
+            value={shape}
+            onChange={setShape}
+            options={[
+              { value: 'sphere', label: t('mat.sphere') },
+              { value: 'cube', label: t('mat.cube') },
+              { value: 'wall', label: t('mat.wall') },
+            ]}
+          />
+          <span className="cw-muted cw-screens-tip">{mat ? t('mat.turnHint') : ''}</span>
+        </div>
+        <div className="cw-mats-stage">{mat ? <MaterialPreview id={mat.id} shape={shape} /> : <div className="cw-muted cw-screens-empty">{t('mat.pick')}</div>}</div>
+        {mat && (
+          <div className="cw-mats-use">
+            <span className="cw-muted" data-testid="material-uses">
+              {used.length ? t('mat.usedBy').replace('{n}', String(used.length)) : t('mat.unused')}
+            </span>
+            <Button
+              size="sm"
+              disabled={!picked}
+              title={picked ? undefined : t('mat.noFacesHint')}
+              onClick={() => {
+                useEditor.getState().setFaces({ material: mat.id }, undefined, `Set material ${mat.name}`);
+              }}
+            >
+              {t('mat.useOnFaces').replace('{n}', String(picked))}
+            </Button>
+            <Button
+              size="sm"
+              onClick={() => {
+                const st = useEditor.getState();
+                st.setPaintMaterial(mat.id);
+                st.setTool('paint');
+                goToScene();
+              }}
+            >
+              {t('mat.paint')}
+            </Button>
+            <Button
+              size="sm"
+              disabled={!used.length}
+              onClick={() => {
+                const st = useEditor.getState();
+                st.setTool('face');
+                useEditor.setState({ faceSelection: used });
+                goToScene();
+              }}
+            >
+              {t('mat.findFaces')}
+            </Button>
+          </div>
+        )}
+      </div>
+
+      <aside className="cw-screens-side right" aria-label={t('mat.settings')}>
+        {mat ? (
+          <MaterialProps
+            m={mat}
+            textures={textures.map((x) => ({ path: x.path, name: x.name }))}
+            edit={edit}
+            onDuplicate={() => add({ ...mat, id: newMaterial(mat.name).id, name: unique(mat.name, list.map((m) => m.name)) }, `Duplicate material ${mat.name}`)}
+            onRemove={() => {
+              setAll(
+                list.filter((m) => m.id !== mat.id),
+                `Remove material ${mat.name}`,
+              );
+              setSelected(null);
+            }}
+            used={used.length}
+          />
+        ) : (
+          <p className="cw-muted cw-screens-hint">{t('mat.pick')}</p>
+        )}
+      </aside>
+    </div>
+  );
+}
+
+function Row({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="cw-screens-row">
+      <span className="cw-screens-l">{label}</span>
+      <span className="cw-screens-v">{children}</span>
+    </div>
+  );
+}
+
+/** A 0–max slider with its value beside it. */
+function Slider({ label, value, max = 1, step = 0.01, onChange }: { label: string; value: number; max?: number; step?: number; onChange: (v: number) => void }) {
+  return (
+    <span className="cw-mats-slider">
+      <input type="range" aria-label={label} min={0} max={max} step={step} value={value} onChange={(e) => onChange(Number(e.currentTarget.value))} />
+      <span className="mono">{value.toFixed(2)}</span>
+    </span>
+  );
+}
+
+function ImagePick({ label, value, textures, onChange }: { label: string; value: string | undefined; textures: { path: string; name: string }[]; onChange: (v: string | undefined) => void }) {
+  return (
+    <select className="cw-input" aria-label={label} value={value ?? ''} onChange={(e) => onChange(e.currentTarget.value || undefined)}>
+      <option value="">{t('mat.noImage')}</option>
+      {textures.map((x) => (
+        <option key={x.path} value={x.path}>
+          {x.name}
+        </option>
+      ))}
+      {value && !textures.some((x) => x.path === value) && <option value={value}>{value.split('/').pop()} ({t('mat.missing')})</option>}
+    </select>
+  );
+}
+
+function MaterialProps({
+  m,
+  textures,
+  edit,
+  onDuplicate,
+  onRemove,
+  used,
+}: {
+  m: MaterialDef;
+  textures: { path: string; name: string }[];
+  edit: (patch: Partial<MaterialDef>, label: string, key?: string) => void;
+  onDuplicate: () => void;
+  onRemove: () => void;
+  used: number;
+}) {
+  const [name, setName] = useState(m.name);
+  useEffect(() => setName(m.name), [m.id, m.name]);
+  const glows = !!m.emissive;
+  const scroll = m.scroll ?? [0, 0];
+  return (
+    <div className="cw-screens-props" key={m.id}>
+      <Row label={t('mat.name')}>
+        <input
+          className="cw-input"
+          aria-label={t('mat.name')}
+          value={name}
+          onChange={(e) => setName(e.currentTarget.value)}
+          onKeyDown={(e) => {
+            e.stopPropagation();
+            if (e.key === 'Enter') e.currentTarget.blur();
+          }}
+          onBlur={() => (name.trim() && name.trim() !== m.name ? edit({ name: name.trim() }, 'Rename material') : setName(m.name))}
+        />
+      </Row>
+      <Row label={t('mat.color')}>
+        <ColorField label={t('mat.color')} value={m.color} onChange={(v) => edit({ color: v }, 'Material colour', `mat-color-${m.id}`)} />
+      </Row>
+      <Row label={t('mat.image')}>
+        <ImagePick label={t('mat.image')} value={m.map} textures={textures} onChange={(v) => edit({ map: v, color: v && !m.map && m.color === '#b4b4b4' ? '#ffffff' : m.color }, 'Material image')} />
+      </Row>
+      {m.map && (
+        <Row label={t('mat.scale')}>
+          <NumberField label="×" ariaLabel={t('mat.scale')} value={m.scale ?? 1} step={0.25} onCommit={(v) => edit({ scale: v > 0 && v !== 1 ? v : undefined }, 'Material image scale')} />
+        </Row>
+      )}
+      {m.map && (
+        <label className="cw-screens-sw" title={t('mat.cutoutHint')}>
+          <Switch label={t('mat.cutout')} checked={m.cutout !== false} onChange={(v) => edit({ cutout: v ? undefined : false }, v ? 'Cut-out on' : 'Cut-out off')} />
+          {t('mat.cutout')}
+        </label>
+      )}
+      <Row label={t('mat.normal')}>
+        <ImagePick label={t('mat.normal')} value={m.normalMap} textures={textures} onChange={(v) => edit({ normalMap: v, normalStrength: v ? m.normalStrength : undefined }, 'Material surface map')} />
+      </Row>
+      {m.normalMap && (
+        <Row label={t('mat.bumps')}>
+          <Slider label={t('mat.bumps')} value={m.normalStrength ?? 1} max={2} onChange={(v) => edit({ normalStrength: v === 1 ? undefined : v }, 'Bump strength', `mat-bumps-${m.id}`)} />
+        </Row>
+      )}
+      <Row label={t('mat.roughness')}>
+        <Slider label={t('mat.roughness')} value={m.roughness} onChange={(v) => edit({ roughness: v }, 'Material roughness', `mat-rough-${m.id}`)} />
+      </Row>
+      <Row label={t('mat.metalness')}>
+        <Slider label={t('mat.metalness')} value={m.metalness} onChange={(v) => edit({ metalness: v }, 'Material metalness', `mat-metal-${m.id}`)} />
+      </Row>
+      <Row label={t('mat.opacity')}>
+        <Slider label={t('mat.opacity')} value={m.opacity ?? 1} onChange={(v) => edit({ opacity: v >= 1 ? undefined : v }, 'Material opacity', `mat-opacity-${m.id}`)} />
+      </Row>
+      <label className="cw-screens-sw">
+        <Switch label={t('mat.glows')} checked={glows} onChange={(v) => edit({ emissive: v ? m.color : undefined, emissiveStrength: v ? 1 : undefined }, v ? 'Material glows' : 'Material stops glowing')} />
+        {t('mat.glows')}
+      </label>
+      {glows && (
+        <>
+          <Row label={t('mat.glowColor')}>
+            <ColorField label={t('mat.glowColor')} value={m.emissive!} onChange={(v) => edit({ emissive: v }, 'Glow colour', `mat-glow-${m.id}`)} />
+          </Row>
+          <Row label={t('mat.glowStrength')}>
+            <Slider label={t('mat.glowStrength')} value={m.emissiveStrength ?? 1} max={10} step={0.1} onChange={(v) => edit({ emissiveStrength: v }, 'Glow strength', `mat-glow-i-${m.id}`)} />
+          </Row>
+        </>
+      )}
+      <label className="cw-screens-sw" title={t('mat.twoSidedHint')}>
+        <Switch label={t('mat.twoSided')} checked={!!m.doubleSided} onChange={(v) => edit({ doubleSided: v || undefined }, v ? 'Two-sided on' : 'Two-sided off')} />
+        {t('mat.twoSided')}
+      </label>
+      <Row label={t('mat.scroll')}>
+        <span className="cw-screens-pair">
+          <NumberField label="↔" ariaLabel={t('mat.scrollX')} value={scroll[0]} step={4} onCommit={(v) => edit({ scroll: v || scroll[1] ? [v, scroll[1]] : undefined }, 'Material scroll')} />
+          <NumberField label="↕" ariaLabel={t('mat.scrollY')} value={scroll[1]} step={4} onCommit={(v) => edit({ scroll: v || scroll[0] ? [scroll[0], v] : undefined }, 'Material scroll')} />
+        </span>
+      </Row>
+      <p className="cw-muted cw-screens-note">{t('mat.scrollHint')}</p>
+      <div className="cw-screens-pair">
+        <Button size="sm" onClick={onDuplicate}>
+          {t('mat.duplicate')}
+        </Button>
+        <Button size="sm" onClick={onRemove}>
+          {t('mat.remove')}
+        </Button>
+      </div>
+      {used > 0 && <p className="cw-muted cw-screens-note">{t('mat.removeHint')}</p>}
+    </div>
+  );
+}
+
+/** Texture repeats on the preview shapes, so a material looks the size it will in the level (128-unit shapes). */
+function previewGeometry(shape: Shape): THREE.BufferGeometry {
+  const g = shape === 'sphere' ? new THREE.SphereGeometry(72, 64, 32) : shape === 'cube' ? new THREE.BoxGeometry(128, 128, 128) : new THREE.PlaneGeometry(192, 128);
+  // Face coordinates: one dev tile (256 texels) is 64 units.
+  const [su, sv] = shape === 'sphere' ? [(2 * Math.PI * 72) / 64, (Math.PI * 72) / 64] : shape === 'cube' ? [2, 2] : [3, 2];
+  const uv = g.getAttribute('uv') as THREE.BufferAttribute;
+  for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * su, (1 - uv.getY(i)) * sv);
+  uv.needsUpdate = true;
+  return g;
+}
+
+function MaterialPreview({ id, shape }: { id: string; shape: Shape }) {
+  const host = useRef<HTMLDivElement>(null);
+  const turn = useRef({ yaw: 0.6, pitch: 0.25, drag: null as null | { x: number; y: number }, idle: 0 });
+  const geometry = useMemo(() => previewGeometry(shape), [shape]);
+  useEffect(() => () => geometry.dispose(), [geometry]);
+
+  useEffect(() => {
+    const el = host.current;
+    if (!el) return;
+    const r = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    r.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    r.domElement.setAttribute('aria-label', t('mat.preview'));
+    r.domElement.setAttribute('data-testid', 'material-preview');
+    el.appendChild(r.domElement);
+    const scene = new THREE.Scene();
+    scene.add(new THREE.HemisphereLight(0xdfe8f2, 0x3a3834, 1.6));
+    const key = new THREE.DirectionalLight(0xffffff, 2.4);
+    key.position.set(-200, 300, 260);
+    scene.add(key);
+    const rim = new THREE.DirectionalLight(0xbcd2ff, 0.8);
+    rim.position.set(260, 60, -300);
+    scene.add(rim);
+    const cam = new THREE.PerspectiveCamera(30, 1, 10, 4000);
+    cam.position.set(0, 0, shape === 'cube' ? 560 : shape === 'wall' ? 500 : 420);
+    let dirty = true;
+    const material = projectMaterial(id, () => (dirty = true));
+    const mesh = new THREE.Mesh(geometry, material);
+    scene.add(mesh);
+    const size = () => {
+      const w = el.clientWidth, h = el.clientHeight;
+      if (!w || !h) return;
+      r.setSize(w, h, false);
+      cam.aspect = w / h;
+      cam.updateProjectionMatrix();
+      dirty = true;
+    };
+    const obs = new ResizeObserver(size);
+    obs.observe(el);
+    size();
+    let raf = 0;
+    let last = performance.now();
+    const loop = () => {
+      raf = requestAnimationFrame(loop);
+      const now = performance.now();
+      const dt = Math.min(0.05, (now - last) / 1000);
+      last = now;
+      const tr = turn.current;
+      // Turns slowly on its own until dragged; picks up again a few seconds after.
+      if (!tr.drag && now > tr.idle && shape !== 'wall') {
+        tr.yaw += dt * 0.35;
+        dirty = true;
+      }
+      if (tickMaterials(now)) dirty = true;
+      if (!dirty) return;
+      dirty = false;
+      mesh.rotation.set(tr.pitch, tr.yaw, 0, 'XYZ');
+      r.render(scene, cam);
+    };
+    loop();
+    const down = (e: PointerEvent) => {
+      turn.current.drag = { x: e.clientX, y: e.clientY };
+      r.domElement.setPointerCapture(e.pointerId);
+    };
+    const move = (e: PointerEvent) => {
+      const tr = turn.current;
+      if (!tr.drag) return;
+      tr.yaw += (e.clientX - tr.drag.x) * 0.01;
+      tr.pitch = Math.max(-1.2, Math.min(1.2, tr.pitch + (e.clientY - tr.drag.y) * 0.01));
+      tr.drag = { x: e.clientX, y: e.clientY };
+      dirty = true;
+    };
+    const up = () => {
+      turn.current.drag = null;
+      turn.current.idle = performance.now() + 4000;
+    };
+    r.domElement.addEventListener('pointerdown', down);
+    r.domElement.addEventListener('pointermove', move);
+    r.domElement.addEventListener('pointerup', up);
+    r.domElement.addEventListener('pointercancel', up);
+    return () => {
+      cancelAnimationFrame(raf);
+      obs.disconnect();
+      releaseMaterial(material);
+      material.dispose();
+      r.dispose();
+      r.domElement.remove();
+    };
+  }, [id, geometry, shape]);
+
+  return <div className="cw-mats-preview" ref={host} />;
+}

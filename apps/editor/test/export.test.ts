@@ -37,3 +37,29 @@ describe('export helpers', () => {
     expect(ownRuntime('/Applications/CocoaWorlds.app/Contents/MacOS/CocoaWorlds', 'darwin')).toBe('/Applications/CocoaWorlds.app');
   });
 });
+
+describe('exported game data', () => {
+  it('carries the materials the scene uses, and their images', async () => {
+    const { newEntity, newMaterial, newProject, stringify } = await import('@cocoaworlds/core');
+    const { gameData } = await import('../src/main/export');
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'cw-gamedata-'));
+    const { project, scenes } = newProject('Lava Run');
+    const lava = newMaterial('Lava', { map: 'assets/textures/lava.png', scroll: [0, 8], emissive: '#ff6020' });
+    const unused = newMaterial('Unused', { map: 'assets/textures/unused.png' });
+    project.settings.materials = [lava, unused];
+    const [scenePath, scene] = Object.entries(scenes)[0]!;
+    const spawn = newEntity('Player start');
+    spawn.components.playerSpawn = {};
+    const floor = newEntity('Floor');
+    floor.tags = [lava.id];
+    scene.entities.push(spawn, floor);
+    await fs.mkdir(path.join(dir, path.dirname(scenePath)), { recursive: true });
+    await fs.writeFile(path.join(dir, 'project.cwproj'), stringify(project));
+    await fs.writeFile(path.join(dir, scenePath), stringify(scene));
+    const { data } = await gameData(dir);
+    const json = JSON.stringify(data);
+    expect((data as { materials: { name: string }[] }).materials.map((m) => m.name)).toEqual(['Lava']);
+    expect(usedAssets(json)).toEqual(['assets/textures/lava.png']);
+    await fs.rm(dir, { recursive: true, force: true });
+  });
+});

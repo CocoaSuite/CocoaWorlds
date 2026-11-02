@@ -70,3 +70,8 @@ copies made while playing show their original's model.
 
 The **Play animation [name] on [object], looping/once** block switches a model's animation.
 
+
+## Materials
+
+Images can be used on faces directly, or through a project material that adds a colour, bumps, shine, metal,
+see-through, glow and scrolling. See [materials.md](materials.md).

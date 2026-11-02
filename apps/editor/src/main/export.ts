@@ -7,7 +7,7 @@
  */
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
-import { gameRules, validateProject, validateScene, type ProjectFile, type SceneFile } from '@cocoaworlds/core';
+import { gameRules, materialsOf, validateProject, validateScene, type ProjectFile, type SceneFile } from '@cocoaworlds/core';
 
 export type ExportTarget = 'web' | 'win32' | 'darwin' | 'linux';
 
@@ -42,11 +42,14 @@ export async function gameData(projectDir: string): Promise<{ project: ProjectFi
   const sv = validateScene(sceneRaw);
   if (!sv.ok) throw new Error(`The scene has problems: ${sv.problems[0]?.message}`);
   const scene = sv.value;
+  // Only the materials the scene uses (and so only their images).
+  const sceneJson = JSON.stringify(scene);
+  const materials = materialsOf(project.settings).filter((m) => sceneJson.includes(`"${m.id}"`));
   if (!scene.entities.some((e) => e.components.playerSpawn)) throw new Error('The scene needs a Player start to be played as a game.');
   return {
     project,
     scene,
-    data: { format: 'cocoaworlds.game', name: project.name, id: project.id, scene, rules: gameRules(project.settings), values: project.settings.values ?? [] },
+    data: { format: 'cocoaworlds.game', name: project.name, id: project.id, scene, rules: gameRules(project.settings), values: project.settings.values ?? [], materials },
   };
 }
 
