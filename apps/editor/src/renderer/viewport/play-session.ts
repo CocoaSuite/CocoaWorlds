@@ -103,7 +103,8 @@ export class PlaySession {
 
     // Models of objects without a body of their own: still, or carried by the moving object they are inside.
     for (const e of doc.entities) {
-      if (!e.components.model || bodies.has(e.id)) continue;
+      // (Creatures draw their own model, where they walk.)
+      if (!e.components.model || bodies.has(e.id) || e.components.npc) continue;
       let shownE = true;
       for (let x = doc.get(e.id); x; x = x.parent ? doc.get(x.parent) : undefined) if (!x.visible) shownE = false;
       const data = this.modelOf(e.id);
@@ -115,6 +116,22 @@ export class PlaySession {
       const mover = this.world.bodyOf(e.id);
       if (mover) this.movers.push({ id: mover, obj: holder, base: holder.matrix.clone() });
       this.attachModel(holder, data, e.id);
+    }
+
+    // Creatures: their model, or a plain figure (red enemies, blue friends, grey others) with a visor at the front.
+    for (const e of doc.entities) {
+      if (!e.components.npc) continue;
+      const holder = new THREE.Group();
+      const inner = new THREE.Group();
+      const s = new THREE.Vector3();
+      new THREE.Matrix4().fromArray(doc.worldMatrix(e.id)).decompose(new THREE.Vector3(), new THREE.Quaternion(), s);
+      inner.scale.copy(s);
+      holder.add(inner);
+      const model = e.components.model ? readComponent<ModelData>('model', e.components.model) : null;
+      if (model?.model) this.attachModel(inner, model, e.id);
+      else inner.add(npcFigure(String((e.components.npc as { side?: string }).side ?? 'hostile')));
+      this.group.add(holder);
+      this.npcViews.set(e.id, { holder, inner, figure: !model?.model });
     }
 
     // Particle emitters, where they stand (carried by what moves them).
@@ -342,6 +359,7 @@ export class PlaySession {
   tick(dt: number): PlayFrame {
     this.world.step(dt);
     this.effects.syncProjectiles(this.world.projectilesNow());
+    this.placeNpcs();
     this.emit(dt);
     this.effects.tick(dt);
     const changes = this.world.drainChanges();
@@ -468,6 +486,22 @@ export class PlaySession {
   }
 
   private effects = new Effects();
+  private npcViews = new Map<string, { holder: THREE.Group; inner: THREE.Group; figure: boolean }>();
+
+  /** Creatures where they are now; plain figures lie down when dead (models play their dying animation). */
+  private placeNpcs(): void {
+    for (const n of this.world.npcStates()) {
+      const v = this.npcViews.get(n.id);
+      if (!v) continue;
+      v.holder.position.set(...n.feet);
+      v.holder.rotation.set(0, n.yaw, 0);
+      if (v.figure && !n.alive) {
+        // (Falls backwards, away from where it was facing.)
+        v.inner.rotation.x = Math.min(Math.PI / 2, v.inner.rotation.x + 0.12);
+        v.inner.position.y = 10;
+      }
+    }
+  }
   private emitters: { data: ParticlesData; holder: THREE.Group; body: string | null; owed: number }[] = [];
 
   /** Emitters put out their particles for this frame (where they are now, if on and shown). */
@@ -558,4 +592,17 @@ export class PlaySession {
     });
     this.shapeMat.dispose();
   }
+}
+
+/** A plain creature: a capsule 32 × 72 with a dark visor showing which way it faces (−Z). */
+function npcFigure(side: string): THREE.Object3D {
+  const color = side === 'friendly' ? 0x5a84b6 : side === 'neutral' ? 0x9a9a92 : 0xb4574c;
+  const g = new THREE.Group();
+  const body = new THREE.Mesh(new THREE.CapsuleGeometry(16, 40, 6, 16), new THREE.MeshStandardMaterial({ color, roughness: 0.7 }));
+  body.position.y = 36;
+  body.castShadow = true;
+  const visor = new THREE.Mesh(new THREE.BoxGeometry(20, 8, 6), new THREE.MeshStandardMaterial({ color: 0x1d1f22, roughness: 0.3 }));
+  visor.position.set(0, 60, -14);
+  g.add(body, visor);
+  return g;
 }

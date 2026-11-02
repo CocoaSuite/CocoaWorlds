@@ -136,6 +136,12 @@ export function buildMarker(e: EntityData): Marker {
       ),
     );
     pick = new THREE.Mesh(new THREE.BoxGeometry(Math.max(8, sign.width), Math.max(8, sign.height), 4), pickMat);
+  } else if (e.components.npc) {
+    // A creature: a standing figure like the Player start, red for enemies, blue for friends, grey for others.
+    const side = (e.components.npc as { side?: string }).side;
+    baseColor = side === 'friendly' ? 0x5a84b6 : side === 'neutral' ? 0x9a9a92 : 0xd06a5e;
+    lines.push(segs(spawnLines(), baseColor));
+    pick = new THREE.Mesh(new THREE.BoxGeometry(32, 72, 32).translate(0, 36, 0), pickMat);
   } else if (e.components.playerSpawn) {
     baseColor = COLORS.spawn;
     lines.push(segs(spawnLines(), baseColor));
@@ -223,5 +229,5 @@ export function disposeMarker(m: Marker): void {
 
 /** Stable key for "does this marker need rebuilding" (shape-affecting data only). */
 export function markerKey(e: EntityData): string {
-  return JSON.stringify([e.components.light ?? null, !!e.components.playerSpawn, e.components.sign ?? null, e.components.model ?? null]);
+  return JSON.stringify([e.components.light ?? null, !!e.components.playerSpawn, e.components.sign ?? null, e.components.model ?? null, (e.components.npc as { side?: string } | undefined)?.side ?? null]);
 }

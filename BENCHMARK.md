@@ -126,23 +126,23 @@ A first-person shooter built from brush levels (the kind CocoaWorlds is designed
 
 | Need | Now | Step |
 |---|---|---|
-| Brush levels, textures per face, hidden faces removed | ✅ (dev textures only) | B3 for real textures |
+| Brush levels, textures per face, hidden faces removed | ✅ images, project materials | — |
 | Player movement, crouch, jump, steps, fall damage | ✅ (Half-Life 2 numbers; Half-Life 1 is close) | — |
 | Triggers, multi-step logic (multi_manager, trigger_relay) | ✅ zones, messages, waits | — |
-| Doors, buttons, lifts, rotating doors | ✅ recipes + pivots | Phase 6 ready-made objects |
+| Doors, buttons, lifts, rotating doors | ✅ recipes + pivots | — |
 | Pushable crates | ✅ | — |
-| Health ✅; **armour (HEV suit)**, health and suit chargers | 🟡 | A1 |
-| **Ladders, water and swimming** | ❌ | A1 (Phase 6) |
-| **Weapons**: hitscan, projectiles, grenades, explosions, ammo, switching, view models | ❌ | A1 weapons |
-| **Breakable objects** (func_breakable) ✅; gibs ❌ | 🟡 | A1 |
-| **Monsters and NPCs**: models, animation, AI (see, chase, attack, take cover), following the player | ❌ | A2 models, A1 NPCs |
-| NPC movement through the level | ❌ | A2 navigation |
-| Trains and moving platforms along paths (func_train, func_tracktrain) | 🟡 moves are straight lines | A1 paths |
-| Scripted scenes (scientists walking, talking) | ❌ | A1 |
-| **Level changes** with the player carried over (changelevel, landmarks) | ❌ one scene at a time | A1 |
-| Baked lighting, sprites, decals (bullet holes, blood), particles | ❌ | B3, A1 |
-| Sound: footsteps, ambient, voices | ❌ | B3 |
-| HUD: health, armour, ammo | 🟡 health | A1 |
+| Health, **armour (HEV suit)**, health and suit chargers | ✅ | — |
+| **Ladders, water and swimming**, drowning, floating crates | ✅ | — |
+| **Weapons**: hitscan, projectiles, grenades, explosions, ammo, switching ✅; view models, reloading ❌ | 🟡 | later |
+| **Breakable objects** (func_breakable), shot or blasted ✅; gibs ❌ | 🟡 | later |
+| **Monsters and NPCs**: see, chase, attack up close or shooting, follow the player, die ✅; taking cover, squads, skeletal animation blending ❌ | 🟡 | A2 |
+| NPC movement through the level | 🟡 straight at the target, sliding along walls | A2 navigation |
+| Trains and moving platforms along paths (func_train, func_tracktrain) | ✅ straight segments, waits, speeds, messages | — |
+| Scripted scenes (scientists walking, talking) | ✅ walk to, animations, sounds, messages, freeze the player, camera views | — |
+| **Level changes** with the player carried over (changelevel, landmarks) | ✅ (scenes left aren't remembered) | world saving later |
+| Baked lighting ❌; decals (bullet holes, scorches) and particles ✅ | 🟡 | lightmaps later |
+| Sound: ambient, voices, weapon sounds ✅; footsteps ❌ | 🟡 | later |
+| HUD: health, armour, ammo | ✅ | — |
 | Quick save and load anywhere | ❌ (values and items only) | world saving later |
 
 ## How far each target is (rough)
@@ -153,7 +153,7 @@ A first-person shooter built from brush levels (the kind CocoaWorlds is designed
 | Natural Disaster Survival | ~70% | water (A1), several players (M1) |
 | Grow a Garden | ~70% | saving planted copies, weather and particles |
 | Pet Simulator | ~70% | trading and seeing other players (M1) |
-| Half-Life 1 | ~35% | weapons, NPCs and AI, models, level changes, lighting and sound |
+| Half-Life 1 | ~70% | navigation and smarter AI (A2), view models, saving anywhere, baked lighting |
 | Slime Rancher | ~15% | terrain, creatures with behaviour, vacuum tool, models |
 
 ## Decisions (approved 2026-11-01)

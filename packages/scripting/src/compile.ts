@@ -109,7 +109,7 @@ export type Op =
 export type GameAction = 'hurt' | 'heal' | 'addScore' | 'giveArmour';
 export type GameValue = 'health' | 'score' | 'armour';
 
-export type ActionName = 'move' | 'turn' | 'turnTo' | 'return' | 'show' | 'hide' | 'turnOn' | 'turnOff' | 'startTrain' | 'stopTrain' | 'remove' | 'scale' | 'physical' | 'push' | 'moveTo' | 'teleport' | 'damage';
+export type ActionName = 'move' | 'turn' | 'turnTo' | 'return' | 'show' | 'hide' | 'turnOn' | 'turnOff' | 'startTrain' | 'stopTrain' | 'walkTo' | 'freeze' | 'unfreeze' | 'viewFrom' | 'remove' | 'scale' | 'physical' | 'push' | 'moveTo' | 'teleport' | 'damage';
 
 export type CompiledEvent =
   | { kind: 'start' }
@@ -119,6 +119,7 @@ export type CompiledEvent =
   | { kind: 'die' }
   | { kind: 'breaks' }
   | { kind: 'hit' }
+  | { kind: 'dies' }
   | { kind: 'every'; seconds: number }
   | { kind: 'uiClick'; element: string }
   | { kind: 'useItem'; item: string }
@@ -224,6 +225,7 @@ class HandlerCompiler {
     else if (ev.kind === 'use') event = { kind: 'use', prompt: (ev.prompt ?? '').trim() };
     else if (ev.kind === 'breaks') event = { kind: 'breaks' };
     else if (ev.kind === 'hit') event = { kind: 'hit' };
+    else if (ev.kind === 'dies') event = { kind: 'dies' };
     else if (ev.kind === 'die') {
       event = { kind: 'die' };
       this.ruleOff('health', ev.id);
@@ -577,6 +579,23 @@ class HandlerCompiler {
         this.expect(s.seconds, 'number', 'The time must be a number of seconds.');
         this.expect(s.gap, 'number', 'The distance to stop short must be a number.');
         this.emit({ op: 'act', name: 'moveTo', argc: 3 });
+        this.waits = true;
+        break;
+      case 'freezePlayer':
+      case 'unfreezePlayer':
+        this.emit({ op: 'ref', ref: { player: true } });
+        this.emit({ op: 'act', name: s.kind === 'freezePlayer' ? 'freeze' : 'unfreeze', argc: 0 });
+        break;
+      case 'viewFrom':
+        this.actTarget(s.target, s.id);
+        this.expect(s.seconds, 'number', 'The time must be a number of seconds.');
+        this.emit({ op: 'act', name: 'viewFrom', argc: 1 });
+        this.waits = true;
+        break;
+      case 'walkTo':
+        this.actTarget(s.target, s.id);
+        this.pushPlace(s.to, s.id);
+        this.emit({ op: 'act', name: 'walkTo', argc: 1 });
         this.waits = true;
         break;
       case 'teleport':

@@ -147,7 +147,7 @@ export function ScriptPanel() {
       ev.clientX,
       ev.clientY,
       [
-        ...(['start', 'enter', 'leave', 'use', 'message', 'messageStop', 'every', 'die', 'breaks', 'hit', 'uiClick', 'useItem', 'listPick', 'key'] as EventKind[]).map((k) => ({
+        ...(['start', 'enter', 'leave', 'use', 'message', 'messageStop', 'every', 'die', 'breaks', 'hit', 'dies', 'uiClick', 'useItem', 'listPick', 'key'] as EventKind[]).map((k) => ({
           label: eventName(k),
           onSelect: () => {
             const zone: Ref = objects.find((o) => o.id === owner.id)?.isZone ? { self: true } : objects.find((o) => o.isZone) ? { entity: objects.find((o) => o.isZone)!.id } : { self: true };
@@ -428,6 +428,7 @@ function EventRow({ ev, onRemove, onCopy, pick }: { ev: EventBlock; onRemove: ()
   else if (ev.kind === 'die') content = w('die');
   else if (ev.kind === 'breaks') content = w('breaks');
   else if (ev.kind === 'hit') content = w('hit');
+  else if (ev.kind === 'dies') content = w('dies');
   else if (ev.kind === 'enter' || ev.kind === 'leave')
     content = (
       <>
@@ -768,6 +769,23 @@ function statementWords(s: Statement, set: (patch: Record<string, unknown>, merg
             ))}
           </select>
           {w('withStrength')} <ExprSlot expr={s.strength} type="number" label={`${w('push')} ${w('withStrength')}`} />
+        </>
+      );
+    case 'freezePlayer':
+    case 'unfreezePlayer':
+      return w(s.kind);
+    case 'viewFrom':
+      return (
+        <>
+          {w('viewFrom')} <RefSlot value={s.target} onChange={(target) => set({ target })} label={w('viewFrom')} /> {w('for')} <ExprSlot expr={s.seconds} type="number" label={`${w('viewFrom')} ${w('for')}`} />{' '}
+          {w('seconds')}
+        </>
+      );
+    case 'walkTo':
+      return (
+        <>
+          {w('walkTo')} <RefSlot value={s.target} onChange={(target) => set({ target })} label={w('walkTo')} /> {w('to')}{' '}
+          <RefSlot value={s.to} allowPlayer allowAim onChange={(to) => set({ to })} label={`${w('walkTo')} ${w('to')}`} />
         </>
       );
     case 'moveTo':

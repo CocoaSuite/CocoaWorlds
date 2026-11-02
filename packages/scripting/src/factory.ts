@@ -23,6 +23,7 @@ export function newEvent(kind: EventKind, zone: Ref = self): EventBlock {
     case 'die':
     case 'breaks':
     case 'hit':
+    case 'dies':
       return { id: id(), kind };
     case 'enter':
     case 'leave':
@@ -101,6 +102,13 @@ export function newStatement(kind: StatementKind, opts: { target?: Ref; variable
       return { id: id(), kind, target, factor: num(2), seconds: num(1) };
     case 'push':
       return { id: id(), kind, target, direction: 'up', strength: num(400) };
+    case 'freezePlayer':
+    case 'unfreezePlayer':
+      return { id: id(), kind };
+    case 'viewFrom':
+      return { id: id(), kind, target, seconds: num(3) };
+    case 'walkTo':
+      return { id: id(), kind, target, to: { player: true } };
     case 'moveTo':
       return { id: id(), kind, target, to: { player: true }, seconds: num(0.5), gap: num(64) };
     case 'teleport':

@@ -26,6 +26,8 @@ export type GameEvent =
   /** Weapons (A1): a bullet's line or a swing, where it hit, and blasts. */
   | { type: 'shot'; from: [number, number, number]; to: [number, number, number]; by: string; weapon: string; time: number }
   | { type: 'impact'; at: [number, number, number]; normal: [number, number, number]; target: string | null; melee: boolean; time: number }
+  /** A creature died. */
+  | { type: 'npc.die'; target: string; time: number }
   /** The player is leaving for another scene (a level change). */
   | { type: 'travel'; scene: string; landmark: string; time: number }
   | { type: 'explosion'; at: [number, number, number]; radius: number; normal: [number, number, number] | null; time: number };

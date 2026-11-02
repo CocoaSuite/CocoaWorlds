@@ -285,6 +285,58 @@ export const COMPONENTS: ComponentDef[] = [
     ],
   },
   {
+    name: 'npc',
+    label: e('Creature', 'Существо'),
+    description: e(
+      'A character with a mind of its own: an enemy that hunts the player, a friend who follows them (press E), or a bystander who fights back if hurt. Shots and blasts hurt it. Give it a Model to show it.',
+      'Персонаж со своим поведением: враг, который охотится на игрока, друг, который идёт за ним (E), или нейтральный, который даёт сдачи. Выстрелы и взрывы его ранят. Добавьте Модель, чтобы его было видно.',
+    ),
+    appliesTo: 'point',
+    conflicts: ['rigidBody', 'collider', 'train', 'pathPoint', 'playerSpawn'],
+    fields: [
+      {
+        key: 'side',
+        label: e('Is', 'Кто'),
+        type: {
+          kind: 'enum',
+          options: [
+            { value: 'hostile', label: e('An enemy', 'Враг') },
+            { value: 'friendly', label: e('A friend', 'Друг') },
+            { value: 'neutral', label: e('Neutral', 'Нейтральный') },
+          ],
+        },
+        default: 'hostile',
+      },
+      { key: 'health', label: e('Health', 'Здоровье'), type: { kind: 'number', min: 1, step: 10 }, default: 50 },
+      { key: 'speed', label: e('Speed', 'Скорость'), type: { kind: 'number', min: 0, step: 10, unit: 'u/s' }, default: 150 },
+      { key: 'sight', label: e('Sees up to', 'Видит на'), type: { kind: 'number', min: 64, step: 64, unit: 'u' }, default: 1024 },
+      {
+        key: 'attack',
+        label: e('Attacks', 'Атакует'),
+        type: {
+          kind: 'enum',
+          options: [
+            { value: 'melee', label: e('Up close', 'Вблизи') },
+            { value: 'shoot', label: e('Shooting', 'Стреляя') },
+            { value: 'none', label: e('Never', 'Никогда') },
+          ],
+        },
+        default: 'melee',
+      },
+      { key: 'damage', label: e('Damage', 'Урон'), type: { kind: 'number', min: 0, step: 1 }, default: 10, when: { key: 'attack', is: ['melee', 'shoot'] } },
+      { key: 'rate', label: e('Attacks a second', 'Атак в секунду'), type: { kind: 'number', min: 0.1, step: 0.5 }, default: 1, when: { key: 'attack', is: ['melee', 'shoot'] } },
+      { key: 'reach', label: e('Reach', 'Дотягивается'), type: { kind: 'number', min: 16, step: 8, unit: 'u' }, default: 64, when: { key: 'attack', is: ['melee'] } },
+      { key: 'spread', label: e('Aim spread', 'Разброс'), hint: e('Degrees: higher misses more.', 'В градусах: больше — чаще промахивается.'), type: { kind: 'number', min: 0, step: 1, unit: '°' }, default: 4, when: { key: 'attack', is: ['shoot'] } },
+      {
+        key: 'anims',
+        label: e('Animations', 'Анимации'),
+        hint: e('Names in its model for standing, walking, attacking and dying, separated by commas.', 'Имена анимаций модели: стоит, идёт, атакует, погибает — через запятую.'),
+        type: { kind: 'text' },
+        default: 'idle, walk, attack, die',
+      },
+    ],
+  },
+  {
     name: 'levelChange',
     label: e('Level change', 'Смена уровня'),
     description: e(
@@ -553,5 +605,19 @@ export interface TrainData {
 export interface LevelChangeData {
   scene: string;
   landmark: string;
+  [k: string]: unknown;
+}
+
+export interface NpcData {
+  side: 'hostile' | 'friendly' | 'neutral';
+  health: number;
+  speed: number;
+  sight: number;
+  attack: 'melee' | 'shoot' | 'none';
+  damage: number;
+  rate: number;
+  reach: number;
+  spread: number;
+  anims: string;
   [k: string]: unknown;
 }

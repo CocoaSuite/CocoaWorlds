@@ -115,6 +115,8 @@ export type RunnerEvent =
   | { type: 'breaks'; target: string }
   /** A shot, swing or blast hit `targets` (what was hit and everything it is inside). */
   | { type: 'hit'; targets: string[] }
+  /** A creature died. */
+  | { type: 'dies'; target: string }
   /** The player clicked a button on screen. */
   | { type: 'uiClick'; element: string }
   /** The player used an item from the hotbar. */
@@ -199,6 +201,8 @@ export class ScriptRunner {
           if (ev.kind === 'key' && ev.key === e.key) this.spawn(inst, h, null);
         } else if (e.type === 'breaks') {
           if (ev.kind === 'breaks' && inst.program.owner === e.target) this.spawn(inst, h, null);
+        } else if (e.type === 'dies') {
+          if (ev.kind === 'dies' && inst.program.owner === e.target) this.spawn(inst, h, null);
         } else if (e.type === 'hit') {
           if (ev.kind === 'hit' && e.targets.includes(inst.program.owner)) this.spawn(inst, h, null);
         } else if (e.type === 'die') {

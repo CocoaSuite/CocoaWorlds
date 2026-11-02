@@ -19,6 +19,7 @@ import {
   type SceneFile,
   type TriggerData,
   type ChargerData,
+  type NpcData,
   type LevelChangeData,
   type PathPointData,
   type TrainData,
@@ -41,6 +42,7 @@ import { DIRECTIONS, ScriptRunner, compileScript, type ActionName, type GameValu
 import { scriptTargets } from './script-targets';
 import { PLAYER, Player, fallDamage, type PlayerInput } from './player';
 import { Weapons, type V3 } from './weapons';
+import { NPC_SIZE, Npc } from './npc';
 import { bounds, brushToWorld, buildMesh, buildWorld, fromData, hullPoints, vertices, type Brush, type BrushData, type WorldBrush } from '@cocoaworlds/geometry';
 
 /** Units per metre (an inch-based world). */
@@ -408,6 +410,9 @@ export class GameWorld {
   /** Objects scripts turned on (true) or off (false), by body. */
   private switched = new Map<string, boolean>();
   private pathPoints = new Map<string, { p: [number, number, number]; data: PathPointData }>();
+  /** Creatures, by object id. */
+  private npcs = new Map<string, Npc>();
+  private npcEntities: EntityData[] = [];
   private trains: { id: string; data: TrainData; at: string | null; to: string | null; speed: number; moving: boolean; waitUntil: number }[] = [];
 
   /** Model triangles by file (see `create`). */
@@ -460,7 +465,7 @@ export class GameWorld {
 
     // Objects scripts move or switch become "units": one body for the object and everything inside it.
     // (Water and ladders stay where they are: they are zones, not something that moves.)
-    const own = (e: EntityData) => !!e.components.rigidBody || !!e.components.trigger || !!e.components.water || !!e.components.ladder || !!e.components.levelChange;
+    const own = (e: EntityData) => !!e.components.rigidBody || !!e.components.trigger || !!e.components.water || !!e.components.ladder || !!e.components.levelChange || !!e.components.npc;
     // (Breakable objects too: they disappear when they break.)
     const breakables = doc.entities.filter((e) => e.components.breakable && shown(e)).map((e) => e.id);
     for (const e of doc.entities) {
@@ -492,6 +497,8 @@ export class GameWorld {
         else if (unitOf.has(e.id) && brushData.role !== 'subtract') unitBrushes.get(unitOf.get(e.id)!)!.push(brush);
         else level.push({ id: e.id, role: brushData.role === 'subtract' ? 'subtract' : 'solid', brush });
         if (e.components.conveyor && !unitOf.has(e.id)) conveyors.set(e.id, readComponent<ConveyorData>('conveyor', e.components.conveyor));
+      } else if (e.components.npc) {
+        this.npcEntities.push(e);
       } else if (e.components.rigidBody || e.components.collider || this.modelShape(e)) {
         // (A Collision shape or a colliding model without Physics stays put.)
         this.addPointBody(e, doc.worldMatrix(e.id));
@@ -513,6 +520,14 @@ export class GameWorld {
       this.pathPoints.set(e.id, { p: [m[12]!, m[13]!, m[14]!], data: readComponent<PathPointData>('pathPoint', e.components.pathPoint) });
     }
     for (const id of trainIds) this.addTrain(id, readComponent<TrainData>('train', doc.get(id)!.components.train));
+
+    // Creatures, where they stand, facing the way they face.
+    for (const e of this.npcEntities) {
+      const m = doc.worldMatrix(e.id);
+      const npc = new Npc(this.npcWorld(), e.id, readComponent<NpcData>('npc', e.components.npc), { x: m[12]!, y: m[13]!, z: m[14]! }, Math.atan2(m[8]!, m[10]!));
+      this.owner.set(npc.collider.handle, e.id);
+      this.npcs.set(e.id, npc);
+    }
 
     // The player: at the first visible Player start, facing the way it faces.
     const spawn = doc.entities.find((e) => e.components.playerSpawn && shown(e));
@@ -839,6 +854,7 @@ export class GameWorld {
       this.applyTweens(this.time + STEP);
       this.moveTrains();
       if (this.player) {
+        if (this.frozen) Object.assign(this.player.input, { forward: 0, right: 0, jump: false, crouch: false, fire: false, use: false });
         this.player.step(STEP);
         if (this.player.landingSpeed) {
           const damage = fallDamage(this.player.landingSpeed);
@@ -856,6 +872,8 @@ export class GameWorld {
         this.breathe();
       }
       this.useQueued = false;
+      // (Not on the very first step: until physics has stepped once, its queries can't see anything.)
+      if (this.time > 0) for (const n of this.npcs.values()) n.step(STEP);
       this.weapons.step(STEP, Math.abs(this.world.gravity.y));
       this.floatBodies();
       this.carryOnBelts();
@@ -881,6 +899,35 @@ export class GameWorld {
     if (this.player) Object.assign(this.player.input, input);
   }
 
+  /** A scripted scene holds the player still (no moving, jumping, firing or using; they can look around). */
+  private frozen = false;
+  /** A scripted scene looks through an object until a time. */
+  private cameraView: { id: string; until: number } | null = null;
+
+  /** Whether a scripted scene holds the player still. */
+  get playerFrozen(): boolean {
+    return this.frozen;
+  }
+
+  /** The view through an object a script chose, if one is on: its place and the way it faces (−Z). */
+  private cameraEye(): { eye: [number, number, number]; yaw: number; pitch: number } | null {
+    const c = this.cameraView;
+    if (!c) return null;
+    if (this.time >= c.until) {
+      this.cameraView = null;
+      return null;
+    }
+    const e = this.doc.get(c.id);
+    if (!e) return null;
+    const start = this.doc.worldMatrix(c.id);
+    const motion = this.motionOf(c.id) ?? this.motionOf(this.unitOf.get(c.id) ?? '');
+    const m = motion ? multiply(motion, start) : start;
+    // Forward is −Z.
+    const f = [-m[8]!, -m[9]!, -m[10]!];
+    const len = Math.hypot(f[0]!, f[1]!, f[2]!) || 1;
+    return { eye: [m[12]!, m[13]!, m[14]!], yaw: Math.atan2(-f[0]! / len, -f[2]! / len), pitch: Math.asin(Math.max(-1, Math.min(1, f[1]! / len))) };
+  }
+
   /**
    * What pressing Use would do right now: the prompt of what the player is looking at within reach ('' for
    * no word), or null when there's nothing to use.
@@ -893,6 +940,7 @@ export class GameWorld {
     for (let x: string | null | undefined = id; x; x = this.parentOf.get(x)) targets.push(x);
     const prompt = this.runner.usePrompt(targets);
     if (prompt !== null) return prompt;
+    if (targets.some((t) => this.npcs.get(t)?.alive && this.npcs.get(t)!.data.side === 'friendly')) return '';
     return targets.some((t) => (this.chargers.get(t)?.left ?? 0) > 0) ? '' : null;
   }
 
@@ -929,10 +977,65 @@ export class GameWorld {
     this.weapons.fire(weapon, name, p.eye(), p.lookDirection(), 'player', p.collider.handle);
   }
 
+  /** What creatures can ask of the world. */
+  private npcWorld(): import('./npc').NpcWorld {
+    const self = this;
+    return {
+      world: this.world,
+      time: () => this.time,
+      get gravity() {
+        return Math.abs(self.world.gravity.y);
+      },
+      player: () => {
+        const p = this.player;
+        if (!p) return null;
+        const [x, y, z] = p.eye();
+        return { feet: p.feetPosition, eye: { x, y, z }, collider: p.collider.handle };
+      },
+      passes: (c) => this.triggers.has(c.handle) || this.volumes.has(c.handle) || this.standInOf.has(c.handle),
+      hurtPlayer: (amount, by) => this.hurt(amount, this.names.get(by) ?? 'a creature'),
+      shoot: (from, dir, npc) =>
+        this.weapons.fire(
+          { kind: 'bullet', damage: npc.data.damage, rate: npc.data.rate, automatic: false, range: npc.data.sight * 1.5, spread: npc.data.spread, pellets: 1, ammo: '', speed: 0, arc: false, blast: 0, push: 100, sound: '' },
+          this.names.get(npc.id) ?? 'a creature',
+          [from.x, from.y, from.z],
+          [dir.x, dir.y, dir.z],
+          npc.id,
+          npc.collider.handle,
+        ),
+      animate: (npc, role, loop) => {
+        const names = npc.data.anims.split(',').map((x) => x.trim());
+        const name = names[['idle', 'walk', 'attack', 'die'].indexOf(role)] ?? '';
+        if (name) this.bus.emit({ type: 'anim', target: npc.id, name, loop, time: this.time });
+      },
+    };
+  }
+
+  private ancestorsOf(id: string): string[] {
+    const out: string[] = [];
+    for (let x = this.parentOf.get(id); x; x = this.parentOf.get(x)) out.push(x);
+    return out;
+  }
+
+  /** Creatures now, for drawing: where their feet are, which way they face, whether alive. */
+  npcStates(): { id: string; feet: V3; yaw: number; alive: boolean; state: string; health: number }[] {
+    return [...this.npcs.values()].map((n) => ({ id: n.id, feet: [n.feet.x, n.feet.y, n.feet.z], yaw: n.yaw, alive: n.alive, state: n.state, health: n.health }));
+  }
+
   /** A hit by a weapon or a blast: “When this is hit” runs on it and what it is inside; breakables lose health. */
   private weaponDamage(target: string, amount: number, by: string, cause: string): void {
     if (!(amount > 0)) return;
     if (target === 'player') return this.hurt(amount, by === 'player' ? `your own ${cause}` : cause);
+    const npc = this.npcs.get(target);
+    if (npc) {
+      if (!npc.alive) return;
+      this.runner.dispatch({ type: 'hit', targets: [target, ...this.ancestorsOf(target)] });
+      if (npc.hurt(amount)) {
+        this.bus.emit({ type: 'npc.die', target, time: this.time });
+        this.runner.dispatch({ type: 'dies', target });
+      }
+      return;
+    }
     const targets: string[] = [];
     for (let x: string | null | undefined = target; x; x = this.parentOf.get(x)) targets.push(x);
     this.runner.dispatch({ type: 'hit', targets });
@@ -1033,13 +1136,18 @@ export class GameWorld {
 
   /** The player pressed Use: on the next step, whatever they look at within reach gets “When the player uses this”. */
   use(): void {
-    this.useQueued = true;
+    if (!this.frozen) this.useQueued = true;
   }
 
   /** The camera for the player's view, smoothed between physics steps. */
   playerView(): { eye: [number, number, number]; yaw: number; pitch: number; thirdPerson: boolean; feet: [number, number, number] } | null {
     const p = this.player;
     if (!p) return null;
+    const cam = this.cameraEye();
+    if (cam) {
+      const f = p.feetPosition;
+      return { ...cam, thirdPerson: false, feet: [f.x, f.y, f.z] };
+    }
     const alpha = Math.min(1, this.accumulator / STEP);
     const eye = p.eye(alpha);
     const feet: [number, number, number] = [eye[0], eye[1] - (p.crouched ? PLAYER.crouchEye : PLAYER.eye), eye[2]];
@@ -1057,6 +1165,8 @@ export class GameWorld {
     const hit = this.player!.aim();
     const id = hit ? this.owner.get(hit.handle) : undefined;
     if (!id || id === 'player') return;
+    // Friends follow (or stay) when used.
+    this.npcs.get(id)?.use();
     const targets: string[] = [];
     for (let x: string | null | undefined = id; x; x = this.parentOf.get(x)) targets.push(x);
     this.runner.dispatch({ type: 'use', targets, by: 'player' });
@@ -1155,6 +1265,19 @@ export class GameWorld {
   private act(name: ActionName, target: string, args: Value[]): (() => boolean) | null {
     if (target === 'player') return this.actOnPlayer(name, args);
     const label = this.names.get(target) ?? 'That object';
+    const npc = this.npcs.get(target);
+    if (name === 'walkTo') {
+      if (!npc) throw new Error(`${label} isn't a creature. Add the Creature component to it.`);
+      const to = this.placePoint(args[0] ?? null);
+      return to ? npc.walkTo({ x: to[0], y: to[1], z: to[2] }) : null;
+    }
+    if (name === 'viewFrom') {
+      const seconds = typeof args[0] === 'number' ? Math.max(0, args[0]) : 0;
+      const until = this.time + seconds;
+      this.cameraView = { id: target, until };
+      return () => this.time >= until || this.cameraView?.id !== target;
+    }
+    if (npc && name === 'damage') return this.weaponDamage(target, typeof args[0] === 'number' ? args[0] : 0, 'script', 'a script'), null;
     if (name === 'startTrain' || name === 'stopTrain') {
       const t = this.trains.find((x) => x.id === target || x.id === this.unitOf.get(target));
       if (!t) throw new Error(`${label} isn't a train. Add the Train component to it.`);
@@ -1225,6 +1348,9 @@ export class GameWorld {
       }
       case 'teleport':
         return null;
+      default:
+        // (Handled above: trains, creatures, cameras, the player.)
+        return null;
     }
   }
 
@@ -1233,6 +1359,10 @@ export class GameWorld {
     const p = this.player;
     if (!p) return null;
     const n = (v: Value) => (typeof v === 'number' ? v : 0);
+    if (name === 'freeze' || name === 'unfreeze') {
+      this.frozen = name === 'freeze';
+      return null;
+    }
     if (name === 'push') {
       const [dx, dy, dz, strength] = args.map(n) as [number, number, number, number];
       p.push(dx * strength, dy * strength, dz * strength);

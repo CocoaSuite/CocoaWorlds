@@ -102,6 +102,12 @@ const W = {
   pickSound: ['pick a sound', 'выберите звук'],
   breaks: ['When this breaks', 'Когда это ломается'],
   hit: ['When this is hit (shot, struck or blasted)', 'Когда в это попадают (выстрел, удар, взрыв)'],
+  dies: ['When this creature dies', 'Когда это существо погибает'],
+  walkTo: ['Walk', 'Отвести'],
+  freezePlayer: ['Freeze the player (a scripted scene)', 'Остановить игрока (сценка)'],
+  unfreezePlayer: ['Let the player move again', 'Снова дать игроку двигаться'],
+  viewFrom: ['Look through', 'Смотреть через'],
+  for: ['for', 'в течение'],
   spawn: ['Make a copy of', 'Создать копию'],
   at: ['at', 'в месте:'],
   aim: ['where the player looks', 'куда смотрит игрок'],
@@ -173,6 +179,7 @@ const PALETTE_EVENT: Record<EventKind, Pair> = {
   die: ['When the player dies', 'Когда игрок погибает'],
   breaks: ['When this breaks', 'Когда это ломается'],
   hit: ['When this is hit (shot, struck or blasted)', 'Когда в это попадают (выстрел, удар, взрыв)'],
+  dies: ['When this creature dies', 'Когда это существо погибает'],
 };
 export const eventName = (k: EventKind) => pick(PALETTE_EVENT[k]);
 
@@ -184,6 +191,10 @@ const PALETTE_STMT: Record<StatementKind, Pair> = {
   show: ['Show', 'Показать'],
   hide: ['Hide', 'Скрыть'],
   turnOn: ['Turn on', 'Включить'],
+  walkTo: ['Walk a creature to a place', 'Отвести существо к месту'],
+  freezePlayer: ['Freeze the player', 'Остановить игрока'],
+  unfreezePlayer: ['Let the player move again', 'Снова дать игроку двигаться'],
+  viewFrom: ['Look through an object (camera)', 'Смотреть через объект (камера)'],
   startTrain: ['Start the train', 'Запустить поезд'],
   stopTrain: ['Stop the train', 'Остановить поезд'],
   turnOff: ['Turn off', 'Выключить'],
@@ -232,8 +243,8 @@ export const statementName = (k: StatementKind) => pick(PALETTE_STMT[k]);
 
 export const STATEMENT_GROUPS: { title: Pair; kinds: StatementKind[] }[] = [
   { title: ['Do', 'Действия'], kinds: ['move', 'turn', 'turnTo', 'return', 'show', 'hide', 'turnOn', 'turnOff', 'startTrain', 'stopTrain', 'send', 'log'] },
-  { title: ['Objects', 'Объекты'], kinds: ['spawn', 'remove', 'moveTo', 'scale', 'physical', 'push', 'damage'] },
-  { title: ['Player and score', 'Игрок и счёт'], kinds: ['teleport', 'hurt', 'heal', 'giveArmour', 'addScore', 'changeScene'] },
+  { title: ['Objects', 'Объекты'], kinds: ['spawn', 'remove', 'moveTo', 'walkTo', 'scale', 'physical', 'push', 'damage'] },
+  { title: ['Player and score', 'Игрок и счёт'], kinds: ['teleport', 'hurt', 'heal', 'giveArmour', 'addScore', 'freezePlayer', 'unfreezePlayer', 'viewFrom', 'changeScene'] },
   { title: ['Screen and signs', 'Экран и таблички'], kinds: ['say', 'showScreen', 'hideScreen', 'toggleScreen', 'showUi', 'hideUi', 'setUiText', 'addRow', 'removeRow', 'clearList', 'setText'] },
   { title: ['Inventory', 'Инвентарь'], kinds: ['giveItem', 'takeItem'] },
   { title: ['Sound', 'Звук'], kinds: ['playSound', 'stopSound'] },

@@ -98,6 +98,12 @@ export type Statement =
   | { id: string; kind: 'push'; target: Ref; direction: Direction; strength: Expr }
   /** Glide to a place, stopping `gap` units short of it. */
   | { id: string; kind: 'moveTo'; target: Ref; to: Place; seconds: Expr; gap: Expr }
+  /** Scripted scenes: the player can't move (or can again); the view looks through an object for a while. */
+  | { id: string; kind: 'freezePlayer' }
+  | { id: string; kind: 'unfreezePlayer' }
+  | { id: string; kind: 'viewFrom'; target: Ref; seconds: Expr }
+  /** Walk a creature to a place (a scripted scene); the stack waits until it gets there. */
+  | { id: string; kind: 'walkTo'; target: Ref; to: Place }
   /** Put the player at a place (facing the way that object faces). */
   | { id: string; kind: 'teleport'; to: Place }
   /** Take health from a breakable object; at 0 it breaks. */
@@ -149,6 +155,8 @@ export type EventBlock =
   | { id: string; kind: 'breaks' }
   /** Hit by a shot, a swing or a blast (this object or anything inside it). */
   | { id: string; kind: 'hit' }
+  /** This creature died. */
+  | { id: string; kind: 'dies' }
   /** The player clicked a button of the screen UI (by id). */
   | { id: string; kind: 'uiClick'; element: string }
   /** The player used (clicked with) an item from the hotbar; '' for any item. */
