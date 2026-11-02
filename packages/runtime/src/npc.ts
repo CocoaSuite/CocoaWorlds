@@ -278,7 +278,8 @@ export class Npc {
         this.play('hurt', false, true);
       }
       if (now < this.stumbleUntil) speed *= 0.25;
-      clumsyTurn = 0.35 * Math.sin(now * 3.3 + this.phase) + 0.15 * Math.sin(now * 7.9 + this.phase * 2);
+      // (A slow drift off the line rather than a zig-zag: quick weaving reads as a wobble, not a walk.)
+      clumsyTurn = 0.1 * Math.sin(now * 1.3 + this.phase) + 0.03 * Math.sin(now * 3.1 + this.phase * 2);
     }
 
     let dx = 0, dz = 0;

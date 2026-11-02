@@ -18,7 +18,7 @@ More settings:
   animation (pecking, sniffing) once to three times, then goes on.
 - **Runs away**: **when hurt** it runs from the player for 3 seconds (then an enemy comes back for more);
   **when the player comes near**, it keeps away from them (shy animals).
-- **Clumsy**: it weaves as it goes and stumbles now and then, nearly stopping and playing its hurt animation.
+- **Clumsy**: it drifts a little off its line as it goes and stumbles now and then, nearly stopping and playing its hurt animation.
 - **Height** and **Thickness**: the size of the capsule it bumps into things with (72 × 16 is a person).
 
 **Attacks** can be **Up close** (within **Reach**, **Damage** at **Attacks a second**), **Shooting** (it stops

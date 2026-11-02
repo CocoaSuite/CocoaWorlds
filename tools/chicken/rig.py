@@ -141,16 +141,24 @@ for pi, prim in enumerate(mesh['primitives']):
     # (COLOR_1 was a painting mask; nothing reads it in the engine.)
     a.pop('COLOR_1', None)
 
+REST_FOLD, REST_FLAT = 0, 0.25  # (the same as FOLD and FLAT below)
+
 # ── Nodes: a root "Chicken" holding the bones and the skinned mesh ──
 nodes = []
 node_of = {}
 for name, parent, _ in BONES:
     t = POS[name] - (POS[parent] if parent else 0)
     node_of[name] = len(nodes) + 1  # (node 0 is the Chicken root)
-    nodes.append({'name': name, 'translation': [float(v) for v in t]})
+    node = {'name': name, 'translation': [float(v) for v in t]}
+    nodes.append(node)
 for name, parent, _ in BONES:
     if parent:
         nodes[node_of[parent] - 1].setdefault('children', []).append(node_of[name])
+# (Shown folded when nothing is playing, as in the editor.)
+for _side, _name in ((1, 'wing.R'), (-1, 'wing.L')):
+    _h = math.radians(-_side * REST_FOLD) / 2
+    nodes[node_of[_name] - 1]['rotation'] = [0.0, 0.0, math.sin(_h), math.cos(_h)]
+    nodes[node_of[_name] - 1]['scale'] = [REST_FLAT, 1.0, 1.0]
 mesh_node = {'name': 'Chicken_mesh', 'mesh': 0, 'skin': 0}
 all_nodes = [{'name': 'Chicken', 'children': [node_of['root']]}] + nodes + [mesh_node]
 j['nodes'] = all_nodes
@@ -202,6 +210,10 @@ def clip(name, length, tracks):
                         vals[i] = -vals[i]
                 out = add_acc(vals, 5126, 'VEC4')
                 gp = 'rotation'
+            elif path == 's':
+                vals = np.array([f(float(t)) for t in times], np.float32)
+                out = add_acc(vals, 5126, 'VEC3')
+                gp = 'scale'
             else:
                 base = POS[bone] - (POS[dict((b[0], b[1]) for b in BONES)[bone]] if dict((b[0], b[1]) for b in BONES)[bone] else 0)
                 vals = np.array([base + np.array(f(float(t))) for t in times], np.float32)
@@ -214,6 +226,23 @@ def clip(name, length, tracks):
 
 S = math.sin
 TAU = math.tau
+
+# Wings rest pressed against the body: squashed flat towards it (scaled along the
+# bone's outward axis). Animations give a raise in degrees; raising also unfolds the wing to full size.
+FOLD = 0       # degrees tipped down at rest (flattening alone reads best on this mesh)
+FLAT = 0.25    # outward thickness at rest (1 = as modelled)
+OPEN = 45      # degrees of raise at which the wing is fully unfolded
+
+
+def wing(side, raise_, x=0.0):
+    """side +1 = wing.R (+X), -1 = wing.L. Returns the bone's rotation and scale tracks."""
+    def opened(t):
+        o = min(1.0, max(0.0, raise_(t) / OPEN))
+        return o * o * (3 - 2 * o)
+    return {
+        'r': lambda t: rot(z=side * (-FOLD + raise_(t)), x=x),
+        's': lambda t: (FLAT + (1 - FLAT) * opened(t), 1.0, 1.0),
+    }
 
 
 def snap(keys, t, period=None):
@@ -236,24 +265,24 @@ clip('idle', 3.0, {
     'neck': {'r': lambda t: rot(y=snap(look, t) * 0.4, x=3 * S(TAU * t / 1.5))},
     'head': {'r': lambda t: rot(y=snap(look, t) * 0.6, z=snap(tilt, t))},
     'tail': {'r': lambda t: rot(z=(14 * S(TAU * t * 8) * max(0, 1 - abs(t - 2.45) / 0.2)))},
-    'wing.R': {'r': lambda t: rot(z=12 * max(0, 1 - abs(t - 1.0) / 0.15))},
-    'wing.L': {'r': lambda t: rot(z=-6 * max(0, 1 - abs(t - 1.1) / 0.12))},
+    'wing.R': wing(1, lambda t: 12 * max(0, 1 - abs(t - 1.0) / 0.15)),
+    'wing.L': wing(-1, lambda t: 6 * max(0, 1 - abs(t - 1.1) / 0.12)),
 })
 
-# Walk (0.7 s a cycle): a wide waddle (rolling side to side), the head bobbing forward and back, the wings a little
-# out for balance, legs swinging; slightly off-beat for clumsiness.
+# Walk (0.7 s a cycle): a gentle waddle, the head bobbing forward and back (the chicken's own walk), wings
+# folded, legs swinging; a little off-beat for clumsiness.
 W = 0.7
 clip('walk', W, {
     'root': {'t': lambda t: (0, 0, 0)},
     'body': {
-        't': lambda t: (0.03 * S(TAU * t / W), 0.05 * abs(S(TAU * t / W)), 0),
-        'r': lambda t: rot(x=-6 + 3 * S(2 * TAU * t / W), z=10 * S(TAU * t / W), y=6 * S(TAU * t / W + 0.6)),
+        't': lambda t: (0.008 * S(TAU * t / W), 0.04 * abs(S(TAU * t / W)), 0),
+        'r': lambda t: rot(x=-6 + 2.5 * S(2 * TAU * t / W), z=3 * S(TAU * t / W), y=2 * S(TAU * t / W + 0.6)),
     },
-    'neck': {'r': lambda t: rot(x=-10 * S(2 * TAU * t / W) - 4, z=-6 * S(TAU * t / W))},
-    'head': {'r': lambda t: rot(x=12 * S(2 * TAU * t / W + 0.5), z=-5 * S(TAU * t / W))},
-    'tail': {'r': lambda t: rot(y=-12 * S(TAU * t / W), x=-5)},
-    'wing.R': {'r': lambda t: rot(z=14 + 8 * S(2 * TAU * t / W))},
-    'wing.L': {'r': lambda t: rot(z=-14 - 8 * S(2 * TAU * t / W + 0.3))},
+    'neck': {'r': lambda t: rot(x=-10 * S(2 * TAU * t / W) - 4, z=-2 * S(TAU * t / W))},
+    'head': {'r': lambda t: rot(x=12 * S(2 * TAU * t / W + 0.5), z=-1.5 * S(TAU * t / W))},
+    'tail': {'r': lambda t: rot(y=-5 * S(TAU * t / W), x=-5)},
+    'wing.R': wing(1, lambda t: 2 + 2 * S(2 * TAU * t / W)),
+    'wing.L': wing(-1, lambda t: 2 + 2 * S(2 * TAU * t / W + 0.3)),
     'leg.R': {'r': lambda t: rot(x=32 * S(TAU * t / W))},
     'foot.R': {'r': lambda t: rot(x=-25 * max(0, S(TAU * t / W + 0.8)))},
     'leg.L': {'r': lambda t: rot(x=-32 * S(TAU * t / W))},
@@ -265,13 +294,13 @@ R = 0.4
 clip('run', R, {
     'body': {
         't': lambda t: (0.05 * S(TAU * t / R), 0.12 * abs(S(TAU * t / R)), 0),
-        'r': lambda t: rot(x=-22 + 5 * S(2 * TAU * t / R), z=14 * S(TAU * t / R), y=10 * S(TAU * t / R)),
+        'r': lambda t: rot(x=-22 + 5 * S(2 * TAU * t / R), z=5 * S(TAU * t / R), y=4 * S(TAU * t / R)),
     },
     'neck': {'r': lambda t: rot(x=10 + 6 * S(2 * TAU * t / R))},
     'head': {'r': lambda t: rot(x=8 * S(2 * TAU * t / R + 1), z=10 * S(TAU * t / R))},
     'tail': {'r': lambda t: rot(x=-20, y=-15 * S(TAU * t / R))},
-    'wing.R': {'r': lambda t: rot(z=35 + 30 * S(2 * TAU * t / R))},
-    'wing.L': {'r': lambda t: rot(z=-35 - 30 * S(2 * TAU * t / R + 0.4))},
+    'wing.R': wing(1, lambda t: 35 + 30 * S(2 * TAU * t / R)),
+    'wing.L': wing(-1, lambda t: 35 + 30 * S(2 * TAU * t / R + 0.4)),
     'leg.R': {'r': lambda t: rot(x=50 * S(TAU * t / R))},
     'foot.R': {'r': lambda t: rot(x=-40 * max(0, S(TAU * t / R + 0.8)))},
     'leg.L': {'r': lambda t: rot(x=-50 * S(TAU * t / R))},
@@ -292,8 +321,8 @@ clip('peck', 0.7, {
     'neck': {'r': lambda t: rot(x=-55 * peck_curve(t))},
     'head': {'r': lambda t: rot(x=-25 * peck_curve(t), z=8 * S(TAU * t * 3))},
     'tail': {'r': lambda t: rot(x=-25 * min(1, t / 0.15) * (1 - max(0, (t - 0.55) / 0.15)))},
-    'wing.R': {'r': lambda t: rot(z=20 * peck_curve(t))},
-    'wing.L': {'r': lambda t: rot(z=-20 * peck_curve(t))},
+    'wing.R': wing(1, lambda t: 20 * peck_curve(t)),
+    'wing.L': wing(-1, lambda t: 20 * peck_curve(t)),
 })
 
 # Flap (0.5 s): startled: a hop with the wings beating.
@@ -301,8 +330,8 @@ clip('flap', 0.5, {
     'root': {'t': lambda t: (0, 0.35 * S(math.pi * t / 0.5), 0)},
     'body': {'r': lambda t: rot(x=10 * S(math.pi * t / 0.5))},
     'neck': {'r': lambda t: rot(x=15 * S(math.pi * t / 0.5))},
-    'wing.R': {'r': lambda t: rot(z=35 + 35 * S(TAU * t / 0.125))},
-    'wing.L': {'r': lambda t: rot(z=-35 - 35 * S(TAU * t / 0.125))},
+    'wing.R': wing(1, lambda t: 35 + 35 * S(TAU * t / 0.125)),
+    'wing.L': wing(-1, lambda t: 35 + 35 * S(TAU * t / 0.125)),
     'leg.R': {'r': lambda t: rot(x=20 * S(math.pi * t / 0.5))},
     'leg.L': {'r': lambda t: rot(x=-15 * S(math.pi * t / 0.5))},
 })
@@ -325,8 +354,8 @@ clip('die', 1.4, {
     'body': {'r': lambda t: rot(x=10 * ease(t, 0.3, 0.8))},
     'neck': {'r': lambda t: rot(x=-30 * ease(t, 0.6, 1.0), z=25 * ease(t, 0.7, 1.1))},
     'head': {'r': lambda t: rot(x=-25 * ease(t, 0.7, 1.1))},
-    'wing.R': {'r': lambda t: rot(z=50 * S(TAU * t / 0.14) * (t < 0.42) + 15 * ease(t, 0.6, 1.0))},
-    'wing.L': {'r': lambda t: rot(z=-50 * S(TAU * t / 0.14) * (t < 0.42) - 10 * ease(t, 0.6, 1.0))},
+    'wing.R': wing(1, lambda t: (25 + 45 * S(TAU * t / 0.14)) * (t < 0.42) + 25 * ease(t, 0.6, 1.0)),
+    'wing.L': wing(-1, lambda t: (25 + 45 * S(TAU * t / 0.14)) * (t < 0.42) + 15 * ease(t, 0.6, 1.0)),
     'leg.R': {'r': lambda t: rot(x=-25 * ease(t, 0.8, 1.0), z=-15 * ease(t, 0.8, 1.0))},
     'leg.L': {'r': lambda t: rot(x=30 * ease(t, 0.8, 1.0), z=10 * ease(t, 0.8, 1.0))},
     'foot.R': {'r': lambda t: rot(x=-40 * ease(t, 0.85, 1.05))},
