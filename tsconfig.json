@@ -11,6 +11,9 @@
       "path": "packages/scripting"
     },
     {
+      "path": "packages/materials"
+    },
+    {
       "path": "packages/runtime"
     },
     {

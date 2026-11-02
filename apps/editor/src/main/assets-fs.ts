@@ -6,7 +6,7 @@
  */
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
-import { ProjectError, resolveInside } from './project-fs';
+import { ProjectError, resolveInside, writeAtomic } from './project-fs';
 import type { AssetEntry, AssetKind } from '../shared/api';
 
 export const ASSET_KINDS: Record<AssetKind, { dir: string; ext: string[] }> = {
@@ -107,4 +107,48 @@ async function exists(p: string): Promise<boolean> {
     () => true,
     () => false,
   );
+}
+
+// ── Cocoa Materials (decision C3) ──
+
+const GRAPH_PATH = /^materials\/[\w-]+\.cwmat$/;
+
+/** A graph material's graph file, as it is on disk (checked by the UI, which knows the node set). */
+export async function readGraph(dir: string, rel: unknown): Promise<unknown> {
+  if (typeof rel !== 'string' || !GRAPH_PATH.test(rel)) throw new ProjectError('That is not a graph file in the materials folder.');
+  const text = await fs.readFile(resolveInside(dir, rel), 'utf8').catch(() => {
+    throw new ProjectError(`The graph file ${rel} is missing.`);
+  });
+  try {
+    return JSON.parse(text);
+  } catch {
+    throw new ProjectError(`The graph file ${rel} is damaged (not valid JSON).`);
+  }
+}
+
+/** Save a graph. With `create`, a new file named after `rel` (renamed if that name is taken). Returns its path. */
+export async function writeGraph(dir: string, rel: unknown, graph: unknown, create: unknown): Promise<string> {
+  if (typeof rel !== 'string' || !GRAPH_PATH.test(rel)) throw new ProjectError('That is not a graph file in the materials folder.');
+  const g = graph as { format?: unknown; nodes?: unknown; links?: unknown };
+  if (!g || g.format !== 'cocoaworlds.material' || !Array.isArray(g.nodes) || !Array.isArray(g.links)) throw new ProjectError('That is not a Cocoa Materials graph.');
+  let file = rel;
+  if (create === true) {
+    const stem = rel.slice('materials/'.length, -'.cwmat'.length);
+    for (let i = 2; await exists(resolveInside(dir, file)); i++) file = `materials/${stem}_${i}.cwmat`;
+  }
+  const full = resolveInside(dir, file);
+  await fs.mkdir(path.dirname(full), { recursive: true });
+  await writeAtomic(full, `${JSON.stringify(graph, null, 2)}\n`);
+  return file;
+}
+
+/** A map baked from a graph: `assets/textures/generated/<name>.png`, replacing the one before. */
+export async function writeGenerated(dir: string, name: unknown, bytes: unknown): Promise<string> {
+  if (typeof name !== 'string' || !/^[\w-]+\.png$/.test(name)) throw new ProjectError('A baked map needs a plain .png name.');
+  if (!(bytes instanceof Uint8Array) || bytes.byteLength > MAX_ASSET_BYTES) throw new ProjectError('The baked map could not be saved.');
+  const rel = `${ASSET_KINDS.textures.dir}/generated/${name}`;
+  const full = resolveInside(dir, rel);
+  await fs.mkdir(path.dirname(full), { recursive: true });
+  await fs.writeFile(full, bytes);
+  return rel;
 }

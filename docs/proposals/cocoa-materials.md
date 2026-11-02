@@ -1,6 +1,6 @@
 # Proposal: Cocoa Materials and procedural meshes
 
-Status: **proposed** (2026-11-02). Decisions C1–C4 and R1 in [DECISIONS.md](../../DECISIONS.md) need sign-off.
+Status: **approved** (2026-11-02; decisions C1–C4 and R1 in [DECISIONS.md](../../DECISIONS.md)). CM1 is done: see [materials.md](../materials.md#graph-materials-cocoa-materials).
 
 ## What we want
 

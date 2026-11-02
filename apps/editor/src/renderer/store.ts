@@ -243,6 +243,8 @@ interface Actions {
   setStartScene(scenePath: string): Promise<void>;
   /** Replace the project's materials, with undo (saved to the project file a moment later). */
   setMaterials(materials: MaterialDef[], label: string, mergeKey?: string): void;
+  /** Change a material without an undo step (baked map paths: they follow the graph, not the user). */
+  patchMaterialQuietly(id: string, patch: Partial<MaterialDef>): void;
   setBottomTab(tab: State['bottomTab']): void;
   setWorkspace(w: State['workspace']): void;
   /** Change an object's script (the whole `script` component) as one undo step, merging with `mergeKey`. */
@@ -1158,6 +1160,19 @@ export const useEditor = create<State & Actions>()((set, get) => ({
       saveProjectSoon(get);
     };
     get().execute({ label, mergeKey, apply: () => put(materials), revert: () => put(before) });
+  },
+
+  patchMaterialQuietly(id, patch) {
+    const s = get().session;
+    if (!s) return;
+    const list = materialsOf(s.project.settings).map((m) => {
+      if (m.id !== id) return m;
+      const next = { ...m, ...patch };
+      for (const k of Object.keys(next) as (keyof MaterialDef)[]) if (next[k] === undefined) delete next[k];
+      return next;
+    });
+    set({ session: { ...s, project: { ...s.project, settings: { ...s.project.settings, materials: list } } }, rev: get().rev + 1 });
+    saveProjectSoon(get);
   },
 
   async setGameRule(rule, on) {

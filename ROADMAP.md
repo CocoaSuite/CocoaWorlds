@@ -8,7 +8,7 @@
 | 4 | Entities and physics: components, Rapier, colliders, triggers, inspector, interaction infrastructure | **Done** (the player's “use” raycast moves to Phase 6 with the player) |
 | 5 | Visual scripting: blocks editor, script model, compiler, VM, events, debugging, recipes | **In progress** — model, checker, compiler, VM, block editor, Play integration and recipes done |
 | 6 | Gameplay: Source-style controller, player, interaction, health/score, doors/plates/buttons/lifts | **In progress** — player controller, Play as the player, “use”, health, damage, pickups and score done |
-| 7 | Assets and rendering: asset browser, material editor, textures, lighting, audio | **In progress** — textures, lights, sky, sound, models and the Materials workspace done |
+| 7 | Assets and rendering: asset browser, material editor, textures, lighting, audio | **In progress** — textures, lights, sky, sound, models, the Materials workspace and graph materials (CM1) done |
 | 8 | Runtime and persistence: standalone runtime, Play isolation, autosave, recovery, migrations | Not started |
 | 9 | Builds: Windows, macOS, Linux packaging; web export; runtime verification | Not started |
 | 10 | Polish: usability, performance, demo level, documentation | Not started |
@@ -25,7 +25,8 @@ From here the order follows the benchmark: [BENCHMARK.md](BENCHMARK.md) — can 
 | B4 ✅ | Standalone export (Windows, macOS, Linux, web) and saved progress | Games others can play and come back to | 8–9 |
 | B5 ✅ | Screen UI editor (text, images, buttons, bars, lists) and an inventory/hotbar | Shops, inventories, menus | 6–7 |
 | A1 ✅ | Half-Life set: ladders, water and swimming, armour and chargers, weapons (hitscan, projectiles, explosions, ammo), paths and trains, level changes with landmarks, decals and particles, scripted scenes, NPCs | Half-Life 1 | 6, 10 |
-| CM1–CM3 | Cocoa Materials: node-graph materials baked on the GPU, triplanar mapping, variants, wear from mesh edges ([proposal](docs/proposals/cocoa-materials.md)) | Every target looks its best | 7 |
+| CM1 ✅ | Cocoa Materials, first step: node graphs on the graphics card, the first 35 nodes, the graph editor with pictures on every node and a live preview, baking to images, every map on materials | Every target looks its best | 7 |
+| CM2–CM3 | Cocoa Materials: node-graph materials baked on the GPU, triplanar mapping, variants, wear from mesh edges ([proposal](docs/proposals/cocoa-materials.md)) | Every target looks its best | 7 |
 | R1 | Procedural objects: Repeat with caps (ladders, pipes, railings) | Half-Life, Roblox builds | 7 |
 | A2 | Animated models, creature behaviours, navigation meshes, scattering foliage, many-objects performance | Half-Life NPCs, Slime Rancher creatures | 7, 10 |
 | T1 | Voxel terrain with heightmap import: sculpt, dig and paint | Slime Rancher, outdoor maps | 7 |
@@ -107,4 +108,4 @@ Order may shift where dependencies require it (for example, the project format f
 
 ## Next
 
-Cocoa Materials (CM1 → CM2 → CM3) and procedural objects (R1), then A2 (navigation meshes so creatures find their way, animated models, creature behaviours for Slime Rancher, foliage, many-objects performance), then T1 (voxel terrain). Installers and signing for exported games come with packaging the editor itself (Phase 9).
+Cocoa Materials (CM2 → CM3: mapping and variants, then wear from mesh edges) and procedural objects (R1), then A2 (navigation meshes so creatures find their way, animated models, creature behaviours for Slime Rancher, foliage, many-objects performance), then T1 (voxel terrain). Installers and signing for exported games come with packaging the editor itself (Phase 9).

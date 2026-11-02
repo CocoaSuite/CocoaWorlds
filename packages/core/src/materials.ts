@@ -38,7 +38,37 @@ export interface MaterialDef {
   scale?: number;
   /** The image moves across the faces, in units a second ([across, up]). */
   scroll?: [number, number];
+  /** Images for the other maps (white where rough / metal / unshaded / glowing / solid; height white = high). */
+  roughnessMap?: string;
+  metalnessMap?: string;
+  occlusionMap?: string;
+  glowMap?: string;
+  heightMap?: string;
+  opacityMap?: string;
+  /**
+   * A graph material (Cocoa Materials): its graph file (`materials/….cwmat`). Its maps are baked from the graph
+   * into `assets/textures/generated/`, and the map fields above point at them.
+   */
+  graph?: string;
+  /** How big the baked images are, in pixels (256–2048). */
+  bakeSize?: number;
+  /** How many units of the world one repeat of the images covers (graph materials; 128 when unset). */
+  tile?: number;
 }
+
+/** The map fields, by the output of a graph that makes them. */
+export const MAP_FIELDS = {
+  color: 'map',
+  normal: 'normalMap',
+  roughness: 'roughnessMap',
+  metalness: 'metalnessMap',
+  occlusion: 'occlusionMap',
+  glow: 'glowMap',
+  height: 'heightMap',
+  opacity: 'opacityMap',
+} as const satisfies Record<string, keyof MaterialDef>;
+
+export const BAKE_SIZES = [256, 512, 1024, 2048] as const;
 
 export const isMaterialId = (s: string): boolean => s.startsWith(MATERIAL_PREFIX);
 
@@ -72,6 +102,11 @@ export function validateMaterials(list: unknown): string | null {
     if (!isColor(m.color)) return `${label} needs a colour like #a0b0c0.`;
     if (m.map !== undefined && !isTexturePath(m.map)) return `${label}: its image must be a project texture.`;
     if (m.normalMap !== undefined && !isTexturePath(m.normalMap)) return `${label}: its surface map must be a project texture.`;
+    for (const k of ['roughnessMap', 'metalnessMap', 'occlusionMap', 'glowMap', 'heightMap', 'opacityMap'] as const)
+      if (m[k] !== undefined && !isTexturePath(m[k])) return `${label}: its ${k.replace('Map', '')} map must be a project texture.`;
+    if (m.graph !== undefined && !(typeof m.graph === 'string' && /^materials\/[\w-]+\.cwmat$/.test(m.graph))) return `${label}: its graph must be a file in the materials folder.`;
+    if (m.bakeSize !== undefined && !(BAKE_SIZES as readonly unknown[]).includes(m.bakeSize)) return `${label}: the baked size must be 256, 512, 1024 or 2048.`;
+    if (m.tile !== undefined && !(isNum(m.tile) && m.tile > 0)) return `${label}: the size in the world must be above 0.`;
     if (!isNum(m.roughness) || m.roughness < 0 || m.roughness > 1) return `${label}: roughness must be between 0 and 1.`;
     if (!isNum(m.metalness) || m.metalness < 0 || m.metalness > 1) return `${label}: metalness must be between 0 and 1.`;
     if (m.emissive !== undefined && !isColor(m.emissive)) return `${label}: the glow colour must be like #a0b0c0.`;

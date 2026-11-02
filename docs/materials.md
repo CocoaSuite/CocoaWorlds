@@ -49,8 +49,66 @@ Below the preview, the workspace shows how many faces in the open scene use the 
 **Delete** removes a material. Faces still using it show the pink and black “missing” check until they get
 another material; undo brings the material back.
 
+## Graph materials (Cocoa Materials)
+
+**+ Graph material** makes a material from a graph of nodes, in the spirit of Substance Designer. Instead of
+an image, it has a graph in the middle of the workspace: nodes that make patterns (noise, cells, bricks …),
+nodes that change them (levels, blur, warp …) and output nodes for each map of the material. A new one starts
+from a small working graph (a stone-like surface) to change.
+
+- **Add a node**: right-click the graph, press **Space**, or **+ Node**. Type to find one; Enter adds the
+  first match where you clicked.
+- **Wire**: drag from a node's output (right) to another node's input (left). An input takes one wire; a new
+  one replaces it. Wires that would loop back are refused. Grey dots carry grey pictures, gold ones colour.
+- **Remove**: pick nodes or wires and press **Delete**. Shift or Ctrl adds to the pick.
+- **Change**: pick a node; its settings show on the right. With no node picked, the right shows the material's
+  own settings.
+- **Undo** (Ctrl+Z) undoes graph changes like any other; a slider's whole drag is one step.
+
+Every node shows its picture, so it's easy to see where in the chain something goes wrong. The preview on the
+right shows the material **On a shape** (sphere, cube, wall) or **Flat** (the picked node's picture).
+
+### Nodes
+
+| Group | Nodes |
+|---|---|
+| Make | Noise (Perlin, value, ridged), Cells, Bricks and tiles, Shape (circle, square, polygon, star), Gradient, Checker, Scratches, Grunge, Image (a project texture), Colour, Number |
+| Change | Levels, Curve, Invert, Clamp, Blur, Warp, Transform (repeat, slide, quarter turns), Edge detect |
+| Combine | Blend (mix, add, subtract, multiply, screen, overlay, lighter, darker, difference, through a mask), Switch |
+| Colour | Gradient map, Hue / saturation / lightness, Colourise |
+| Surface | Height to normal, Height to occlusion, Height to curvature |
+| Outputs | Colour, Height, Normal, Roughness, Metal, Occlusion, Glow, Opacity |
+
+Everything tiles: the patterns repeat over their square, so the material never shows a seam. Random nodes
+have a **Seed**; **New** picks another random pattern of the same kind.
+
+### Maps and baking
+
+Graphs run on the graphics card while you edit, and the level shows the changes at once. A moment after the
+last change, the material is **baked**: each output becomes an image in `assets/textures/generated/`
+(`stone_color.png`, `stone_normal.png` …), and the material uses those images. The level, Play and exported
+games use the baked images, so they look exactly as in the editor and cost nothing extra to load. The status
+next to **Bake now** says whether the latest changes are baked.
+
+A graph material's own settings:
+
+| Setting | What it does |
+|---|---|
+| Size in the world | How many units one repeat of the material covers (128 by default). |
+| Baked size | 256, 512, 1024 or 2048 pixels square. Bigger is sharper and takes more memory. |
+| Bump strength, glow strength, opacity, cut-out, two-sided, scroll | As for other materials. |
+
+A map from the graph replaces its slider: a Roughness output decides the roughness, a Metal output the metal.
+Height gives bumps only when there is no Normal output. Opacity cuts holes where it is dark (or fades, with
+cut-out off).
+
 ## Files
 
 Materials are kept in the project file (`project.cwproj`, under `settings.materials`). Each has an id such as
 `mat/k3f9a0z2m1q8x7c4`, and faces store that id. Exported games carry only the materials their scene uses, and
 only those materials' images.
+
+Each graph material's graph is its own file, `materials/<name>.cwmat` (versioned JSON of nodes, wires and
+settings; settings left at their defaults aren't written), so big graphs stay out of the project file and
+diff cleanly. The file is named when the material is made and keeps that name when the material is renamed.
+Exported games carry the baked images, not the graphs.

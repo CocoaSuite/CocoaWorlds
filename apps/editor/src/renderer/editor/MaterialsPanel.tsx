@@ -13,8 +13,10 @@ import { useEditor } from '../store';
 import { projectMaterial, releaseMaterial, tickMaterials } from '../viewport/project-materials';
 import type { FaceRef } from '../viewport/world-render';
 import { MaterialSwatch } from './MaterialSwatch';
+import { GraphWorkspace } from './MaterialGraph';
+import { createGraphMaterial, useGraphs } from '../materials/graphs';
 
-type Shape = 'sphere' | 'cube' | 'wall';
+export type Shape = 'sphere' | 'cube' | 'wall';
 
 /** A unique name: base, base 2, … */
 function unique(base: string, taken: Iterable<string>): string {
@@ -108,60 +110,29 @@ export function MaterialsPanel() {
 
   const goToScene = () => useEditor.getState().setWorkspace('scene');
 
-  return (
-    <div className="cw-screens cw-mats" role="region" aria-label={t('ws.materials')}>
-      <aside className="cw-screens-side" aria-label={t('mat.list')}>
-        <div className="cw-screens-h">
-          <span>{t('mat.list')}</span>
-          <Button size="sm" onClick={() => add(newMaterial(unique(t('mat.newName'), list.map((m) => m.name))), 'Add material')}>
-            {t('mat.add')}
-          </Button>
-        </div>
-        <Button size="sm" onClick={() => fileRef.current?.click()}>
-          {t('mat.fromImage')}
-        </Button>
-        <input
-          ref={fileRef}
-          type="file"
-          multiple
-          hidden
-          accept=".png,.jpg,.jpeg,.webp"
-          data-testid="material-images"
-          onChange={(e) => {
-            const files = [...(e.currentTarget.files ?? [])];
-            e.currentTarget.value = '';
-            if (files.length) void fromImages(files);
-          }}
-        />
-        {!list.length && <p className="cw-muted cw-screens-hint">{t('mat.none')}</p>}
-        <ul className="cw-mats-list" role="listbox" aria-label={t('mat.list')}>
-          {list.map((m) => (
-            <li key={m.id} role="option" aria-selected={m.id === mat?.id} aria-label={m.name} className={m.id === mat?.id ? 'on' : ''} onClick={() => setSelected(m.id)}>
-              <MaterialSwatch def={m} className="cw-mats-sw" />
-              <span>{m.name}</span>
-            </li>
-          ))}
-        </ul>
-        <p className="cw-muted cw-screens-hint">{t('mat.hint')}</p>
-      </aside>
-
-      <div className="cw-screens-main">
-        <div className="cw-screens-tools">
-          <Segmented<Shape>
-            label={t('mat.shape')}
-            value={shape}
-            onChange={setShape}
-            options={[
-              { value: 'sphere', label: t('mat.sphere') },
-              { value: 'cube', label: t('mat.cube') },
-              { value: 'wall', label: t('mat.wall') },
-            ]}
-          />
-          <span className="cw-muted cw-screens-tip">{mat ? t('mat.turnHint') : ''}</span>
-        </div>
-        <div className="cw-mats-stage">{mat ? <MaterialPreview id={mat.id} shape={shape} /> : <div className="cw-muted cw-screens-empty">{t('mat.pick')}</div>}</div>
-        {mat && (
-          <div className="cw-mats-use">
+  const removeMat = () => {
+    if (!mat) return;
+    setAll(
+      list.filter((m) => m.id !== mat.id),
+      `Remove material ${mat.name}`,
+    );
+    setSelected(null);
+  };
+  /** A graph material's copy gets a copy of the graph (so changing one leaves the other alone). */
+  const duplicateGraphMaterial = async (src: MaterialDef) => {
+    const name = unique(src.name, list.map((m) => m.name));
+    const made = await createGraphMaterial(name);
+    if (!made) return;
+    const g = useGraphs.getState().graphs[src.graph!];
+    if (g) {
+      useGraphs.setState((s) => ({ graphs: { ...s.graphs, [made.graph!]: g } }));
+      await window.cocoa.projects.writeGraph(useEditor.getState().session!.dir, made.graph!, g);
+    }
+    const { id, graph } = made;
+    add({ ...src, id, name, graph, map: undefined, normalMap: undefined, roughnessMap: undefined, metalnessMap: undefined, occlusionMap: undefined, glowMap: undefined, heightMap: undefined, opacityMap: undefined }, `Duplicate material ${src.name}`);
+  };
+  const useRow = mat ? (
+    <div className="cw-mats-use">
             <span className="cw-muted" data-testid="material-uses">
               {used.length ? t('mat.usedBy').replace('{n}', String(used.length)) : t('mat.unused')}
             </span>
@@ -199,7 +170,81 @@ export function MaterialsPanel() {
               {t('mat.findFaces')}
             </Button>
           </div>
-        )}
+  ) : null;
+
+  return (
+    <div className="cw-screens cw-mats" role="region" aria-label={t('ws.materials')}>
+      <aside className="cw-screens-side" aria-label={t('mat.list')}>
+        <div className="cw-screens-h">
+          <span>{t('mat.list')}</span>
+          <Button size="sm" onClick={() => add(newMaterial(unique(t('mat.newName'), list.map((m) => m.name))), 'Add material')}>
+            {t('mat.add')}
+          </Button>
+        </div>
+        <Button size="sm" onClick={() => fileRef.current?.click()}>
+          {t('mat.fromImage')}
+        </Button>
+        <Button
+          size="sm"
+          onClick={async () => {
+            const m = await createGraphMaterial(unique(t('cm.newName'), list.map((x) => x.name)));
+            if (m) add(m, `Add graph material ${m.name}`);
+          }}
+        >
+          {t('cm.add')}
+        </Button>
+        <input
+          ref={fileRef}
+          type="file"
+          multiple
+          hidden
+          accept=".png,.jpg,.jpeg,.webp"
+          data-testid="material-images"
+          onChange={(e) => {
+            const files = [...(e.currentTarget.files ?? [])];
+            e.currentTarget.value = '';
+            if (files.length) void fromImages(files);
+          }}
+        />
+        {!list.length && <p className="cw-muted cw-screens-hint">{t('mat.none')}</p>}
+        <ul className="cw-mats-list" role="listbox" aria-label={t('mat.list')}>
+          {list.map((m) => (
+            <li key={m.id} role="option" aria-selected={m.id === mat?.id} aria-label={m.name} className={m.id === mat?.id ? 'on' : ''} onClick={() => setSelected(m.id)}>
+              <MaterialSwatch def={m} className="cw-mats-sw" />
+              <span>{m.name}</span>
+            </li>
+          ))}
+        </ul>
+        <p className="cw-muted cw-screens-hint">{t('mat.hint')}</p>
+      </aside>
+
+      {mat?.graph ? (
+        <GraphWorkspace
+          m={mat}
+          edit={edit}
+          used={used.length}
+          onDuplicate={() => void duplicateGraphMaterial(mat)}
+          onRemove={removeMat}
+          tools={useRow}
+        />
+      ) : (
+        <>
+      <div className="cw-screens-main">
+        <div className="cw-screens-tools">
+          <Segmented<Shape>
+            label={t('mat.shape')}
+            value={shape}
+            onChange={setShape}
+            options={[
+              { value: 'sphere', label: t('mat.sphere') },
+              { value: 'cube', label: t('mat.cube') },
+              { value: 'wall', label: t('mat.wall') },
+            ]}
+          />
+          <span className="cw-muted cw-screens-tip">{mat ? t('mat.turnHint') : ''}</span>
+        </div>
+        <div className="cw-mats-stage">{mat ? <MaterialPreview id={mat.id} shape={shape} /> : <div className="cw-muted cw-screens-empty">{t('mat.pick')}</div>}</div>
+        {mat && useRow}
       </div>
 
       <aside className="cw-screens-side right" aria-label={t('mat.settings')}>
@@ -209,24 +254,20 @@ export function MaterialsPanel() {
             textures={textures.map((x) => ({ path: x.path, name: x.name }))}
             edit={edit}
             onDuplicate={() => add({ ...mat, id: newMaterial(mat.name).id, name: unique(mat.name, list.map((m) => m.name)) }, `Duplicate material ${mat.name}`)}
-            onRemove={() => {
-              setAll(
-                list.filter((m) => m.id !== mat.id),
-                `Remove material ${mat.name}`,
-              );
-              setSelected(null);
-            }}
+            onRemove={removeMat}
             used={used.length}
           />
         ) : (
           <p className="cw-muted cw-screens-hint">{t('mat.pick')}</p>
         )}
       </aside>
+        </>
+      )}
     </div>
   );
 }
 
-function Row({ label, children }: { label: string; children: React.ReactNode }) {
+export function Row({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="cw-screens-row">
       <span className="cw-screens-l">{label}</span>
@@ -235,17 +276,18 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
   );
 }
 
-/** A 0–max slider with its value beside it. */
-function Slider({ label, value, max = 1, step = 0.01, onChange }: { label: string; value: number; max?: number; step?: number; onChange: (v: number) => void }) {
+/** A min–max slider with its value beside it. */
+export function Slider({ label, value, min = 0, max = 1, step = 0.01, digits, onChange }: { label: string; value: number; min?: number; max?: number; step?: number; digits?: number; onChange: (v: number) => void }) {
+  const d = digits ?? (step >= 1 ? 0 : step >= 0.1 ? 1 : step >= 0.01 ? 2 : 3);
   return (
     <span className="cw-mats-slider">
-      <input type="range" aria-label={label} min={0} max={max} step={step} value={value} onChange={(e) => onChange(Number(e.currentTarget.value))} />
-      <span className="mono">{value.toFixed(2)}</span>
+      <input type="range" aria-label={label} min={min} max={max} step={step} value={value} onChange={(e) => onChange(Number(e.currentTarget.value))} />
+      <span className="mono">{value.toFixed(d)}</span>
     </span>
   );
 }
 
-function ImagePick({ label, value, textures, onChange }: { label: string; value: string | undefined; textures: { path: string; name: string }[]; onChange: (v: string | undefined) => void }) {
+export function ImagePick({ label, value, textures, onChange }: { label: string; value: string | undefined; textures: { path: string; name: string }[]; onChange: (v: string | undefined) => void }) {
   return (
     <select className="cw-input" aria-label={label} value={value ?? ''} onChange={(e) => onChange(e.currentTarget.value || undefined)}>
       <option value="">{t('mat.noImage')}</option>
@@ -376,7 +418,7 @@ function previewGeometry(shape: Shape): THREE.BufferGeometry {
   return g;
 }
 
-function MaterialPreview({ id, shape }: { id: string; shape: Shape }) {
+export function MaterialPreview({ id, shape }: { id: string; shape: Shape }) {
   const host = useRef<HTMLDivElement>(null);
   const turn = useRef({ yaw: 0.6, pitch: 0.25, drag: null as null | { x: number; y: number }, idle: 0 });
   const geometry = useMemo(() => previewGeometry(shape), [shape]);

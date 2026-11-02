@@ -377,3 +377,62 @@ code { font: 12px var(--mono); color: var(--fg); }
 .cw-mats-slider { display: flex; align-items: center; gap: 6px; width: 100%; }
 .cw-mats-slider input { flex: 1; min-width: 0; accent-color: var(--sel); }
 .cw-mats-slider .mono { width: 34px; text-align: right; font-size: 12px; color: var(--mute); }
+
+/* ── Cocoa Materials: the graph ── */
+.cm-main { padding-bottom: 12px; }
+.cm-flow { flex: 1; min-height: 0; position: relative; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: var(--bg); outline: none; }
+.cm-flow .react-flow { --xy-background-color: var(--bg); --xy-node-border-radius: 8px; --xy-edge-stroke: #6d6d6d; --xy-edge-stroke-selected: var(--sel); --xy-edge-stroke-width: 2;
+  --xy-connectionline-stroke: var(--sel); --xy-connectionline-stroke-width: 2; --xy-controls-button-background-color: var(--panel2); --xy-controls-button-background-color-hover: var(--menuhover);
+  --xy-controls-button-color: var(--fg); --xy-controls-button-border-color: var(--line); --xy-selection-background-color: rgba(75, 156, 255, 0.08); --xy-selection-border: 1px dashed var(--sel); }
+.cm-flow .react-flow__controls { box-shadow: none; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+.cm-flow .react-flow__edge.cm-e.color path { stroke: #b49a6a; }
+.cm-flow .react-flow__edge.selected path { stroke: var(--sel) !important; }
+.cm-flow-tools { position: absolute; top: 8px; left: 8px; right: 8px; display: flex; align-items: center; gap: 10px; pointer-events: none; font-size: 12px; }
+.cm-flow-tools > * { pointer-events: auto; }
+.cm-node { width: 132px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; color: var(--fg); font-size: 11px; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35); }
+/* Outputs: the input's name and a small picture side by side. */
+.cm-node.out .cm-node-b { flex-direction: row; align-items: center; justify-content: space-between; }
+.cm-node.on { border-color: var(--sel); box-shadow: 0 0 0 1px var(--sel), 0 4px 14px rgba(0, 0, 0, 0.35); }
+.cm-node.bad { border-color: var(--bad); }
+.cm-node-h { padding: 5px 8px; font-weight: 700; font-size: 11px; border-radius: 7px 7px 0 0; border-bottom: 1px solid var(--line); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cm-node.g-make .cm-node-h { background: #2e3a1a; }
+.cm-node.g-change .cm-node-h { background: #1d2a3a; }
+.cm-node.g-combine .cm-node-h { background: #3a2a1d; }
+.cm-node.g-colour .cm-node-h { background: #3a1d33; }
+.cm-node.g-surface .cm-node-h { background: #1d3a37; }
+.cm-node.g-output .cm-node-h { background: #3a3a3a; }
+.cm-node-b { display: flex; flex-direction: column; gap: 6px; padding: 6px 8px 8px; }
+.cm-ports { display: flex; flex-direction: column; gap: 2px; }
+.cm-ports:empty { display: none; }
+.cm-port { position: relative; color: var(--mute); line-height: 16px; }
+.cm-thumb { display: block; width: 116px; height: 116px; border-radius: 4px; background: #000; image-rendering: auto; }
+.cm-h.react-flow__handle { width: 10px; height: 10px; border: 2px solid var(--panel); background: #9a9a9a; }
+.cm-h.react-flow__handle.color { background: #d2b07a; }
+.cm-port .cm-h.react-flow__handle-left { left: -14px; }
+.cm-node > .cm-h.react-flow__handle-right { right: -6px; top: 50%; }
+.cm-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 8px; vertical-align: middle; background: #555; }
+.cm-dot.g-make { background: #8fb04a; }
+.cm-dot.g-change { background: #4b9cff; }
+.cm-dot.g-combine { background: #f0a442; }
+.cm-dot.g-colour { background: #d46bc0; }
+.cm-dot.g-surface { background: #4ad0c4; }
+.cm-dot.g-output { background: #cfcfcf; }
+.cm-add { position: absolute; z-index: 20; width: 240px; max-height: 330px; display: flex; flex-direction: column; gap: 6px; padding: 8px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 8px 28px rgba(0, 0, 0, 0.5); }
+.cm-add-list { overflow: auto; display: flex; flex-direction: column; }
+.cm-add-g { padding: 6px 6px 2px; font-size: 11px; color: var(--mute); text-transform: uppercase; letter-spacing: 0.04em; }
+.cm-add-list button { display: flex; align-items: center; width: 100%; padding: 5px 6px; border: 0; border-radius: 5px; background: none; color: var(--fg); font: inherit; font-size: 13px; text-align: left; cursor: pointer; }
+.cm-add-list button:hover, .cm-add-list button.hi { background: var(--menuhover); }
+.cm-add-none { padding: 8px 6px; font-size: 12px; }
+.cm-side { gap: 10px; }
+.cm-preview-tools { display: flex; flex-wrap: wrap; gap: 6px; }
+.cm-preview { position: relative; flex: none; height: 240px; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: radial-gradient(circle at 50% 40%, #2a2a2a, #161616); display: flex; align-items: center; justify-content: center; }
+.cm-flat { width: 100%; height: 100%; object-fit: contain; display: block; }
+.cm-props-h { display: flex; align-items: center; font-size: 13px; }
+.cm-bad { color: var(--bad); }
+.cm-bake { margin-left: auto; font-size: 12px; color: var(--mute); }
+.cm-bake.waiting, .cm-bake.baking { color: var(--cw-warn); }
+.cm-bake.failed { color: var(--bad); }
+.cm-ramp { display: flex; flex-direction: column; gap: 6px; width: 100%; }
+.cm-ramp-bar { height: 16px; border-radius: 4px; border: 1px solid var(--line); }
+.cm-ramp-row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 6px; }
+.cm-ramp-row .cw-color .mono { display: none; }

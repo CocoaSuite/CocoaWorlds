@@ -1,0 +1,10 @@
+{
+  "name": "@cocoaworlds/materials",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Cocoa Materials: node-graph materials (the graph model, the node set, the shaders) and their GPU evaluator. No editor or engine dependencies.",
+  "exports": {
+    ".": "./src/index.ts"
+  }
+}

@@ -151,6 +151,7 @@ packages/core        ids, math, file formats, validation, migrations, History, S
 packages/geometry    convex brushes, primitives, carve/intersect/merge, vertex editing, mesh + hull output (docs/geometry.md)
 packages/scripting   visual scripting: block model, checker, compiler to IR, VM (docs/scripting.md)
 packages/runtime     the game world: Rapier physics built from a scene, fixed-step simulation, trigger events (no rendering)
+packages/materials   Cocoa Materials: graph model, node set, GLSL per node, GPU evaluator (docs/materials.md)
 packages/ui          CocoaCanvas tokens (styles.css) and React components
 ```
 

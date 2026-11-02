@@ -35,7 +35,7 @@
 - **Edited meshes (moved into a dent or twist) aren't cut, clipped, merged or hollowed** until they are convex again, and can't be subtract brushes. Moving ones collide as their convex hull.
 - **Loop cut runs across four-sided faces only;** it stops at triangles and other shapes.
 - **The vertex tool moves corners with the gizmo only;** dragging a corner handle directly is not supported yet.
-- **Materials:** one image, one bump map and one glow per material (no separate roughness, metal or glow images); glowing faces don't light what's around them; reflections are the sky's colours, not the level around them; scroll speeds assume the usual face scale (0.25). Changes to materials are undoable, but they mark the scene as edited too. Models keep the materials from their glTF file.
+- **Materials:** plain materials have one image, one bump map and one glow (graph materials have every map); glowing faces don't light what's around them; reflections are the sky's colours, not the level around them; scroll speeds assume the usual face scale (0.25). Changes to materials are undoable, but they mark the scene as edited too. Models keep the materials from their glTF file.
 - **Surfaces made by a live cut** (the inside of a doorway) follow the wall around them and can't be selected until the cut is applied.
 - **Big levels update a moment after an edit.** From 64 brushes the level is rebuilt in a background worker, so the view can lag an edit by the build time (shown in the stats). Picking uses the last finished build.
 - **Brush rotation re-projects textures** (world alignment). Texture lock is exact for moves only.
@@ -61,3 +61,8 @@ None open.
 
 - Newer Chromium returns a Promise from `scrollIntoView`; an effect that returned it implicitly crashed the editor when the console updated. Effects now never return values implicitly.
 - Line-segment grids disappeared near the camera on software renderers; the grid is now drawn by a shader on a single plane.
+- **Cocoa Materials (CM1):** materials map with each face's own alignment only (triplanar mapping, exposed
+  settings and variants come in CM2, with Slope blur, Distance and Flood fill); no wear from mesh edges yet
+  (CM3). Nodes can't be copied and pasted or grouped into frames yet. Curve has four fixed points. Height to
+  occlusion is a quick approximation. Graph files keep the name they were made with. Graphs are evaluated
+  only in the editor; changing one from another workspace with Undo bakes it again in the background.

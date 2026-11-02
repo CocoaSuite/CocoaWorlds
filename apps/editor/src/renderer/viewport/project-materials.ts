@@ -3,7 +3,7 @@
  * with the project's material list. Editing a material changes every face that uses it at once, in the 3D
  * view, in Play and in the preview, without rebuilding the level. Scrolling materials move on each frame.
  */
-import type { MaterialDef } from '@cocoaworlds/core';
+import { MAP_FIELDS, type MaterialDef } from '@cocoaworlds/core';
 import * as THREE from 'three';
 import { DEV_TEXTURE_SIZE, devMaterial } from '../brush/materials';
 import type { Lang } from '../i18n';
@@ -63,17 +63,53 @@ export function projectMaterial(id: string, onUpdate: () => void): THREE.MeshSta
   return m;
 }
 
+/** The texture slots a material's maps go into. */
+const SLOTS = ['map', 'normalMap', 'roughnessMap', 'metalnessMap', 'aoMap', 'emissiveMap', 'bumpMap', 'alphaMap'] as const;
+type Slot = (typeof SLOTS)[number];
+
 /** Stop following edits (the material was thrown away). */
 export function releaseMaterial(m: THREE.Material): void {
   const l = live.get(m);
   if (!l) return;
   live.delete(m);
-  drop(l.m.map);
-  drop(l.m.normalMap);
+  for (const k of SLOTS) drop(l.m[k]);
 }
 
 function drop(t: THREE.Texture | null): void {
-  if (t && t !== missing) t.dispose();
+  if (t && t !== missing && !liveTextures.has(t)) t.dispose();
+}
+
+// ── Pictures while a graph is being edited ──
+// The graph editor hands over canvases with each map as it is now; faces show them at once, before the maps
+// are baked to files.
+type MapRole = keyof typeof MAP_FIELDS;
+const liveMaps = new Map<string, Partial<Record<MapRole, THREE.CanvasTexture>>>();
+const liveTextures = new Set<THREE.Texture>();
+
+/** Show these canvases as material `id`'s maps (null: back to its files). */
+export function setLiveMaps(id: string, maps: Partial<Record<MapRole, HTMLCanvasElement>> | null): void {
+  const old = liveMaps.get(id);
+  for (const t of Object.values(old ?? {})) {
+    liveTextures.delete(t);
+    t.dispose();
+  }
+  liveMaps.delete(id);
+  if (maps) {
+    const texs: Partial<Record<MapRole, THREE.CanvasTexture>> = {};
+    for (const [role, c] of Object.entries(maps) as [MapRole, HTMLCanvasElement][]) {
+      const t = new THREE.CanvasTexture(c);
+      liveTextures.add(t);
+      texs[role] = t;
+    }
+    liveMaps.set(id, texs);
+  }
+  for (const l of live.values()) if (l.id === id) restyle(l);
+}
+
+/** The live canvases were drawn again. */
+export function refreshLiveMaps(id: string): void {
+  for (const t of Object.values(liveMaps.get(id) ?? {})) t.needsUpdate = true;
+  for (const l of live.values()) if (l.id === id) l.onUpdate();
 }
 
 const loader = new THREE.TextureLoader();
@@ -140,15 +176,26 @@ export function setReflection(top: string, horizon: string, ground: string): voi
 /** How much a material reflects: metals fully, polished ones a little, matte ones hardly. */
 const reflects = (d: MaterialDef) => d.metalness + (1 - d.metalness) * (1 - d.roughness) * 0.35;
 
+/** Which slot each map goes in, and whether it holds colours (sRGB) or plain values. */
+const ROLE_SLOT: Record<MapRole, { slot: Slot; srgb: boolean }> = {
+  color: { slot: 'map', srgb: true },
+  normal: { slot: 'normalMap', srgb: false },
+  roughness: { slot: 'roughnessMap', srgb: false },
+  metalness: { slot: 'metalnessMap', srgb: false },
+  occlusion: { slot: 'aoMap', srgb: false },
+  glow: { slot: 'emissiveMap', srgb: true },
+  height: { slot: 'bumpMap', srgb: false },
+  opacity: { slot: 'alphaMap', srgb: false },
+};
+
 function restyle(l: Live): void {
   const d = defs.get(l.id);
   const m = l.m;
   const version = ++l.version;
-  drop(m.map);
-  drop(m.normalMap);
-  m.map = null;
-  m.normalMap = null;
-  m.emissiveMap = null;
+  for (const k of SLOTS) {
+    drop(m[k]);
+    m[k] = null;
+  }
   if (!d) {
     // Deleted (or never made): the missing-texture checker, so the faces are easy to find.
     m.color.set(0xffffff);
@@ -165,60 +212,75 @@ function restyle(l: Live): void {
     l.onUpdate();
     return;
   }
+  const livePics = liveMaps.get(d.id);
+  const has = (role: MapRole) => !!(livePics?.[role] ?? d[MAP_FIELDS[role]]);
   m.color.set(d.color);
-  m.roughness = d.roughness;
-  m.metalness = d.metalness;
+  // A map replaces its slider (Three.js multiplies the two).
+  m.roughness = has('roughness') ? 1 : d.roughness;
+  m.metalness = has('metalness') ? 1 : d.metalness;
   m.envMap = reflectionMap();
-  m.envMapIntensity = reflects(d);
-  m.emissive.set(d.emissive ?? '#000000');
-  m.emissiveIntensity = d.emissive ? (d.emissiveStrength ?? 1) : 0;
+  m.envMapIntensity = has('roughness') || has('metalness') ? 0.6 : reflects(d);
+  const glowMap = has('glow');
+  m.emissive.set(d.emissive ?? (glowMap ? '#ffffff' : '#000000'));
+  m.emissiveIntensity = d.emissive || glowMap ? (d.emissiveStrength ?? 1) : 0;
+  m.aoMapIntensity = 1;
+  const k = d.normalStrength ?? 1;
+  m.normalScale.set(k, k);
+  m.bumpScale = k * 2;
   const opacity = d.opacity ?? 1;
-  m.transparent = opacity < 1;
+  const cut = d.cutout !== false;
+  m.transparent = opacity < 1 || (has('opacity') && !cut);
   m.opacity = opacity;
-  m.depthWrite = opacity >= 1;
+  m.depthWrite = !m.transparent;
   m.side = d.doubleSided ? THREE.DoubleSide : THREE.FrontSide;
-  m.alphaTest = d.map && d.cutout !== false ? 0.5 : 0;
+  m.alphaTest = (d.map || has('opacity')) && cut ? 0.5 : 0;
   m.needsUpdate = true;
   l.onUpdate();
   const scale = d.scale ?? 1;
-  const take = (path: string, normal: boolean) =>
-    loadImage(path).then(
+  /** Repeats per dev tile: from the world size of graph materials, else from the image's own size. */
+  const repeatFor = (img: { width: number; height: number }): [number, number] =>
+    d.tile ? [UNITS_PER_TILE / d.tile, UNITS_PER_TILE / d.tile] : [TEX_SIZE / Math.max(1, img.width * scale), TEX_SIZE / Math.max(1, img.height * scale)];
+  const setup = (tex: THREE.Texture, srgb: boolean) => {
+    const img = tex.image as { width: number; height: number };
+    tex.flipY = false;
+    tex.colorSpace = srgb ? THREE.SRGBColorSpace : THREE.NoColorSpace;
+    tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+    tex.anisotropy = 8;
+    const [rx, ry] = repeatFor(img);
+    tex.repeat.set(rx, ry);
+    tex.needsUpdate = true;
+    return tex;
+  };
+  const put = (role: MapRole, tex: THREE.Texture) => {
+    const { slot } = ROLE_SLOT[role];
+    // (Height only gives bumps when there is no normal map.)
+    if (role === 'height' && has('normal')) return void (liveTextures.has(tex) || tex.dispose());
+    m[slot] = tex;
+    // A glowing colour image glows in its own pattern (lava's bright cracks), tinted by the glow colour.
+    if (role === 'color' && d.emissive && !glowMap) m.emissiveMap = tex;
+    if (role === 'color') l.repeat = [tex.repeat.x, tex.repeat.y];
+    // Bumps line up with the image when there is one.
+    if (role === 'normal' && !d.tile && d.map) tex.repeat.set(l.repeat[0], l.repeat[1]);
+    m.needsUpdate = true;
+    l.onUpdate();
+  };
+  for (const role of Object.keys(ROLE_SLOT) as MapRole[]) {
+    const pic = livePics?.[role];
+    if (pic) {
+      put(role, setup(pic, ROLE_SLOT[role].srgb));
+      continue;
+    }
+    const path = d[MAP_FIELDS[role]];
+    if (!path) continue;
+    void loadImage(path).then(
       (base) => {
-        if (l.version !== version || !live.has(m)) return null;
-        const tex = base.clone();
-        const img = tex.image as { width: number; height: number };
-        tex.flipY = false;
-        tex.colorSpace = normal ? THREE.NoColorSpace : THREE.SRGBColorSpace;
-        tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
-        tex.anisotropy = 8;
-        tex.repeat.set(TEX_SIZE / Math.max(1, img.width * scale), TEX_SIZE / Math.max(1, img.height * scale));
-        tex.needsUpdate = true;
-        return tex;
+        if (l.version !== version || !live.has(m)) return;
+        put(role, setup(base.clone(), ROLE_SLOT[role].srgb));
       },
-      () => (l.version === version && !normal ? missingTexture().clone() : null),
+      () => {
+        if (l.version === version && role === 'color') put(role, missingTexture().clone());
+      },
     );
-  if (d.map) {
-    void take(d.map, false).then((tex) => {
-      if (!tex || l.version !== version) return;
-      m.map = tex;
-      // A glowing image glows in its own pattern (lava's bright cracks), tinted by the glow colour.
-      if (d.emissive) m.emissiveMap = tex;
-      l.repeat = [tex.repeat.x, tex.repeat.y];
-      m.needsUpdate = true;
-      l.onUpdate();
-    });
-  }
-  if (d.normalMap) {
-    void take(d.normalMap, true).then((tex) => {
-      if (!tex || l.version !== version) return;
-      // Bumps line up with the image when there is one.
-      if (d.map) tex.repeat.set(l.repeat[0], l.repeat[1]);
-      m.normalMap = tex;
-      const k = d.normalStrength ?? 1;
-      m.normalScale.set(k, k);
-      m.needsUpdate = true;
-      l.onUpdate();
-    });
   }
 }
 
@@ -230,7 +292,7 @@ export function tickMaterials(ms: number): boolean {
     const d = defs.get(l.id);
     const sc = d?.scroll;
     if (!sc || (!sc[0] && !sc[1])) continue;
-    for (const tex of [l.m.map, l.m.normalMap]) {
+    for (const tex of SLOTS.map((k) => l.m[k])) {
       if (!tex) continue;
       const [rx, ry] = [tex.repeat.x, tex.repeat.y];
       // Units a second → texture repeats a second, wrapped to stay precise.

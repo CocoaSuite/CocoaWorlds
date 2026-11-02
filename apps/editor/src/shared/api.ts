@@ -71,6 +71,12 @@ export interface CocoaApi {
     readAsset(dir: string, path: string): Promise<Result<Uint8Array>>;
     /** Put a ready-made asset the editor ships with (“chicken”) into the project's assets, once. */
     addSample(dir: string, name: string): Promise<Result<AssetEntry>>;
+    /** A graph material's graph (`materials/….cwmat`), unchecked. */
+    readGraph(dir: string, path: string): Promise<Result<unknown>>;
+    /** Save a graph; with `create`, as a new file (renamed if taken). Returns its path. */
+    writeGraph(dir: string, path: string, graph: unknown, create?: boolean): Promise<Result<string>>;
+    /** Save a map baked from a graph as `assets/textures/generated/<name>`. Returns its path. */
+    writeGenerated(dir: string, name: string, bytes: Uint8Array): Promise<Result<string>>;
   };
   game: {
     /**
@@ -112,6 +118,9 @@ export const IPC = {
   writeAsset: 'assets:write',
   readAsset: 'assets:read',
   addSample: 'assets:addSample',
+  readGraph: 'materials:readGraph',
+  writeGraph: 'materials:writeGraph',
+  writeGenerated: 'materials:writeGenerated',
   exportGame: 'game:export',
   exportProgress: 'game:exportProgress',
   revealGame: 'game:reveal',

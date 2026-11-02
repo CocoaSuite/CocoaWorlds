@@ -11,6 +11,11 @@ describe('export helpers', () => {
     expect(gameFileName('   ')).toBe('Game');
   });
 
+  it('carries maps baked from graph materials (in the generated folder), not the graphs', () => {
+    const json = JSON.stringify({ materials: [{ id: 'mat/a', graph: 'materials/stone.cwmat', map: 'assets/textures/generated/stone_color.png', roughnessMap: 'assets/textures/generated/stone_roughness.png' }] });
+    expect(usedAssets(json)).toEqual(['assets/textures/generated/stone_color.png', 'assets/textures/generated/stone_roughness.png']);
+  });
+
   it('finds the assets a game uses in its data', () => {
     const json = JSON.stringify({ a: 'assets/textures/brick.png', b: { material: 'assets/textures/brick.png' }, s: 'assets/sounds/ding.wav', m: 'assets/models/crate.glb', x: 'dev/wall' });
     expect(usedAssets(json)).toEqual(['assets/models/crate.glb', 'assets/sounds/ding.wav', 'assets/textures/brick.png']);
