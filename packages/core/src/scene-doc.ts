@@ -215,11 +215,11 @@ export function setTransformCmd(doc: SceneDoc, id: string, next: Transform, merg
   };
 }
 
-type Flag = 'visible' | 'locked';
+type Flag = 'visible' | 'locked' | 'keepsGrass';
 export function setFlagCmd(doc: SceneDoc, id: string, flag: Flag, value: boolean): Command {
   const prev = doc.get(id)?.[flag] ?? !value;
   return {
-    label: flag === 'visible' ? (value ? 'Show' : 'Hide') : value ? 'Lock' : 'Unlock',
+    label: flag === 'visible' ? (value ? 'Show' : 'Hide') : flag === 'keepsGrass' ? (value ? 'Let grass grow under' : 'Clear grass under') : value ? 'Lock' : 'Unlock',
     apply: () => doc.patch(id, (e) => void (e[flag] = value)),
     revert: () => doc.patch(id, (e) => void (e[flag] = prev)),
   };

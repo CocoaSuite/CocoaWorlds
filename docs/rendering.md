@@ -102,7 +102,7 @@ see-through, glow and scrolling. See [materials.md](materials.md).
 
 A **Foliage** component on a brush covers its upward-facing surfaces (within the **Steepest** slope of straight up)
 with grass in a stylized look. **Spacing** is about how far apart the tufts are, **Density** the share of spots
-that get one, **Size** their height (each varies by ±20%). The same **Seed** always gives the same pattern, and no
+that get one, **Width** how far each tuft spreads and **Height** how tall it grows (each varies by ±20%). The same **Seed** always gives the same pattern, and no
 two tufts share a cell of the spacing, so a field is even.
 
 Each tuft is a clump of leaf-shaped blades fanning out from the middle, dark at the root and bright at the tips,
@@ -118,10 +118,15 @@ with a little lighter or darker per tuft. Three tricks give the look:
 - **No ambient occlusion from grass.** Grass is left out of what occlusion is measured from (it would measure
   its own swaying blades and smear dark copies over them), so it only gets the little the ground under it gets.
 
+**Cleared under objects.** Visible solid brushes and models standing on the grass clear it underneath, if they
+are at least 24 u across (pebbles and posts don't). A tuft goes when a point just above its root is inside the
+object (exactly, for brushes; by its box, for models), so something floating overhead leaves the grass alone.
+Each object has **Clears grass under it** in the Inspector (on by default) to let grass grow under it instead.
+
 **Level of detail.** Grass is drawn in 256 u chunks, each culled when out of view and drawn at one of three levels
 by its distance from the camera: full blades (three triangles each, 14 per tuft) within 320 u, 8 single-triangle
-blades to 960 u, 4 broad ones to 2400 u, and past that only the grass-coloured ground cover, which keeps the
-distance green without popping. In the flat views the level follows the zoom. A 1536 u square field drops from about
+blades to 960 u, 4 broad ones to 2400 u, and past that only the grass-coloured ground cover. Over the last fifth of each range a level dissolves into the
+next with a screen-door dither (the two keep complementary pixels), so there's no pop. In the flat views the level follows the zoom. A 1536 u square field drops from about
 2.5 million triangles to about 200 thousand from the player's eyes.
 
 Only the component is saved. Placement is in `@cocoaworlds/geometry` (`scatterTufts`, `grassCover`); drawing (one

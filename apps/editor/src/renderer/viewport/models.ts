@@ -10,7 +10,7 @@ import { assetUrl } from '../assets';
 import { projectMaterial, releaseMaterial } from './project-materials';
 
 /** Units per metre (as in the runtime; not imported from it so the editor doesn't load physics up front). */
-const UNITS_PER_METRE = 39.37;
+export const UNITS_PER_METRE = 39.37;
 
 export interface LoadedModel {
   scene: THREE.Group;

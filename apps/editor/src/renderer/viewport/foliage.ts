@@ -4,7 +4,9 @@
  * or its settings change. Shared by the editor and play mode.
  */
 import { SceneDoc, readComponent, type ScatterData } from '@cocoaworlds/core';
-import { TUFT_STRIDE, grassCover, scatterTufts, seededRandom, type Brush, type Tufts } from '@cocoaworlds/geometry';
+import { TUFT_STRIDE, bounds as brushBoxOf, grassCover, scatterTufts, seededRandom, type Brush, type Tufts } from '@cocoaworlds/geometry';
+import { applyMat4, type EntityData, type ModelData } from '@cocoaworlds/core';
+import { UNITS_PER_METRE, loadModel } from './models';
 import * as THREE from 'three';
 import { isShown, worldBrushOf } from '../brush/brushes';
 
@@ -19,6 +21,10 @@ const LEVELS = [
 ];
 /** How far (u, from the camera to a chunk's edge) each level is drawn; past the last, only the ground cover. */
 export const FOLIAGE_LOD_DISTANCES = [320, 960, 2400];
+/** Objects narrower than this (u, their widest side across the ground) leave the grass alone. */
+export const GRASS_CLEAR_MIN = 24;
+/** The last part of each level's range where it blends into the next (a share of that distance). */
+const BLEND = 0.2;
 /** Grass is drawn in square chunks this wide, each at its own level (and skipped when out of view). */
 const CHUNK = 256;
 
@@ -75,9 +81,21 @@ function tuftGeometry(level: number): THREE.BufferGeometry {
  * The grass shades like the floor it grows on: every vertex takes the floor's normal (a per-tuft attribute), so it
  * lights flat with no shading of its own, and it sways in the wind (more towards the tips).
  */
-function foliageShader(m: THREE.Material): void {
+function foliageShader(m: THREE.Material, fade: Fade): void {
   m.onBeforeCompile = (sh) => {
     sh.uniforms.uTime = FOLIAGE_TIME;
+    sh.uniforms.uFade = fade.amount;
+    sh.uniforms.uFadeSide = fade.side;
+    // Blending between levels: a screen-door dissolve. The level going away keeps the pixels whose dither is under
+    // its share; the one coming in keeps exactly the others, so nothing is drawn twice and nothing goes missing.
+    sh.fragmentShader = sh.fragmentShader.replace(
+      'void main() {',
+      `uniform float uFade;
+      uniform float uFadeSide;
+      void main() {
+        float cwDither = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715))));
+        if (uFadeSide < 0.5 ? cwDither >= uFade : cwDither < 1.0 - uFade) discard;`,
+    );
     sh.vertexShader = sh.vertexShader
       .replace('#include <common>', '#include <common>\nattribute vec3 aFloor;\nuniform float uTime;')
       .replace('#include <beginnormal_vertex>', 'vec3 objectNormal = aFloor;')
@@ -104,6 +122,12 @@ function foliageShader(m: THREE.Material): void {
     flat(sh);
   };
   m.customProgramCacheKey = () => 'cw-foliage';
+}
+
+/** A mesh's share of a blend between levels: how much it keeps, and which side of the dither it keeps. */
+interface Fade {
+  amount: { value: number };
+  side: { value: number };
 }
 
 /** A chunk of one brush's grass: the same tufts at each level, only one shown at a time. */
@@ -151,19 +175,119 @@ export function patchTint(x: number, z: number, seed: number, out: THREE.Color):
   return out.setRGB(1 + 0.16 * warm - 0.12 * cool, 1 + 0.07 * warm + 0.02 * cool, 1 - 0.3 * warm + 0.14 * cool);
 }
 
+/** Something standing on grass: where it clears it, and a key that changes when it moves or changes shape. */
+interface Blocker {
+  min: number[];
+  max: number[];
+  inside(x: number, y: number, z: number): boolean;
+  key: string;
+}
+
+/** Models' own sizes (unit box in the file's space, times its unit scale), loaded as they are first needed. */
+const modelBoxes = new Map<string, THREE.Box3 | null>();
+const modelWaiters = new Set<() => void>();
+function modelBox(data: ModelData): THREE.Box3 | null | undefined {
+  const k = `${data.model}|${data.units}`;
+  if (modelBoxes.has(k)) return modelBoxes.get(k);
+  modelBoxes.set(k, null);
+  void loadModel(data.model)
+    .then((m) => {
+      m.scene.updateMatrixWorld(true);
+      const b = new THREE.Box3().setFromObject(m.scene, true);
+      const u = data.units === 'units' ? 1 : UNITS_PER_METRE;
+      modelBoxes.set(k, b.isEmpty() ? null : new THREE.Box3(b.min.multiplyScalar(u), b.max.multiplyScalar(u)));
+      for (const w of modelWaiters) w();
+    })
+    .catch(() => undefined);
+  return undefined;
+}
+
+const round = (v: number) => Math.round(v * 10) / 10;
+
+/**
+ * What clears grass: visible solid brushes and models, at least GRASS_CLEAR_MIN across, unless set to let grass
+ * grow under them. A tuft is cleared when a point just above its root is inside one (exactly for brushes; within the
+ * box for models, which must also reach down to about the ground).
+ */
+function blockersOf(doc: SceneDoc, skip: string): Blocker[] {
+  const out: Blocker[] = [];
+  for (const e of doc.entities) {
+    if (e.id === skip || e.keepsGrass || !isShown(doc, e)) continue;
+    const c = e.components;
+    if (c.trigger || c.water || c.ladder || c.levelChange) continue;
+    const wb = c.brush ? worldBrushOf(doc, e) : null;
+    if (wb) {
+      if (wb.role !== 'solid') continue;
+      const box = brushBoxOf(wb.brush);
+      if (!box || Math.max(box.max[0]! - box.min[0]!, box.max[2]! - box.min[2]!) < GRASS_CLEAR_MIN) continue;
+      const planes = wb.brush.mesh ? null : wb.brush.faces.map((f) => f.plane);
+      out.push({
+        min: box.min,
+        max: box.max,
+        // (Inside a convex brush: behind every face's plane. Edited meshes go by their box.)
+        inside: planes
+          ? (x, y, z) => planes.every((p) => p.n[0] * x + p.n[1] * y + p.n[2] * z <= p.d + 0.01)
+          : (x, y, z) => x >= box.min[0]! && x <= box.max[0]! && y >= box.min[1]! && y <= box.max[1]! && z >= box.min[2]! && z <= box.max[2]!,
+        key: [box.min, box.max].flat().map(round).join(','),
+      });
+    } else if (c.model) {
+      const data = readComponent<ModelData>('model', c.model);
+      const local = data.model ? modelBox(data) : null;
+      if (!local) continue;
+      const m = doc.worldMatrix(e.id);
+      const min = [Infinity, Infinity, Infinity], max = [-Infinity, -Infinity, -Infinity];
+      for (let i = 0; i < 8; i++) {
+        const p = applyMat4(m, [i & 1 ? local.max.x : local.min.x, i & 2 ? local.max.y : local.min.y, i & 4 ? local.max.z : local.min.z]);
+        for (let k = 0; k < 3; k++) {
+          min[k] = Math.min(min[k]!, p[k]!);
+          max[k] = Math.max(max[k]!, p[k]!);
+        }
+      }
+      if (Math.max(max[0]! - min[0]!, max[2]! - min[2]!) < GRASS_CLEAR_MIN) continue;
+      out.push({
+        min,
+        max,
+        inside: (x, y, z) => x >= min[0]! && x <= max[0]! && z >= min[2]! && z <= max[2]! && y >= min[1]! - 4 && y <= max[1]!,
+        key: [min, max].flat().map(round).join(','),
+      });
+    }
+  }
+  return out;
+}
+
+/** Tufts not cleared by anything standing there. */
+function withoutCleared(t: Tufts, blockers: Blocker[]): Tufts {
+  if (!blockers.length) return t;
+  const keep: number[] = [];
+  for (let i = 0; i < t.count; i++) {
+    const o = i * TUFT_STRIDE;
+    // (Just above the root: a block resting on the ground has it inside; one floating overhead doesn't.)
+    const x = t.data[o]!, y = t.data[o + 1]! + 2, z = t.data[o + 2]!;
+    if (!blockers.some((b) => x >= b.min[0]! && x <= b.max[0]! && z >= b.min[2]! && z <= b.max[2]! && b.inside(x, y, z))) keep.push(i);
+  }
+  const data = new Float32Array(keep.length * TUFT_STRIDE);
+  keep.forEach((i, k) => data.set(t.data.subarray(i * TUFT_STRIDE, (i + 1) * TUFT_STRIDE), k * TUFT_STRIDE));
+  return { count: keep.length, data };
+}
+
 export class FoliageRenderer {
   readonly group = new THREE.Group();
   private entries = new Map<string, Entry>();
   private geometries = LEVELS.map((_, l) => tuftGeometry(l));
-  private materials = new Map<string, THREE.MeshLambertMaterial>();
   private dummy = new THREE.Object3D();
+
+  private lastDoc: SceneDoc | null = null;
+  private resync = () => this.lastDoc && this.sync(this.lastDoc);
 
   constructor() {
     this.group.name = 'foliage';
+    // A model's size arrives once its file is read: then the grass under it is cleared.
+    modelWaiters.add(this.resync);
   }
 
   /** Bring the tufts up to date with the scene (only the brushes that changed are placed again). */
   sync(doc: SceneDoc | null): void {
+    this.lastDoc = doc;
     const seen = new Set<string>();
     for (const e of doc?.entities ?? []) {
       if (!e.components.scatter || !doc) continue;
@@ -171,12 +295,17 @@ export class FoliageRenderer {
       if (!brush || !isShown(doc, e)) continue;
       seen.add(e.id);
       const sc = readComponent<ScatterData>('scatter', e.components.scatter);
-      const key = JSON.stringify([sc, e.components.brush, doc.worldMatrix(e.id)]);
+      // (Only what stands within this brush's reach can clear its grass.)
+      const reach = brushBoxOf(brush.brush);
+      const blockers = reach
+        ? blockersOf(doc, e.id).filter((b) => b.max[0]! >= reach.min[0]! && b.min[0]! <= reach.max[0]! && b.max[2]! >= reach.min[2]! && b.min[2]! <= reach.max[2]! && b.max[1]! >= reach.min[1]! && b.min[1]! <= reach.max[1]! + 8)
+        : [];
+      const key = JSON.stringify([sc, e.components.brush, doc.worldMatrix(e.id), blockers.map((b) => b.key)]);
       if (this.entries.get(e.id)?.key === key) continue;
       this.remove(e.id);
       const entry: Entry = { key, chunks: [] };
       this.entries.set(e.id, entry);
-      const tufts = scatterTufts(brush.brush, sc);
+      const tufts = withoutCleared(scatterTufts(brush.brush, sc), blockers);
       if (!tufts.count) continue;
       this.add(e.id, entry, sc, tufts);
       this.addCover(entry, e.id, brush.brush, sc);
@@ -191,22 +320,33 @@ export class FoliageRenderer {
   update(cam: THREE.Camera, unitsPerPixel = 1): void {
     const ortho = (cam as THREE.OrthographicCamera).isOrthographicCamera;
     const at = cam.getWorldPosition(new THREE.Vector3());
+    const show = (m: THREE.InstancedMesh | undefined, amount: number, side: number) => {
+      if (!m) return;
+      m.visible = amount > 0.001;
+      const f = m.material as THREE.Material & { userData: { fade: Fade } };
+      f.userData.fade.amount.value = amount;
+      f.userData.fade.side.value = side;
+    };
     for (const e of this.entries.values()) {
       for (const c of e.chunks) {
-        let level: number;
-        if (ortho) level = unitsPerPixel < 0.6 ? 0 : unitsPerPixel < 2 ? 1 : 2;
-        else {
-          const d = Math.max(0, at.distanceTo(c.centre) - c.radius);
-          level = FOLIAGE_LOD_DISTANCES.findIndex((max) => d < max);
-          if (level < 0) level = LEVELS.length;
+        for (const m of c.meshes) m.visible = false;
+        if (ortho) {
+          show(c.meshes[unitsPerPixel < 0.6 ? 0 : unitsPerPixel < 2 ? 1 : 2], 1, 0);
+          continue;
         }
-        c.meshes.forEach((m, l) => (m.visible = l === level));
+        const d = Math.max(0, at.distanceTo(c.centre) - c.radius);
+        const level = FOLIAGE_LOD_DISTANCES.findIndex((max) => d < max);
+        if (level < 0) continue;
+        // Near the end of its range a level dissolves into the next (the last into nothing: the cover carries on).
+        const end = FOLIAGE_LOD_DISTANCES[level]!;
+        const t = Math.min(1, Math.max(0, (d - end * (1 - BLEND)) / (end * BLEND)));
+        show(c.meshes[level], 1 - t, 0);
+        if (t > 0) show(c.meshes[level + 1], t, 1);
       }
     }
   }
 
   private add(id: string, entry: Entry, sc: ScatterData, t: Tufts): void {
-    const mat = this.material(sc.colour);
     const tint = new THREE.Color();
     const rnd = seededRandom(Math.round(sc.seed) + 99);
     // Tufts by chunk.
@@ -228,13 +368,15 @@ export class FoliageRenderer {
         const yaw = t.data[o + 3]!;
         this.dummy.position.set(t.data[o]!, t.data[o + 1]!, t.data[o + 2]!);
         this.dummy.rotation.set(0, yaw, 0);
-        this.dummy.scale.setScalar(t.data[o + 4]!);
+        const w = t.data[o + 4]!, tall = (w * (sc.height ?? sc.size)) / sc.size;
+        this.dummy.scale.set(w, tall, w);
         this.dummy.updateMatrix();
         this.dummy.matrix.toArray(matrices.array, k * 16);
-        // The floor normal in the tuft's own (turned) space, so turning it back gives the floor's.
+        // The floor normal in the tuft's own (turned) space, so turning it back gives the floor's. (Scaled by the
+        // tuft's stretch: the shader divides normals by it, so a taller tuft still gets the floor's exact normal.)
         const nx = t.data[o + 5]!, ny = t.data[o + 6]!, nz = t.data[o + 7]!;
         const c = Math.cos(yaw), s = Math.sin(yaw);
-        floor.setXYZ(k, c * nx - s * nz, ny, s * nx + c * nz);
+        floor.setXYZ(k, c * nx - s * nz, (ny * tall) / w, s * nx + c * nz);
         // Its patch's hue, a touch lighter or darker per tuft.
         patchTint(t.data[o]!, t.data[o + 2]!, sc.seed, tint).multiplyScalar(0.97 + rnd() * 0.06);
         colours.setXYZ(k, tint.r, tint.g, tint.b);
@@ -242,7 +384,7 @@ export class FoliageRenderer {
       const meshes = this.geometries.map((g, l) => {
         const geo = g.clone();
         geo.setAttribute('aFloor', floor);
-        const mesh = new THREE.InstancedMesh(geo, mat, count);
+        const mesh = new THREE.InstancedMesh(geo, this.material(sc.colour), count);
         mesh.name = `foliage:${id}:lod${l}`;
         mesh.instanceMatrix = matrices;
         mesh.instanceColor = colours;
@@ -282,6 +424,7 @@ export class FoliageRenderer {
       for (const m of c.meshes) {
         this.group.remove(m);
         m.geometry.dispose();
+        (m.material as THREE.Material).dispose();
         m.dispose();
       }
     }
@@ -293,13 +436,15 @@ export class FoliageRenderer {
     this.entries.delete(id);
   }
 
+  /**
+   * Each mesh has a material of its own, to carry its own share of a blend between levels (they all share one
+   * compiled shader).
+   */
   private material(colour: string): THREE.MeshLambertMaterial {
-    let m = this.materials.get(colour);
-    if (!m) {
-      m = new THREE.MeshLambertMaterial({ color: colour, vertexColors: true, side: THREE.DoubleSide });
-      foliageShader(m);
-      this.materials.set(colour, m);
-    }
+    const m = new THREE.MeshLambertMaterial({ color: colour, vertexColors: true, side: THREE.DoubleSide });
+    const fade: Fade = { amount: { value: 1 }, side: { value: 0 } };
+    m.userData.fade = fade;
+    foliageShader(m, fade);
     return m;
   }
 
@@ -313,14 +458,26 @@ export class FoliageRenderer {
   /** How many tufts are drawn at each level right now (for tests). */
   get shown(): number[] {
     const out = LEVELS.map(() => 0);
-    for (const e of this.entries.values()) for (const c of e.chunks) c.meshes.forEach((m, l) => m.visible && (out[l]! += c.count));
+    for (const e of this.entries.values()) {
+      for (const c of e.chunks) {
+        // (Mid-blend a chunk counts at the level with the larger share.)
+        let best = -1, share = 0;
+        c.meshes.forEach((m, l) => {
+          const a = (m.material as THREE.Material).userData.fade.amount.value as number;
+          if (m.visible && a > share) {
+            best = l;
+            share = a;
+          }
+        });
+        if (best >= 0) out[best]! += c.count;
+      }
+    }
     return out;
   }
 
   dispose(): void {
     for (const id of [...this.entries.keys()]) this.remove(id);
     for (const g of this.geometries) g.dispose();
-    for (const m of this.materials.values()) m.dispose();
-    this.materials.clear();
+    modelWaiters.delete(this.resync);
   }
 }

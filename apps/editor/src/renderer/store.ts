@@ -188,7 +188,7 @@ interface Actions {
   duplicateSelection(): void;
   rename(id: string, name: string): void;
   setTransform(id: string, tr: Transform, mergeKey?: string): void;
-  setFlag(id: string, flag: 'visible' | 'locked', v: boolean): void;
+  setFlag(id: string, flag: 'visible' | 'locked' | 'keepsGrass', v: boolean): void;
   startRename(id: string | null): void;
   frameSelection(): void;
   save(): Promise<boolean>;

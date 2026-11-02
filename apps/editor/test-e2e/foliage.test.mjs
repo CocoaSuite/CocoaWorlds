@@ -19,6 +19,25 @@ test('foliage: tufts on a brush top, shown in the editor and in Play', async () 
     const tufts = () => page.evaluate(() => window.__cwViewport.foliage.count);
     await until(async () => (await tufts()) > 500, true, 10000);
     const saved = await tufts();
+    const block = async (size, corner) => {
+      await page.keyboard.press('2'); await page.keyboard.press('b'); await drawBrush(page);
+      await setDraft(page, size, corner);
+      await page.getByRole('group', { name: 'Brush tool' }).getByRole('button', { name: 'Create' }).click();
+      await page.keyboard.press('v');
+    };
+    // A crate standing on the grass clears it underneath…
+    await block([128, 64, 128], [-64, 0, -64]);
+    await until(async () => (await tufts()) < saved - 100, true, 10000);
+    const cleared = await tufts();
+    // …a pebble doesn't (too small)…
+    await block([16, 16, 16], [200, 0, 200]);
+    await new Promise((r) => setTimeout(r, 800));
+    assert.equal(await tufts(), cleared);
+    // …and the crate can be set to let grass grow under it.
+    await page.getByRole('tree').getByRole('treeitem', { name: 'block_2' }).click();
+    await insp.getByRole('switch', { name: 'Clears grass under it' }).click();
+    await until(tufts, saved, 10000);
+    await page.getByRole('tree').getByRole('treeitem', { name: 'block', exact: true }).click();
     await page.getByTestId('viewport').hover(); await page.keyboard.press('f');
     await shot(page, 'foliage01');
     // Play: the same tufts are drawn in the game, and the player can still stand on the block.

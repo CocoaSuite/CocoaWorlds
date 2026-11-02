@@ -65,6 +65,10 @@ function BrushEntity({ e }: { e: EntityData }) {
           <span>{t('insp.locked')}</span>
           <Switch label={t('insp.locked')} checked={e.locked} onChange={(v) => s.setFlag(e.id, 'locked', v)} />
         </div>
+        <div className="cw-flagrow">
+          <span>{t('insp.clearsGrass')}</span>
+          <Switch label={t('insp.clearsGrass')} checked={!e.keepsGrass} onChange={(v) => s.setFlag(e.id, 'keepsGrass', !v)} />
+        </div>
       </Section>
     </>
   );
@@ -115,6 +119,10 @@ function GroupEntity({ e }: { e: EntityData }) {
         <div className="cw-flagrow">
           <span>{t('insp.locked')}</span>
           <Switch label={t('insp.locked')} checked={e.locked} onChange={(v) => s.setFlag(e.id, 'locked', v)} />
+        </div>
+        <div className="cw-flagrow">
+          <span>{t('insp.clearsGrass')}</span>
+          <Switch label={t('insp.clearsGrass')} checked={!e.keepsGrass} onChange={(v) => s.setFlag(e.id, 'keepsGrass', !v)} />
         </div>
       </Section>
     </>

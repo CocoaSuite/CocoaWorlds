@@ -95,6 +95,8 @@ export interface EntityData {
   layer: string;
   visible: boolean;
   locked: boolean;
+  /** True: grass grows under it (it doesn't clear Foliage it stands on). */
+  keepsGrass?: boolean;
   components: Record<string, ComponentData>;
 }
 
