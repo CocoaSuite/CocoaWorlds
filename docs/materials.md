@@ -11,8 +11,12 @@ every face that uses it at once: in the editor, in Play and in exported games.
   material from each one, named after the file (`lava_rock.png` becomes “Lava rock”).
 
 Pick a material in the list to see it in the middle. The preview can be a **Sphere**, a **Cube** or a
-**Wall**. Drag to turn it; it starts turning slowly again a few seconds later. The shapes are 128 units
-across, so an image shows at the size it will have in the level.
+**Wall**. Drag to turn it; it starts turning slowly again a few seconds later. The mouse wheel (or **+** and
+**−**) zooms in to see the details; **Shift+drag** or a right-button drag moves the light instead (or turn on
+**☀** to make an ordinary drag move it). Double-click puts the view back. The shapes are 128 units across, so
+an image shows at the size it will have in the level.
+
+**‹** at the top of the list folds it away into a strip of swatches (still clickable); **›** opens it again.
 
 ## Settings
 
@@ -58,11 +62,15 @@ from a small working graph (a stone-like surface) to change.
 
 - **The library** on the left of the graph lists every node by group, with a picture of what it makes. Type
   to search it. Click a node to add it in the middle of the graph, or drag it to where you want it. **‹** hides
-  the library (and **›** brings it back); groups fold away with a click on their name.
+  the library (and **›** brings it back); groups fold away with a click on their name. With the materials
+  list folded away, the library spreads into several columns of tiles.
 - **Add a node** without the library: right-click the graph, press **Space**, or **+ Node**. Type to find one;
   Enter adds the first match where you clicked.
 - **Wire**: drag from a node's output (right) to another node's input (left). An input takes one wire; a new
   one replaces it. Wires that would loop back are refused. Grey dots carry grey pictures, gold ones colour.
+  The dots can be grabbed (and wires dropped on them) from a little way off.
+- **Unplug**: grab a plugged input and pull its wire off: let go on empty graph to unplug it, or on another
+  input to move it there. Alt+click on a wire unplugs it too.
 - **Remove**: pick nodes or wires and press **Delete**. Shift or Ctrl adds to the pick.
 - **Copy and paste**: Ctrl+C copies the picked nodes (with their settings and the wires between them), Ctrl+X
   cuts them, Ctrl+V pastes them where the mouse is, Ctrl+D duplicates them beside the originals. Copied nodes

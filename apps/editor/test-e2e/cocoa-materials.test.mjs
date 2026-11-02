@@ -84,6 +84,46 @@ test('cocoa materials: a graph material, edited, baked and used', async () => {
     await page.keyboard.press('Control+y');
     await until(async () => (await graphFile()).nodes.find((n) => n.type === 'bricks').params.rows, 12, 6000);
 
+    // 3b. Unplugging: grab a plugged input and let go on empty graph; undo plugs it back. Dropped on another
+    // input, the wire moves there (one undo step).
+    const linkInto = async (type, input = 'in') => {
+      const g = await graphFile();
+      const id = g.nodes.find((n) => n.type === type).id;
+      const l = g.links.find((x) => x.to === id && x.input === input);
+      return l ? g.nodes.find((n) => n.id === l.from).type : null;
+    };
+    const grab = async (type) => {
+      const h = await nodeOf(type).locator('.react-flow__handle-left').first().boundingBox();
+      await page.mouse.move(h.x + h.width / 2, h.y + h.height / 2);
+      await page.mouse.down();
+    };
+    const flowBox = await page.getByTestId('material-graph').boundingBox();
+    await grab('outHeight');
+    await page.mouse.move(flowBox.x + flowBox.width - 30, flowBox.y + flowBox.height - 30, { steps: 8 });
+    await page.locator('.cm-lifted').waitFor();
+    await page.mouse.up();
+    await until(() => linkInto('outHeight'), null, 6000);
+    await page.keyboard.press('Control+z');
+    await until(() => linkInto('outHeight'), 'noise', 6000);
+    await grab('gradientMap');
+    const target = await nodeOf('outHeight').locator('.react-flow__handle-left').first().boundingBox();
+    // (Let go a little off the dot: near is enough.)
+    await page.mouse.move(target.x + target.width / 2 + 12, target.y + target.height / 2 + 6, { steps: 8 });
+    await page.mouse.up();
+    await until(() => linkInto('outHeight'), 'bricks', 6000);
+    assert.equal(await linkInto('gradientMap'), null);
+    await page.keyboard.press('Control+z');
+    await until(() => linkInto('gradientMap'), 'bricks', 6000);
+    assert.equal(await linkInto('outHeight'), 'noise');
+
+    // 3c. Folding the materials list away spreads the library into columns.
+    await region.getByRole('button', { name: 'Fold the list away (more room for the graph)' }).click();
+    const columns = () => page.evaluate(() => getComputedStyle(document.querySelector('.cm-lib.wide .cm-lib-items')).gridTemplateColumns.split(' ').length);
+    await until(async () => (await columns()) >= 3, true, 4000);
+    await shot(page, 'cm03b-wide-library');
+    await region.getByRole('button', { name: 'Show the materials list' }).click();
+    await region.getByRole('listbox', { name: 'Materials' }).getByRole('option', { name: 'Graph material' }).waitFor();
+
     // 4. Taking a map away: deleting the roughness number unbakes that map; undo brings it back.
     await nodeOf('value').click();
     await page.keyboard.press('Delete');

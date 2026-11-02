@@ -362,7 +362,7 @@ let icons: Map<string, string> | null = null;
  * A small picture of what each kind of node makes, with its default settings (nodes that need an input are fed
  * a noise; colour nodes a soft gradient). Drawn once, on first use.
  */
-export function nodeIcons(size = 40): Map<string, string> {
+export function nodeIcons(size = 64): Map<string, string> {
   if (icons) return icons;
   icons = new Map();
   try {

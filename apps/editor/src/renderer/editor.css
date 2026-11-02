@@ -454,3 +454,35 @@ code { font: 12px var(--mono); color: var(--fg); }
 .cm-lib-ph.g-colour { background: #d46bc0; } .cm-lib-ph.g-surface { background: #4ad0c4; } .cm-lib-ph.g-output { background: #cfcfcf; }
 .cm-lib-show { flex: none; width: 22px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); color: var(--mute); cursor: pointer; font-size: 14px; }
 .cm-lib-show:hover { color: var(--fg); background: var(--panel2); }
+
+/* The materials list folded away: a strip of swatches; the node library spreads into columns of tiles. */
+.cw-mats.list-shut { grid-template-columns: 52px minmax(0, 1fr) 300px; }
+.cw-mats-h-tools { display: flex; align-items: center; gap: 4px; }
+.cw-mats-rail { display: flex; flex-direction: column; align-items: center; gap: 8px; min-height: 0; padding: 10px 0; background: var(--panel); border-right: 1px solid var(--line); }
+.cw-mats-rail-list { list-style: none; margin: 0; padding: 0 0 8px; display: flex; flex-direction: column; gap: 6px; overflow: auto; }
+.cw-mats-rail-list > li { padding: 2px; border: 1px solid transparent; border-radius: 8px; cursor: pointer; }
+.cw-mats-rail-list > li.on { border-color: var(--sel); }
+.cw-mats-rail-list > li:hover:not(.on) { background: var(--panel2); }
+.cm-lib.wide { width: 360px; }
+.cm-lib.wide .cm-lib-items { display: grid; grid-template-columns: repeat(auto-fill, minmax(76px, 1fr)); gap: 4px; }
+.cm-lib.wide .cm-lib-item { flex-direction: column; justify-content: flex-start; gap: 4px; padding: 6px 2px; text-align: center; font-size: 11px; line-height: 1.2; }
+.cm-lib.wide .cm-lib-item img, .cm-lib.wide .cm-lib-ph { width: 56px; height: 56px; }
+
+/* Preview: zoom and light buttons over the picture. */
+.cw-mats-preview-wrap { position: absolute; inset: 0; }
+.cw-mats-preview-wrap.light .cw-mats-preview { cursor: crosshair; }
+.cw-mats-preview-tools { position: absolute; right: 6px; bottom: 6px; display: flex; gap: 4px; }
+.cw-mats-preview-tools .cw-iconbtn.on { border-color: var(--cw-warn); color: var(--cw-warn); }
+/* A small square button with one character (‹ › × + −). */
+.cw-iconbtn { display: inline-flex; align-items: center; justify-content: center; flex: none; width: 24px; height: 24px; padding: 0; border: 1px solid var(--line); border-radius: 6px;
+  background: var(--panel2); color: var(--mute); font: inherit; font-size: 14px; line-height: 1; cursor: pointer; }
+.cw-iconbtn:hover:not(:disabled) { color: var(--fg); background: var(--menuhover); }
+.cw-iconbtn:disabled { opacity: 0.4; cursor: default; }
+.cw-mats-preview-tools .cw-iconbtn { width: 26px; height: 26px; border: 1px solid var(--line); border-radius: 6px; background: rgba(26, 26, 26, 0.85); color: var(--fg); }
+/* Connection points: small dots with a much bigger area to grab (and to drop wires on). */
+.cm-h.react-flow__handle::after { content: ''; position: absolute; inset: -9px; border-radius: 50%; }
+.cm-h.react-flow__handle:hover { background: var(--fg); box-shadow: 0 0 0 3px rgba(75, 156, 255, 0.45); }
+.cm-port.wired .cm-h.react-flow__handle { cursor: grab; }
+.cm-flow .react-flow__edge.lifted path { opacity: 0.2; }
+.cm-lifted { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 15; overflow: visible; }
+.cm-lifted path { fill: none; stroke: var(--sel); stroke-width: 2; stroke-dasharray: 6 4; }

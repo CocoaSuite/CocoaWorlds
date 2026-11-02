@@ -110,6 +110,23 @@ export function MaterialsPanel() {
 
   const goToScene = () => useEditor.getState().setWorkspace('scene');
 
+  // The list can fold away (remembered), giving the graph and its library the room.
+  const [listShut, setListShut] = useState(() => {
+    try {
+      return localStorage.getItem('cw-mats-list') === 'shut';
+    } catch {
+      return false;
+    }
+  });
+  const shutList = (shut: boolean) => {
+    setListShut(shut);
+    try {
+      localStorage.setItem('cw-mats-list', shut ? 'shut' : 'open');
+    } catch {
+      /* ignore */
+    }
+  };
+
   const removeMat = () => {
     if (!mat) return;
     setAll(
@@ -173,13 +190,33 @@ export function MaterialsPanel() {
   ) : null;
 
   return (
-    <div className="cw-screens cw-mats" role="region" aria-label={t('ws.materials')}>
+    <div className={`cw-screens cw-mats${listShut ? ' list-shut' : ''}`} role="region" aria-label={t('ws.materials')}>
+      {listShut ? (
+        // Folded away: a narrow strip of swatches, to switch materials without opening it.
+        <aside className="cw-mats-rail" aria-label={t('mat.list')}>
+          <button type="button" className="cw-iconbtn" aria-label={t('mat.showList')} title={t('mat.showList')} onClick={() => shutList(false)}>
+            ›
+          </button>
+          <ul className="cw-mats-rail-list" role="listbox" aria-label={t('mat.list')}>
+            {list.map((m) => (
+              <li key={m.id} role="option" aria-selected={m.id === mat?.id} aria-label={m.name} title={m.name} className={m.id === mat?.id ? 'on' : ''} onClick={() => setSelected(m.id)}>
+                <MaterialSwatch def={m} className="cw-mats-sw" />
+              </li>
+            ))}
+          </ul>
+        </aside>
+      ) : (
       <aside className="cw-screens-side" aria-label={t('mat.list')}>
         <div className="cw-screens-h">
           <span>{t('mat.list')}</span>
-          <Button size="sm" onClick={() => add(newMaterial(unique(t('mat.newName'), list.map((m) => m.name))), 'Add material')}>
-            {t('mat.add')}
-          </Button>
+          <span className="cw-mats-h-tools">
+            <Button size="sm" onClick={() => add(newMaterial(unique(t('mat.newName'), list.map((m) => m.name))), 'Add material')}>
+              {t('mat.add')}
+            </Button>
+            <button type="button" className="cw-iconbtn" aria-label={t('mat.hideList')} title={t('mat.hideList')} onClick={() => shutList(true)}>
+              ‹
+            </button>
+          </span>
         </div>
         <Button size="sm" onClick={() => fileRef.current?.click()}>
           {t('mat.fromImage')}
@@ -217,6 +254,7 @@ export function MaterialsPanel() {
         </ul>
         <p className="cw-muted cw-screens-hint">{t('mat.hint')}</p>
       </aside>
+      )}
 
       {mat?.graph ? (
         <GraphWorkspace
@@ -226,6 +264,7 @@ export function MaterialsPanel() {
           onDuplicate={() => void duplicateGraphMaterial(mat)}
           onRemove={removeMat}
           tools={useRow}
+          wideLibrary={listShut}
         />
       ) : (
         <>
@@ -241,7 +280,7 @@ export function MaterialsPanel() {
               { value: 'wall', label: t('mat.wall') },
             ]}
           />
-          <span className="cw-muted cw-screens-tip">{mat ? t('mat.turnHint') : ''}</span>
+          <span className="cw-muted cw-screens-tip">{mat ? t('mat.viewHint') : ''}</span>
         </div>
         <div className="cw-mats-stage">{mat ? <MaterialPreview id={mat.id} shape={shape} /> : <div className="cw-muted cw-screens-empty">{t('mat.pick')}</div>}</div>
         {mat && useRow}
@@ -420,7 +459,12 @@ function previewGeometry(shape: Shape): THREE.BufferGeometry {
 
 export function MaterialPreview({ id, shape }: { id: string; shape: Shape }) {
   const host = useRef<HTMLDivElement>(null);
-  const turn = useRef({ yaw: 0.6, pitch: 0.25, drag: null as null | { x: number; y: number }, idle: 0 });
+  const turn = useRef({ yaw: 0.6, pitch: 0.25, drag: null as null | { x: number; y: number; light: boolean }, idle: 0 });
+  /** Closer or further (1 = the whole shape in view), and where the main light comes from. */
+  const view = useRef({ zoom: 1, az: -0.6, el: 0.6, dirty: () => {} });
+  const [lightMode, setLightMode] = useState(false);
+  const lightRef = useRef(false);
+  lightRef.current = lightMode;
   const geometry = useMemo(() => previewGeometry(shape), [shape]);
   useEffect(() => () => geometry.dispose(), [geometry]);
 
@@ -433,16 +477,16 @@ export function MaterialPreview({ id, shape }: { id: string; shape: Shape }) {
     r.domElement.setAttribute('data-testid', 'material-preview');
     el.appendChild(r.domElement);
     const scene = new THREE.Scene();
-    scene.add(new THREE.HemisphereLight(0xdfe8f2, 0x3a3834, 1.6));
-    const key = new THREE.DirectionalLight(0xffffff, 2.4);
-    key.position.set(-200, 300, 260);
+    scene.add(new THREE.HemisphereLight(0xdfe8f2, 0x3a3834, 1.2));
+    const key = new THREE.DirectionalLight(0xffffff, 2.8);
     scene.add(key);
-    const rim = new THREE.DirectionalLight(0xbcd2ff, 0.8);
+    const rim = new THREE.DirectionalLight(0xbcd2ff, 0.6);
     rim.position.set(260, 60, -300);
     scene.add(rim);
     const cam = new THREE.PerspectiveCamera(30, 1, 10, 4000);
-    cam.position.set(0, 0, shape === 'cube' ? 560 : shape === 'wall' ? 500 : 420);
+    const base = shape === 'cube' ? 560 : shape === 'wall' ? 500 : 420;
     let dirty = true;
+    view.current.dirty = () => (dirty = true);
     const material = projectMaterial(id, () => (dirty = true));
     const mesh = new THREE.Mesh(geometry, material);
     scene.add(mesh);
@@ -465,38 +509,64 @@ export function MaterialPreview({ id, shape }: { id: string; shape: Shape }) {
       const dt = Math.min(0.05, (now - last) / 1000);
       last = now;
       const tr = turn.current;
-      // Turns slowly on its own until dragged; picks up again a few seconds after.
-      if (!tr.drag && now > tr.idle && shape !== 'wall') {
+      // Turns slowly on its own until dragged (or zoomed in); picks up again a few seconds after.
+      if (!tr.drag && now > tr.idle && shape !== 'wall' && view.current.zoom >= 1) {
         tr.yaw += dt * 0.35;
         dirty = true;
       }
       if (tickMaterials(now)) dirty = true;
       if (!dirty) return;
       dirty = false;
+      const v = view.current;
+      cam.position.set(0, 0, base * v.zoom);
+      key.position.set(Math.sin(v.az) * Math.cos(v.el) * 450, Math.sin(v.el) * 450, Math.cos(v.az) * Math.cos(v.el) * 450);
       mesh.rotation.set(tr.pitch, tr.yaw, 0, 'XYZ');
       r.render(scene, cam);
     };
     loop();
     const down = (e: PointerEvent) => {
-      turn.current.drag = { x: e.clientX, y: e.clientY };
+      turn.current.drag = { x: e.clientX, y: e.clientY, light: lightRef.current || e.shiftKey || e.button === 2 };
       r.domElement.setPointerCapture(e.pointerId);
     };
     const move = (e: PointerEvent) => {
       const tr = turn.current;
       if (!tr.drag) return;
-      tr.yaw += (e.clientX - tr.drag.x) * 0.01;
-      tr.pitch = Math.max(-1.2, Math.min(1.2, tr.pitch + (e.clientY - tr.drag.y) * 0.01));
-      tr.drag = { x: e.clientX, y: e.clientY };
+      const dx = e.clientX - tr.drag.x, dy = e.clientY - tr.drag.y;
+      if (tr.drag.light) {
+        const v = view.current;
+        v.az += dx * 0.012;
+        v.el = Math.max(-1.3, Math.min(1.45, v.el - dy * 0.012));
+      } else {
+        tr.yaw += dx * 0.01;
+        tr.pitch = Math.max(-1.2, Math.min(1.2, tr.pitch + dy * 0.01));
+      }
+      tr.drag = { ...tr.drag, x: e.clientX, y: e.clientY };
       dirty = true;
     };
     const up = () => {
       turn.current.drag = null;
       turn.current.idle = performance.now() + 4000;
     };
+    const wheel = (e: WheelEvent) => {
+      e.preventDefault();
+      const v = view.current;
+      v.zoom = Math.max(0.3, Math.min(2.5, v.zoom * Math.exp(e.deltaY * 0.0012)));
+      turn.current.idle = performance.now() + 4000;
+      dirty = true;
+    };
+    const reset = () => {
+      Object.assign(view.current, { zoom: 1, az: -0.6, el: 0.6 });
+      Object.assign(turn.current, { yaw: 0.6, pitch: 0.25 });
+      dirty = true;
+    };
+    const noMenu = (e: Event) => e.preventDefault();
     r.domElement.addEventListener('pointerdown', down);
     r.domElement.addEventListener('pointermove', move);
     r.domElement.addEventListener('pointerup', up);
     r.domElement.addEventListener('pointercancel', up);
+    r.domElement.addEventListener('wheel', wheel, { passive: false });
+    r.domElement.addEventListener('dblclick', reset);
+    r.domElement.addEventListener('contextmenu', noMenu);
     return () => {
       cancelAnimationFrame(raf);
       obs.disconnect();
@@ -507,5 +577,26 @@ export function MaterialPreview({ id, shape }: { id: string; shape: Shape }) {
     };
   }, [id, geometry, shape]);
 
-  return <div className="cw-mats-preview" ref={host} />;
+  const zoomBy = (k: number) => {
+    const v = view.current;
+    v.zoom = Math.max(0.3, Math.min(2.5, v.zoom * k));
+    turn.current.idle = performance.now() + 4000;
+    v.dirty();
+  };
+  return (
+    <div className={`cw-mats-preview-wrap${lightMode ? ' light' : ''}`}>
+      <div className="cw-mats-preview" ref={host} />
+      <div className="cw-mats-preview-tools">
+        <button type="button" className="cw-iconbtn" aria-label={t('mat.zoomIn')} title={t('mat.zoomIn')} onClick={() => zoomBy(0.8)}>
+          +
+        </button>
+        <button type="button" className="cw-iconbtn" aria-label={t('mat.zoomOut')} title={t('mat.zoomOut')} onClick={() => zoomBy(1.25)}>
+          −
+        </button>
+        <button type="button" className={`cw-iconbtn${lightMode ? ' on' : ''}`} aria-pressed={lightMode} aria-label={t('mat.turnLight')} title={t('mat.turnLightHint')} onClick={() => setLightMode((v) => !v)}>
+          ☀
+        </button>
+      </div>
+    </div>
+  );
 }

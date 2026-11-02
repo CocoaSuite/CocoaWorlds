@@ -53,12 +53,14 @@ const liveSize = (m: MaterialDef) => Math.min(m.bakeSize ?? 512, 512);
 
 interface Ctx {
   live: LiveGraph | null;
+  /** Start lifting the wire plugged into an input (to move it to another input, or unplug it). */
+  lift?: (to: string, input: string, e: React.PointerEvent) => void;
   /** Bumped when pictures are redrawn (nodes repaint their errors). */
   errors: ReadonlyMap<string, string>;
 }
 const GraphCtx = createContext<Ctx>({ live: null, errors: new Map() });
 
-type CmNode = Node<{ node: GraphNode }, 'cm'>;
+type CmNode = Node<{ node: GraphNode; wired: string[] }, 'cm'>;
 
 const Thumb = memo(function Thumb({ id, size = 116 }: { id: string; size?: number }) {
   const { live } = useContext(GraphCtx);
@@ -72,7 +74,7 @@ const Thumb = memo(function Thumb({ id, size = 116 }: { id: string; size?: numbe
 
 function CmNodeView({ id, data, selected }: NodeProps<CmNode>) {
   const def = nodeDef(data.node.type)!;
-  const { errors } = useContext(GraphCtx);
+  const { errors, lift } = useContext(GraphCtx);
   const err = errors.get(id);
   return (
     <div className={`cm-node g-${def.group}${def.group === 'output' ? ' out' : ''}${selected ? ' on' : ''}${err ? ' bad' : ''}`} title={err ?? say(def.hint)} data-node-type={def.type} aria-label={say(def.label)}>
@@ -80,7 +82,18 @@ function CmNodeView({ id, data, selected }: NodeProps<CmNode>) {
       <div className="cm-node-b">
         <div className="cm-ports">
           {def.inputs.map((p) => (
-            <div className="cm-port" key={p.id}>
+            <div
+              className={`cm-port${data.wired.includes(p.id) ? ' wired nodrag' : ''}`}
+              key={p.id}
+              // A plugged input: grabbing it lifts the wire instead of starting a new one.
+              onPointerDownCapture={(e) => {
+                if (e.button !== 0 || !data.wired.includes(p.id) || !(e.target as HTMLElement).closest('.react-flow__handle')) return;
+                e.preventDefault();
+                e.stopPropagation();
+                lift?.(id, p.id, e);
+              }}
+              onMouseDownCapture={(e) => data.wired.includes(p.id) && (e.target as HTMLElement).closest('.react-flow__handle') && e.stopPropagation()}
+            >
               <Handle type="target" position={Position.Left} id={p.id} className={`cm-h ${p.kind}`} />
               <span>{say(p.label)}</span>
             </div>
@@ -149,14 +162,14 @@ function AddMenu({ at, onPick, onClose }: { at: { x: number; y: number }; onPick
 }
 
 /** The node library (left of the graph, as in Substance Designer): search, groups, a picture of each node. */
-function NodeLibrary({ onAdd, onHide }: { onAdd: (type: string) => void; onHide: () => void }) {
+function NodeLibrary({ onAdd, onHide, wide }: { onAdd: (type: string) => void; onHide: () => void; wide: boolean }) {
   const [q, setQ] = useState('');
   const [shut, setShut] = useState<Set<string>>(new Set());
   const icons = useMemo(() => nodeIcons(), []);
   const query = q.trim().toLowerCase();
   const match = (n: (typeof NODES)[number]) => !query || say(n.label).toLowerCase().includes(query) || n.label.en.toLowerCase().includes(query) || say(n.hint).toLowerCase().includes(query);
   return (
-    <aside className="cm-lib" aria-label={t('cm.library')}>
+    <aside className={`cm-lib${wide ? ' wide' : ''}`} aria-label={t('cm.library')}>
       <div className="cm-lib-h">
         <span>{t('cm.library')}</span>
         <button type="button" className="cw-iconbtn" aria-label={t('cm.hideLibrary')} title={t('cm.hideLibrary')} onClick={onHide}>
@@ -243,13 +256,17 @@ function pasteNodes(g: MatGraph, at: { x: number; y: number } | null): { graph: 
   return { graph: { ...g, nodes: [...g.nodes, ...nodes], links: [...g.links, ...links] }, ids: nodes.map((n) => n.id) };
 }
 
-function Flow({ path, graph, sel, onSelect }: { path: string; graph: MatGraph; sel: string[]; onSelect: (ids: string[]) => void }) {
+function Flow({ path, graph, sel, onSelect, wideLibrary }: { path: string; graph: MatGraph; sel: string[]; onSelect: (ids: string[]) => void; wideLibrary: boolean }) {
   const rf = useReactFlow();
   const host = useRef<HTMLDivElement>(null);
+  const ctx = useContext(GraphCtx);
   const pointer = useRef({ x: 0, y: 0 });
   const [menu, setMenu] = useState<{ x: number; y: number; flow: { x: number; y: number } } | null>(null);
   const [nodes, setNodes] = useState<CmNode[]>([]);
   const [edgeSel, setEdgeSel] = useState<Set<string>>(new Set());
+  /** A wire being lifted off an input (drawn from its output to the mouse, in the graph's own pixels). */
+  const [lifted, setLifted] = useState<{ from: string; to: string; input: string; start: { x: number; y: number }; at: { x: number; y: number } } | null>(null);
+
   const graphRef = useRef(graph);
   graphRef.current = graph;
   const selRef = useRef(sel);
@@ -262,7 +279,8 @@ function Flow({ path, graph, sel, onSelect }: { path: string; graph: MatGraph; s
       return graph.nodes.map((n) => {
         const o = old.get(n.id);
         const dragging = o?.dragging;
-        return { id: n.id, type: 'cm', position: dragging ? o!.position : { x: n.x, y: n.y }, data: { node: n }, selected: sel.includes(n.id), dragging };
+        const wired = graph.links.filter((l) => l.to === n.id).map((l) => l.input);
+        return { id: n.id, type: 'cm', position: dragging ? o!.position : { x: n.x, y: n.y }, data: { node: n, wired }, selected: sel.includes(n.id), dragging };
       });
     });
   }, [graph, sel]);
@@ -272,9 +290,10 @@ function Flow({ path, graph, sel, onSelect }: { path: string; graph: MatGraph; s
       graph.links.map((l) => {
         const id = `${l.to}:${l.input}`;
         const kind = nodeDef(graph.nodes.find((n) => n.id === l.from)?.type ?? '')?.output ?? 'grey';
-        return { id, source: l.from, sourceHandle: 'out', target: l.to, targetHandle: l.input, selected: edgeSel.has(id), className: `cm-e ${kind}` };
+        const off = lifted?.to === l.to && lifted.input === l.input;
+        return { id, source: l.from, sourceHandle: 'out', target: l.to, targetHandle: l.input, selected: edgeSel.has(id), className: `cm-e ${kind}${off ? ' lifted' : ''}` };
       }),
-    [graph, edgeSel],
+    [graph, edgeSel, lifted],
   );
 
   const onNodesChange = useCallback(
@@ -415,14 +434,49 @@ function Flow({ path, graph, sel, onSelect }: { path: string; graph: MatGraph; s
     return () => window.removeEventListener('keydown', down);
   }, []);
 
+  // ── Lifting a wire off an input ──
+  const lift = useCallback(
+    (to: string, input: string, e: React.PointerEvent) => {
+      const link = graphRef.current.links.find((l) => l.to === to && l.input === input);
+      const box = host.current?.getBoundingClientRect();
+      const out = host.current?.querySelector(`.react-flow__node[data-id="${link?.from}"] .react-flow__handle-right`)?.getBoundingClientRect();
+      if (!link || !box || !out) return;
+      const rel = (x: number, y: number) => ({ x: x - box.left, y: y - box.top });
+      setLifted({ from: link.from, to, input, start: rel(out.left + out.width / 2, out.top + out.height / 2), at: rel(e.clientX, e.clientY) });
+      const move = (ev: PointerEvent) => setLifted((l) => (l ? { ...l, at: rel(ev.clientX, ev.clientY) } : l));
+      const up = (ev: PointerEvent) => {
+        window.removeEventListener('pointermove', move);
+        window.removeEventListener('pointerup', up);
+        setLifted(null);
+        // Dropped on (or near) an input: moved there; anywhere else: unplugged.
+        let best: { node: string; input: string; d: number } | null = null;
+        for (const h of host.current?.querySelectorAll<HTMLElement>('.react-flow__handle.target') ?? []) {
+          const r = h.getBoundingClientRect();
+          const d = Math.hypot(r.left + r.width / 2 - ev.clientX, r.top + r.height / 2 - ev.clientY);
+          const node = h.dataset.nodeid, inp = h.dataset.handleid;
+          if (node && inp && d < 28 && (!best || d < best.d)) best = { node, input: inp, d };
+        }
+        if (best && best.node === to && best.input === input) return;
+        const g = graphRef.current;
+        const off = disconnect(g, to, input);
+        const moved = best ? connect(off, link.from, best.node, best.input) : off;
+        setGraph(path, moved, moved !== off ? 'Move wire' : 'Unplug wire');
+      };
+      window.addEventListener('pointermove', move);
+      window.addEventListener('pointerup', up);
+    },
+    [path],
+  );
+
   const openMenu = (clientX: number, clientY: number) => {
     const box = host.current!.getBoundingClientRect();
     setMenu({ x: Math.min(clientX - box.left, box.width - 250), y: Math.min(clientY - box.top, box.height - 340), flow: rf.screenToFlowPosition({ x: clientX, y: clientY }) });
   };
 
   return (
+    <GraphCtx.Provider value={{ ...ctx, lift }}>
     <div className="cm-graph">
-    {showLib ? <NodeLibrary onAdd={addInView} onHide={() => toggleLib(false)} /> : (
+    {showLib ? <NodeLibrary onAdd={addInView} onHide={() => toggleLib(false)} wide={wideLibrary} /> : (
       <button type="button" className="cm-lib-show" aria-label={t('cm.showLibrary')} title={t('cm.showLibrary')} onClick={() => toggleLib(true)}>
         ›
       </button>
@@ -464,6 +518,13 @@ function Flow({ path, graph, sel, onSelect }: { path: string; graph: MatGraph; s
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}
+        connectionRadius={30}
+        onEdgeClick={(e, edge) => {
+          // Alt+click unplugs a wire.
+          if (!e.altKey) return;
+          const [to, input] = edge.id.split(':') as [string, string];
+          setGraph(path, disconnect(graphRef.current, to, input), 'Unplug wire');
+        }}
         onNodeDragStop={() => endGraphGesture()}
         isValidConnection={(c) => c.source !== c.target && !wouldLoop(graphRef.current, c.source, c.target)}
         onPaneContextMenu={(e) => {
@@ -493,9 +554,17 @@ function Flow({ path, graph, sel, onSelect }: { path: string; graph: MatGraph; s
         </Button>
         <span className="cw-muted">{t('cm.flowHint')}</span>
       </div>
+      {lifted && (
+        <svg className="cm-lifted" aria-hidden>
+          <path
+            d={`M ${lifted.start.x} ${lifted.start.y} C ${lifted.start.x + Math.max(40, (lifted.at.x - lifted.start.x) / 2)} ${lifted.start.y}, ${lifted.at.x - Math.max(40, (lifted.at.x - lifted.start.x) / 2)} ${lifted.at.y}, ${lifted.at.x} ${lifted.at.y}`}
+          />
+        </svg>
+      )}
       {menu && <AddMenu at={menu} onPick={(type) => add(type, menu.flow)} onClose={() => setMenu(null)} />}
     </div>
     </div>
+    </GraphCtx.Provider>
   );
 }
 
@@ -717,6 +786,7 @@ export function GraphWorkspace({
   onRemove,
   used,
   tools,
+  wideLibrary,
 }: {
   m: MaterialDef;
   edit: (patch: Partial<MaterialDef>, label: string, key?: string) => void;
@@ -724,6 +794,8 @@ export function GraphWorkspace({
   onRemove: () => void;
   used: number;
   tools: React.ReactNode;
+  /** The materials list is folded away: the library spreads into several columns. */
+  wideLibrary: boolean;
 }) {
   const path = m.graph!;
   const graph = useGraphs((s) => s.graphs[path]);
@@ -772,7 +844,7 @@ export function GraphWorkspace({
           </div>
         ) : graph ? (
           <ReactFlowProvider>
-            <Flow path={path} graph={graph} sel={sel} onSelect={setSel} />
+            <Flow path={path} graph={graph} sel={sel} onSelect={setSel} wideLibrary={wideLibrary} />
           </ReactFlowProvider>
         ) : (
           <div className="cw-muted cw-screens-empty">{t('cm.loading')}</div>
