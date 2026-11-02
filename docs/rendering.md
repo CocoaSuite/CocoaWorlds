@@ -113,6 +113,10 @@ with a little lighter or darker per tuft. Three tricks give the look:
 - **No bare ground.** The grassed surface is painted in the root colour just under the tufts, so nothing shows
   between them.
 - **Wind.** Blades sway, more towards their tips, out of step from place to place.
+- **Patches.** Rounded areas of a very slightly different hue (one warmer, one cooler), from world-space noise,
+  so they carry on across brushes. Painting them by hand comes with terrain (T1).
+- **No ambient occlusion from grass.** Grass is left out of what occlusion is measured from (it would measure
+  its own swaying blades and smear dark copies over them), so it only gets the little the ground under it gets.
 
 Only the component is saved. Placement is in `@cocoaworlds/geometry` (`scatterTufts`, `grassCover`); drawing (one
 instanced mesh per brush plus its cover) in `viewport/foliage.ts`, shared by the editor and Play.

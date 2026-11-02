@@ -94,6 +94,37 @@ interface Entry {
   cover?: THREE.Mesh;
 }
 
+/** Smooth value noise, 0…1 (for patches). */
+function noise(x: number, z: number): number {
+  const h = (i: number, j: number) => {
+    let n = Math.imul(i, 374761393) + Math.imul(j, 668265263);
+    n = Math.imul(n ^ (n >>> 13), 1274126177);
+    return ((n ^ (n >>> 16)) >>> 0) / 4294967296;
+  };
+  const i = Math.floor(x), j = Math.floor(z);
+  const fx = x - i, fz = z - j;
+  const u = fx * fx * (3 - 2 * fx), v = fz * fz * (3 - 2 * fz);
+  const a = h(i, j), b = h(i + 1, j), c = h(i, j + 1), d = h(i + 1, j + 1);
+  return a + (b - a) * u + (c - a) * v + (a - b - c + d) * u * v;
+}
+
+const smooth = (e0: number, e1: number, x: number) => {
+  const t = Math.min(1, Math.max(0, (x - e0) / (e1 - e0)));
+  return t * t * (3 - 2 * t);
+};
+
+/**
+ * Patches: rounded areas of a very slightly different hue, from world-space noise (so they carry on across
+ * brushes). One kind leans warm (yellower), the other cool; elsewhere it's the grass's own colour.
+ */
+export function patchTint(x: number, z: number, seed: number, out: THREE.Color): THREE.Color {
+  const o = seed * 137.1;
+  const n1 = noise((x + o) / 200, (z - o) / 200) * 0.7 + noise((x + o) / 80, (z + o) / 80) * 0.3;
+  const n2 = noise((x - o + 911) / 230, (z + o + 377) / 230) * 0.7 + noise((x - o) / 90, (z - o) / 90) * 0.3;
+  const warm = smooth(0.56, 0.66, n1), cool = smooth(0.58, 0.68, n2) * (1 - warm);
+  return out.setRGB(1 + 0.16 * warm - 0.12 * cool, 1 + 0.07 * warm + 0.02 * cool, 1 - 0.3 * warm + 0.14 * cool);
+}
+
 export class FoliageRenderer {
   readonly group = new THREE.Group();
   private entries = new Map<string, Entry>();
@@ -136,6 +167,8 @@ export class FoliageRenderer {
     mesh.name = `foliage:${id}`;
     mesh.castShadow = false;
     mesh.receiveShadow = true;
+    // Left out of ambient occlusion: measured from its own swaying blades, it smeared dark copies over the grass.
+    mesh.userData.noAo = true;
     const tint = new THREE.Color();
     const rnd = seededRandom(Math.round(sc.seed) + 99);
     for (let i = 0; i < t.count; i++) {
@@ -152,9 +185,9 @@ export class FoliageRenderer {
       floor[i * 3] = c * nx - s * nz;
       floor[i * 3 + 1] = ny;
       floor[i * 3 + 2] = s * nx + c * nz;
-      // A little lighter or darker per tuft, so a field isn't one flat colour.
-      const v = 0.88 + rnd() * 0.24;
-      mesh.setColorAt(i, tint.setRGB(v, v, v));
+      // Its patch's hue, a touch lighter or darker per tuft.
+      patchTint(t.data[o]!, t.data[o + 2]!, sc.seed, tint).multiplyScalar(0.97 + rnd() * 0.06);
+      mesh.setColorAt(i, tint);
     }
     geo.setAttribute('aFloor', new THREE.InstancedBufferAttribute(floor, 3));
     mesh.instanceMatrix.needsUpdate = true;

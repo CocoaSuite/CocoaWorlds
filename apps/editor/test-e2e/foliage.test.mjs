@@ -10,7 +10,7 @@ test('foliage: tufts on a brush top, shown in the editor and in Play', async () 
   try {
     await newProject(page, 'Grass');
     await page.keyboard.press('2'); await page.keyboard.press('b'); await drawBrush(page);
-    await setDraft(page, [512, 16, 512], [-256, -16, -256]);
+    await setDraft(page, [1536, 16, 1536], [-768, -16, -768]);
     await page.getByRole('group', { name: 'Brush tool' }).getByRole('button', { name: 'Create' }).click();
     await page.keyboard.press('v');
     const insp = page.getByRole('complementary', { name: 'Inspector' });

@@ -32,6 +32,19 @@ export class AoRenderer {
       const composer = new EffectComposer(this.r);
       composer.addPass(new RenderPass(scene, cam));
       const pass = new GTAOPass(scene, cam, size.x, size.y);
+      // Objects marked `noAo` (grass) are left out of what the occlusion is measured from, so they get only the
+      // little the ground under them gets: barely any.
+      const p = pass as unknown as { _overrideVisibility(): void; _visibilityCache: THREE.Object3D[] };
+      const hide = p._overrideVisibility.bind(p);
+      p._overrideVisibility = () => {
+        hide();
+        scene.traverse((o) => {
+          if (o.userData.noAo && o.visible) {
+            o.visible = false;
+            p._visibilityCache.push(o);
+          }
+        });
+      };
       composer.addPass(pass);
       composer.addPass(new OutputPass());
       this.c = { composer, pass, scene, cam, w: 0, h: 0 };
