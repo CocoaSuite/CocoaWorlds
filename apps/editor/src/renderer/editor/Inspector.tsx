@@ -9,6 +9,7 @@ import { FaceInspector } from './FaceInspector';
 import { ComponentsSection } from './ComponentsSection';
 import { PrefabSection } from './PrefabSection';
 import { isGroup } from '../scene-ops';
+import { clearsGrass } from '../viewport/foliage';
 import { useSelectedEntities, useEditor } from '../store';
 
 export function Inspector() {
@@ -67,7 +68,7 @@ function BrushEntity({ e }: { e: EntityData }) {
         </div>
         <div className="cw-flagrow">
           <span>{t('insp.clearsGrass')}</span>
-          <Switch label={t('insp.clearsGrass')} checked={!e.keepsGrass} onChange={(v) => s.setFlag(e.id, 'keepsGrass', !v)} />
+          <Switch label={t('insp.clearsGrass')} checked={clearsGrass(e)} onChange={(v) => s.setFlag(e.id, 'keepsGrass', !v)} />
         </div>
       </Section>
     </>
@@ -338,7 +339,7 @@ function EntityInspector({ e }: { e: EntityData }) {
         </div>
         <div className="cw-flagrow">
           <span>{t('insp.clearsGrass')}</span>
-          <Switch label={t('insp.clearsGrass')} checked={!e.keepsGrass} onChange={(v) => s.setFlag(e.id, 'keepsGrass', !v)} />
+          <Switch label={t('insp.clearsGrass')} checked={clearsGrass(e)} onChange={(v) => s.setFlag(e.id, 'keepsGrass', !v)} />
         </div>
       </Section>
       <ComponentsSection e={e} />

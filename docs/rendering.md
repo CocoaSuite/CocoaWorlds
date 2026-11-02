@@ -120,10 +120,11 @@ with a little lighter or darker per tuft. Three tricks give the look:
 
 **Cleared under objects.** Visible solid brushes and models standing on the grass clear it underneath, if they
 are at least 24 u across (pebbles and posts don't). A tuft goes when a point just above its root is inside the
-object (exactly, for brushes; by its box, for models), so something floating overhead leaves the grass alone.
+object (exactly: a brush's own shape, a model's convex hull), so something floating overhead leaves the grass alone.
 Objects lower than the grass (slabs, path stones) also keep it back by a tuft's spread, so blades don't poke
 through their top; taller ones don't need to (they hide what leans into them). Brushes and objects have
-**Clears grass under it** in the Inspector (on by default) to let grass grow under them instead.
+**Clears grass under it** in the Inspector. It's on by default, except for creatures, things that move (Physics
+other than fixed) and COL brushes; NOGRASS always clears.
 
 **NOGRASS** (`tool/nograss`) is a tool material like COL: a brush made of it is shown in the editor but never in
 the game, collides with nothing, and clears grass where it stands, at any size. Use it to carve paths and

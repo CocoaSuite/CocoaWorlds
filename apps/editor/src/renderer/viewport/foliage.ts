@@ -4,9 +4,11 @@
  * or its settings change. Shared by the editor and play mode.
  */
 import { SceneDoc, readComponent, type ScatterData } from '@cocoaworlds/core';
-import { TUFT_STRIDE, bounds as brushBoxOf, isNoGrassBrush, scatterTufts, seededRandom, type Tufts } from '@cocoaworlds/geometry';
+import { COLLIDER_MATERIAL, TUFT_STRIDE, bounds as brushBoxOf, isNoGrassBrush, scatterTufts, seededRandom, type Tufts } from '@cocoaworlds/geometry';
 import { applyMat4, type EntityData, type ModelData } from '@cocoaworlds/core';
 import { UNITS_PER_METRE, loadModel } from './models';
+import { ConvexHull } from 'three/examples/jsm/math/ConvexHull.js';
+import { brushOf } from '../brush/brushes';
 import * as THREE from 'three';
 import { isShown, worldBrushOf } from '../brush/brushes';
 
@@ -190,23 +192,53 @@ interface Blocker {
   key: string;
 }
 
-/** Models' own sizes (unit box in the file's space, times its unit scale), loaded as they are first needed. */
-const modelBoxes = new Map<string, THREE.Box3 | null>();
+/** A model's shape for clearing grass: its box and its convex hull (planes), in the file's own space. */
+interface ModelShape {
+  box: THREE.Box3;
+  planes: { n: THREE.Vector3; c: number }[];
+}
+
+/** Models' shapes, worked out from their files as they are first needed (null: none, or still loading). */
+const modelShapes = new Map<string, ModelShape | null>();
 const modelWaiters = new Set<() => void>();
-function modelBox(data: ModelData): THREE.Box3 | null | undefined {
-  const k = `${data.model}|${data.units}`;
-  if (modelBoxes.has(k)) return modelBoxes.get(k);
-  modelBoxes.set(k, null);
-  void loadModel(data.model)
+function modelShape(path: string): ModelShape | null {
+  if (modelShapes.has(path)) return modelShapes.get(path)!;
+  modelShapes.set(path, null);
+  void loadModel(path)
     .then((m) => {
       m.scene.updateMatrixWorld(true);
-      const b = new THREE.Box3().setFromObject(m.scene, true);
-      const u = data.units === 'units' ? 1 : UNITS_PER_METRE;
-      modelBoxes.set(k, b.isEmpty() ? null : new THREE.Box3(b.min.multiplyScalar(u), b.max.multiplyScalar(u)));
+      const pts: THREE.Vector3[] = [];
+      const v = new THREE.Vector3();
+      m.scene.traverse((o) => {
+        const g = (o as THREE.Mesh).geometry as THREE.BufferGeometry | undefined;
+        const pos = (o as THREE.Mesh).isMesh ? g?.getAttribute('position') : undefined;
+        if (!pos) return;
+        // (A few thousand corners are plenty for a hull.)
+        const step = Math.max(1, Math.floor(pos.count / 4000));
+        for (let i = 0; i < pos.count; i += step) pts.push(v.fromBufferAttribute(pos, i).applyMatrix4(o.matrixWorld).clone());
+      });
+      if (pts.length < 4) return;
+      const hull = new ConvexHull().setFromPoints(pts);
+      modelShapes.set(path, { box: new THREE.Box3().setFromPoints(pts), planes: hull.faces.map((f) => ({ n: f.normal.clone(), c: f.constant })) });
       for (const w of modelWaiters) w();
     })
     .catch(() => undefined);
-  return undefined;
+  return null;
+}
+
+/**
+ * Whether an object clears grass under it: as set in the Inspector, or by default yes, except for creatures,
+ * things that move (Physics other than fixed) and COL brushes (invisible colliders). NOGRASS brushes always do.
+ */
+export function clearsGrass(e: EntityData): boolean {
+  const b = brushOf(e);
+  if (b && isNoGrassBrush(b.brush)) return true;
+  if (typeof e.keepsGrass === 'boolean') return !e.keepsGrass;
+  const c = e.components;
+  if (c.npc) return false;
+  if (c.rigidBody && (c.rigidBody as { motion?: string }).motion !== 'fixed') return false;
+  if (b && b.brush.faces.every((f) => f.surface.material === COLLIDER_MATERIAL)) return false;
+  return true;
 }
 
 const round = (v: number) => Math.round(v * 10) / 10;
@@ -219,7 +251,7 @@ const round = (v: number) => Math.round(v * 10) / 10;
 function blockersOf(doc: SceneDoc, skip: string, spread: number, tall: number): Blocker[] {
   const out: Blocker[] = [];
   for (const e of doc.entities) {
-    if (e.id === skip || e.keepsGrass || !isShown(doc, e)) continue;
+    if (e.id === skip || !clearsGrass(e) || !isShown(doc, e)) continue;
     const c = e.components;
     if (c.trigger || c.water || c.ladder || c.levelChange) continue;
     const wb = c.brush ? worldBrushOf(doc, e) : null;
@@ -244,27 +276,30 @@ function blockersOf(doc: SceneDoc, skip: string, spread: number, tall: number): 
       });
     } else if (c.model) {
       const data = readComponent<ModelData>('model', c.model);
-      const local = data.model ? modelBox(data) : null;
-      if (!local) continue;
-      const m = doc.worldMatrix(e.id);
-      const min = [Infinity, Infinity, Infinity], max = [-Infinity, -Infinity, -Infinity];
-      for (let i = 0; i < 8; i++) {
-        const p = applyMat4(m, [i & 1 ? local.max.x : local.min.x, i & 2 ? local.max.y : local.min.y, i & 4 ? local.max.z : local.min.z]);
-        for (let k = 0; k < 3; k++) {
-          min[k] = Math.min(min[k]!, p[k]!);
-          max[k] = Math.max(max[k]!, p[k]!);
-        }
-      }
+      const shape = data.model ? modelShape(data.model) : null;
+      if (!shape) continue;
+      // The world placement of the file's own space (the object's transform times the model's unit scale).
+      const u = data.units === 'units' ? 1 : UNITS_PER_METRE;
+      const world = new THREE.Matrix4().fromArray(doc.worldMatrix(e.id)).multiply(new THREE.Matrix4().makeScale(u, u, u));
+      const local = world.clone().invert();
+      const wbox = shape.box.clone().applyMatrix4(world);
+      const min = wbox.min.toArray(), max = wbox.max.toArray();
       if (Math.max(max[0]! - min[0]!, max[2]! - min[2]!) < GRASS_CLEAR_MIN) continue;
       const margin = max[1]! - min[1]! < tall ? spread : 0;
+      // (The margin in the file's units: world size over the object's scale.)
+      const scale = new THREE.Vector3().setFromMatrixColumn(world, 0).length() || 1;
+      const m = margin / scale, up = 4 / scale;
+      const p = new THREE.Vector3();
       for (const k of [0, 2]) {
         min[k]! -= margin;
         max[k]! += margin;
       }
+      // Inside its hull (pushed out by the margin), at the probe or a little above it.
+      const inHull = (q: THREE.Vector3) => shape.planes.every((f) => f.n.dot(q) - f.c <= m * Math.hypot(f.n.x, f.n.z) + 0.001);
       out.push({
         min,
         max,
-        inside: (x, y, z) => x >= min[0]! && x <= max[0]! && z >= min[2]! && z <= max[2]! && y >= min[1]! - 4 && y <= max[1]!,
+        inside: (x, y, z) => inHull(p.set(x, y, z).applyMatrix4(local)) || inHull(p.set(x, y, z).applyMatrix4(local).setY(p.y + up)),
         key: [min, max].flat().map(round).join(','),
       });
     }
@@ -298,7 +333,7 @@ export class FoliageRenderer {
 
   constructor() {
     this.group.name = 'foliage';
-    // A model's size arrives once its file is read: then the grass under it is cleared.
+    // A model's shape arrives once its file is read: then the grass under it is cleared.
     modelWaiters.add(this.resync);
   }
 

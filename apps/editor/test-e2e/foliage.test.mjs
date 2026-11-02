@@ -48,6 +48,13 @@ test('foliage: tufts on a brush top, shown in the editor and in Play', async () 
     await page.getByRole('tree').getByRole('treeitem', { name: 'block', exact: true }).click();
     await page.getByTestId('viewport').hover(); await page.keyboard.press('f');
     await shot(page, 'foliage01');
+    // A chicken (a creature: it moves about) leaves the grass alone by default, and says so in the Inspector.
+    const beforeChicken = await tufts();
+    await page.getByRole('menubar').getByRole('button', { name: 'Add' }).click();
+    await page.getByRole('menuitem', { name: 'Chicken (enemy)' }).click();
+    await new Promise((r) => setTimeout(r, 2500));
+    assert.equal(await tufts(), beforeChicken);
+    assert.equal(await insp.getByRole('switch', { name: 'Clears grass under it' }).isChecked(), false);
     const before = await tufts();
     // Play: the same tufts are drawn in the game, and the player can still stand on the block.
     await page.getByRole('button', { name: 'Play', exact: true }).click();
