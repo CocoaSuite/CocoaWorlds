@@ -26,10 +26,15 @@ test('foliage: tufts on a brush top, shown in the editor and in Play', async () 
     await until(() => page.evaluate(() => !!window.__cwViewport.play), true, 15000);
     const inGame = await page.evaluate(() => {
       let n = 0;
-      window.__cwViewport.play.group.traverse((o) => { if (o.isInstancedMesh && o.name.startsWith('foliage:')) n += o.count; });
+      window.__cwViewport.play.group.traverse((o) => { if (o.isInstancedMesh && o.name.startsWith('foliage:') && o.name.endsWith(':lod0')) n += o.count; });
       return n;
     });
     assert.equal(inGame, saved);
+    // Level of detail: full blades near the player, simpler ones further out (and every tuft at one level at most).
+    await new Promise((r) => setTimeout(r, 500));
+    const shown = await page.evaluate(() => window.__cwViewport.play.foliage.shown);
+    assert.ok(shown[0] > 0 && shown[1] > 0, `levels ${shown}`);
+    assert.ok(shown[0] + shown[1] + shown[2] <= saved && shown[0] < saved / 2, `levels ${shown} of ${saved}`);
     await shot(page, 'foliage02');
   } catch (e) {
     await shot(page, 'foliage-failure');

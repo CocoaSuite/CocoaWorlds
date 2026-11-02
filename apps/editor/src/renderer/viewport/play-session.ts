@@ -44,6 +44,11 @@ export class PlaySession {
   readonly group = new THREE.Group();
   private world: GameWorld;
   private foliage = new FoliageRenderer();
+  /** Grass detail by distance from the camera. */
+  updateFoliage(cam: THREE.Camera, unitsPerPixel?: number): void {
+    this.foliage.update(cam, unitsPerPixel);
+  }
+
   /** Where the game's creatures can walk. */
   navigation(): NavGrid | null {
     return this.world.navigation();

@@ -118,5 +118,11 @@ with a little lighter or darker per tuft. Three tricks give the look:
 - **No ambient occlusion from grass.** Grass is left out of what occlusion is measured from (it would measure
   its own swaying blades and smear dark copies over them), so it only gets the little the ground under it gets.
 
+**Level of detail.** Grass is drawn in 256 u chunks, each culled when out of view and drawn at one of three levels
+by its distance from the camera: full blades (three triangles each, 14 per tuft) within 320 u, 8 single-triangle
+blades to 960 u, 4 broad ones to 2400 u, and past that only the grass-coloured ground cover, which keeps the
+distance green without popping. In the flat views the level follows the zoom. A 1536 u square field drops from about
+2.5 million triangles to about 200 thousand from the player's eyes.
+
 Only the component is saved. Placement is in `@cocoaworlds/geometry` (`scatterTufts`, `grassCover`); drawing (one
 instanced mesh per brush plus its cover) in `viewport/foliage.ts`, shared by the editor and Play.

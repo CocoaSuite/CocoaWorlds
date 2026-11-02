@@ -11,21 +11,34 @@ import { isShown, worldBrushOf } from '../brush/brushes';
 /** Shared wind clock for every foliage material (seconds); the view sets it each frame. */
 export const FOLIAGE_TIME = { value: 0 };
 
+/** Detail levels: full blades up close, plain single-triangle blades further out, a few broad ones far away. */
+const LEVELS = [
+  { blades: 14, plain: false, widen: 1 },
+  { blades: 8, plain: true, widen: 1.35 },
+  { blades: 4, plain: true, widen: 2 },
+];
+/** How far (u, from the camera to a chunk's edge) each level is drawn; past the last, only the ground cover. */
+export const FOLIAGE_LOD_DISTANCES = [320, 960, 2400];
+/** Grass is drawn in square chunks this wide, each at its own level (and skipped when out of view). */
+const CHUNK = 256;
+
 /**
  * One tuft: a clump of leaf-shaped blades fanning out from the middle and leaning outwards, dark at the root and
  * bright at the tips, wide enough that neighbouring tufts overlap and hide the ground. One unit tall, one wide.
+ * Further levels have fewer, wider blades, each a single triangle.
  */
-function tuftGeometry(): THREE.BufferGeometry {
+function tuftGeometry(level: number): THREE.BufferGeometry {
+  const L = LEVELS[level]!;
   const pos: number[] = [];
   const col: number[] = [];
-  const BLADES = 14;
   const rnd = seededRandom(17);
-  for (let i = 0; i < BLADES; i++) {
+  for (let i = 0; i < L.blades; i++) {
     const a = i * 2.39996 + rnd() * 0.4; // golden angle: evenly round
     // (The first few stand up in the middle; the rest fan out low, covering the ground round the clump.)
-    const lean = (i < 3 ? 8 + rnd() * 14 : 34 + rnd() * 36) * (Math.PI / 180);
+    const upright = i < Math.max(1, Math.round(L.blades / 5));
+    const lean = (upright ? 8 + rnd() * 14 : 34 + rnd() * 36) * (Math.PI / 180);
     const h = 0.75 + rnd() * 0.25;
-    const w = 0.24 + rnd() * 0.1;
+    const w = (0.24 + rnd() * 0.1) * L.widen;
     const out = { x: Math.cos(a), z: Math.sin(a) };
     const side = { x: -out.z, z: out.x };
     const r0 = 0.04 + rnd() * 0.08;
@@ -40,10 +53,15 @@ function tuftGeometry(): THREE.BufferGeometry {
       pos.push(p.x + side.x * off, p.y, p.z + side.z * off);
       col.push(shade, shade, shade);
     };
-    // Two quads up to the middle, then a point.
-    v(b, -half[0]!, 0.55); v(b, half[0]!, 0.55); v(m, half[1]!, 0.85);
-    v(b, -half[0]!, 0.55); v(m, half[1]!, 0.85); v(m, -half[1]!, 0.85);
-    v(m, -half[1]!, 0.85); v(m, half[1]!, 0.85); v(tip, 0, 1.12);
+    if (L.plain) {
+      // One triangle: the base, out to the tip.
+      v(b, -half[1]!, 0.55); v(b, half[1]!, 0.55); v(tip, 0, 1.1);
+    } else {
+      // Two quads up to the middle, then a point.
+      v(b, -half[0]!, 0.55); v(b, half[0]!, 0.55); v(m, half[1]!, 0.85);
+      v(b, -half[0]!, 0.55); v(m, half[1]!, 0.85); v(m, -half[1]!, 0.85);
+      v(m, -half[1]!, 0.85); v(m, half[1]!, 0.85); v(tip, 0, 1.12);
+    }
   }
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
@@ -88,9 +106,17 @@ function foliageShader(m: THREE.Material): void {
   m.customProgramCacheKey = () => 'cw-foliage';
 }
 
+/** A chunk of one brush's grass: the same tufts at each level, only one shown at a time. */
+interface Chunk {
+  centre: THREE.Vector3;
+  radius: number;
+  meshes: THREE.InstancedMesh[];
+  count: number;
+}
+
 interface Entry {
   key: string;
-  mesh: THREE.InstancedMesh;
+  chunks: Chunk[];
   cover?: THREE.Mesh;
 }
 
@@ -128,7 +154,7 @@ export function patchTint(x: number, z: number, seed: number, out: THREE.Color):
 export class FoliageRenderer {
   readonly group = new THREE.Group();
   private entries = new Map<string, Entry>();
-  private geometry = tuftGeometry();
+  private geometries = LEVELS.map((_, l) => tuftGeometry(l));
   private materials = new Map<string, THREE.MeshLambertMaterial>();
   private dummy = new THREE.Object3D();
 
@@ -142,65 +168,102 @@ export class FoliageRenderer {
     for (const e of doc?.entities ?? []) {
       if (!e.components.scatter || !doc) continue;
       const brush = worldBrushOf(doc, e);
-      if (!doc || !brush || !isShown(doc, e)) continue;
+      if (!brush || !isShown(doc, e)) continue;
       seen.add(e.id);
       const sc = readComponent<ScatterData>('scatter', e.components.scatter);
       const key = JSON.stringify([sc, e.components.brush, doc.worldMatrix(e.id)]);
       if (this.entries.get(e.id)?.key === key) continue;
       this.remove(e.id);
+      const entry: Entry = { key, chunks: [] };
+      this.entries.set(e.id, entry);
       const tufts = scatterTufts(brush.brush, sc);
-      if (tufts.count) {
-        this.add(e.id, key, sc, tufts);
-        this.addCover(e.id, brush.brush, sc);
-      }
-      else this.entries.set(e.id, { key, mesh: null! });
+      if (!tufts.count) continue;
+      this.add(e.id, entry, sc, tufts);
+      this.addCover(entry, e.id, brush.brush, sc);
     }
     for (const id of [...this.entries.keys()]) if (!seen.has(id)) this.remove(id);
   }
 
-  private add(id: string, key: string, sc: ScatterData, t: Tufts): void {
+  /**
+   * Show each chunk at the level its distance calls for (none past the last: the ground cover carries on).
+   * In a flat (orthographic) view, the level follows the zoom instead.
+   */
+  update(cam: THREE.Camera, unitsPerPixel = 1): void {
+    const ortho = (cam as THREE.OrthographicCamera).isOrthographicCamera;
+    const at = cam.getWorldPosition(new THREE.Vector3());
+    for (const e of this.entries.values()) {
+      for (const c of e.chunks) {
+        let level: number;
+        if (ortho) level = unitsPerPixel < 0.6 ? 0 : unitsPerPixel < 2 ? 1 : 2;
+        else {
+          const d = Math.max(0, at.distanceTo(c.centre) - c.radius);
+          level = FOLIAGE_LOD_DISTANCES.findIndex((max) => d < max);
+          if (level < 0) level = LEVELS.length;
+        }
+        c.meshes.forEach((m, l) => (m.visible = l === level));
+      }
+    }
+  }
+
+  private add(id: string, entry: Entry, sc: ScatterData, t: Tufts): void {
     const mat = this.material(sc.colour);
-    // (Each mesh has its own copy of the tuft, to carry its floor normals.)
-    const geo = this.geometry.clone();
-    const floor = new Float32Array(t.count * 3);
-    const mesh = new THREE.InstancedMesh(geo, mat, t.count);
-    mesh.name = `foliage:${id}`;
-    mesh.castShadow = false;
-    mesh.receiveShadow = true;
-    // Left out of ambient occlusion: measured from its own swaying blades, it smeared dark copies over the grass.
-    mesh.userData.noAo = true;
     const tint = new THREE.Color();
     const rnd = seededRandom(Math.round(sc.seed) + 99);
+    // Tufts by chunk.
+    const byChunk = new Map<string, number[]>();
     for (let i = 0; i < t.count; i++) {
       const o = i * TUFT_STRIDE;
-      const yaw = t.data[o + 3]!;
-      this.dummy.position.set(t.data[o]!, t.data[o + 1]!, t.data[o + 2]!);
-      this.dummy.rotation.set(0, yaw, 0);
-      this.dummy.scale.setScalar(t.data[o + 4]!);
-      this.dummy.updateMatrix();
-      mesh.setMatrixAt(i, this.dummy.matrix);
-      // The floor normal in the tuft's own (turned) space, so turning it back gives the floor's.
-      const nx = t.data[o + 5]!, ny = t.data[o + 6]!, nz = t.data[o + 7]!;
-      const c = Math.cos(yaw), s = Math.sin(yaw);
-      floor[i * 3] = c * nx - s * nz;
-      floor[i * 3 + 1] = ny;
-      floor[i * 3 + 2] = s * nx + c * nz;
-      // Its patch's hue, a touch lighter or darker per tuft.
-      patchTint(t.data[o]!, t.data[o + 2]!, sc.seed, tint).multiplyScalar(0.97 + rnd() * 0.06);
-      mesh.setColorAt(i, tint);
+      const k = `${Math.floor(t.data[o]! / CHUNK)},${Math.floor(t.data[o + 2]! / CHUNK)}`;
+      const list = byChunk.get(k);
+      if (list) list.push(i);
+      else byChunk.set(k, [i]);
     }
-    geo.setAttribute('aFloor', new THREE.InstancedBufferAttribute(floor, 3));
-    mesh.instanceMatrix.needsUpdate = true;
-    if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
-    this.group.add(mesh);
-    this.entries.set(id, { key, mesh });
+    for (const list of byChunk.values()) {
+      const count = list.length;
+      const matrices = new THREE.InstancedBufferAttribute(new Float32Array(count * 16), 16);
+      const colours = new THREE.InstancedBufferAttribute(new Float32Array(count * 3), 3);
+      const floor = new THREE.InstancedBufferAttribute(new Float32Array(count * 3), 3);
+      list.forEach((i, k) => {
+        const o = i * TUFT_STRIDE;
+        const yaw = t.data[o + 3]!;
+        this.dummy.position.set(t.data[o]!, t.data[o + 1]!, t.data[o + 2]!);
+        this.dummy.rotation.set(0, yaw, 0);
+        this.dummy.scale.setScalar(t.data[o + 4]!);
+        this.dummy.updateMatrix();
+        this.dummy.matrix.toArray(matrices.array, k * 16);
+        // The floor normal in the tuft's own (turned) space, so turning it back gives the floor's.
+        const nx = t.data[o + 5]!, ny = t.data[o + 6]!, nz = t.data[o + 7]!;
+        const c = Math.cos(yaw), s = Math.sin(yaw);
+        floor.setXYZ(k, c * nx - s * nz, ny, s * nx + c * nz);
+        // Its patch's hue, a touch lighter or darker per tuft.
+        patchTint(t.data[o]!, t.data[o + 2]!, sc.seed, tint).multiplyScalar(0.97 + rnd() * 0.06);
+        colours.setXYZ(k, tint.r, tint.g, tint.b);
+      });
+      const meshes = this.geometries.map((g, l) => {
+        const geo = g.clone();
+        geo.setAttribute('aFloor', floor);
+        const mesh = new THREE.InstancedMesh(geo, mat, count);
+        mesh.name = `foliage:${id}:lod${l}`;
+        mesh.instanceMatrix = matrices;
+        mesh.instanceColor = colours;
+        mesh.castShadow = false;
+        mesh.receiveShadow = true;
+        // Left out of ambient occlusion: measured from its own swaying blades, it smeared dark copies over the grass.
+        mesh.userData.noAo = true;
+        mesh.visible = l === 0;
+        mesh.computeBoundingSphere();
+        this.group.add(mesh);
+        return mesh;
+      });
+      const sphere = meshes[0]!.boundingSphere!;
+      entry.chunks.push({ centre: sphere.center.clone(), radius: sphere.radius, meshes, count });
+    }
   }
 
   /** The ground under the grass, painted the colour of its roots. */
-  private addCover(id: string, brush: Brush, sc: ScatterData): void {
+  private addCover(entry: Entry, id: string, brush: Brush, sc: ScatterData): void {
     const tri = grassCover(brush, sc.slope);
-    const entry = this.entries.get(id);
-    if (!tri.length || !entry) return;
+    if (!tri.length) return;
     const g = new THREE.BufferGeometry();
     g.setAttribute('position', new THREE.BufferAttribute(tri, 3));
     g.computeVertexNormals();
@@ -215,10 +278,12 @@ export class FoliageRenderer {
   private remove(id: string): void {
     const e = this.entries.get(id);
     if (!e) return;
-    if (e.mesh) {
-      this.group.remove(e.mesh);
-      e.mesh.geometry.dispose();
-      e.mesh.dispose();
+    for (const c of e.chunks) {
+      for (const m of c.meshes) {
+        this.group.remove(m);
+        m.geometry.dispose();
+        m.dispose();
+      }
     }
     if (e.cover) {
       this.group.remove(e.cover);
@@ -241,13 +306,20 @@ export class FoliageRenderer {
   /** How many tufts are placed in all (for the statistics line and tests). */
   get count(): number {
     let n = 0;
-    for (const e of this.entries.values()) n += e.mesh?.count ?? 0;
+    for (const e of this.entries.values()) for (const c of e.chunks) n += c.count;
     return n;
+  }
+
+  /** How many tufts are drawn at each level right now (for tests). */
+  get shown(): number[] {
+    const out = LEVELS.map(() => 0);
+    for (const e of this.entries.values()) for (const c of e.chunks) c.meshes.forEach((m, l) => m.visible && (out[l]! += c.count));
+    return out;
   }
 
   dispose(): void {
     for (const id of [...this.entries.keys()]) this.remove(id);
-    this.geometry.dispose();
+    for (const g of this.geometries) g.dispose();
     for (const m of this.materials.values()) m.dispose();
     this.materials.clear();
   }

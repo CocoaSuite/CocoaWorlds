@@ -1414,11 +1414,14 @@ export class ViewportEngine {
     if (this.pathLines) this.pathLines.visible = !this.play;
     this.updateLighting();
     if (this.play?.placeCamera(this.fpCam)) {
+      this.play.updateFoliage(this.fpCam);
       this.play.applyWater(this.scene, this.fpCam);
       if (!this.renderAo(this.fpCam)) r.render(this.scene, this.fpCam);
       return;
     }
     this.grid.setCamera(this.rig.camera.position);
+    this.foliage.update(this.rig.camera, this.rig.unitsPerPixel);
+    this.play?.updateFoliage(this.rig.camera, this.rig.unitsPerPixel);
     if (!this.renderAo(this.rig.camera)) r.render(this.scene, this.rig.camera);
     const s = 72;
     this.axisCam.quaternion.copy(this.rig.camera.quaternion);
