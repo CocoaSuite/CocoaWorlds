@@ -7,7 +7,7 @@
  * `assets/textures/generated/` and its map fields pointed at them.
  */
 import { MAP_FIELDS, materialsOf, newMaterial, type MaterialDef } from '@cocoaworlds/core';
-import { GraphEvaluator, OUTPUT_ROLES, newGraph, outputNodes, paramsOf, nodeDef, validateGraph, type MatGraph, type OutputRole } from '@cocoaworlds/materials';
+import { GraphEvaluator, NODES, OUTPUT_ROLES, newGraph, outputNodes, paramsOf, nodeDef, validateGraph, type MatGraph, type OutputRole } from '@cocoaworlds/materials';
 import { create } from 'zustand';
 import { assetUrl, forgetAsset } from '../assets';
 import { useEditor } from '../store';
@@ -352,4 +352,45 @@ async function bakeOnce(path: string): Promise<void> {
     useGraphs.setState((s) => ({ baking: { ...s.baking, [path]: 'failed' } }));
     useEditor.getState().log('error', 'Materials', `Baking ${stem} failed: ${(e as Error).message}`);
   }
+}
+
+// ── Pictures for the node library ──
+
+let icons: Map<string, string> | null = null;
+
+/**
+ * A small picture of what each kind of node makes, with its default settings (nodes that need an input are fed
+ * a noise; colour nodes a soft gradient). Drawn once, on first use.
+ */
+export function nodeIcons(size = 40): Map<string, string> {
+  if (icons) return icons;
+  icons = new Map();
+  try {
+    const gl = context();
+    const ev = new GraphEvaluator(gl);
+    const g: MatGraph = { format: 'cocoaworlds.material', version: 1, nodes: [], links: [] };
+    const feed = { id: 'feed', type: 'noise', x: 0, y: 0, params: { scale: 3, octaves: 4 } };
+    const bricks = { id: 'bricks', type: 'bricks', x: 0, y: 0, params: { rows: 6, columns: 3 } };
+    g.nodes.push(feed, bricks);
+    for (const def of NODES) {
+      const id = `n_${def.type}`;
+      g.nodes.push({ id, type: def.type, x: 0, y: 0, params: {} });
+      // (Surface nodes read a height: bricks show them best.)
+      def.inputs.forEach((p, i) => g.links.push({ from: def.group === 'surface' || def.type === 'edges' || i > 0 ? bricks.id : feed.id, to: id, input: p.id }));
+    }
+    ev.evaluate(g, 96);
+    const c = document.createElement('canvas');
+    c.width = c.height = size;
+    const g2 = c.getContext('2d')!;
+    for (const def of NODES) {
+      if (!ev.present(`n_${def.type}`, size, size)) continue;
+      g2.clearRect(0, 0, size, size);
+      g2.drawImage(gl.canvas as HTMLCanvasElement, 0, 0);
+      icons.set(def.type, c.toDataURL());
+    }
+    ev.dispose();
+  } catch {
+    // (No pictures without WebGL 2: the library shows coloured dots instead.)
+  }
+  return icons;
 }

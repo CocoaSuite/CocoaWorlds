@@ -436,3 +436,21 @@ code { font: 12px var(--mono); color: var(--fg); }
 .cm-ramp-bar { height: 16px; border-radius: 4px; border: 1px solid var(--line); }
 .cm-ramp-row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 6px; }
 .cm-ramp-row .cw-color .mono { display: none; }
+/* The node library, left of the graph. */
+.cm-graph { flex: 1; min-height: 0; display: flex; gap: 8px; }
+.cm-graph > .cm-flow { flex: 1; min-width: 0; }
+.cm-lib { flex: none; width: 200px; display: flex; flex-direction: column; gap: 6px; min-height: 0; padding: 8px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; }
+.cm-lib-h { display: flex; align-items: center; justify-content: space-between; font-size: 11px; font-weight: 700; color: var(--mute); text-transform: uppercase; letter-spacing: 0.04em; }
+.cm-lib-list { flex: 1; min-height: 0; overflow: auto; display: flex; flex-direction: column; gap: 2px; margin: 0 -4px; padding: 0 4px; }
+.cm-lib-g { display: flex; align-items: center; width: 100%; padding: 6px 4px; border: 0; background: none; color: var(--fg); font: inherit; font-size: 12px; font-weight: 700; cursor: pointer; text-align: left; }
+.cm-lib-g .cw-muted { margin-left: auto; font-weight: 400; }
+.cm-lib-g[aria-expanded="false"] { opacity: 0.75; }
+.cm-lib-items { display: flex; flex-direction: column; gap: 2px; padding-bottom: 4px; }
+.cm-lib-item { display: flex; align-items: center; gap: 8px; width: 100%; padding: 3px 4px; border: 1px solid transparent; border-radius: 6px; background: none; color: var(--fg); font: inherit; font-size: 12px; text-align: left; cursor: grab; }
+.cm-lib-item:hover { background: var(--menuhover); border-color: var(--line); }
+.cm-lib-item img, .cm-lib-ph { flex: none; width: 40px; height: 40px; border-radius: 4px; border: 1px solid var(--line); background: #000; }
+.cm-lib-ph { display: block; opacity: 0.6; }
+.cm-lib-ph.g-make { background: #8fb04a; } .cm-lib-ph.g-change { background: #4b9cff; } .cm-lib-ph.g-combine { background: #f0a442; }
+.cm-lib-ph.g-colour { background: #d46bc0; } .cm-lib-ph.g-surface { background: #4ad0c4; } .cm-lib-ph.g-output { background: #cfcfcf; }
+.cm-lib-show { flex: none; width: 22px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); color: var(--mute); cursor: pointer; font-size: 14px; }
+.cm-lib-show:hover { color: var(--fg); background: var(--panel2); }

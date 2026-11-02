@@ -43,7 +43,7 @@ import {
 import '@xyflow/react/dist/style.css';
 import { createContext, memo, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { getLang, t } from '../i18n';
-import { LiveGraph, bakeNow, endGraphGesture, loadGraph, setGraph, setGraphLive, useGraphs } from '../materials/graphs';
+import { LiveGraph, bakeNow, endGraphGesture, loadGraph, nodeIcons, setGraph, setGraphLive, useGraphs } from '../materials/graphs';
 import { useEditor } from '../store';
 import { ImagePick, MaterialPreview, Row, Slider, type Shape } from './MaterialsPanel';
 
@@ -146,6 +146,101 @@ function AddMenu({ at, onPick, onClose }: { at: { x: number; y: number }; onPick
       </div>
     </div>
   );
+}
+
+/** The node library (left of the graph, as in Substance Designer): search, groups, a picture of each node. */
+function NodeLibrary({ onAdd, onHide }: { onAdd: (type: string) => void; onHide: () => void }) {
+  const [q, setQ] = useState('');
+  const [shut, setShut] = useState<Set<string>>(new Set());
+  const icons = useMemo(() => nodeIcons(), []);
+  const query = q.trim().toLowerCase();
+  const match = (n: (typeof NODES)[number]) => !query || say(n.label).toLowerCase().includes(query) || n.label.en.toLowerCase().includes(query) || say(n.hint).toLowerCase().includes(query);
+  return (
+    <aside className="cm-lib" aria-label={t('cm.library')}>
+      <div className="cm-lib-h">
+        <span>{t('cm.library')}</span>
+        <button type="button" className="cw-iconbtn" aria-label={t('cm.hideLibrary')} title={t('cm.hideLibrary')} onClick={onHide}>
+          ‹
+        </button>
+      </div>
+      <input className="cw-input" placeholder={t('cm.search')} aria-label={t('cm.searchLibrary')} value={q} onChange={(e) => setQ(e.currentTarget.value)} onKeyDown={(e) => e.stopPropagation()} />
+      <div className="cm-lib-list">
+        {GROUPS.map((g) => {
+          const items = NODES.filter((n) => n.group === g.id && match(n));
+          if (!items.length) return null;
+          const open = !!query || !shut.has(g.id);
+          return (
+            <section key={g.id} aria-label={say(g.label)}>
+              <button
+                type="button"
+                className="cm-lib-g"
+                aria-expanded={open}
+                onClick={() =>
+                  setShut((s) => {
+                    const n = new Set(s);
+                    n.has(g.id) ? n.delete(g.id) : n.add(g.id);
+                    return n;
+                  })
+                }
+              >
+                <i className={`cm-dot g-${g.id}`} />
+                {say(g.label)}
+                <span className="cw-muted">{items.length}</span>
+              </button>
+              {open && (
+                <div className="cm-lib-items">
+                  {items.map((n) => (
+                    <button
+                      key={n.type}
+                      type="button"
+                      className="cm-lib-item"
+                      draggable
+                      title={`${say(n.hint)}\n${t('cm.libraryHint')}`}
+                      aria-label={say(n.label)}
+                      onDragStart={(e) => {
+                        e.dataTransfer.setData(NODE_DRAG, n.type);
+                        e.dataTransfer.effectAllowed = 'copy';
+                      }}
+                      onClick={() => onAdd(n.type)}
+                    >
+                      {icons.get(n.type) ? <img src={icons.get(n.type)} alt="" width={40} height={40} /> : <i className={`cm-lib-ph g-${n.group}`} />}
+                      <span>{say(n.label)}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </section>
+          );
+        })}
+        {!NODES.some(match) && <div className="cw-muted cm-add-none">{t('cm.noMatch')}</div>}
+      </div>
+    </aside>
+  );
+}
+
+const NODE_DRAG = 'application/x-cocoaworlds-node';
+
+/** Copied nodes (and the wires between them). Lives for the session, so it pastes into another material too. */
+let nodeClipboard: { nodes: GraphNode[]; links: MatGraph['links'] } | null = null;
+
+function copyNodes(g: MatGraph, ids: string[]): boolean {
+  const set = new Set(ids);
+  const nodes = g.nodes.filter((n) => set.has(n.id));
+  if (!nodes.length) return false;
+  nodeClipboard = { nodes: structuredClone(nodes), links: g.links.filter((l) => set.has(l.from) && set.has(l.to)) };
+  return true;
+}
+
+/** The copied nodes with new ids, their top-left corner at `at` (or a step off where they were). */
+function pasteNodes(g: MatGraph, at: { x: number; y: number } | null): { graph: MatGraph; ids: string[] } | null {
+  const c = nodeClipboard;
+  if (!c) return null;
+  const minX = Math.min(...c.nodes.map((n) => n.x)), minY = Math.min(...c.nodes.map((n) => n.y));
+  const [dx, dy] = at ? [Math.round(at.x - minX), Math.round(at.y - minY)] : [40, 40];
+  const ids = new Map(c.nodes.map((n) => [n.id, newNode(n.type).id]));
+  const nodes = c.nodes.map((n) => ({ ...structuredClone(n), id: ids.get(n.id)!, x: n.x + dx, y: n.y + dy }));
+  const links = c.links.map((l) => ({ from: ids.get(l.from)!, to: ids.get(l.to)!, input: l.input }));
+  return { graph: { ...g, nodes: [...g.nodes, ...nodes], links: [...g.links, ...links] }, ids: nodes.map((n) => n.id) };
 }
 
 function Flow({ path, graph, sel, onSelect }: { path: string; graph: MatGraph; sel: string[]; onSelect: (ids: string[]) => void }) {
@@ -251,20 +346,112 @@ function Flow({ path, graph, sel, onSelect }: { path: string; graph: MatGraph; s
     setMenu(null);
   };
 
+  /** Where a node clicked in the library goes: the middle of the view, a little further each time. */
+  const stagger = useRef(0);
+  const addInView = (type: string) => {
+    const box = host.current!.getBoundingClientRect();
+    const k = (stagger.current = (stagger.current + 1) % 6);
+    const p = rf.screenToFlowPosition({ x: box.left + box.width / 2, y: box.top + box.height / 2 });
+    add(type, { x: p.x - 66 + k * 24, y: p.y - 90 + k * 24 });
+  };
+  const [showLib, setShowLib] = useState(() => {
+    try {
+      return localStorage.getItem('cw-cm-library') !== 'hidden';
+    } catch {
+      return true;
+    }
+  });
+  const toggleLib = (on: boolean) => {
+    setShowLib(on);
+    try {
+      localStorage.setItem('cw-cm-library', on ? 'shown' : 'hidden');
+    } catch {
+      /* ignore */
+    }
+  };
+
+  /** Ctrl+C, X, V, D on the picked nodes (wires between them come along). */
+  const clipboardKey = (e: KeyboardEvent): boolean => {
+    if (!(e.ctrlKey || e.metaKey) || e.shiftKey || e.altKey) return false;
+    const k = e.code.replace(/^Key/, '').toLowerCase();
+    if (!['c', 'x', 'v', 'd'].includes(k)) return false;
+    e.preventDefault();
+    const g = graphRef.current;
+    const picked = selRef.current;
+    if (k === 'c') return copyNodes(g, picked), true;
+    if (k === 'x') {
+      if (copyNodes(g, picked)) {
+        setGraph(path, removeNodes(g, picked), picked.length === 1 ? 'Cut node' : 'Cut nodes');
+        onSelect([]);
+      }
+      return true;
+    }
+    const keep = nodeClipboard;
+    if (k === 'd' && !copyNodes(g, picked)) return true;
+    // Pasted where the mouse is (when it is over the graph); duplicates a step off the originals.
+    const box = host.current!.getBoundingClientRect();
+    const p = pointer.current;
+    const inside = p.x >= box.left && p.x <= box.right && p.y >= box.top && p.y <= box.bottom;
+    const r = pasteNodes(g, k === 'v' && inside ? rf.screenToFlowPosition(p) : null);
+    if (k === 'd') nodeClipboard = keep;
+    if (!r) return true;
+    setGraph(path, r.graph, k === 'd' ? 'Duplicate nodes' : 'Paste nodes');
+    onSelect(r.ids);
+    return true;
+  };
+
+  // (On the window: picking a node can leave nothing focused. Only when focus is in the graph or nowhere, and
+  // never while typing.)
+  const keyRef = useRef(clipboardKey);
+  keyRef.current = clipboardKey;
+  useEffect(() => {
+    const down = (e: KeyboardEvent) => {
+      const a = document.activeElement;
+      if (a && a !== document.body && !host.current?.contains(a)) return;
+      if (document.querySelector('.cw-modal')) return;
+      keyRef.current(e);
+    };
+    window.addEventListener('keydown', down);
+    return () => window.removeEventListener('keydown', down);
+  }, []);
+
   const openMenu = (clientX: number, clientY: number) => {
     const box = host.current!.getBoundingClientRect();
     setMenu({ x: Math.min(clientX - box.left, box.width - 250), y: Math.min(clientY - box.top, box.height - 340), flow: rf.screenToFlowPosition({ x: clientX, y: clientY }) });
   };
 
   return (
+    <div className="cm-graph">
+    {showLib ? <NodeLibrary onAdd={addInView} onHide={() => toggleLib(false)} /> : (
+      <button type="button" className="cm-lib-show" aria-label={t('cm.showLibrary')} title={t('cm.showLibrary')} onClick={() => toggleLib(true)}>
+        ›
+      </button>
+    )}
     <div
       className="cm-flow"
       ref={host}
       data-testid="material-graph"
       tabIndex={-1}
       onPointerMove={(e) => (pointer.current = { x: e.clientX, y: e.clientY })}
+      // (Keys go to the graph once it has been clicked, even on the empty background.)
+      onPointerDown={() => {
+        if (!host.current!.contains(document.activeElement)) host.current!.focus({ preventScroll: true });
+      }}
+      onDragOver={(e) => {
+        if (!e.dataTransfer.types.includes(NODE_DRAG)) return;
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'copy';
+      }}
+      onDrop={(e) => {
+        const type = e.dataTransfer.getData(NODE_DRAG);
+        if (!type || !nodeDef(type)) return;
+        e.preventDefault();
+        const p = rf.screenToFlowPosition({ x: e.clientX, y: e.clientY });
+        add(type, { x: p.x - 66, y: p.y - 20 });
+      }}
       onKeyDown={(e) => {
-        if (e.code === 'Space' && !menu && !(e.target as HTMLElement).closest('input, select, textarea')) {
+        if ((e.target as HTMLElement).closest('input, select, textarea')) return;
+        if (e.code === 'Space' && !menu) {
           e.preventDefault();
           openMenu(pointer.current.x || host.current!.getBoundingClientRect().left + 200, pointer.current.y || host.current!.getBoundingClientRect().top + 120);
         }
@@ -307,6 +494,7 @@ function Flow({ path, graph, sel, onSelect }: { path: string; graph: MatGraph; s
         <span className="cw-muted">{t('cm.flowHint')}</span>
       </div>
       {menu && <AddMenu at={menu} onPick={(type) => add(type, menu.flow)} onClose={() => setMenu(null)} />}
+    </div>
     </div>
   );
 }

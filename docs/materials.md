@@ -56,11 +56,17 @@ an image, it has a graph in the middle of the workspace: nodes that make pattern
 nodes that change them (levels, blur, warp …) and output nodes for each map of the material. A new one starts
 from a small working graph (a stone-like surface) to change.
 
-- **Add a node**: right-click the graph, press **Space**, or **+ Node**. Type to find one; Enter adds the
-  first match where you clicked.
+- **The library** on the left of the graph lists every node by group, with a picture of what it makes. Type
+  to search it. Click a node to add it in the middle of the graph, or drag it to where you want it. **‹** hides
+  the library (and **›** brings it back); groups fold away with a click on their name.
+- **Add a node** without the library: right-click the graph, press **Space**, or **+ Node**. Type to find one;
+  Enter adds the first match where you clicked.
 - **Wire**: drag from a node's output (right) to another node's input (left). An input takes one wire; a new
   one replaces it. Wires that would loop back are refused. Grey dots carry grey pictures, gold ones colour.
 - **Remove**: pick nodes or wires and press **Delete**. Shift or Ctrl adds to the pick.
+- **Copy and paste**: Ctrl+C copies the picked nodes (with their settings and the wires between them), Ctrl+X
+  cuts them, Ctrl+V pastes them where the mouse is, Ctrl+D duplicates them beside the originals. Copied nodes
+  can be pasted into another graph material too.
 - **Change**: pick a node; its settings show on the right. With no node picked, the right shows the material's
   own settings.
 - **Undo** (Ctrl+Z) undoes graph changes like any other; a slider's whole drag is one step.

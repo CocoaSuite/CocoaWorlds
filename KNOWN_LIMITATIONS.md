@@ -63,6 +63,6 @@ None open.
 - Line-segment grids disappeared near the camera on software renderers; the grid is now drawn by a shader on a single plane.
 - **Cocoa Materials (CM1):** materials map with each face's own alignment only (triplanar mapping, exposed
   settings and variants come in CM2, with Slope blur, Distance and Flood fill); no wear from mesh edges yet
-  (CM3). Nodes can't be copied and pasted or grouped into frames yet. Curve has four fixed points. Height to
+  (CM3). Nodes can't be grouped into frames yet, and copied nodes stay inside the editor (not the system clipboard). Curve has four fixed points. Height to
   occlusion is a quick approximation. Graph files keep the name they were made with. Graphs are evaluated
   only in the editor; changing one from another workspace with Undo bakes it again in the background.

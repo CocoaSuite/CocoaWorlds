@@ -96,7 +96,42 @@ test('cocoa materials: a graph material, edited, baked and used', async () => {
     await page.getByTestId('material-preview').waitFor();
     await shot(page, 'cm03-settled');
 
-    // 5. Painted on the block, the level draws it with its colour, bump and roughness maps.
+    // 5. The library on the left: a click adds a node in the middle of the graph; dragging drops it where let go.
+    const count = async (type) => (await graphFile()).nodes.filter((n) => n.type === type).length;
+    const lib = page.getByRole('complementary', { name: 'Library' });
+    await lib.getByLabel('Search the library').fill('check');
+    await lib.getByRole('button', { name: 'Checker' }).click();
+    await until(() => count('checker'), 1, 6000);
+    await lib.getByLabel('Search the library').fill('');
+    assert.ok((await lib.getByRole('button').count()) > 35, 'every node is listed');
+    const fl = await page.getByTestId('material-graph').boundingBox();
+    const src = await lib.getByRole('button', { name: 'Cells', exact: true }).boundingBox();
+    await page.mouse.move(src.x + 20, src.y + src.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(fl.x + fl.width - 160, fl.y + fl.height - 140, { steps: 10 });
+    await page.mouse.up();
+    await until(() => count('cells'), 1, 6000);
+    const cells = (await graphFile()).nodes.find((n) => n.type === 'cells');
+    const cellBox = await nodeOf('cells').boundingBox();
+    assert.ok(Math.abs(cellBox.x + cellBox.width / 2 - (fl.x + fl.width - 160)) < 40 && Math.abs(cellBox.y + 20 - (fl.y + fl.height - 140)) < 40, 'dropped where let go');
+    assert.ok(cells);
+    await shot(page, 'cm05-library');
+
+    // 6. Copy and paste nodes (with their settings), duplicate, undo.
+    await nodeOf('bricks').click();
+    await page.keyboard.press('Control+c');
+    await page.mouse.move(fl.x + fl.width / 2, fl.y + 60);
+    await page.keyboard.press('Control+v');
+    await until(() => count('bricks'), 2, 6000);
+    assert.deepEqual((await graphFile()).nodes.filter((n) => n.type === 'bricks').map((n) => n.params.rows), [12, 12]);
+    await page.keyboard.press('Control+d');
+    await until(() => count('bricks'), 3, 6000);
+    await page.keyboard.press('Control+z');
+    await until(() => count('bricks'), 2, 6000);
+    await page.keyboard.press('Control+z');
+    await until(() => count('bricks'), 1, 6000);
+
+    // 7. Painted on the block, the level draws it with its colour, bump and roughness maps.
     m = (await materials())[0];
     await region.getByRole('button', { name: 'Paint with it' }).click();
     await page.keyboard.press('1');
