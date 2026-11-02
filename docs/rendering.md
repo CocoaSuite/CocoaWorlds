@@ -110,8 +110,8 @@ with a little lighter or darker per tuft. Three tricks give the look:
 
 - **Floor normals.** Every blade takes the normal of the floor it grows on (both sides), so grass lights exactly
   like the ground: flat, with no shading of its own, and it darkens in shadows as the ground does.
-- **No bare ground.** The grassed surface is painted in the root colour just under the tufts, so nothing shows
-  between them.
+- **No bare ground.** Each tuft has a root-coloured disc on the ground under it; neighbouring discs overlap, so
+  nothing shows between tufts, yet where grass is cleared (or a field ends) the floor shows as it is.
 - **Wind.** Blades sway, more towards their tips, out of step from place to place.
 - **Patches.** Rounded areas of a very slightly different hue (one warmer, one cooler), from world-space noise,
   so they carry on across brushes. Painting them by hand comes with terrain (T1).
@@ -121,13 +121,19 @@ with a little lighter or darker per tuft. Three tricks give the look:
 **Cleared under objects.** Visible solid brushes and models standing on the grass clear it underneath, if they
 are at least 24 u across (pebbles and posts don't). A tuft goes when a point just above its root is inside the
 object (exactly, for brushes; by its box, for models), so something floating overhead leaves the grass alone.
-Each object has **Clears grass under it** in the Inspector (on by default) to let grass grow under it instead.
+Objects lower than the grass (slabs, path stones) also keep it back by a tuft's spread, so blades don't poke
+through their top; taller ones don't need to (they hide what leans into them). Brushes and objects have
+**Clears grass under it** in the Inspector (on by default) to let grass grow under them instead.
+
+**NOGRASS** (`tool/nograss`) is a tool material like COL: a brush made of it is shown in the editor but never in
+the game, collides with nothing, and clears grass where it stands, at any size. Use it to carve paths and
+clearings that show the floor's own material.
 
 **Level of detail.** Grass is drawn in 256 u chunks, each culled when out of view and drawn at one of three levels
 by its distance from the camera: full blades (three triangles each, 14 per tuft) within 320 u, 8 single-triangle
-blades to 960 u, 4 broad ones to 2400 u, and past that only the grass-coloured ground cover. Over the last fifth of each range a level dissolves into the
+blades to 960 u, and 4 broad ones beyond. Over the last fifth of each range a level dissolves into the
 next with a screen-door dither (the two keep complementary pixels), so there's no pop. In the flat views the level follows the zoom. A 1536 u square field drops from about
 2.5 million triangles to about 200 thousand from the player's eyes.
 
-Only the component is saved. Placement is in `@cocoaworlds/geometry` (`scatterTufts`, `grassCover`); drawing (one
-instanced mesh per brush plus its cover) in `viewport/foliage.ts`, shared by the editor and Play.
+Only the component is saved. Placement is in `@cocoaworlds/geometry` (`scatterTufts`); drawing (instanced meshes per chunk
+and level) in `viewport/foliage.ts`, shared by the editor and Play.

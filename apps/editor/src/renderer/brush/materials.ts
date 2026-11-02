@@ -29,6 +29,7 @@ export const DEV_MATERIALS: DevMaterial[] = [
   { id: 'dev/blue', base: '#5a84b6', label: { en: 'Blue', ru: 'Синий' } },
   { id: 'dev/water', base: '#3b86b4', label: { en: 'Water', ru: 'Вода' }, liquid: true },
   { id: 'tool/col', base: '#c04ad0', label: { en: 'COL — invisible collider', ru: 'COL — невидимый коллайдер' }, tool: true },
+  { id: 'tool/nograss', base: '#d9b43a', label: { en: 'NOGRASS — clears grass (invisible, no collision)', ru: 'NOGRASS — убирает траву (невидимый, без столкновений)' }, tool: true },
 ];
 
 /** Paint a tool texture: diagonal stripes and the material's short name (COL). */

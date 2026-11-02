@@ -29,17 +29,26 @@ test('foliage: tufts on a brush top, shown in the editor and in Play', async () 
     await block([128, 64, 128], [-64, 0, -64]);
     await until(async () => (await tufts()) < saved - 100, true, 10000);
     const cleared = await tufts();
+    await block([160, 2, 64], [-80, 0, 80]);
+    await until(async () => (await tufts()) < cleared - 60, true, 10000);
+    await page.getByRole('radio', { name: 'Perspective' }).click();
+    await page.getByRole('tree').getByRole('treeitem', { name: 'block_3' }).click();
+    await page.getByTestId('viewport').hover(); await page.keyboard.press('f');
+    await new Promise((r) => setTimeout(r, 1500));
+    await shot(page, 'foliage-crate');
     // …a pebble doesn't (too small)…
+    const withSlab = await tufts();
     await block([16, 16, 16], [200, 0, 200]);
     await new Promise((r) => setTimeout(r, 800));
-    assert.equal(await tufts(), cleared);
+    assert.equal(await tufts(), withSlab);
     // …and the crate can be set to let grass grow under it.
     await page.getByRole('tree').getByRole('treeitem', { name: 'block_2' }).click();
     await insp.getByRole('switch', { name: 'Clears grass under it' }).click();
-    await until(tufts, saved, 10000);
+    await until(async () => (await tufts()) > withSlab, true, 10000);
     await page.getByRole('tree').getByRole('treeitem', { name: 'block', exact: true }).click();
     await page.getByTestId('viewport').hover(); await page.keyboard.press('f');
     await shot(page, 'foliage01');
+    const before = await tufts();
     // Play: the same tufts are drawn in the game, and the player can still stand on the block.
     await page.getByRole('button', { name: 'Play', exact: true }).click();
     await until(() => page.evaluate(() => !!window.__cwViewport.play), true, 15000);
@@ -48,7 +57,7 @@ test('foliage: tufts on a brush top, shown in the editor and in Play', async () 
       window.__cwViewport.play.group.traverse((o) => { if (o.isInstancedMesh && o.name.startsWith('foliage:') && o.name.endsWith(':lod0')) n += o.count; });
       return n;
     });
-    assert.equal(inGame, saved);
+    assert.equal(inGame, before);
     // Level of detail: full blades near the player, simpler ones further out (and every tuft at one level at most).
     await new Promise((r) => setTimeout(r, 500));
     const shown = await page.evaluate(() => window.__cwViewport.play.foliage.shown);

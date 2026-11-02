@@ -4,7 +4,7 @@
  * or its settings change. Shared by the editor and play mode.
  */
 import { SceneDoc, readComponent, type ScatterData } from '@cocoaworlds/core';
-import { TUFT_STRIDE, bounds as brushBoxOf, grassCover, scatterTufts, seededRandom, type Brush, type Tufts } from '@cocoaworlds/geometry';
+import { TUFT_STRIDE, bounds as brushBoxOf, isNoGrassBrush, scatterTufts, seededRandom, type Tufts } from '@cocoaworlds/geometry';
 import { applyMat4, type EntityData, type ModelData } from '@cocoaworlds/core';
 import { UNITS_PER_METRE, loadModel } from './models';
 import * as THREE from 'three';
@@ -19,8 +19,8 @@ const LEVELS = [
   { blades: 8, plain: true, widen: 1.35 },
   { blades: 4, plain: true, widen: 2 },
 ];
-/** How far (u, from the camera to a chunk's edge) each level is drawn; past the last, only the ground cover. */
-export const FOLIAGE_LOD_DISTANCES = [320, 960, 2400];
+/** How far (u, from the camera to a chunk's edge) each level is drawn (the last, however far). */
+export const FOLIAGE_LOD_DISTANCES = [320, 960, Infinity];
 /** Objects narrower than this (u, their widest side across the ground) leave the grass alone. */
 export const GRASS_CLEAR_MIN = 24;
 /** The last part of each level's range where it blends into the next (a share of that distance). */
@@ -68,6 +68,14 @@ function tuftGeometry(level: number): THREE.BufferGeometry {
       v(b, -half[0]!, 0.55); v(m, half[1]!, 0.85); v(m, -half[1]!, 0.85);
       v(m, -half[1]!, 0.85); v(m, half[1]!, 0.85); v(tip, 0, 1.12);
     }
+  }
+  // A root-coloured disc on the ground under the clump: neighbouring discs overlap, so no bare ground shows
+  // between tufts, yet where grass is cleared (or the field ends) the floor shows as it is.
+  const sides = level === 0 ? 8 : 6, R = 0.72, lift = 0.03;
+  for (let k = 0; k < sides; k++) {
+    const a0 = (k / sides) * Math.PI * 2, a1 = ((k + 1) / sides) * Math.PI * 2;
+    pos.push(0, lift, 0, Math.cos(a1) * R, lift, Math.sin(a1) * R, Math.cos(a0) * R, lift, Math.sin(a0) * R);
+    col.push(0.55, 0.55, 0.55, 0.55, 0.55, 0.55, 0.55, 0.55, 0.55);
   }
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
@@ -141,7 +149,6 @@ interface Chunk {
 interface Entry {
   key: string;
   chunks: Chunk[];
-  cover?: THREE.Mesh;
 }
 
 /** Smooth value noise, 0…1 (for patches). */
@@ -209,7 +216,7 @@ const round = (v: number) => Math.round(v * 10) / 10;
  * grow under them. A tuft is cleared when a point just above its root is inside one (exactly for brushes; within the
  * box for models, which must also reach down to about the ground).
  */
-function blockersOf(doc: SceneDoc, skip: string): Blocker[] {
+function blockersOf(doc: SceneDoc, skip: string, spread: number, tall: number): Blocker[] {
   const out: Blocker[] = [];
   for (const e of doc.entities) {
     if (e.id === skip || e.keepsGrass || !isShown(doc, e)) continue;
@@ -219,15 +226,20 @@ function blockersOf(doc: SceneDoc, skip: string): Blocker[] {
     if (wb) {
       if (wb.role !== 'solid') continue;
       const box = brushBoxOf(wb.brush);
-      if (!box || Math.max(box.max[0]! - box.min[0]!, box.max[2]! - box.min[2]!) < GRASS_CLEAR_MIN) continue;
+      // (NOGRASS brushes are there to clear grass: any size.)
+      if (!box || (!isNoGrassBrush(wb.brush) && Math.max(box.max[0]! - box.min[0]!, box.max[2]! - box.min[2]!) < GRASS_CLEAR_MIN)) continue;
+      // Blades leaning into something taller than the grass are hidden by it; only lower things (slabs, paths)
+      // need the grass kept back by a tuft's spread, or it pokes through their top.
+      const margin = box.max[1]! - box.min[1]! < tall ? spread : 0;
       const planes = wb.brush.mesh ? null : wb.brush.faces.map((f) => f.plane);
       out.push({
-        min: box.min,
-        max: box.max,
-        // (Inside a convex brush: behind every face's plane. Edited meshes go by their box.)
+        min: [box.min[0]! - margin, box.min[1]!, box.min[2]! - margin],
+        max: [box.max[0]! + margin, box.max[1]!, box.max[2]! + margin],
+        // Inside a convex brush (behind every face's plane), with its sides pushed out by `margin`, so tufts just
+        // outside don't lean their blades through it. Edited meshes go by their box.
         inside: planes
-          ? (x, y, z) => planes.every((p) => p.n[0] * x + p.n[1] * y + p.n[2] * z <= p.d + 0.01)
-          : (x, y, z) => x >= box.min[0]! && x <= box.max[0]! && y >= box.min[1]! && y <= box.max[1]! && z >= box.min[2]! && z <= box.max[2]!,
+          ? (x, y, z) => planes.every((p) => p.n[0] * x + p.n[1] * y + p.n[2] * z <= p.d + 0.01 + margin * Math.hypot(p.n[0], p.n[2]))
+          : (x, y, z) => x >= box.min[0]! - margin && x <= box.max[0]! + margin && y >= box.min[1]! && y <= box.max[1]! && z >= box.min[2]! - margin && z <= box.max[2]! + margin,
         key: [box.min, box.max].flat().map(round).join(','),
       });
     } else if (c.model) {
@@ -244,6 +256,11 @@ function blockersOf(doc: SceneDoc, skip: string): Blocker[] {
         }
       }
       if (Math.max(max[0]! - min[0]!, max[2]! - min[2]!) < GRASS_CLEAR_MIN) continue;
+      const margin = max[1]! - min[1]! < tall ? spread : 0;
+      for (const k of [0, 2]) {
+        min[k]! -= margin;
+        max[k]! += margin;
+      }
       out.push({
         min,
         max,
@@ -261,8 +278,8 @@ function withoutCleared(t: Tufts, blockers: Blocker[]): Tufts {
   const keep: number[] = [];
   for (let i = 0; i < t.count; i++) {
     const o = i * TUFT_STRIDE;
-    // (Just above the root: a block resting on the ground has it inside; one floating overhead doesn't.)
-    const x = t.data[o]!, y = t.data[o + 1]! + 2, z = t.data[o + 2]!;
+    // (Just above the root, so even a thin slab lying on the ground has it inside; one floating overhead doesn't.)
+    const x = t.data[o]!, y = t.data[o + 1]! + 0.5, z = t.data[o + 2]!;
     if (!blockers.some((b) => x >= b.min[0]! && x <= b.max[0]! && z >= b.min[2]! && z <= b.max[2]! && b.inside(x, y, z))) keep.push(i);
   }
   const data = new Float32Array(keep.length * TUFT_STRIDE);
@@ -298,7 +315,7 @@ export class FoliageRenderer {
       // (Only what stands within this brush's reach can clear its grass.)
       const reach = brushBoxOf(brush.brush);
       const blockers = reach
-        ? blockersOf(doc, e.id).filter((b) => b.max[0]! >= reach.min[0]! && b.min[0]! <= reach.max[0]! && b.max[2]! >= reach.min[2]! && b.min[2]! <= reach.max[2]! && b.max[1]! >= reach.min[1]! && b.min[1]! <= reach.max[1]! + 8)
+        ? blockersOf(doc, e.id, sc.size * 0.45, (sc.height ?? sc.size) * 1.25).filter((b) => b.max[0]! >= reach.min[0]! && b.min[0]! <= reach.max[0]! && b.max[2]! >= reach.min[2]! && b.min[2]! <= reach.max[2]! && b.max[1]! >= reach.min[1]! && b.min[1]! <= reach.max[1]! + 8)
         : [];
       const key = JSON.stringify([sc, e.components.brush, doc.worldMatrix(e.id), blockers.map((b) => b.key)]);
       if (this.entries.get(e.id)?.key === key) continue;
@@ -308,7 +325,6 @@ export class FoliageRenderer {
       const tufts = withoutCleared(scatterTufts(brush.brush, sc), blockers);
       if (!tufts.count) continue;
       this.add(e.id, entry, sc, tufts);
-      this.addCover(entry, e.id, brush.brush, sc);
     }
     for (const id of [...this.entries.keys()]) if (!seen.has(id)) this.remove(id);
   }
@@ -337,9 +353,9 @@ export class FoliageRenderer {
         const d = Math.max(0, at.distanceTo(c.centre) - c.radius);
         const level = FOLIAGE_LOD_DISTANCES.findIndex((max) => d < max);
         if (level < 0) continue;
-        // Near the end of its range a level dissolves into the next (the last into nothing: the cover carries on).
+        // Near the end of its range a level dissolves into the next.
         const end = FOLIAGE_LOD_DISTANCES[level]!;
-        const t = Math.min(1, Math.max(0, (d - end * (1 - BLEND)) / (end * BLEND)));
+        const t = Number.isFinite(end) ? Math.min(1, Math.max(0, (d - end * (1 - BLEND)) / (end * BLEND))) : 0;
         show(c.meshes[level], 1 - t, 0);
         if (t > 0) show(c.meshes[level + 1], t, 1);
       }
@@ -402,21 +418,6 @@ export class FoliageRenderer {
     }
   }
 
-  /** The ground under the grass, painted the colour of its roots. */
-  private addCover(entry: Entry, id: string, brush: Brush, sc: ScatterData): void {
-    const tri = grassCover(brush, sc.slope);
-    if (!tri.length) return;
-    const g = new THREE.BufferGeometry();
-    g.setAttribute('position', new THREE.BufferAttribute(tri, 3));
-    g.computeVertexNormals();
-    const mat = new THREE.MeshLambertMaterial({ color: new THREE.Color(sc.colour).multiplyScalar(0.55) });
-    const cover = new THREE.Mesh(g, mat);
-    cover.name = `foliage-cover:${id}`;
-    cover.receiveShadow = true;
-    this.group.add(cover);
-    entry.cover = cover;
-  }
-
   private remove(id: string): void {
     const e = this.entries.get(id);
     if (!e) return;
@@ -427,11 +428,6 @@ export class FoliageRenderer {
         (m.material as THREE.Material).dispose();
         m.dispose();
       }
-    }
-    if (e.cover) {
-      this.group.remove(e.cover);
-      e.cover.geometry.dispose();
-      (e.cover.material as THREE.Material).dispose();
     }
     this.entries.delete(id);
   }

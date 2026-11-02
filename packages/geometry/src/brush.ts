@@ -63,8 +63,14 @@ export const DEFAULT_MATERIAL = 'dev/grid';
 /** COL: an invisible collider. Faces with it collide in the game but are never drawn there (the editor shows them). */
 export const COLLIDER_MATERIAL = 'tool/col';
 
+/** NOGRASS: never drawn in the game and collides with nothing, but clears grass (Foliage) where it stands. */
+export const NOGRASS_MATERIAL = 'tool/nograss';
+
 /** Materials that are not drawn in the game. */
-export const isInvisibleMaterial = (material: string): boolean => material === COLLIDER_MATERIAL;
+export const isInvisibleMaterial = (material: string): boolean => material === COLLIDER_MATERIAL || material === NOGRASS_MATERIAL;
+
+/** A brush made only of NOGRASS: no collision, nothing drawn in the game; it only clears grass. */
+export const isNoGrassBrush = (b: Brush): boolean => b.faces.length > 0 && b.faces.every((f) => f.surface.material === NOGRASS_MATERIAL);
 
 export const defaultSurface = (material = DEFAULT_MATERIAL): FaceSurface => ({
   material,

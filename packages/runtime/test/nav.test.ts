@@ -1,7 +1,7 @@
 // A2: navigation — standing spots measured from the level, paths round walls, creatures that find their way.
 import { beforeAll, describe, expect, it } from 'vitest';
 import { newEntity, newScene, type EntityData, type SceneFile, type Vec3 } from '@cocoaworlds/core';
-import { box, toData } from '@cocoaworlds/geometry';
+import { NOGRASS_MATERIAL, box, defaultSurface, toData } from '@cocoaworlds/geometry';
 import { GameWorld, initPhysics } from '../src';
 
 beforeAll(async () => {
@@ -61,4 +61,17 @@ describe('navigation', () => {
     expect(Math.hypot(feet[0], feet[2] - 300)).toBeLessThan(10);
     w.dispose();
   });
+});
+
+it('a NOGRASS brush collides with nothing and is not part of the level', () => {
+  const clear = newEntity('clearing', { brush: { role: 'solid', faces: toData(box([-64, 0, -64], [64, 4, 64], defaultSurface(NOGRASS_MATERIAL))).faces } as never });
+  const f = floor();
+  const w = GameWorld.create(scene(f, clear));
+  expect(w.levelIds.has(f.id)).toBe(true);
+  expect(w.levelIds.has(clear.id)).toBe(false);
+  // Nothing to stand on over it but the floor itself.
+  const nav = w.navigation()!;
+  const s = nav.nearest({ x: 0, y: 10, z: 0 });
+  expect(nav.xyz[s * 3 + 1]).toBeCloseTo(0, 1);
+  w.dispose();
 });

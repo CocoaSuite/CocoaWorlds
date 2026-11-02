@@ -46,7 +46,7 @@ import { PLAYER, Player, fallDamage, type PlayerInput } from './player';
 import { Weapons, type V3 } from './weapons';
 import { ANIM_ROLES, Npc, type AnimRole } from './npc';
 import { NavGrid } from './navgrid';
-import { bounds, brushToWorld, buildMesh, buildWorld, fromData, hullPoints, vertices, type Brush, type BrushData, type WorldBrush } from '@cocoaworlds/geometry';
+import { bounds, brushToWorld, isNoGrassBrush, buildMesh, buildWorld, fromData, hullPoints, vertices, type Brush, type BrushData, type WorldBrush } from '@cocoaworlds/geometry';
 
 /** Units per metre (an inch-based world). */
 export const UNITS_PER_METRE = 39.37;
@@ -524,7 +524,8 @@ export class GameWorld {
         else if (e.components.trigger) this.addTrigger(e, brush, scriptedZones.has(e.id));
         else if (e.components.rigidBody) this.addBrushBody(e, brush);
         else if (unitOf.has(e.id) && brushData.role !== 'subtract') unitBrushes.get(unitOf.get(e.id)!)!.push(brush);
-        else level.push({ id: e.id, role: brushData.role === 'subtract' ? 'subtract' : 'solid', brush });
+        // (NOGRASS brushes only clear grass: nothing to collide with.)
+        else if (!isNoGrassBrush(brush)) level.push({ id: e.id, role: brushData.role === 'subtract' ? 'subtract' : 'solid', brush });
         if (e.components.conveyor && !unitOf.has(e.id)) conveyors.set(e.id, readComponent<ConveyorData>('conveyor', e.components.conveyor));
       } else if (e.components.npc) {
         this.npcEntities.push(e);
