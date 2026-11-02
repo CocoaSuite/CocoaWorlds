@@ -8,7 +8,7 @@ import * as THREE from 'three';
 import { DEV_TEXTURE_SIZE, devMaterial } from '../brush/materials';
 import type { Lang } from '../i18n';
 import { assetUrl } from '../assets';
-import { setMapping } from './triplanar';
+import { setShading, setWearTexture, wearTextures, type WearRole } from './triplanar';
 
 const TEX_SIZE = DEV_TEXTURE_SIZE;
 /** Face coordinates are in texels at 0.25 units each (the usual face scale): 64 units across one dev tile. */
@@ -76,6 +76,7 @@ export function releaseMaterial(m: THREE.Material): void {
   if (!l) return;
   live.delete(m);
   for (const k of SLOTS) drop(l.m[k]);
+  for (const t of wearTextures(l.m)) drop(t);
 }
 
 function drop(t: THREE.Texture | null): void {
@@ -180,7 +181,7 @@ export function setReflection(top: string, horizon: string, ground: string): voi
 const reflects = (d: MaterialDef) => d.metalness + (1 - d.metalness) * (1 - d.roughness) * 0.35;
 
 /** Which slot each map goes in, and whether it holds colours (sRGB) or plain values. */
-const ROLE_SLOT: Record<MapRole, { slot: Slot; srgb: boolean }> = {
+const ROLE_SLOT: Record<MapRole, { slot: Slot | null; srgb: boolean }> = {
   color: { slot: 'map', srgb: true },
   normal: { slot: 'normalMap', srgb: false },
   roughness: { slot: 'roughnessMap', srgb: false },
@@ -189,19 +190,26 @@ const ROLE_SLOT: Record<MapRole, { slot: Slot; srgb: boolean }> = {
   glow: { slot: 'emissiveMap', srgb: true },
   height: { slot: 'bumpMap', srgb: false },
   opacity: { slot: 'alphaMap', srgb: false },
+  // (The wear layer's images live in the shader, not in Three.js's own slots.)
+  wearColor: { slot: null, srgb: true },
+  wearRoughness: { slot: null, srgb: false },
+  wearMetal: { slot: null, srgb: false },
+  wearNoise: { slot: null, srgb: false },
 };
 
 function restyle(l: Live): void {
   const d = defs.get(l.id);
   const m = l.m;
   const version = ++l.version;
+  for (const t of wearTextures(m)) drop(t);
+  for (const r of ['wearColor', 'wearRoughness', 'wearMetal', 'wearNoise'] as WearRole[]) setWearTexture(m, r, null);
   for (const k of SLOTS) {
     drop(m[k]);
     m[k] = null;
   }
   if (!d) {
     // Deleted (or never made): the missing-texture checker, so the faces are easy to find.
-    setMapping(m, 'face', 128);
+    setShading(m, 'face', 128, null);
     m.color.set(0xffffff);
     m.map = missingTexture();
     m.envMap = null;
@@ -219,12 +227,13 @@ function restyle(l: Live): void {
   const livePics = liveMaps.get(d.id);
   const has = (role: MapRole) => !!(livePics?.[role] ?? d[MAP_FIELDS[role]]);
   m.color.set(d.color);
-  setMapping(m, d.mapping ?? 'face', d.tile ?? 128);
+  setShading(m, d.mapping ?? 'face', d.tile ?? 128, d.wear ?? null);
   // A map replaces its slider (Three.js multiplies the two).
   m.roughness = has('roughness') ? 1 : d.roughness;
   m.metalness = has('metalness') ? 1 : d.metalness;
   m.envMap = reflectionMap();
-  m.envMapIntensity = has('roughness') || has('metalness') ? 0.6 : reflects(d);
+  // (Worn bare metal needs something to reflect, however matte the paint is.)
+  m.envMapIntensity = Math.max(has('roughness') || has('metalness') ? 0.6 : reflects(d), d.wear ? 0.35 + 0.5 * d.wear.metalness : 0);
   const glowMap = has('glow');
   m.emissive.set(d.emissive ?? (glowMap ? '#ffffff' : '#000000'));
   m.emissiveIntensity = d.emissive || glowMap ? (d.emissiveStrength ?? 1) : 0;
@@ -258,6 +267,11 @@ function restyle(l: Live): void {
   };
   const put = (role: MapRole, tex: THREE.Texture) => {
     const { slot } = ROLE_SLOT[role];
+    if (!slot) {
+      if (d.wear) setWearTexture(m, role as WearRole, tex);
+      l.onUpdate();
+      return;
+    }
     // (Height only gives bumps when there is no normal map.)
     if (role === 'height' && has('normal')) return void (liveTextures.has(tex) || tex.dispose());
     m[slot] = tex;

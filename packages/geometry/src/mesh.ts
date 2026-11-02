@@ -25,11 +25,22 @@ export interface BrushMesh {
   /** For picking: which brush and face each triangle came from. */
   triangleFaces: Uint32Array;
   triangleBrushes: Uint32Array;
+  /**
+   * With `wearRing`: per vertex, 1 + the distance (units) to the nearest outer edge of its face, and 1 + the
+   * distance to the nearest crease (an edge where the face meets another brush), capped at the ring width.
+   * (0 would mean “not known”, as for meshes without this data.)
+   */
+  wear?: Float32Array;
 }
 
 export interface MeshOptions {
   /** Drop faces that are pressed flat against an opposite face of another brush (hidden inside walls). */
   cullTouchingFaces?: boolean;
+  /**
+   * Give each face an inset ring this many units wide (less on small faces) carrying exact distances to its
+   * edges and creases, for wear on edges and dirt in corners (CM3).
+   */
+  wearRing?: number;
 }
 
 /**
@@ -55,11 +66,28 @@ export function buildMesh(brushes: Brush[], opts: MeshOptions = {}): BrushMesh {
     byMat.get(k)!.push(x);
   }
 
-  const pos: number[] = [], nor: number[] = [], uv: number[] = [], idx: number[] = [], tf: number[] = [], tb: number[] = [];
+  const pos: number[] = [], nor: number[] = [], uv: number[] = [], idx: number[] = [], tf: number[] = [], tb: number[] = [], wr: number[] = [];
+  const ring = opts.wearRing ?? 0;
+  const shown = new Set(visible.map((x) => x.poly));
   const groups: MeshGroup[] = [];
   for (const [material, list] of byMat) {
     const start = idx.length;
     for (const { poly, brush } of list) {
+      if (ring > 0) {
+        ringFace(poly, brush, perBrush[brush]!, shown, ring, (p, d) => {
+          pos.push(p[0], p[1], p[2]);
+          nor.push(poly.plane.n[0], poly.plane.n[1], poly.plane.n[2]);
+          const [u, w] = uvAt(p, poly.plane, poly.surface, uvAxes(poly.plane, poly.surface));
+          uv.push(u, w);
+          wr.push(d[0] + 1, d[1] + 1);
+          return pos.length / 3 - 1;
+        }, (a, b, c) => {
+          idx.push(a, b, c);
+          tf.push(poly.face);
+          tb.push(brush);
+        });
+        continue;
+      }
       const base = pos.length / 3;
       const axes = uvAxes(poly.plane, poly.surface);
       for (const p of poly.points) {
@@ -84,7 +112,73 @@ export function buildMesh(brushes: Brush[], opts: MeshOptions = {}): BrushMesh {
     groups,
     triangleFaces: new Uint32Array(tf),
     triangleBrushes: new Uint32Array(tb),
+    ...(ring > 0 ? { wear: new Float32Array(wr) } : {}),
   };
+}
+
+/** Points shared by two polygons of a brush: the edge between them. */
+const samePoint = (a: V3, b: V3) => Math.abs(a[0] - b[0]) < 1e-3 && Math.abs(a[1] - b[1]) < 1e-3 && Math.abs(a[2] - b[2]) < 1e-3;
+
+/**
+ * One face as an inset ring (a strip along each edge, carrying the distance to that edge) around an inner
+ * polygon. Each edge is an outer edge when the face beside it (in the same brush) is shown, and a crease when
+ * that face is hidden against another brush. `vert` adds a vertex with [edge distance, crease distance].
+ */
+function ringFace(
+  poly: BrushPolygon,
+  brush: number,
+  own: BrushPolygon[],
+  shown: Set<BrushPolygon>,
+  width: number,
+  vert: (p: V3, d: [number, number]) => number,
+  tri: (a: number, b: number, c: number) => void,
+): void {
+  const pts = poly.points;
+  const n = pts.length;
+  const N = poly.plane.n;
+  // Inward normals of the edges (counter-clockwise polygons).
+  const inward = pts.map((a, i) => {
+    const b = pts[(i + 1) % n]!;
+    const e: V3 = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
+    const v: V3 = [N[1] * e[2] - N[2] * e[1], N[2] * e[0] - N[0] * e[2], N[0] * e[1] - N[1] * e[0]];
+    const l = Math.hypot(...v) || 1;
+    return [v[0] / l, v[1] / l, v[2] / l] as V3;
+  });
+  // The ring can't be wider than about half the face (measured from its middle to the nearest edge).
+  const c: V3 = [0, 0, 0];
+  for (const p of pts) for (let k = 0; k < 3; k++) c[k]! += p[k]! / n;
+  let inr = Infinity;
+  pts.forEach((a, i) => (inr = Math.min(inr, (c[0] - a[0]) * inward[i]![0] + (c[1] - a[1]) * inward[i]![1] + (c[2] - a[2]) * inward[i]![2])));
+  const w = Math.max(0, Math.min(width, inr * 0.9));
+  // What each edge is: outer (0) or crease (1), from the face on its other side.
+  const kind = pts.map((a, i) => {
+    const b = pts[(i + 1) % n]!;
+    const other = own.find((q) => q !== poly && q.points.some((x) => samePoint(x, a)) && q.points.some((x) => samePoint(x, b)));
+    return other && !shown.has(other) ? 1 : 0;
+  });
+  if (w <= 1e-3) {
+    // Too small for a ring: a plain fan, worn all over its outer edges.
+    const ids = pts.map((p) => vert(p, [kind.includes(0) ? 0 : width, kind.includes(1) ? 0 : width]));
+    for (let i = 1; i + 1 < n; i++) tri(ids[0]!, ids[i]!, ids[i + 1]!);
+    return;
+  }
+  // Inner corners: where the edges, moved in by w, meet.
+  const inner = pts.map((p, i) => {
+    const a = inward[(i + n - 1) % n]!, b = inward[i]!;
+    const s = w / Math.max(0.2, 1 + a[0] * b[0] + a[1] * b[1] + a[2] * b[2]);
+    return [p[0] + (a[0] + b[0]) * s, p[1] + (a[1] + b[1]) * s, p[2] + (a[2] + b[2]) * s] as V3;
+  });
+  const far: [number, number] = [w, w];
+  for (let i = 0; i < n; i++) {
+    const j = (i + 1) % n;
+    // Along this edge: its own distance grows from 0 to w; the other kind stays far.
+    const near = (d: number): [number, number] => (kind[i] === 0 ? [d, w] : [w, d]);
+    const o0 = vert(pts[i]!, near(0)), o1 = vert(pts[j]!, near(0)), i1 = vert(inner[j]!, near(w)), i0 = vert(inner[i]!, near(w));
+    tri(o0, o1, i1);
+    tri(o0, i1, i0);
+  }
+  const mid = inner.map((p) => vert(p, far));
+  for (let i = 1; i + 1 < n; i++) tri(mid[0]!, mid[i]!, mid[i + 1]!);
 }
 
 /** A face is covered when another brush has a face on the same plane facing the other way whose polygon contains it. */

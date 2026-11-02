@@ -4,6 +4,9 @@
  */
 import { buildMesh, buildWorld, type Brush, type BrushMesh, type WorldBrush } from '@cocoaworlds/geometry';
 
+/** How wide each face's wear ring is (units): the widest wear a material can have. */
+export const WEAR_RING = 32;
+
 export interface WorldJob {
   seq: number;
   brushes: WorldBrush[];
@@ -34,7 +37,7 @@ export function buildLevel(job: WorldJob): WorldResult {
       owners.push(s.id);
     }
   }
-  const mesh = pieces.length ? buildMesh(pieces, { cullTouchingFaces: true }) : null;
+  const mesh = pieces.length ? buildMesh(pieces, { cullTouchingFaces: true, wearRing: WEAR_RING }) : null;
   return {
     seq: job.seq,
     mesh,

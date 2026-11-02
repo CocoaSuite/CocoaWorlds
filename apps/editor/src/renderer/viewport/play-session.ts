@@ -11,7 +11,7 @@ import { GameWorld, initPhysics, type BodyInfo, type ModelMesh, type SavedProgre
 import type { Problem, ScriptError } from '@cocoaworlds/scripting';
 import * as THREE from 'three';
 import { worldBrushes } from '../brush/brushes';
-import { buildLevel } from './world-build';
+import { WEAR_RING, buildLevel } from './world-build';
 import { toGeometry } from './world-render';
 import { buildSign, type SignObject } from './sign';
 import { Effects } from './effects';
@@ -328,7 +328,7 @@ export class PlaySession {
       // Drawn in world space at the start; the body's motion moves it from there.
       const brushes = this.world.bodyBrushes(b.id);
       if (!brushes.length) return;
-      const m = buildMesh(brushes);
+      const m = buildMesh(brushes, { wearRing: WEAR_RING });
       obj = new THREE.Mesh(toGeometry(m), m.groups.map((g) => this.material(g.material)));
     } else {
       // A point object with a collision shape: draw its model if it has one, else the shape, placed like the

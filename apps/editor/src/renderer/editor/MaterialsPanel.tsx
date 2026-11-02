@@ -3,7 +3,7 @@
  * (sphere, cube or wall, turned with the mouse), and its settings on the right. Materials belong to the
  * project, so every scene can use them; changes show at once on every face that uses one, and are undoable.
  */
-import { newMaterial, type MaterialDef } from '@cocoaworlds/core';
+import { newMaterial, newWear, type MaterialDef, type WearDef } from '@cocoaworlds/core';
 import { Button, ColorField, NumberField, Segmented, Switch } from '@cocoaworlds/ui';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
@@ -442,6 +442,7 @@ function MaterialProps({
           </Row>
         </>
       )}
+      <WearSettings m={m} edit={edit} />
       <label className="cw-screens-sw" title={t('mat.twoSidedHint')}>
         <Switch label={t('mat.twoSided')} checked={!!m.doubleSided} onChange={(v) => edit({ doubleSided: v || undefined }, v ? 'Two-sided on' : 'Two-sided off')} />
         {t('mat.twoSided')}
@@ -617,6 +618,49 @@ export function MaterialPreview({ id, shape }: { id: string; shape: Shape }) {
           ☀
         </button>
       </div>
+    </div>
+  );
+}
+
+/** The wear layer (CM3): another look on edges, in creases and on top, broken up by noise. */
+export function WearSettings({ m, edit }: { m: MaterialDef; edit: (patch: Partial<MaterialDef>, label: string, key?: string) => void }) {
+  const w = m.wear;
+  const set = (patch: Partial<WearDef>, label: string, key?: string) => w && edit({ wear: { ...w, ...patch } }, label, key ? `wear-${key}-${m.id}` : undefined);
+  return (
+    <div className="cm-own" role="group" aria-label={t('wear.title')}>
+      <label className="cw-screens-sw" title={t('wear.hint')}>
+        <Switch label={t('wear.title')} checked={!!w} onChange={(v) => edit({ wear: v ? newWear() : undefined }, v ? 'Wear on' : 'Wear off')} />
+        {t('wear.title')}
+      </label>
+      {w && (
+        <>
+          <Row label={t('wear.edge')}>
+            <Slider label={t('wear.edge')} value={w.edge} onChange={(v) => set({ edge: v }, 'Wear on edges', 'edge')} />
+          </Row>
+          <Row label={t('wear.crease')}>
+            <Slider label={t('wear.crease')} value={w.crease} onChange={(v) => set({ crease: v }, 'Wear in creases', 'crease')} />
+          </Row>
+          <Row label={t('wear.up')}>
+            <Slider label={t('wear.up')} value={w.up} onChange={(v) => set({ up: v }, 'Wear on top', 'up')} />
+          </Row>
+          <Row label={t('wear.width')}>
+            <Slider label={t('wear.width')} value={w.width} min={0.5} max={32} step={0.5} onChange={(v) => set({ width: v }, 'Wear width', 'width')} />
+          </Row>
+          <Row label={t('wear.noise')}>
+            <Slider label={t('wear.noise')} value={w.noise} onChange={(v) => set({ noise: v }, 'Wear noise', 'noise')} />
+          </Row>
+          <Row label={t('wear.color')}>
+            <ColorField label={t('wear.color')} value={w.color} onChange={(v) => set({ color: v }, 'Wear colour', 'color')} />
+          </Row>
+          <Row label={t('wear.roughness')}>
+            <Slider label={t('wear.roughness')} value={w.roughness} onChange={(v) => set({ roughness: v }, 'Wear roughness', 'rough')} />
+          </Row>
+          <Row label={t('wear.metalness')}>
+            <Slider label={t('wear.metalness')} value={w.metalness} onChange={(v) => set({ metalness: v }, 'Wear metal', 'metal')} />
+          </Row>
+          <p className="cw-muted cw-screens-note">{t(m.graph ? 'wear.graphHint' : 'wear.hint')}</p>
+        </>
+      )}
     </div>
   );
 }

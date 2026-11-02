@@ -61,7 +61,34 @@ export interface MaterialDef {
   mapping?: 'face' | 'world' | 'object';
   /** A graph material's own values for the graph's exposed settings, by exposed id (variants differ here). */
   overrides?: Record<string, unknown>;
+  /**
+   * A wear layer (CM3): another look (bare metal under paint, dust, dirt) shown where the mesh says so: on outer
+   * edges, in creases, on surfaces facing up, broken up by noise. Missing: no wear.
+   */
+  wear?: WearDef;
+  /** The wear layer's images, baked from a graph's Wear outputs. */
+  wearMap?: string;
+  wearRoughnessMap?: string;
+  wearMetalnessMap?: string;
+  wearNoiseMap?: string;
 }
+
+export interface WearDef {
+  /** How much outer edges, creases and upward faces show the wear (0–1 each). */
+  edge: number;
+  crease: number;
+  up: number;
+  /** How far in from an edge or crease it reaches (units, up to 32). */
+  width: number;
+  /** How much noise breaks it up (0–1). */
+  noise: number;
+  /** The wear's colour, roughness and metal (used where no Wear images are baked). */
+  color: string;
+  roughness: number;
+  metalness: number;
+}
+
+export const newWear = (): WearDef => ({ edge: 1, crease: 0, up: 0, width: 8, noise: 0.5, color: '#c4c4c4', roughness: 0.4, metalness: 0.9 });
 
 /** The map fields, by the output of a graph that makes them. */
 export const MAP_FIELDS = {
@@ -73,6 +100,10 @@ export const MAP_FIELDS = {
   glow: 'glowMap',
   height: 'heightMap',
   opacity: 'opacityMap',
+  wearColor: 'wearMap',
+  wearRoughness: 'wearRoughnessMap',
+  wearMetal: 'wearMetalnessMap',
+  wearNoise: 'wearNoiseMap',
 } as const satisfies Record<string, keyof MaterialDef>;
 
 export const BAKE_SIZES = [256, 512, 1024, 2048] as const;
@@ -109,11 +140,15 @@ export function validateMaterials(list: unknown): string | null {
     if (!isColor(m.color)) return `${label} needs a colour like #a0b0c0.`;
     if (m.map !== undefined && !isTexturePath(m.map)) return `${label}: its image must be a project texture.`;
     if (m.normalMap !== undefined && !isTexturePath(m.normalMap)) return `${label}: its surface map must be a project texture.`;
-    for (const k of ['roughnessMap', 'metalnessMap', 'occlusionMap', 'glowMap', 'heightMap', 'opacityMap'] as const)
+    for (const k of ['roughnessMap', 'metalnessMap', 'occlusionMap', 'glowMap', 'heightMap', 'opacityMap', 'wearMap', 'wearRoughnessMap', 'wearMetalnessMap', 'wearNoiseMap'] as const)
       if (m[k] !== undefined && !isTexturePath(m[k])) return `${label}: its ${k.replace('Map', '')} map must be a project texture.`;
     if (m.graph !== undefined && !(typeof m.graph === 'string' && /^materials\/[\w-]+\.cwmat$/.test(m.graph))) return `${label}: its graph must be a file in the materials folder.`;
     if (m.bakeSize !== undefined && !(BAKE_SIZES as readonly unknown[]).includes(m.bakeSize)) return `${label}: the baked size must be 256, 512, 1024 or 2048.`;
     if (m.tile !== undefined && !(isNum(m.tile) && m.tile > 0)) return `${label}: the size in the world must be above 0.`;
+    if (m.wear !== undefined) {
+      const w = m.wear as Record<string, unknown>;
+      if (!isObj(w) || !['edge', 'crease', 'up', 'width', 'noise', 'roughness', 'metalness'].every((k) => isNum(w[k])) || !isColor(w.color)) return `${label}: its wear is broken.`;
+    }
     if (m.overrides !== undefined && !isObj(m.overrides)) return `${label}: its own settings are broken.`;
     if (m.mapping !== undefined && !['face', 'world', 'object'].includes(m.mapping as string)) return `${label}: mapping must be face, world or object.`;
     if (!isNum(m.roughness) || m.roughness < 0 || m.roughness > 1) return `${label}: roughness must be between 0 and 1.`;

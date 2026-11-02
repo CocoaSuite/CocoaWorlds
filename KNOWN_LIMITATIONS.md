@@ -61,7 +61,7 @@ None open.
 
 - Newer Chromium returns a Promise from `scrollIntoView`; an effect that returned it implicitly crashed the editor when the console updated. Effects now never return values implicitly.
 - Line-segment grids disappeared near the camera on software renderers; the grid is now drawn by a shader on a single plane.
-- **Cocoa Materials:** no wear from mesh edges yet (CM3); Flood fill (random per island) isn't there yet; triplanar mapping blends
+- **Cocoa Materials:** wear on models is estimated from how the surface curves (flat-shaded boxes show none); wear images are always projected (triplanar); Flood fill (random per island) isn't there yet; triplanar mapping blends
   three projections, so very busy patterns can look doubled on slopes; bumps from a Height output (without a
   Normal output) follow face coordinates even when triplanar. Nodes can't be grouped into frames yet, and copied nodes stay inside the editor (not the system clipboard). Curve has four fixed points. Height to
   occlusion is a quick approximation. Graph files keep the name they were made with. Graphs are evaluated

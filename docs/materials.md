@@ -69,6 +69,21 @@ another material; undo brings the material back.
 With triplanar mapping, **Size in the world** sets how many units one repeat covers. Every map is projected,
 bumps included.
 
+## Wear
+
+**Wear** gives a material a second look (bare metal under paint, dust, dirt) where it would wear: **On edges**
+that stick out, **In creases** where things meet (the foot of a wall on a floor), and **On top** (surfaces facing
+up). **Width** is how far in from an edge or crease it reaches (up to 32 units); **Broken up** mixes in noise
+so it frays irregularly. The wear's own **colour**, **roughness** and **metal** say what it looks like.
+
+On brushes the edges are exact: every face carries its distance to its outer edges and to its creases (edges
+where it meets another brush), so a wall's top corners wear and its foot gathers dirt. On models it is an
+estimate from how quickly the surface curves (good for chunky props).
+
+A graph material can make the wear's look itself with the **Wear colour**, **Wear roughness**, **Wear metal** and
+**Wear noise** outputs (baked like the other maps; Wear noise, often a Grunge, decides where the wear frays
+first); its Wear settings still say where the wear goes.
+
 ## Graph materials (Cocoa Materials)
 
 **+ Graph material** makes a material from a graph of nodes, in the spirit of Substance Designer. Instead of

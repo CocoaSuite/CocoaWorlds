@@ -49,7 +49,7 @@ import { createContext, memo, useCallback, useContext, useEffect, useMemo, useRe
 import { getLang, t } from '../i18n';
 import { LiveGraph, bakeLater, bakeNow, endGraphGesture, loadGraph, nodeIcons, setGraph, setGraphLive, useGraphs } from '../materials/graphs';
 import { useEditor } from '../store';
-import { ImagePick, MaterialPreview, Row, Slider, type Shape } from './MaterialsPanel';
+import { ImagePick, MaterialPreview, Row, Slider, WearSettings, type Shape } from './MaterialsPanel';
 
 const say = (x: L) => (getLang() === 'ru' ? x.ru : x.en);
 /** The live picture size: the baked size, but no more than 512 while editing. */
@@ -812,6 +812,7 @@ function GraphMaterialProps({
       <Row label={t('mat.opacity')}>
         <Slider label={t('mat.opacity')} value={m.opacity ?? 1} onChange={(v) => edit({ opacity: v >= 1 ? undefined : v }, 'Material opacity', `mat-opacity-${m.id}`)} />
       </Row>
+      <WearSettings m={m} edit={edit} />
       <label className="cw-screens-sw" title={t('mat.cutoutHint')}>
         <Switch label={t('mat.cutout')} checked={m.cutout !== false} onChange={(v) => edit({ cutout: v ? undefined : false }, v ? 'Cut-out on' : 'Cut-out off')} />
         {t('mat.cutout')}

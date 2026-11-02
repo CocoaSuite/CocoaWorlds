@@ -12,7 +12,7 @@ export type L = { en: string; ru: string };
 export type RampStop = { at: number; color: string };
 export type ParamValue = number | string | boolean | RampStop[];
 export type Kind = 'grey' | 'color';
-export type OutputRole = 'color' | 'height' | 'normal' | 'roughness' | 'metalness' | 'occlusion' | 'glow' | 'opacity';
+export type OutputRole = 'color' | 'height' | 'normal' | 'roughness' | 'metalness' | 'occlusion' | 'glow' | 'opacity' | 'wearColor' | 'wearRoughness' | 'wearMetal' | 'wearNoise';
 export type Group = 'make' | 'change' | 'combine' | 'colour' | 'surface' | 'output';
 
 export interface Port {
@@ -589,6 +589,10 @@ outColor = vec4(vec3(clamp(0.5 + lap * p_strength, 0., 1.)), 1.);`,
   output('outOcclusion', 'occlusion', 'grey', 'Occlusion', 'Затенение', 'Dark where little light gets in (cracks, dips).', 'Темнее там, куда мало света попадает (трещины, впадины).', [1, 1, 1]),
   output('outGlow', 'glow', 'color', 'Glow', 'Свечение', 'Where it glows, and in what colour (black: no glow).', 'Где светится и каким цветом (чёрное — не светится).', [0, 0, 0]),
   output('outOpacity', 'opacity', 'grey', 'Opacity', 'Непрозрачность', 'Black is see-through (cut out), white solid.', 'Чёрное — насквозь (вырезано), белое — сплошное.', [1, 1, 1]),
+  output('outWearColor', 'wearColor', 'color', 'Wear colour', 'Цвет износа', 'The wear layer’s colour (bare metal under paint, dust): shown on edges, in creases or on top, as the material’s Wear settings say.', 'Цвет слоя износа (металл под краской, пыль): виден на краях, в углах или сверху, как задано в настройках износа материала.', [0.6, 0.6, 0.6]),
+  output('outWearRoughness', 'wearRoughness', 'grey', 'Wear roughness', 'Шероховатость износа', 'The wear layer’s roughness (white matte).', 'Шероховатость слоя износа (белое — матовое).', [0.35, 0.35, 0.35]),
+  output('outWearMetal', 'wearMetal', 'grey', 'Wear metal', 'Металл износа', 'Where the wear layer is metal (white).', 'Где слой износа металлический (белое).', [1, 1, 1]),
+  output('outWearNoise', 'wearNoise', 'grey', 'Wear noise', 'Шум износа', 'Breaks the wear up: where it is white, wear shows sooner (a grunge works well).', 'Разбивает износ: где белое, износ проявляется раньше (хорошо подходит «Грязь»).', [0.5, 0.5, 0.5]),
 ];
 
 const byType = new Map(NODES.map((n) => [n.type, n]));
@@ -604,4 +608,4 @@ export const GROUPS: { id: Group; label: L }[] = [
 ];
 
 /** The maps a material can have, in the order they are listed. */
-export const OUTPUT_ROLES: OutputRole[] = ['color', 'height', 'normal', 'roughness', 'metalness', 'occlusion', 'glow', 'opacity'];
+export const OUTPUT_ROLES: OutputRole[] = ['color', 'height', 'normal', 'roughness', 'metalness', 'occlusion', 'glow', 'opacity', 'wearColor', 'wearRoughness', 'wearMetal', 'wearNoise'];

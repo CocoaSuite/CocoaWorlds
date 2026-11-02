@@ -298,6 +298,8 @@ export function toGeometry(m: BrushMesh): THREE.BufferGeometry {
   const uv = new Float32Array(m.uvs.length);
   for (let i = 0; i < uv.length; i++) uv[i] = m.uvs[i]! / TEX_SIZE;
   g.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+  // Distances to edges and creases, for wear (CM3).
+  if (m.wear) g.setAttribute('aWear', new THREE.BufferAttribute(m.wear, 2));
   g.setIndex(new THREE.BufferAttribute(m.indices, 1));
   m.groups.forEach((gr, i) => g.addGroup(gr.start, gr.count, i));
   g.computeBoundingSphere();
