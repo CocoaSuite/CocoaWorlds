@@ -39,8 +39,9 @@ test('play as the player', async () => {
 
     // Walk forward: into the zone, up to the wall.
     await page.keyboard.down('w');
-    await until(async () => (await consoleText()).includes('The player entered trigger'), true, 5000);
-    await until(async () => (await feet()).z < -380, true, 5000);
+    // (Generous: the test display can run the game at a third of real speed.)
+    await until(async () => (await consoleText()).includes('The player entered trigger'), true, 15000);
+    await until(async () => (await feet()).z < -380, true, 15000);
     await page.keyboard.up('w');
     const stoppedAt = (await feet()).z;
     assert.ok(stoppedAt > -404 + 16 - 2, `stopped at the wall, not through it (${stoppedAt})`);
