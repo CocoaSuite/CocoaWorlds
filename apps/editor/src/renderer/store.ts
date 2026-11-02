@@ -141,6 +141,8 @@ interface State {
   playing: { scene: SceneFile; startedAt: number; rules: GameRules; values: GameValue[] } | null;
   /** The project's prefabs by id, with their file paths. */
   prefabs: Map<string, PrefabEntry>;
+  /** The material picked in the Materials workspace (the asset library can open one there). */
+  materialPick: string | null;
   /** Where "place" puts new things: the point the view is looking at (set by the viewport). */
   placementPoint: () => [number, number, number] | null;
   /** An open editor dialog. */
@@ -223,6 +225,10 @@ interface Actions {
   importAssets(kind: AssetKind, files: File[]): Promise<string[]>;
   makePrefab(name: string): Promise<boolean>;
   placePrefab(prefabId: string): void;
+  /** Add an object showing a model file where the view is looking. */
+  placeModel(path: string): void;
+  /** Pick a material in the Materials workspace (and go there when `open`). */
+  pickMaterial(id: string | null, open?: boolean): void;
   revertChange(id: string, path: string | null): void;
   applyChange(id: string, path: string | null): Promise<void>;
   unlinkCopy(id: string): void;
@@ -305,6 +311,7 @@ export const useEditor = create<State & Actions>()((set, get) => ({
   canPaste: false,
   playing: null,
   prefabs: new Map(),
+  materialPick: null,
   placementPoint: () => null,
   dialog: null,
   bottomTab: 'console',
@@ -1278,6 +1285,21 @@ export const useEditor = create<State & Actions>()((set, get) => ({
     get().log('info', 'Prefabs', `Made prefab ${prefab.name} (${r.value.path}) from ${tree.length} object(s)`);
     get().notify(t('prefab.made').replace('{name}', prefab.name));
     return true;
+  },
+
+  placeModel(path) {
+    const { doc } = get();
+    if (!doc) return;
+    const at = get().placementPoint() ?? [0, 0, 0];
+    const base = path.split('/').pop()!.replace(/\.[^.]+$/, '');
+    const e = newEntity(uniqueName(doc, base), { model: { ...defaultComponent('model'), model: path } }, { position: [at[0], at[1], at[2]] });
+    get().execute(addEntitiesCmd(doc, [e], `Place ${base}`));
+    set({ selection: [e.id] });
+  },
+
+  pickMaterial(id, open) {
+    set({ materialPick: id });
+    if (open) get().setWorkspace('materials');
   },
 
   placePrefab(prefabId) {

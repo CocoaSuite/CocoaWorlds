@@ -64,7 +64,8 @@ export function MaterialsPanel() {
   const list = useEditor((s) => s.session?.project.settings.materials) ?? [];
   const textures = useEditor((s) => s.assets.textures);
   const picked = useEditor((s) => s.faceSelection.length);
-  const [selected, setSelected] = useState<string | null>(null);
+  const selected = useEditor((s) => s.materialPick);
+  const setSelected = (id: string | null) => useEditor.getState().pickMaterial(id);
   const [shape, setShape] = useState<Shape>('sphere');
   const fileRef = useRef<HTMLInputElement>(null);
   const mat = list.find((m) => m.id === selected) ?? list[0] ?? null;
@@ -447,7 +448,7 @@ function MaterialProps({
 }
 
 /** Texture repeats on the preview shapes, so a material looks the size it will in the level (128-unit shapes). */
-function previewGeometry(shape: Shape): THREE.BufferGeometry {
+export function previewGeometry(shape: Shape): THREE.BufferGeometry {
   const g = shape === 'sphere' ? new THREE.SphereGeometry(72, 64, 32) : shape === 'cube' ? new THREE.BoxGeometry(128, 128, 128) : new THREE.PlaneGeometry(192, 128);
   // Face coordinates: one dev tile (256 texels) is 64 units.
   const [su, sv] = shape === 'sphere' ? [(2 * Math.PI * 72) / 64, (Math.PI * 72) / 64] : shape === 'cube' ? [2, 2] : [3, 2];

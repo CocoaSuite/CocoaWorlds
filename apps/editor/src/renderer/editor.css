@@ -486,3 +486,35 @@ code { font: 12px var(--mono); color: var(--fg); }
 .cm-flow .react-flow__edge.lifted path { opacity: 0.2; }
 .cm-lifted { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 15; overflow: visible; }
 .cm-lifted path { fill: none; stroke: var(--sel); stroke-width: 2; stroke-dasharray: 6 4; }
+
+/* ── The asset library (Assets tab) ── */
+.cw-bottom.lib { height: min(40vh, 330px); }
+.cw-console.lib { padding: 0; font: inherit; color: var(--fg); user-select: none; display: flex; min-height: 0; overflow: hidden; }
+.cw-lib { flex: 1; min-width: 0; min-height: 0; display: flex; }
+.cw-lib-side { flex: none; width: 196px; display: flex; flex-direction: column; gap: 6px; padding: 10px; border-right: 1px solid var(--line); overflow: auto; }
+.cw-lib-side .cw-input { width: 100%; }
+.cw-lib-cats-h { display: flex; align-items: center; justify-content: space-between; min-height: 26px; margin-top: 2px; font-size: 11px; font-weight: 700; color: var(--mute); text-transform: uppercase; letter-spacing: 0.05em; }
+.cw-lib-cats { display: flex; flex-direction: column; gap: 2px; }
+.cw-lib-cats button { display: flex; align-items: center; gap: 8px; width: 100%; padding: 4px 8px; border: 1px solid transparent; border-radius: 8px; background: none; color: var(--fg); font: inherit; font-size: 13px; text-align: left; cursor: pointer; }
+.cw-lib-cats button .cw-icon { color: var(--mute); }
+.cw-lib-cats button:hover { background: var(--panel2); }
+.cw-lib-cats button.on { background: var(--panel2); border-color: var(--line); font-weight: 600; }
+.cw-lib-cats button.on .cw-icon { color: var(--cw-brand-hi); }
+.cw-lib-n { margin-left: auto; font-size: 11px; color: var(--mute); font-variant-numeric: tabular-nums; }
+.cw-lib-import { text-transform: none; letter-spacing: 0; }
+.cw-lib-grid { flex: 1; min-width: 0; overflow: auto; padding: 12px; display: grid; grid-template-columns: repeat(auto-fill, minmax(112px, 1fr)); grid-auto-rows: 128px; gap: 10px; align-content: start; background: var(--bg); }
+.cw-lib-empty { grid-column: 1 / -1; padding: 8px 2px; font-size: 13px; }
+.cw-lib-tile { position: relative; min-width: 0; }
+.cw-lib-hit { width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; gap: 6px; padding: 8px 6px 6px; border: 1px solid var(--line); border-radius: 10px;
+  background: var(--panel); color: var(--fg); font: inherit; cursor: pointer; transition: border-color 0.1s, background 0.1s; }
+.cw-lib-hit:hover { background: var(--panel2); border-color: #4a4a4a; }
+.cw-lib-hit:focus-visible { outline: 2px solid var(--sel); outline-offset: 1px; }
+.cw-lib-hit:active { border-color: var(--sel); }
+.cw-lib-pic { flex: none; width: 80px; height: 80px; border-radius: 6px; object-fit: contain; display: flex; align-items: center; justify-content: center; }
+.cw-lib-pic.wait { background: radial-gradient(circle at 50% 45%, #2a2a2a, transparent 70%); color: var(--mute); }
+.cw-lib-pic.icon { background: var(--panel2); color: var(--mute); }
+.cw-lib-pic.icon .cw-icon { width: 30px; height: 30px; }
+.cw-lib-pic.icon.on { color: var(--cw-brand-hi); box-shadow: inset 0 0 0 1px var(--cw-brand); }
+.cw-lib-pic.tex { background-size: cover; background-position: center; border: 1px solid var(--line); }
+.cw-lib-name { width: 100%; font-size: 12px; font-weight: 600; line-height: 1.2; text-align: center; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; word-break: break-word; }
+.cw-lib-kind { position: absolute; top: 6px; left: 6px; padding: 1px 6px; border-radius: 999px; background: rgba(18, 18, 18, 0.8); border: 1px solid var(--line); color: var(--mute); font-size: 10px; pointer-events: none; }

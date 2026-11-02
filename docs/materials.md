@@ -40,6 +40,9 @@ saving the scene or exporting a game.
 
 ## Using them
 
+The **Assets** tab under the 3D view shows every material as a sphere among the project's other assets. Click
+one to paint faces with it, or double-click it to open it here.
+
 Project materials appear in the Face tool's and the Paint tool's material pickers, after the built-in colours
 and before the plain images. The workspace also has:
 
