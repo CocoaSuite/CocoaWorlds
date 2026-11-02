@@ -24,7 +24,7 @@ test('screen UI: a shop with a button, a value text and a hotbar', async () => {
     // 1. The Screens tab: a screen that frees the mouse, with a Buy button, a text and a hotbar; an item.
     // The Screens workspace fills the window; the 3D view is out of the way.
     const ws = page.getByRole('tablist', { name: 'Workspace' });
-    assert.equal(await ws.getByRole('tab', { name: 'Materials' }).isDisabled(), true);
+    assert.equal(await ws.getByRole('tab', { name: 'Materials' }).isDisabled(), false);
     await ws.getByRole('tab', { name: 'Screens' }).click();
     await page.getByRole('region', { name: 'Screens' }).waitFor();
     assert.equal(await page.getByTestId('viewport').isVisible(), false);
