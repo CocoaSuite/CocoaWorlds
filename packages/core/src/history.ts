@@ -9,8 +9,9 @@ export interface Command {
   apply(): void;
   revert(): void;
   /**
-   * Commands with the same merge key that arrive back-to-back while a transaction is open
-   * collapse into one entry (e.g. every pointer-move of a drag).
+   * Commands with the same merge key that arrive back-to-back collapse into one entry: while a transaction is
+   * open (every pointer-move of a drag), or outside one within MERGE_WINDOW of the last (every step of a colour
+   * picker or slider being dragged).
    */
   mergeKey?: string;
 }
@@ -18,9 +19,13 @@ export interface Command {
 interface Entry {
   label: string;
   commands: Command[];
+  /** When it was last added to (ms). */
+  at?: number;
 }
 
 export const HISTORY_LIMIT = 200;
+/** How soon (ms) an edit with the same merge key still joins the previous entry, outside a transaction. */
+export const MERGE_WINDOW = 1500;
 
 export class History {
   private done: Entry[] = [];
@@ -29,7 +34,10 @@ export class History {
   private listeners = new Set<() => void>();
   private savedMarker: Entry | null | undefined = null;
 
-  constructor(private readonly limit = HISTORY_LIMIT) {}
+  constructor(
+    private readonly limit = HISTORY_LIMIT,
+    private readonly clock: () => number = () => Date.now(),
+  ) {}
 
   /** Run a command and record it. Inside a transaction it joins the open entry. */
   execute(cmd: Command): void {
@@ -44,7 +52,16 @@ export class History {
         this.open.commands.push(cmd);
       }
     } else {
-      this.push({ label: cmd.label, commands: [cmd] });
+      const now = this.clock();
+      const top = this.done[this.done.length - 1];
+      const only = top?.commands.length === 1 ? top.commands[0] : undefined;
+      // (Not into the entry the document was saved at: that would leave it looking unchanged.)
+      if (cmd.mergeKey && only?.mergeKey === cmd.mergeKey && top !== this.savedMarker && now - (top!.at ?? 0) <= MERGE_WINDOW) {
+        top!.commands[0] = { ...cmd, revert: () => only.revert() };
+        top!.at = now;
+      } else {
+        this.push({ label: cmd.label, commands: [cmd], at: now });
+      }
     }
     this.emit();
   }

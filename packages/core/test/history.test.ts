@@ -95,4 +95,31 @@ describe('History', () => {
     h.undo();
     expect(h.isDirty).toBe(true);
   });
+
+  it('edits with the same merge key outside a transaction join one entry if they come close together', () => {
+    let now = 0;
+    const h = new History(200, () => now);
+    const { state, set } = counter();
+    for (let i = 1; i <= 5; i++) {
+      now += 50;
+      h.execute(set(i, 'colour'));
+    }
+    expect(state.v).toBe(5);
+    h.undo();
+    expect(state.v).toBe(0);
+    expect(h.canUndo).toBe(false);
+    // Far apart, or with another key in between: separate entries.
+    h.execute(set(1, 'colour'));
+    now += 5000;
+    h.execute(set(2, 'colour'));
+    h.execute(set(3, 'size'));
+    h.execute(set(4, 'colour'));
+    h.undo();
+    expect(state.v).toBe(3);
+    h.undo();
+    expect(state.v).toBe(2);
+    h.undo();
+    expect(state.v).toBe(1);
+  });
 });
+
