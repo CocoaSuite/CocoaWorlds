@@ -1,6 +1,6 @@
 // A2b: foliage placement — tufts on upward-facing surfaces only, seeded, spread out, capped.
 import { describe, expect, it } from 'vitest';
-import { TUFT_MAX, box, scatterTufts, type ScatterOptions } from '../src';
+import { TUFT_MAX, TUFT_STRIDE as S, box, scatterTufts, type ScatterOptions } from '../src';
 
 const opts = (o: Partial<ScatterOptions> = {}): ScatterOptions => ({ spacing: 12, density: 1, size: 24, slope: 40, seed: 1, ...o });
 
@@ -9,8 +9,10 @@ describe('foliage placement', () => {
     const t = scatterTufts(box([-256, -16, -256], [256, 0, 256]), opts());
     expect(t.count).toBeGreaterThan(1000);
     for (let i = 0; i < t.count; i++) {
-      const x = t.data[i * 5]!, y = t.data[i * 5 + 1]!, z = t.data[i * 5 + 2]!;
+      const x = t.data[i * S]!, y = t.data[i * S + 1]!, z = t.data[i * S + 2]!;
       expect(y).toBeCloseTo(0, 3);
+      // The floor's normal, straight up.
+      expect([t.data[i * S + 5], t.data[i * S + 6], t.data[i * S + 7]]).toEqual([0, 1, 0]);
       expect(Math.abs(x)).toBeLessThanOrEqual(256 + 1e-3);
       expect(Math.abs(z)).toBeLessThanOrEqual(256 + 1e-3);
     }
@@ -19,7 +21,7 @@ describe('foliage placement', () => {
   it('a tall, thin wall gets tufts only on its top, none on its sides', () => {
     const t = scatterTufts(box([0, 0, 0], [8, 200, 400]), opts());
     expect(t.count).toBeGreaterThan(0);
-    for (let i = 0; i < t.count; i++) expect(t.data[i * 5 + 1]).toBeCloseTo(200, 3);
+    for (let i = 0; i < t.count; i++) expect(t.data[i * S + 1]).toBeCloseTo(200, 3);
   });
 
   it('the same seed gives the same spots; another seed gives others', () => {
@@ -45,7 +47,7 @@ describe('foliage placement', () => {
     const t = scatterTufts(box([-256, -8, -256], [256, 0, 256]), opts({ spacing: 16 }));
     const cells = new Set<string>();
     for (let i = 0; i < t.count; i++) {
-      cells.add([Math.floor(t.data[i * 5]! / 16), Math.floor(t.data[i * 5 + 1]! / 16), Math.floor(t.data[i * 5 + 2]! / 16)].join(','));
+      cells.add([Math.floor(t.data[i * S]! / 16), Math.floor(t.data[i * S + 1]! / 16), Math.floor(t.data[i * S + 2]! / 16)].join(','));
     }
     expect(cells.size).toBe(t.count);
   });

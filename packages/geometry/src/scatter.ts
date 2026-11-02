@@ -20,13 +20,14 @@ export interface ScatterOptions {
   max?: number;
 }
 
-/** One tuft: position (world), turn (radians) and size (u). Five numbers per tuft. */
+/** One tuft: position (world), turn (radians), size (u) and the floor's normal there. TUFT_STRIDE numbers per tuft. */
 export interface Tufts {
   count: number;
   data: Float32Array;
 }
 
 export const TUFT_MAX = 20000;
+export const TUFT_STRIDE = 8;
 
 /** A small seeded random generator (mulberry32): 0…1. */
 export function seededRandom(seed: number): () => number {
@@ -69,10 +70,11 @@ export function scatterTufts(brush: Brush, o: ScatterOptions): Tufts {
   const rnd = seededRandom(o.seed);
   const want = Math.round((total / (o.spacing * o.spacing)) * Math.max(0, Math.min(1, o.density)));
   const max = Math.min(o.max ?? TUFT_MAX, TUFT_MAX);
-  const tries = Math.min(want, max) * 2;
+  // (Plenty of tries: most land in a cell already taken once a patch fills up.)
+  const tries = Math.min(want, max) * 8;
   const taken = new Set<string>();
   const out: number[] = [];
-  for (let k = 0; k < tries && out.length / 5 < max; k++) {
+  for (let k = 0; k < tries && out.length / TUFT_STRIDE < max; k++) {
     // A triangle by area, then a uniform point on it.
     const pick = rnd() * total;
     let lo = 0, hi = cum.length - 1;
@@ -92,7 +94,35 @@ export function scatterTufts(brush: Brush, o: ScatterOptions): Tufts {
     const cell = `${Math.floor(x / o.spacing)},${Math.floor(y / o.spacing)},${Math.floor(z / o.spacing)}`;
     if (taken.has(cell)) continue;
     taken.add(cell);
-    out.push(x, y, z, rnd() * Math.PI * 2, o.size * (0.75 + 0.5 * rnd()));
+    // The floor's own normal (the face's, not smoothed), so the grass lights exactly like the ground under it.
+    const ux = P[b]! - P[a]!, uy = P[b + 1]! - P[a + 1]!, uz = P[b + 2]! - P[a + 2]!;
+    const vx = P[c]! - P[a]!, vy = P[c + 1]! - P[a + 1]!, vz = P[c + 2]! - P[a + 2]!;
+    let nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx;
+    const nl = Math.hypot(nx, ny, nz) || 1;
+    const flip = ny < 0 ? -1 : 1;
+    nx = (nx / nl) * flip;
+    ny = (ny / nl) * flip;
+    nz = (nz / nl) * flip;
+    out.push(x, y, z, rnd() * Math.PI * 2, o.size * (0.8 + 0.4 * rnd()), nx, ny, nz);
   }
-  return { count: out.length / 5, data: Float32Array.from(out) };
+  return { count: out.length / TUFT_STRIDE, data: Float32Array.from(out) };
+}
+
+/**
+ * The surfaces that grow grass, as loose triangles (world positions, 9 numbers each), lifted a little along their
+ * normals: drawn in the grass's root colour under the tufts, so no bare ground shows between them.
+ */
+export function grassCover(brush: Brush, slope: number, lift = 0.4): Float32Array {
+  const mesh = buildMesh([brush]);
+  const P = mesh.positions, N = mesh.normals, I = mesh.indices;
+  const minUp = Math.cos((Math.max(0, Math.min(90, slope)) * Math.PI) / 180);
+  const out: number[] = [];
+  for (let t = 0; t + 2 < I.length; t += 3) {
+    const v = [I[t]! * 3, I[t + 1]! * 3, I[t + 2]! * 3];
+    const nx = N[v[0]!]! + N[v[1]!]! + N[v[2]!]!, ny = N[v[0]! + 1]! + N[v[1]! + 1]! + N[v[2]! + 1]!, nz = N[v[0]! + 2]! + N[v[1]! + 2]! + N[v[2]! + 2]!;
+    const nl = Math.hypot(nx, ny, nz) || 1;
+    if (ny / nl < minUp) continue;
+    for (const k of v) out.push(P[k]! + (nx / nl) * lift, P[k + 1]! + (ny / nl) * lift, P[k + 2]! + (nz / nl) * lift);
+  }
+  return Float32Array.from(out);
 }

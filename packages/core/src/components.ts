@@ -546,14 +546,14 @@ export const COMPONENTS: ComponentDef[] = [
     name: 'scatter',
     label: e('Foliage', 'Растительность'),
     description: e(
-      'Scatters grass tufts over this brush’s upward-facing surfaces. Purely visual: nothing collides with them. The same seed always gives the same pattern; the tufts are made when the scene is shown or played.',
+      'Covers this brush’s upward-facing surfaces with grass. Purely visual: nothing collides with them. The same seed always gives the same pattern; the tufts are made when the scene is shown or played.',
       'Разбрасывает пучки травы по верхним поверхностям этого браша. Только для вида: с ними ничего не сталкивается. Один и тот же seed всегда даёт один и тот же рисунок; пучки делаются при показе и игре.',
     ),
     appliesTo: 'brush',
     fields: [
-      { key: 'spacing', label: e('Spacing', 'Шаг'), hint: e('About how far apart the tufts are.', 'Примерно расстояние между пучками.'), type: { kind: 'number', min: 4, step: 2, unit: 'u' }, default: 12 },
-      { key: 'density', label: e('Density', 'Густота'), hint: e('How many spots get a tuft (1 = all).', 'Сколько мест получают пучок (1 = все).'), type: { kind: 'number', min: 0, max: 1, step: 0.05 }, default: 0.6 },
-      { key: 'size', label: e('Size', 'Размер'), type: { kind: 'number', min: 2, step: 2, unit: 'u' }, default: 24 },
+      { key: 'spacing', label: e('Spacing', 'Шаг'), hint: e('About how far apart the tufts are.', 'Примерно расстояние между пучками.'), type: { kind: 'number', min: 4, step: 2, unit: 'u' }, default: 10 },
+      { key: 'density', label: e('Density', 'Густота'), hint: e('How many spots get a tuft (1 = all).', 'Сколько мест получают пучок (1 = все).'), type: { kind: 'number', min: 0, max: 1, step: 0.05 }, default: 1 },
+      { key: 'size', label: e('Size', 'Размер'), type: { kind: 'number', min: 2, step: 2, unit: 'u' }, default: 14 },
       { key: 'slope', label: e('Steepest', 'Круче'), hint: e('The steepest slope that grows tufts, in degrees.', 'Самый крутой склон, на котором растут пучки, в градусах.'), type: { kind: 'number', min: 0, max: 90, step: 5, unit: '°' }, default: 40 },
       { key: 'colour', label: e('Colour', 'Цвет'), type: { kind: 'color' }, default: '#4f9a3c' },
       { key: 'seed', label: e('Seed', 'Seed'), hint: e('Change it for a different pattern.', 'Измените для другого рисунка.'), type: { kind: 'number', min: 0, step: 1 }, default: 1 },

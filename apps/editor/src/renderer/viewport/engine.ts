@@ -25,7 +25,7 @@ import { GAME_KEYS, inputFromKeys, isScriptKey, lookFromMouse } from '../game/co
 import { hudOf, type Hud } from '../ui/Hud';
 import { loadProgress, storeProgress } from '../game/progress';
 import { SceneLighting } from './scene-lighting';
-import { FoliageRenderer } from './foliage';
+import { FOLIAGE_TIME, FoliageRenderer } from './foliage';
 
 
 export type { Hud } from '../ui/Hud';
@@ -1402,6 +1402,7 @@ export class ViewportEngine {
   }
 
   private render(): void {
+    FOLIAGE_TIME.value = performance.now() / 1000;
     const r = this.renderer;
     const size = r.getSize(new THREE.Vector2());
     r.setScissorTest(false);

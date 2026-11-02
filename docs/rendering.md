@@ -100,10 +100,19 @@ see-through, glow and scrolling. See [materials.md](materials.md).
 
 ## Foliage (A2b)
 
-A **Foliage** component on a brush scatters grass tufts over its upward-facing surfaces (faces whose normals
-point within the **Steepest** slope of straight up). **Spacing** is about how far apart the tufts are, and
-**Density** the share of spots that get one. **Size** varies each tuft by ±25%. The same **Seed** always gives the
-same pattern, and no two tufts share a cell of the spacing, so a patch looks even. Each tuft is three crossed
-quads drawn as one instanced mesh per brush, with a darker root; only the component is saved. The placement is
-in `@cocoaworlds/geometry` (`scatterTufts`); the drawing in `viewport/foliage.ts`, shared by the editor and Play.
+A **Foliage** component on a brush covers its upward-facing surfaces (within the **Steepest** slope of straight up)
+with grass in a stylized look. **Spacing** is about how far apart the tufts are, **Density** the share of spots
+that get one, **Size** their height (each varies by ±20%). The same **Seed** always gives the same pattern, and no
+two tufts share a cell of the spacing, so a field is even.
 
+Each tuft is a clump of leaf-shaped blades fanning out from the middle, dark at the root and bright at the tips,
+with a little lighter or darker per tuft. Three tricks give the look:
+
+- **Floor normals.** Every blade takes the normal of the floor it grows on (both sides), so grass lights exactly
+  like the ground: flat, with no shading of its own, and it darkens in shadows as the ground does.
+- **No bare ground.** The grassed surface is painted in the root colour just under the tufts, so nothing shows
+  between them.
+- **Wind.** Blades sway, more towards their tips, out of step from place to place.
+
+Only the component is saved. Placement is in `@cocoaworlds/geometry` (`scatterTufts`, `grassCover`); drawing (one
+instanced mesh per brush plus its cover) in `viewport/foliage.ts`, shared by the editor and Play.
