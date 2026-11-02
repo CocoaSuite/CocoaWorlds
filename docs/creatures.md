@@ -39,13 +39,16 @@ Blocks for creatures:
 - **Walk a creature to a place** (Objects) walks it to an object, the player, or where the player looks. The
   stack waits until it gets there; meanwhile it does nothing else.
 
-Creatures go straight towards where they're heading, sliding along walls and climbing steps. Finding a way
-round obstacles comes with navigation meshes (A2).
+Creatures go towards where they're heading, climbing steps and steering round what's in the way: crates,
+pillars, other creatures. They go round one side, and if that gets them nowhere, the other. A wandering
+creature gives up on a spot it can't reach and picks another. Finding a way through a maze of rooms comes
+with navigation meshes (A2).
 
 ## The chicken
 
 **Add › Chicken (enemy)** and **Add › Chicken (friend)** give a ready-made creature to start from: a rigged
-chicken model (copied into the project's models the first time) at half size, with clumsy animations (`idle`,
+chicken model (copied into the project's models as `chicken_rigged` the first time; a file of yours with
+that name is never replaced) at half size, with clumsy animations (`idle`,
 `walk`, `run`, `peck`, `flap`, `die`) and these settings:
 
 | | Enemy | Friend |

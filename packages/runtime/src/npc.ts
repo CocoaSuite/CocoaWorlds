@@ -79,6 +79,11 @@ export class Npc {
   private phase: number;
   /** Whether it has been lifted clear of whatever it was placed inside (done on its first step). */
   private placed = false;
+  /** Steering round things: the side it last went round (+1 left, −1 right), and how stuck it is. */
+  private side = 1;
+  private stuckFor = 0;
+  /** While set, it keeps going round on `side` (after getting stuck). */
+  private detourUntil = 0;
 
   constructor(
     private w: NpcWorld,
@@ -282,8 +287,10 @@ export class Npc {
       const len = Math.hypot(d.x, d.z);
       if (len > 1) {
         const c = Math.cos(clumsyTurn), s = Math.sin(clumsyTurn);
-        dx = ((d.x * c - d.z * s) / len) * speed;
-        dz = ((d.x * s + d.z * c) / len) * speed;
+        // Round whatever is in the way (a crate, a pillar, another creature); not past the target itself.
+        const dir = this.steer((d.x * c - d.z * s) / len, (d.x * s + d.z * c) / len, Math.min(len, 48), p?.collider ?? null, now);
+        dx = dir.x * speed;
+        dz = dir.z * speed;
         face ??= { x: this.feet.x + dx, y: this.feet.y, z: this.feet.z + dz };
       }
     }
@@ -312,6 +319,10 @@ export class Npc {
     this.controller.computeColliderMovement(this.collider, desired, RAPIER.QueryFilterFlags.EXCLUDE_SENSORS, undefined, (c) => !this.w.passes(c));
     const m = this.controller.computedMovement();
     if (this.controller.computedGrounded() && this.vy < 0) this.vy = 0;
+    // Stuck: hardly getting anywhere while trying to move.
+    const wanted = Math.hypot(desired.x, desired.z);
+    if (wanted > 1e-3 && Math.hypot(m.x, m.z) < wanted * 0.25) this.stuckFor += dt;
+    else this.stuckFor = Math.max(0, this.stuckFor - dt);
     this.feet = { x: this.feet.x + m.x, y: this.feet.y + m.y, z: this.feet.z + m.z };
     this.body.setTranslation({ x: this.feet.x, y: this.feet.y + this.height / 2, z: this.feet.z }, true);
   }
@@ -337,6 +348,51 @@ export class Npc {
     if ((d.x * fx + d.z * fz) / flat < Math.cos((70 * Math.PI) / 180) && this.w.time() - this.seenAt > 2) return false;
     const hit = this.w.world.castRay(new RAPIER.Ray(from, { x: d.x / dist, y: d.y / dist, z: d.z / dist }), dist, true, RAPIER.QueryFilterFlags.EXCLUDE_SENSORS, undefined, this.collider, undefined, (c) => !this.w.passes(c) && c.handle !== p.collider);
     return !hit;
+  }
+
+  /**
+   * The way to go towards (x, z) (a unit vector): straight on if nothing is in the way within `ahead`, else the
+   * nearest clear way turning to one side, then the other (keeping to the side it chose last, so it doesn't
+   * dither). Steps and slopes it can climb don't count. Stuck for a while, it gives up on a wander spot, or goes
+   * round the other way.
+   */
+  private steer(x: number, z: number, ahead: number, ignore: number | null, now: number): { x: number; z: number } {
+    if (this.stuckFor > 0.6) {
+      this.stuckFor = 0;
+      if (this.state === 'wander') {
+        this.wanderTo = null;
+        this.nextWander = now + 0.3;
+      } else {
+        this.side = -this.side;
+        this.detourUntil = now + 0.8;
+      }
+    }
+    const step = 18;
+    const half = Math.max(1, (this.height - step - 2) / 2 - this.radius);
+    const shape = new RAPIER.Capsule(half, this.radius * 0.9);
+    const from = { x: this.feet.x, y: this.feet.y + step + 1 + half + this.radius, z: this.feet.z };
+    const clear = (a: number) => {
+      const c = Math.cos(a), s = Math.sin(a);
+      const v = { x: x * c - z * s, y: 0, z: x * s + z * c };
+      const hit = this.w.world.castShape(from, { x: 0, y: 0, z: 0, w: 1 }, v, shape, 0, ahead, true, RAPIER.QueryFilterFlags.EXCLUDE_SENSORS, undefined, this.collider, undefined, (col) => !this.w.passes(col) && col.handle !== ignore);
+      return hit ? null : { x: v.x, z: v.z };
+    };
+    const deg = Math.PI / 180;
+    if (now >= this.detourUntil) {
+      const straight = clear(0);
+      if (straight) return straight;
+    }
+    // Round on the side it chose (every angle on that side first), only then the other way.
+    for (const sgn of [this.side, -this.side]) {
+      for (const t of [35, 60, 90, 120, 150]) {
+        const way = clear(t * deg * sgn);
+        if (!way) continue;
+        this.side = sgn;
+        return way;
+      }
+    }
+    // Boxed in: push on (sliding along whatever it is).
+    return { x, z };
   }
 
   private turnTowards(yaw: number, dt: number): void {

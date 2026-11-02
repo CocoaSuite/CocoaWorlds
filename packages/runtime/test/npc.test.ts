@@ -250,6 +250,39 @@ it('a creature placed inside a raised floor stands on top of it', () => {
   w.dispose();
 });
 
+it('a creature goes round what is in its way instead of getting stuck on it', () => {
+  // A crate it can see over but not climb, square between it and the player.
+  const crate = brush('crate', [-80, 0, -170], [80, 40, -130]);
+  const hen = npc('hen', [0, 0, -300], { side: 'hostile', attack: 'melee', damage: 5, height: 56, radius: 14, speed: 110 });
+  const w = GameWorld.create(scene(floor(), crate, spawn(), hen));
+  let attacked = false;
+  for (let i = 0; i < 8 * 60 && !attacked; i++) {
+    w.step(1 / 60);
+    attacked = state(w, hen.id).state === 'attack';
+  }
+  expect(attacked).toBe(true);
+  w.dispose();
+});
+
+it('a wandering creature gives up on spots it cannot reach', () => {
+  // Walled in a pen: it keeps pottering about inside rather than pressing on a wall for ever.
+  const walls = [brush('n', [-120, 0, -140], [120, 64, -120]), brush('s', [-120, 0, 120], [120, 64, 140]), brush('w', [-140, 0, -140], [-120, 64, 140]), brush('e', [120, 0, -140], [140, 64, 140])];
+  const hen = npc('hen', [0, 0, 0], { side: 'friendly', attack: 'none', wander: true, height: 56, radius: 14 });
+  const w = GameWorld.create(scene(floor(), ...walls, spawn([600, 0, 600]), hen));
+  let moved = 0;
+  let last = state(w, hen.id).feet;
+  for (let i = 0; i < 30 * 60; i++) {
+    w.step(1 / 60);
+    const f = state(w, hen.id).feet;
+    if (i > 10 * 60) moved += Math.hypot(f[0] - last[0], f[2] - last[2]);
+    last = f;
+  }
+  expect(moved).toBeGreaterThan(100);
+  expect(Math.abs(last[0])).toBeLessThan(120);
+  expect(Math.abs(last[2])).toBeLessThan(120);
+  w.dispose();
+});
+
 describe('animation names', () => {
   it('roles map to the names listed; missing ones fall back', async () => {
     const { npcAnimation } = await import('../src');

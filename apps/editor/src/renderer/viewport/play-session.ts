@@ -186,7 +186,13 @@ export class PlaySession {
     this.world.bus.on('impact', (e) => this.effects.impact(e.at, e.normal, e.melee, this.moverObject(e.target)));
     this.world.bus.on('anim', (e) => {
       const inst = this.models.get(e.target);
-      if (inst && !inst.play(e.name, e.loop)) this.notes.push(`The model has no animation called “${e.name}”`);
+      if (inst && !inst.play(e.name, e.loop)) {
+        // (Once per object and name: creatures ask for their animations again and again.)
+        const key = `${e.target}/${e.name}`;
+        if (this.missingAnims.has(key)) return;
+        this.missingAnims.add(key);
+        this.notes.push(`${this.info.names.get(e.target) ?? 'The object'}: its model has no animation called “${e.name}”`);
+      }
     });
     this.world.bus.on('sound.stop', (e) => this.stopSounds(e.source));
     this.world.bus.on('break', (e) => void this.notes.push(`${this.info.names.get(e.target.split('#')[0]!) ?? 'Something'} broke`));
@@ -486,6 +492,7 @@ export class PlaySession {
   }
 
   private effects = new Effects();
+  private missingAnims = new Set<string>();
   private npcViews = new Map<string, { holder: THREE.Group; inner: THREE.Group; figure: boolean }>();
 
   /** Creatures where they are now; plain figures lie down when dead (models play their dying animation). */

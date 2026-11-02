@@ -68,7 +68,7 @@ export async function writeAsset(dir: string, kind: unknown, name: unknown, byte
 }
 
 /** Ready-made assets the editor ships with (Add › Chicken), by name: where they come from and where they go. */
-const SAMPLES: Record<string, { file: string; kind: AssetKind }> = { chicken: { file: 'chicken.glb', kind: 'models' } };
+const SAMPLES: Record<string, { file: string; as: string; kind: AssetKind }> = { chicken: { file: 'chicken.glb', as: 'chicken_rigged.glb', kind: 'models' } };
 
 /**
  * Put a ready-made asset into the project (once: if it's there already, that one is used). `samplesDir` is the
@@ -78,14 +78,21 @@ export async function addSample(dir: string, samplesDir: string, name: unknown):
   const s = typeof name === 'string' ? SAMPLES[name] : undefined;
   if (!s) throw new ProjectError('There is no ready-made asset by that name.');
   const { dir: sub } = ASSET_KINDS[s.kind];
-  const rel = `${sub}/${s.file}`;
-  const to = resolveInside(dir, rel);
-  if (!(await exists(to))) {
-    await fs.mkdir(path.dirname(to), { recursive: true });
-    await fs.copyFile(path.join(samplesDir, s.file), to);
+  const src = await fs.readFile(path.join(samplesDir, s.file));
+  const ext = path.extname(s.as), stem = path.basename(s.as, ext);
+  // The same file already there is used again; a different file of that name (the user's own) is left alone.
+  for (let i = 1; ; i++) {
+    const name = i === 1 ? s.as : `${stem}_${i}${ext}`;
+    const rel = `${sub}/${name}`;
+    const to = resolveInside(dir, rel);
+    const have = await fs.readFile(to).catch(() => null);
+    if (have && !have.equals(src)) continue;
+    if (!have) {
+      await fs.mkdir(path.dirname(to), { recursive: true });
+      await fs.writeFile(to, src);
+    }
+    return { path: rel, name: path.basename(name, ext), bytes: src.length };
   }
-  const st = await fs.stat(to);
-  return { path: rel, name: path.basename(s.file, path.extname(s.file)), bytes: st.size };
 }
 
 /** The bytes of an asset (only files inside the project's assets folder). */

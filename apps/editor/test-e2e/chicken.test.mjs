@@ -33,7 +33,7 @@ test('the chicken: enemy and friend', async () => {
     await addMenu('Chicken (friend)');
     await page.getByRole('tree').getByRole('treeitem', { name: 'chicken_friend' }).waitFor();
     await setField(insp, 'Position X', 300);
-    const glb = await fs.stat(path.join(projectsDir, 'farm', 'assets', 'models', 'chicken.glb'));
+    const glb = await fs.stat(path.join(projectsDir, 'farm', 'assets', 'models', 'chicken_rigged.glb'));
     assert.ok(glb.size > 100000);
     await page.keyboard.press('1');
     await new Promise((r) => setTimeout(r, 1500));
