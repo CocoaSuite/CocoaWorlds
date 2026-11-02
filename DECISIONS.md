@@ -26,6 +26,11 @@ Status values: **Approved** (signed off by the product owner), **Proposed** (rec
 | S1 | Where scripts live | A Script component on the object it controls (“this door”), travelling with copies and prefabs; game-wide rules go on a “Game rules” object | Separate script files that name the objects they control | **Approved** (2026-11-01) |
 | S2 | First block set | Core set: events (game starts, enters/leaves a zone, message, every N seconds); actions (move, turn, return to start, show/hide, turn on/off, wait, send message, log, set/change variable); If/Otherwise, Repeat, Repeat forever, Stop; variables, maths, comparisons, random, text | A smaller first set | **Approved** (2026-11-01) |
 | D12 | Editor UI stack | React + TypeScript + Zustand + Vite, CocoaCanvas CSS copied into a UI package | Vanilla TS like CocoaCanvas; Svelte | **Approved** (2026-11-01) |
+| C1 | How Cocoa Materials evaluates graphs | Each node compiles to a GLSL program run on the GPU (WebGL2, float textures), re-running only what changed; outputs are **baked to images** that the game uses | Evaluate graphs in the game's shaders live (no baking); CPU evaluation in workers | **Proposed** (2026-11-02, [proposal](docs/proposals/cocoa-materials.md)) |
+| C2 | The graph editor's UI | Build on React Flow (xyflow, MIT) with CocoaCanvas styling | Our own canvas (more work, full control) | **Proposed** (2026-11-02) |
+| C3 | Where graphs are kept | One file per graph material, `materials/<name>.cwmat`; the project file keeps the id, name and baked map paths | Inside the project file with the other materials | **Proposed** (2026-11-02) |
+| C4 | Edge wear and other mesh-aware effects | A wear layer per material, masked in the shader by Edge, Crease and Up; brush faces carry exact edge distances in a thin inset ring of triangles, models an approximation | Screen-space edge detection (works on anything, but shifts with the view); baked curvature per object | **Proposed** (2026-11-02) |
+| R1 | Procedural meshes | Parts plus a rule on a Procedural component (first rule: Repeat along an axis with caps and fit modes); copies are rebuilt from the rule, not saved; brush parts stay brushes | Bake generated meshes into the scene; a separate mesh-modelling tool | **Proposed** (2026-11-02) |
 
 Details and trade-offs for each: [ARCHITECTURE.md](ARCHITECTURE.md).
 
