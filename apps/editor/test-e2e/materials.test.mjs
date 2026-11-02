@@ -110,8 +110,8 @@ test('materials: make, edit with undo, paint, delete', async () => {
     await until(async () => (await world(look, lava.id))?.w, 64, 8000);
     assert.equal((await world(look, lava.id)).glow, 'ff5010');
     const y0 = (await world(look, lava.id)).y;
-    await new Promise((r) => setTimeout(r, 300));
-    assert.notEqual((await world(look, lava.id)).y, y0, 'the image scrolls');
+    // (Waits for it to move: the first frames after painting can be slow while shaders compile.)
+    await until(async () => (await world(look, lava.id)).y !== y0, true, 5000);
     await page.keyboard.press('v');
     await page.keyboard.press('Escape');
     await shot(page, 'm02-painted');
