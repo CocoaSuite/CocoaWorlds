@@ -13,6 +13,8 @@ export interface DevMaterial {
   label: Record<Lang, string>;
   /** Tool materials (COL): drawn see-through and striped in the editor, not drawn in the game. */
   tool?: boolean;
+  /** See-through, glossy and two-sided (water). */
+  liquid?: boolean;
 }
 
 export const DEV_MATERIALS: DevMaterial[] = [
@@ -25,6 +27,7 @@ export const DEV_MATERIALS: DevMaterial[] = [
   { id: 'dev/red', base: '#b4574c', label: { en: 'Red', ru: 'Красный' } },
   { id: 'dev/green', base: '#7c9a48', label: { en: 'Green', ru: 'Зелёный' } },
   { id: 'dev/blue', base: '#5a84b6', label: { en: 'Blue', ru: 'Синий' } },
+  { id: 'dev/water', base: '#3b86b4', label: { en: 'Water', ru: 'Вода' }, liquid: true },
   { id: 'tool/col', base: '#c04ad0', label: { en: 'COL — invisible collider', ru: 'COL — невидимый коллайдер' }, tool: true },
 ];
 

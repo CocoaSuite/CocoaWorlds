@@ -40,6 +40,14 @@ export const PLAYER = {
   /** Falls landing slower than this don't hurt; at the fatal speed the fall takes all 100 health (Half-Life 2's values). */
   safeFallSpeed: 526.5,
   fatalFallSpeed: 922.5,
+  /** Swimming: Source's (80% of the running speed, water friction 4, sinking 60 u/s when idle). */
+  swimFactor: 0.8,
+  waterFriction: 4,
+  sinkSpeed: 60,
+  /** A jump from the water onto a ledge in front (Source's water jump). */
+  waterJumpSpeed: 300,
+  /** Letting go of a ladder by jumping: pushed back this fast. */
+  ladderJumpSpeed: 200,
 };
 
 /** Damage from landing at `speed` (units per second, downwards). */
@@ -76,6 +84,10 @@ export interface PlayerSurroundings {
   blocks(c: RAPIER.Collider): boolean;
   /** Where a point riding on what this collider belongs to will be after this step, or null if it isn't moving. */
   carry(collider: number, at: V): V | null;
+  /** The water surface's height if the point is in water, else null. */
+  waterTop?(at: V): number | null;
+  /** The climbing speed of a ladder the shape (placed at `at`) touches, else null. */
+  ladder?(shape: RAPIER.Shape, at: V): number | null;
 }
 
 export class Player {
@@ -97,6 +109,14 @@ export class Player {
   private sinceGround = 0;
   /** True while standing on something that moves (a lift): no jumping, and the feet stay on it. */
   riding = false;
+  /** How deep the player is in water: 0 out, 1 feet, 2 waist (swimming), 3 head under. */
+  waterLevel: 0 | 1 | 2 | 3 = 0;
+  /** True while on a ladder. */
+  onLadder = false;
+  /** Steps until a ladder can be grabbed again (after jumping off one). */
+  private ladderCooldown = 0;
+  /** Whether a wall stopped the last step's movement (for jumping out of water onto a ledge). */
+  private lastBlocked = false;
   /** The conveyor speed under the player at the last step. */
   private belt = { x: 0, z: 0 };
   /** Feet position at the previous and current physics step (for smooth drawing between steps). */
@@ -230,7 +250,105 @@ export class Player {
     }
     const maxSpeed = this.crouched ? PLAYER.crouchSpeed : inp.walk ? PLAYER.walkSpeed : PLAYER.runSpeed;
     const wishSpeed = len > 1e-6 ? maxSpeed : 0;
+    const s = this.surroundings;
+    this.sense(s);
 
+    if (this.onLadder) this.ladderMove(inp, fx, fz, rx, rz);
+    else if (this.waterLevel >= 2) this.waterMove(inp, rx, rz, maxSpeed, dt);
+    else this.walkMove(inp, wx, wz, wishSpeed, dt);
+    this.jumpHeld = inp.jump;
+
+    const desired = { x: (this.velocity.x + this.belt.x) * dt, y: this.velocity.y * dt, z: (this.velocity.z + this.belt.z) * dt };
+    this.moveBy(desired, dt);
+  }
+
+  /** Where the player is: how deep in water, and whether on a ladder. */
+  private sense(s: PlayerSurroundings | null): void {
+    const t = this.body.translation();
+    const feet = t.y - this.height / 2;
+    this.waterLevel = 0;
+    if (s?.waterTop) {
+      const wet = (y: number) => s.waterTop!({ x: t.x, y, z: t.z }) !== null;
+      if (wet(feet + 2)) {
+        this.waterLevel = 1;
+        if (wet(feet + this.height / 2)) {
+          this.waterLevel = 2;
+          if (wet(feet + (this.crouched ? PLAYER.crouchEye : PLAYER.eye))) this.waterLevel = 3;
+        }
+      }
+    }
+    if (this.ladderCooldown > 0) this.ladderCooldown--;
+    const speed = s?.ladder && !this.ladderCooldown ? s.ladder(new RAPIER.Cylinder(this.height / 2, PLAYER.radius + 2), t) : null;
+    this.ladderSpeed = speed ?? 0;
+    this.onLadder = speed !== null;
+  }
+
+  private ladderSpeed = 0;
+
+  /**
+   * On a ladder (Half-Life's way): forward climbs while looking ahead or up and goes down while looking down,
+   * back does the opposite; sideways moves along it; no gravity. Jump lets go, pushing off backwards.
+   */
+  private ladderMove(inp: PlayerInput, fx: number, fz: number, rx: number, rz: number): void {
+    const v = this.velocity;
+    if (inp.jump && !this.jumpHeld) {
+      v.x = -fx * PLAYER.ladderJumpSpeed;
+      v.z = -fz * PLAYER.ladderJumpSpeed;
+      v.y = PLAYER.ladderJumpSpeed * 0.5;
+      this.ladderCooldown = 20;
+      this.onLadder = false;
+      this.onGround = false;
+      return;
+    }
+    const speed = this.ladderSpeed;
+    const up = inp.pitch > -0.35 ? 1 : -1;
+    v.y = inp.forward * speed * up;
+    // Forward also presses into the ladder, so at the top the player steps off onto the floor.
+    v.x = (fx * inp.forward + rx * inp.right) * speed * 0.5;
+    v.z = (fz * inp.forward + rz * inp.right) * speed * 0.5;
+    this.onGround = false;
+  }
+
+  /** Swimming (Source's water move): forward follows the view, Jump rises, Crouch dives, idle sinks slowly. */
+  private waterMove(inp: PlayerInput, rx: number, rz: number, maxSpeed: number, dt: number): void {
+    const v = this.velocity;
+    // Out onto a ledge: at the surface, swimming forward against a wall, with Jump.
+    if (this.waterLevel === 2 && inp.jump && inp.forward > 0 && this.lastBlocked) {
+      v.y = Math.max(v.y, PLAYER.waterJumpSpeed);
+      return;
+    }
+    const d = this.lookDirection();
+    const run = this.crouched ? PLAYER.runSpeed : maxSpeed;
+    const wish = { x: (d[0] * inp.forward + rx * inp.right) * run, y: d[1] * inp.forward * run, z: (d[2] * inp.forward + rz * inp.right) * run };
+    if (inp.jump) wish.y += run;
+    else if (inp.crouch) wish.y -= run;
+    else if (!inp.forward && !inp.right) wish.y -= PLAYER.sinkSpeed;
+    let wishSpeed = Math.hypot(wish.x, wish.y, wish.z);
+    const dir = wishSpeed > 1e-6 ? { x: wish.x / wishSpeed, y: wish.y / wishSpeed, z: wish.z / wishSpeed } : { x: 0, y: 0, z: 0 };
+    wishSpeed = Math.min(wishSpeed, run) * PLAYER.swimFactor;
+    // Water friction.
+    const speed = Math.hypot(v.x, v.y, v.z);
+    if (speed > 1e-3) {
+      const k = Math.max(0, speed - dt * speed * PLAYER.waterFriction) / speed;
+      v.x *= k;
+      v.y *= k;
+      v.z *= k;
+    }
+    // Accelerate in 3D along the wished direction.
+    if (wishSpeed > 0) {
+      const add = wishSpeed - (v.x * dir.x + v.y * dir.y + v.z * dir.z);
+      if (add > 0) {
+        const gain = Math.min(add, PLAYER.accelerate * wishSpeed * dt);
+        v.x += gain * dir.x;
+        v.y += gain * dir.y;
+        v.z += gain * dir.z;
+      }
+    }
+    this.onGround = false;
+  }
+
+  /** On the ground or in the air. */
+  private walkMove(inp: PlayerInput, wx: number, wz: number, wishSpeed: number, dt: number): void {
     if (this.onGround) {
       // Jump (pressing again each time; holding doesn't repeat).
       if (inp.jump && !this.jumpHeld && !this.riding) {
@@ -245,9 +363,10 @@ export class Player {
       this.accelerate(wx, wz, Math.min(wishSpeed, PLAYER.airCap), PLAYER.airAccelerate, dt, wishSpeed);
       this.velocity.y -= this.gravity * dt;
     }
-    this.jumpHeld = inp.jump;
+  }
 
-    const desired = { x: (this.velocity.x + this.belt.x) * dt, y: this.velocity.y * dt, z: (this.velocity.z + this.belt.z) * dt };
+  /** Move by `desired` this step, sliding along what is hit, stepping up, riding what moves. */
+  private moveBy(desired: V, dt: number): void {
     // (Walking down slopes and steps: the controller's snap-to-ground keeps the player on the floor.)
     const s = this.surroundings;
     if (s) this.controller.computeColliderMovement(this.collider, desired, undefined, SOLID, (c) => s.blocks(c));
@@ -282,7 +401,9 @@ export class Player {
       const b = hit ? this.beltOf(hit.collider.handle) : null;
       if (b) this.belt = b;
     }
-    if (grounded && !this.onGround && v.y < 0) this.landingSpeed = -v.y;
+    this.lastBlocked = blocked;
+    // (Landing in water, or coming off a ladder, doesn't hurt.)
+    if (grounded && !this.onGround && v.y < 0 && !this.waterLevel && !this.onLadder) this.landingSpeed = -v.y;
     if (grounded && v.y <= 0) v.y = 0;
     if (v.y > 0 && moved.y < desired.y - 1e-3) v.y = 0; // bumped the ceiling
     this.onGround = grounded && this.velocity.y <= 0;

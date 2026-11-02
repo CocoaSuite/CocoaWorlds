@@ -61,7 +61,8 @@ Order may shift where dependencies require it (for example, the project format f
 - [x] Play as the player: pointer lock, first-person camera, crosshair, Use (E) and “When the player uses this”
 - [x] Health, damage, pickups, score: on-screen health and score, death and restart, fall damage, blocks and recipes
 - [x] Ready-made doors (sliding and hinged), buttons, pressure plates, lifts — as recipes, with lifts carrying the player
-- [ ] Ladders, water, key rebinding
+- [x] Ladders, water and swimming (A1), floating physics objects, drowning
+- [ ] Key rebinding
 
 ## Phase 5 checklist
 

@@ -34,6 +34,7 @@ export function sceneMaterial(name: string, onUpdate: () => void): THREE.Materia
   const dev = devMaterial(name);
   // See-through in the editor so what's behind stays visible; hidden in the game.
   if (dev?.tool) return new THREE.MeshBasicMaterial({ map: devTexture(dev.base, 'COL'), transparent: true, opacity: 0.45, depthWrite: false, side: THREE.DoubleSide });
+  if (dev?.liquid) return new THREE.MeshStandardMaterial({ color: dev.base, roughness: 0.08, metalness: 0, transparent: true, opacity: 0.55, depthWrite: false, side: THREE.DoubleSide });
   if (dev) return new THREE.MeshStandardMaterial({ map: devTexture(dev.base), roughness: 0.9, metalness: 0 });
   if (isTexture(name)) return imageMaterial(name, onUpdate);
   if (isMaterialId(name)) return projectMaterial(name, onUpdate);
@@ -76,6 +77,9 @@ export class WorldRenderer {
   private subtractEdgeMat = new THREE.LineBasicMaterial({ color: 0xff8a73, transparent: true, opacity: 0.9 });
   private triggerMat = new THREE.MeshBasicMaterial({ color: 0xf0a442, transparent: true, opacity: 0.16, depthWrite: false, side: THREE.DoubleSide });
   private triggerEdgeMat = new THREE.LineBasicMaterial({ color: 0xf0a442, transparent: true, opacity: 0.95 });
+  private ladderMat = new THREE.MeshBasicMaterial({ color: 0x7fcf5a, transparent: true, opacity: 0.18, depthWrite: false, side: THREE.DoubleSide });
+  private ladderEdgeMat = new THREE.LineBasicMaterial({ color: 0x7fcf5a, transparent: true, opacity: 0.95 });
+  private waterEdgeMat = new THREE.LineBasicMaterial({ color: 0x4fb3e0, transparent: true, opacity: 0.8 });
   private selectedEdgeMat = new THREE.LineBasicMaterial({ color: 0x4b9cff, transparent: true, opacity: 0.95 });
   private selectedHiddenMat = new THREE.LineBasicMaterial({ color: 0x4b9cff, transparent: true, opacity: 0.3, depthTest: false });
   private brushes: WorldBrush[] = [];
@@ -187,11 +191,13 @@ export class WorldRenderer {
     clear(this.subtractGroup);
     for (const b of brushes) {
       if (b.role === 'solid') continue;
-      const trigger = b.role === 'trigger';
       const m = buildMesh([b.brush]);
-      const mesh = new THREE.Mesh(toGeometry(m), trigger ? this.triggerMat : this.subtractMat);
+      // Water is drawn with its own materials (like in the game), with a blue outline; ladders are green zones.
+      const fill = b.role === 'water' ? m.groups.map((g) => this.material(g.material)) : b.role === 'ladder' ? this.ladderMat : b.role === 'trigger' ? this.triggerMat : this.subtractMat;
+      const edge = b.role === 'water' ? this.waterEdgeMat : b.role === 'ladder' ? this.ladderEdgeMat : b.role === 'trigger' ? this.triggerEdgeMat : this.subtractEdgeMat;
+      const mesh = new THREE.Mesh(toGeometry(m), fill);
       mesh.userData.entityId = b.id;
-      this.subtractGroup.add(mesh, edgeLines(b.brush, trigger ? this.triggerEdgeMat : this.subtractEdgeMat));
+      this.subtractGroup.add(mesh, edgeLines(b.brush, edge));
     }
   }
 

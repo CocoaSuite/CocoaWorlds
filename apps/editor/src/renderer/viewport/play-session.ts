@@ -85,6 +85,15 @@ export class PlaySession {
       levelMesh.castShadow = levelMesh.receiveShadow = true;
       this.group.add(levelMesh);
     }
+    // Water, drawn with its own materials (it hides nothing behind it, and casts no shadow).
+    for (const b of worldBrushes(doc)) {
+      if (b.role !== 'water') continue;
+      const m = buildMesh([b.brush]);
+      const water = new THREE.Mesh(toGeometry(m), m.groups.map((g) => material(g.material)));
+      water.name = 'water';
+      water.receiveShadow = true;
+      this.group.add(water);
+    }
 
     this.material = material;
     this.doc = doc;
@@ -428,6 +437,21 @@ export class PlaySession {
 
   use(): void {
     this.world.use();
+  }
+
+  private waterFog: { key: string; fog: THREE.Fog; color: THREE.Color } | null = null;
+
+  /** With the camera under water: the water's colour all round, and only as far as it is clear. */
+  applyWater(scene: THREE.Scene, cam: THREE.Camera): void {
+    const w = this.world.waterAt(cam.position);
+    // (The sky isn't fogged: under water it is hidden.)
+    const sky = scene.getObjectByName('sky');
+    if (sky) sky.visible = !w;
+    if (!w) return;
+    const key = `${w.tint}/${w.clearness}`;
+    if (this.waterFog?.key !== key) this.waterFog = { key, fog: new THREE.Fog(w.tint, 0, w.clearness), color: new THREE.Color(w.tint) };
+    scene.fog = this.waterFog.fog;
+    scene.background = this.waterFog.color;
   }
 
   /** Place a camera at the player's eyes. Returns false when there is no player. */

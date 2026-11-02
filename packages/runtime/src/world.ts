@@ -18,6 +18,8 @@ import {
   type RigidBodyData,
   type SceneFile,
   type TriggerData,
+  type LadderData,
+  type WaterData,
   gameRules,
   type BreakableData,
   type ConveyorData,
@@ -223,6 +225,13 @@ export class GameWorld {
   private breakHealth = new Map<string, number>();
   /** Conveyor collider handle → belt velocity. */
   private belts = new Map<number, { x: number; z: number }>();
+  /** Water and ladders: zones that change how the player (and floating things) move. */
+  private waters: { id: string; collider: RAPIER.Collider; top: number; data: WaterData }[] = [];
+  private ladders: { id: string; collider: RAPIER.Collider; data: LadderData }[] = [];
+  private volumes = new Set<number>();
+  /** Seconds the player's head has been under water (for drowning), and when it last hurt. */
+  private underwaterFor = 0;
+  private drownedAt = 0;
 
   /** Which built-in game systems are on (from the project settings). */
   readonly rules: GameRules;
@@ -333,7 +342,8 @@ export class GameWorld {
     }
 
     // Objects scripts move or switch become "units": one body for the object and everything inside it.
-    const own = (e: EntityData) => !!e.components.rigidBody || !!e.components.trigger;
+    // (Water and ladders stay where they are: they are zones, not something that moves.)
+    const own = (e: EntityData) => !!e.components.rigidBody || !!e.components.trigger || !!e.components.water || !!e.components.ladder;
     // (Breakable objects too: they disappear when they break.)
     const breakables = doc.entities.filter((e) => e.components.breakable && shown(e)).map((e) => e.id);
     for (const id of breakables) this.breakHealth.set(id, readComponent<BreakableData>('breakable', doc.get(id)!.components.breakable).health);
@@ -351,7 +361,8 @@ export class GameWorld {
       const brushData = e.components.brush as unknown as (BrushData & { role?: string }) | undefined;
       if (brushData?.faces) {
         const brush = brushToWorld(fromData({ faces: brushData.faces, mesh: brushData.mesh }), doc.worldMatrix(e.id));
-        if (e.components.trigger) this.addTrigger(e, brush, scriptedZones.has(e.id));
+        if (e.components.ladder || e.components.water) this.addVolume(e, brush);
+        else if (e.components.trigger) this.addTrigger(e, brush, scriptedZones.has(e.id));
         else if (e.components.rigidBody) this.addBrushBody(e, brush);
         else if (unitOf.has(e.id) && brushData.role !== 'subtract') unitBrushes.get(unitOf.get(e.id)!)!.push(brush);
         else level.push({ id: e.id, role: brushData.role === 'subtract' ? 'subtract' : 'solid', brush });
@@ -380,8 +391,10 @@ export class GameWorld {
       p.beltOf = (h) => this.belts.get(h) ?? null;
       p.surroundings = {
         // (Plain lookups only: this runs inside the physics engine's own query.)
-        blocks: (c) => this.standInOf.has(c.handle) || (!this.triggers.has(c.handle) && !this.standIns.has(c.handle)),
+        blocks: (c) => this.standInOf.has(c.handle) || (!this.triggers.has(c.handle) && !this.standIns.has(c.handle) && !this.volumes.has(c.handle)),
         carry: (h, at) => this.carry(h, at),
+        waterTop: (at) => this.waterAt(at)?.top ?? null,
+        ladder: (shape, at) => this.ladderAt(shape, at),
       };
       this.player = p;
       let low = m[13]!;
@@ -571,6 +584,72 @@ export class GameWorld {
     if (kind !== 'zone') this.stats.bodies++;
   }
 
+  /** Water or a ladder: a sensor zone the player (and, for water, floating things) moves differently in. */
+  private addVolume(e: EntityData, brush: Brush): void {
+    const desc = RAPIER.ColliderDesc.convexHull(hullPoints(brush));
+    if (!desc) return;
+    desc.setSensor(true);
+    const c = this.world.createCollider(desc, this.world.createRigidBody(RAPIER.RigidBodyDesc.fixed()));
+    this.volumes.add(c.handle);
+    this.owner.set(c.handle, e.id);
+    if (e.components.water) this.waters.push({ id: e.id, collider: c, top: bounds(brush)?.max[1] ?? 0, data: readComponent<WaterData>('water', e.components.water) });
+    else this.ladders.push({ id: e.id, collider: c, data: readComponent<LadderData>('ladder', e.components.ladder) });
+  }
+
+  /** The water a point is in (its id, surface height and look under water), or null. */
+  waterAt(p: { x: number; y: number; z: number }): { id: string; top: number; tint: string; clearness: number } | null {
+    for (const w of this.waters) if (w.collider.containsPoint(p)) return { id: w.id, top: w.top, tint: w.data.tint, clearness: w.data.clearness };
+    return null;
+  }
+
+  /** The climbing speed of a ladder the player's shape touches at `at`, or null. */
+  private ladderAt(shape: RAPIER.Shape, at: { x: number; y: number; z: number }): number | null {
+    for (const l of this.ladders) if (l.collider.intersectsShape(shape, at, { x: 0, y: 0, z: 0, w: 1 })) return l.data.speed;
+    return null;
+  }
+
+  /** Floating: physics objects in water are lifted (they settle with their middle a little under the surface) and slowed. */
+  private floatBodies(): void {
+    if (!this.waters.length) return;
+    const g = Math.abs(this.world.gravity.y);
+    this.world.forEachRigidBody((b) => {
+      if (!b.isDynamic()) return;
+      const p = b.translation();
+      const w = this.waterAt(p);
+      if (!w) return;
+      // Fully under 24 u down; half at the surface: a body floats with its middle about 8 u under.
+      const k = Math.max(0, Math.min(1, (w.top - p.y) / 24 + 0.5));
+      const m = b.mass();
+      b.applyImpulse({ x: 0, y: m * g * b.gravityScale() * 1.5 * k * STEP, z: 0 }, true);
+      const v = b.linvel(), a = b.angvel();
+      const damp = Math.max(0, 1 - 2.5 * STEP);
+      b.setLinvel({ x: v.x * damp, y: v.y * damp, z: v.z * damp }, true);
+      b.setAngvel({ x: a.x * damp, y: a.y * damp, z: a.z * damp }, true);
+    });
+  }
+
+  /** Drowning: after 12 s with the head under water (in water that drowns), 10 health a second. */
+  private breathe(): void {
+    const p = this.player;
+    if (!p) return;
+    const [x, y, z] = p.eye();
+    const w = this.waters.find((w) => w.collider.containsPoint({ x, y, z }));
+    if (!w || !w.data.drowns) {
+      this.underwaterFor = 0;
+      return;
+    }
+    this.underwaterFor += STEP;
+    if (this.underwaterFor >= 12 && this.time - this.drownedAt >= 1) {
+      this.drownedAt = this.time;
+      this.hurt(10, 'drowning');
+    }
+  }
+
+  /** Seconds the player's head has been under water (0 when out). */
+  get breathHeld(): number {
+    return this.underwaterFor;
+  }
+
   /** A trigger zone: a sensor that reports what enters and leaves. */
   private addTrigger(e: EntityData, brush: Brush, scripted = false): void {
     const desc = RAPIER.ColliderDesc.convexHull(hullPoints(brush));
@@ -610,8 +689,10 @@ export class GameWorld {
           else this.player.respawn();
         }
         if (this.useQueued) this.doUse();
+        this.breathe();
       }
       this.useQueued = false;
+      this.floatBodies();
       this.carryOnBelts();
       this.syncStandIns();
       this.world.step(this.events);

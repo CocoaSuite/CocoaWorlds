@@ -141,17 +141,19 @@ export function worldBrushes(doc: SceneDoc): WorldBrush[] {
     if (!e.components.brush || !isShown(doc, e)) continue;
     const b = worldBrushOf(doc, e, mats.get(e.id));
     // Trigger zones are brushes too, but they never become level geometry.
-    if (b) out.push({ id: e.id, role: e.components.trigger ? 'trigger' : b.role, brush: b.brush });
+    if (b) out.push({ id: e.id, role: e.components.water ? 'water' : e.components.ladder ? 'ladder' : e.components.trigger ? 'trigger' : b.role, brush: b.brush });
   }
   return out;
 }
 
 /** The brushes for a shape spanning min–max. Stairs produce one brush per step. */
 /** What the brush tool draws: level geometry, a live cutter, a trigger zone, or an invisible collider (COL). */
-export type DrawRole = BrushRole | 'trigger' | 'collider';
+export type DrawRole = BrushRole | 'trigger' | 'collider' | 'water' | 'ladder';
 
 export function shapeBrushes(o: ShapeOptions, min: V3, max: V3, role: DrawRole, outline?: Outline): Brush[] {
-  const surface = defaultSurface(role === 'subtract' ? 'dev/subtract' : role === 'trigger' ? 'dev/trigger' : role === 'collider' ? COLLIDER_MATERIAL : 'dev/grid');
+  const surface = defaultSurface(
+    role === 'subtract' ? 'dev/subtract' : role === 'trigger' || role === 'ladder' ? 'dev/trigger' : role === 'collider' ? COLLIDER_MATERIAL : role === 'water' ? 'dev/water' : 'dev/grid',
+  );
   switch (o.shape) {
     case 'polygon':
       if (!outline) return [];

@@ -1198,6 +1198,7 @@ export class ViewportEngine {
     if (this.pivotMarker.visible) this.showPivotMarker();
     this.updateLighting();
     if (this.play?.placeCamera(this.fpCam)) {
+      this.play.applyWater(this.scene, this.fpCam);
       r.render(this.scene, this.fpCam);
       return;
     }

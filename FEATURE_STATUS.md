@@ -95,6 +95,7 @@ Last updated: 2026-11-01 (Phase 2, first slice).
 | Game values shared by all scripts (Cash, Round …), shown on screen if wanted; “Show on screen” messages; Text signs in the world, changed by “Set the text of” (benchmark step B1) | **Done** |
 | Copies while playing (Make a copy at an object, the player or where the player looks; the new copy; Remove; another object's variable), object actions (Move to, Scale, Make it fall, Push objects or the player, Put the player at, Damage), Conveyor and Breakable components, third-person camera rule (benchmark step B2) | **Done** |
 | Ready-made doors/buttons/plates/lifts beyond recipes, ladders, water, key rebinding (rest of Phase 6) | Planned |
+| Ladders (climb by looking up or down, step off at the top, jump off) and water (swim along the view, sink, surface, jump out onto a ledge, drown after 12 s, tinted view underneath, floating physics objects); Water and Ladder brush kinds | **Done** (A1) |
 | Materials workspace (full window): project materials with colour, image, bump map, roughness, metal, opacity, cut-out, glow, two-sided and scrolling; a turning preview (sphere, cube, wall); materials from images; use on faces, paint, show faces; undo | **Done** |
 | Assets, materials, lighting, audio (Phase 7) | Partly done (textures, lights, sky, sound, models, materials) |
 | Prefabs (P1): Edit › Make prefab…, place copies from the Assets panel, per-copy changes listed in the Inspector with Revert / Apply, Unlink; copies stored in full and synced on Apply and on open | **Done** (Phase 4). See docs/prefabs.md. |

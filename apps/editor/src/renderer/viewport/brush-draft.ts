@@ -159,7 +159,7 @@ export class BrushDraft {
       this.group.remove(c);
       (c as THREE.Mesh).geometry.dispose();
     }
-    const color = role === 'subtract' ? 0xff8a73 : role === 'trigger' ? 0xf0a442 : role === 'collider' ? 0xc04ad0 : 0x4b9cff;
+    const color = role === 'subtract' ? 0xff8a73 : role === 'trigger' ? 0xf0a442 : role === 'collider' ? 0xc04ad0 : role === 'water' ? 0x4fb3e0 : role === 'ladder' ? 0x7fcf5a : 0x4b9cff;
     this.fill.color.setHex(color);
     this.line.color.setHex(color);
     const { min, max } = this.bounds();

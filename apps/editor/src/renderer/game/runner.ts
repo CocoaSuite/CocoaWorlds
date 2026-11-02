@@ -166,7 +166,10 @@ export class GameRunner {
     this.lighting.update(this.doc, (id) => this.doc.worldMatrix(id), bounds, this.scene);
     this.lighting.applyTo(this.scene);
     this.renderer.shadowMap.enabled = this.lighting.shadows;
-    if (play.placeCamera(this.cam)) this.renderer.render(this.scene, this.cam);
+    if (play.placeCamera(this.cam)) {
+      play.applyWater(this.scene, this.cam);
+      this.renderer.render(this.scene, this.cam);
+    }
   };
 
   private saveProgress(): void {

@@ -281,6 +281,32 @@ export const COMPONENTS: ComponentDef[] = [
     ],
   },
   {
+    name: 'ladder',
+    label: e('Ladder', 'Лестница'),
+    description: e(
+      'An invisible zone the player climbs: forward goes up while looking ahead or up, down while looking down. Jump lets go. Put it in front of what looks like a ladder.',
+      'Невидимая зона, по которой игрок лезет: вперёд — вверх, если смотреть прямо или вверх, и вниз, если смотреть вниз. Прыжок — отпустить. Поставьте её перед тем, что выглядит как лестница.',
+    ),
+    appliesTo: 'brush',
+    conflicts: ['rigidBody', 'trigger', 'conveyor', 'water'],
+    fields: [{ key: 'speed', label: e('Climb speed', 'Скорость'), type: { kind: 'number', min: 10, step: 10, unit: 'u/s' }, default: 200 }],
+  },
+  {
+    name: 'water',
+    label: e('Water', 'Вода'),
+    description: e(
+      'The player swims in it (forward follows the view, Jump rises, Crouch dives) and can drown; physics objects float. Its faces are drawn as they are painted: use a see-through material.',
+      'В ней игрок плавает (вперёд — куда смотрит, прыжок — вверх, присесть — вниз) и может утонуть; физические объекты всплывают. Грани рисуются своим материалом: возьмите прозрачный.',
+    ),
+    appliesTo: 'brush',
+    conflicts: ['rigidBody', 'trigger', 'conveyor', 'ladder'],
+    fields: [
+      { key: 'tint', label: e('Colour under water', 'Цвет под водой'), type: { kind: 'color' }, default: '#28607a' },
+      { key: 'clearness', label: e('Seeing distance', 'Видимость'), hint: e('How far the player sees under water.', 'Насколько далеко видно под водой.'), type: { kind: 'number', min: 32, step: 64, unit: 'u' }, default: 640 },
+      { key: 'drowns', label: e('Can drown', 'Можно утонуть'), hint: e('After 12 s under water the player loses 10 health a second.', 'Через 12 с под водой игрок теряет 10 здоровья в секунду.'), type: { kind: 'boolean' }, default: true },
+    ],
+  },
+  {
     name: 'script',
     label: e('Script', 'Скрипт'),
     description: e('Blocks that make this object do things: “When the player enters… open the door”.', 'Блоки, которые заставляют объект действовать: «Когда игрок входит… открыть дверь».'),
@@ -342,5 +368,17 @@ export interface ColliderData {
 export interface TriggerData {
   detects: 'player' | 'physics' | 'anything';
   once: boolean;
+  [k: string]: unknown;
+}
+
+export interface LadderData {
+  speed: number;
+  [k: string]: unknown;
+}
+
+export interface WaterData {
+  tint: string;
+  clearness: number;
+  drowns: boolean;
   [k: string]: unknown;
 }

@@ -22,9 +22,10 @@ describe('component registry', () => {
   it('offers only what fits: brushes vs point objects, conflicts, no duplicates, no internal ones', () => {
     const brush = { brush: {} };
     const names = (c: Record<string, unknown>, isBrush: boolean) => addableComponents(c, isBrush).map((x) => x.name).sort();
-    expect(names(brush, true)).toEqual(['breakable', 'conveyor', 'rigidBody', 'script', 'sound', 'trigger']);
+    expect(names(brush, true)).toEqual(['breakable', 'conveyor', 'ladder', 'rigidBody', 'script', 'sound', 'trigger', 'water']);
     expect(names({ ...brush, trigger: {} }, true)).toEqual(['breakable', 'script', 'sound']);
     expect(names({ ...brush, rigidBody: {} }, true)).toEqual(['breakable', 'script', 'sound']);
+    expect(names({ ...brush, water: {} }, true)).toEqual(['breakable', 'script', 'sound']);
     expect(names({}, false)).toEqual(['breakable', 'collider', 'light', 'model', 'playerSpawn', 'rigidBody', 'script', 'sign', 'sound']);
     expect(names({ light: {} }, false)).toEqual(['breakable', 'collider', 'model', 'playerSpawn', 'rigidBody', 'script', 'sign', 'sound']);
     expect(componentDef('group')?.internal).toBe(true);
