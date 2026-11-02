@@ -85,6 +85,7 @@ export class PlaySession {
       const m = level.mesh;
       const levelMesh = new THREE.Mesh(toGeometry(m), m.groups.map((g) => material(g.material)));
       levelMesh.castShadow = levelMesh.receiveShadow = true;
+      for (const mat of levelMesh.material as THREE.Material[]) mat.shadowSide = THREE.DoubleSide;
       this.group.add(levelMesh);
     }
     // Water, drawn with its own materials (it hides nothing behind it, and casts no shadow).
@@ -200,7 +201,8 @@ export class PlaySession {
   }
 
   private material: (name: string) => THREE.Material;
-  private doc!: SceneDoc;
+  /** The scene being played (read only outside). */
+  doc!: SceneDoc;
 
   // ── Models ──
 

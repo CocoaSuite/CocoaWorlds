@@ -25,6 +25,14 @@ With nothing selected, the Inspector shows the scene's settings, all with undo:
   start with it off.
 - **Fog**: a colour, where it starts, and where it's thick.
 
+## Ambient occlusion
+
+**Ambient occlusion** (Scene settings, on by default) darkens corners, creases and the ground under things, so
+objects sit on the floor. It shows with **Lighting: Game**, in Play and in exported games. **Occlusion strength**
+(0–2) is how dark; **Occlusion radius** is how far, in units, things darken each other. Shadows are cast by both
+sides of every face, so light doesn't leak under walls and objects where brushes meet. Bounce light (global
+illumination) is planned: see [proposals/lighting-gi.md](proposals/lighting-gi.md).
+
 ## Textures
 
 **Assets › Textures › Import…** copies PNG, JPG or WebP images into the project's `assets/textures/` folder

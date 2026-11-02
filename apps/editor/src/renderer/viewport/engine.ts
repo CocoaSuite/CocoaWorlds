@@ -5,6 +5,7 @@
 import type { EntityData, SceneDoc, Transform, Vec3 } from '@cocoaworlds/core';
 import { bounds, faceAt, loopCut, nearestEdge, transform as transformBrush, translate, vertices, type Brush, type Plane, type V3 } from '@cocoaworlds/geometry';
 import * as THREE from 'three';
+import { AoRenderer } from './ao';
 import { TransformControls } from 'three/addons/controls/TransformControls.js';
 import { brushBounds, brushOf, isLocked, isShown, worldBrushOf, worldBrushes, worldMatrices, type DrawRole, type Outline, type ShapeOptions } from '../brush/brushes';
 import { rootsOf } from '../scene-ops';
@@ -174,6 +175,8 @@ export class ViewportEngine {
   private previewLights = new THREE.Group();
   private lighting = new SceneLighting();
   private gameLighting = false;
+  /** Ambient occlusion (with the scene's own lighting): drawn through a composer for the camera in use. */
+  private ao: AoRenderer | null = null;
   private hudKey = '';
   private gridWasVisible = true;
   /** First-person camera while playing as the player. */
@@ -1244,6 +1247,12 @@ export class ViewportEngine {
     });
   };
 
+  /** Draw with ambient occlusion when the scene's lighting is shown and it is on. False: draw plainly. */
+  private renderAo(cam: THREE.Camera): boolean {
+    if (!(this.play || this.gameLighting)) return false;
+    return (this.ao ??= new AoRenderer(this.renderer)).render(this.scene, cam, this.doc?.settings);
+  }
+
   private render(): void {
     const r = this.renderer;
     const size = r.getSize(new THREE.Vector2());
@@ -1256,11 +1265,11 @@ export class ViewportEngine {
     this.updateLighting();
     if (this.play?.placeCamera(this.fpCam)) {
       this.play.applyWater(this.scene, this.fpCam);
-      r.render(this.scene, this.fpCam);
+      if (!this.renderAo(this.fpCam)) r.render(this.scene, this.fpCam);
       return;
     }
     this.grid.setCamera(this.rig.camera.position);
-    r.render(this.scene, this.rig.camera);
+    if (!this.renderAo(this.rig.camera)) r.render(this.scene, this.rig.camera);
     const s = 72;
     this.axisCam.quaternion.copy(this.rig.camera.quaternion);
     this.axisCam.position.set(0, 0, 5).applyQuaternion(this.rig.camera.quaternion);

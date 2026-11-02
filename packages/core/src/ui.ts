@@ -145,7 +145,15 @@ export function weaponOf(w: Partial<WeaponDef> | undefined): WeaponDef | null {
 export interface UiSettings {
   screens: UiScreen[];
   items: ItemDef[];
+  /**
+   * The screens' own blocks (a script, as on objects): button clicks, list picks, keys … edited in the Screens
+   * workspace and run like any object's script. Missing: none.
+   */
+  script?: unknown;
 }
+
+/** The owner id the screens' script runs as (not an object of the scene). */
+export const UI_SCRIPT_OWNER = '#screens';
 
 export const emptyUi = (): UiSettings => ({ screens: [], items: [] });
 
@@ -155,6 +163,7 @@ export function uiOf(settings: { ui?: Partial<UiSettings> } | undefined): UiSett
   return {
     screens: Array.isArray(ui?.screens) ? ui.screens.map((s) => ({ ...s, elements: (s.elements ?? []).map((e) => ({ ...newUiElement(e.kind ?? 'text', e.id ?? 'x'), ...e })) })) : [],
     items: Array.isArray(ui?.items) ? ui.items : [],
+    ...(ui?.script ? { script: ui.script } : {}),
   };
 }
 

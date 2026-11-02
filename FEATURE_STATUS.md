@@ -41,6 +41,8 @@ Last updated: 2026-11-01 (Phase 2, first slice).
 | Add: empty, point/spot/sun light, player spawn, text sign | **Done** | Lights light the level in Play and with Lighting: Game. |
 | Image textures: import PNG/JPG/WebP in the Assets tab, paint faces with them, Hammer-style scale; sounds and models can be imported (used next) | **Done** |
 | Materials on models: a model's parts (material slots) take project materials, from the Inspector (Model › Materials) or by clicking them with the Paint tool (Shift: every part, Ctrl: pick up); saved per object, drawn in the editor, Play and exported games; the chicken's slots are named Body, Eye whites, Pupils | **Done** |
+| Ambient occlusion (GTAO; scene setting with strength and radius) in Lighting: Game, Play and exported games; shadows cast by both sides of faces (no light leaks where brushes meet) | **Done** |
+| Screen script: blocks in the Screens workspace under the screen, with “+ When clicked” / “+ When a row is picked” from a picked element; runs in Play | **Done** |
 | Asset library (Assets tab): search and categories (all, materials, prefabs, models, textures, sounds, with counts) beside a grid of tiles with pictures — materials on a lit sphere, models and prefabs drawn from three-quarters above, textures as images; click to paint (materials, textures), place (prefabs, models) or listen (sounds); double-click a material to open it; one Import for every kind of file | **Done** |
 | Models: import GLB/glTF, Model component (metres or game units, animation, shadows), shown in the editor and Play, with Physics and collision shapes, Play animation block | **Done** |
 | Sound: import OGG/MP3/WAV, Sound component (3D, loop, range, plays from the start), Play sound / Stop sounds blocks | **Done** |

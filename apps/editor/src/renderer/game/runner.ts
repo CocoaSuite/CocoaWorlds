@@ -6,6 +6,7 @@ import { SceneDoc, type GameRules, type GameValue, type MaterialDef, type SceneF
 import { isInvisibleMaterial } from '@cocoaworlds/geometry';
 import * as THREE from 'three';
 import { PlaySession } from '../viewport/play-session';
+import { AoRenderer } from '../viewport/ao';
 import type { Travel } from '@cocoaworlds/runtime';
 import { SceneLighting } from '../viewport/scene-lighting';
 import { setProjectMaterials, tickMaterials } from '../viewport/project-materials';
@@ -47,6 +48,7 @@ export class GameRunner {
   private lighting = new SceneLighting();
   private doc: SceneDoc;
   private play: PlaySession | null = null;
+  private ao: AoRenderer | null = null;
   private materials = new Map<string, THREE.Material>();
   private keys = new Set<string>();
   private raf = 0;
@@ -177,7 +179,7 @@ export class GameRunner {
     if (play.travel) return void this.go(play.travel);
     if (play.placeCamera(this.cam)) {
       play.applyWater(this.scene, this.cam);
-      this.renderer.render(this.scene, this.cam);
+      if (!(this.ao ??= new AoRenderer(this.renderer)).render(this.scene, this.cam, this.play?.doc.settings)) this.renderer.render(this.scene, this.cam);
     }
   };
 

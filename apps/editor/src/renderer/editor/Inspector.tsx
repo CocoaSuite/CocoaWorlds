@@ -1,5 +1,5 @@
 /** Inspector for the selection (CocoaCanvas right panel). Scene settings when nothing is selected. */
-import { PIVOT, gameRules, pivotOf, sceneSettings, worldBoundsOf, type EntityData, type SceneSettings as SceneSettingsData, type Transform, type Vec3 } from '@cocoaworlds/core';
+import { PIVOT, aoOf, gameRules, pivotOf, sceneSettings, worldBoundsOf, type EntityData, type SceneSettings as SceneSettingsData, type Transform, type Vec3 } from '@cocoaworlds/core';
 import { brushBounds } from '../brush/brushes';
 import { Button, ColorField, Field, NumberField, PanelHeader, Section, Switch } from '@cocoaworlds/ui';
 import { storeProgress } from '../game/progress';
@@ -137,6 +137,7 @@ function SceneSettings() {
   const doc = useEditor((s) => s.doc)!;
   const st = useEditor.getState();
   const cur = sceneSettings(doc.settings);
+  const ao = aoOf(doc.settings);
   const set = (patch: Partial<SceneSettingsData>, label: string, mergeKey?: string) => st.setSceneSettings(patch, label, mergeKey);
   const sky = cur.sky!;
   const num = (label: string, value: number, step: number, onChange: (v: number) => void, unit = '#') => (
@@ -157,6 +158,16 @@ function SceneSettings() {
         <Field label={t('insp.ambientStrength')}>
           {num(t('insp.ambientStrength'), cur.ambientIntensity, 0.05, (v) => set({ ambientIntensity: Math.max(0, v) }, 'Ambient strength', 'scene-ambient-i'))}
         </Field>
+        <Field label={t('insp.ao')}>
+          <Switch label={t('insp.ao')} checked={ao.enabled} onChange={(v) => set({ ao: { ...ao, enabled: v } }, v ? 'Ambient occlusion on' : 'Ambient occlusion off')} />
+        </Field>
+        {ao.enabled && (
+          <>
+            <Field label={t('insp.aoStrength')}>{num(t('insp.aoStrength'), ao.strength, 0.1, (v) => set({ ao: { ...ao, strength: Math.max(0, Math.min(2, v)) } }, 'Occlusion strength', 'scene-ao-s'))}</Field>
+            <Field label={t('insp.aoRadius')}>{num(t('insp.aoRadius'), ao.radius, 4, (v) => set({ ao: { ...ao, radius: Math.max(1, v) } }, 'Occlusion radius', 'scene-ao-r'), 'u')}</Field>
+            <p className="cw-hint">{t('insp.aoHint')}</p>
+          </>
+        )}
         <Field label={t('insp.background')}>
           <ColorField label={t('insp.background')} value={cur.backgroundColor} onChange={(v) => set({ backgroundColor: v }, 'Background', 'scene-bg')} />
         </Field>

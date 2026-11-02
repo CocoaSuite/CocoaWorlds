@@ -33,8 +33,9 @@ import {
   type Statement,
   type StatementKind,
   type VariableDef,
+  emptyScript,
 } from '@cocoaworlds/scripting';
-import { uiOf, type GameValue } from '@cocoaworlds/core';
+import { UI_SCRIPT_OWNER, uiOf, type GameValue } from '@cocoaworlds/core';
 import { Button, ContextMenu, IconButton, type MenuEntry } from '@cocoaworlds/ui';
 import { createContext, useContext, useEffect, useMemo, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { t } from '../../i18n';
@@ -87,7 +88,8 @@ function countBlocks(list: Statement[]): number {
   return list.reduce((n, s) => n + 1 + innerLists(s).reduce((m, [, l]) => m + countBlocks(l), 0), 0);
 }
 
-export function ScriptPanel() {
+/** The selected object's blocks, or with `screens`, the screens' own script (in the Screens workspace). */
+export function ScriptPanel({ screens = false }: { screens?: boolean } = {}) {
   useEditor((s) => s.rev);
   const doc = useEditor((s) => s.doc);
   const selection = useEditor((s) => s.selection);
@@ -102,8 +104,8 @@ export function ScriptPanel() {
     return () => void clipListeners.delete(f);
   }, []);
 
-  const owner = selection.length === 1 ? doc?.get(selection[0]!) : undefined;
-  const script = owner?.components.script as unknown as Script | undefined;
+  const owner = screens ? (doc ? { id: UI_SCRIPT_OWNER, name: t('script.screens') } : undefined) : selection.length === 1 ? doc?.get(selection[0]!) : undefined;
+  const script = (screens ? (uiOf(doc?.settings).script ?? emptyScript()) : (owner as { components?: Record<string, unknown> } | undefined)?.components?.script) as Script | undefined;
   const project = useEditor((s) => s.session?.project);
   const globals = useMemo(() => project?.settings.values ?? [], [project]);
   const objects = useMemo(
@@ -135,7 +137,9 @@ export function ScriptPanel() {
     owner: owner.id,
     script,
     globals,
-    update: (fn, label, mergeKey) => st.updateScript(owner.id, fn, label, mergeKey),
+    update: screens
+      ? (fn, label, mergeKey) => st.setSceneSettings({ ui: { ...uiOf(useEditor.getState().doc?.settings), script: fn((uiOf(useEditor.getState().doc?.settings).script as Script | undefined) ?? emptyScript()) } }, label, mergeKey)
+      : (fn, label, mergeKey) => st.updateScript(owner.id, fn, label, mergeKey),
     problems,
     active: new Set(active.get(owner.id) ?? []),
     objects,
@@ -207,7 +211,7 @@ export function ScriptPanel() {
           <Variables />
           <GameValues />
           <span className="cw-sp" />
-          <Button onClick={() => st.openDialog('recipes')}>{t('recipe.open')}</Button>
+          {!screens && <Button onClick={() => st.openDialog('recipes')}>{t('recipe.open')}</Button>}
           <Button onClick={addStack}>{t('script.addStack')}</Button>
         </div>
         <div className="cw-stacks">

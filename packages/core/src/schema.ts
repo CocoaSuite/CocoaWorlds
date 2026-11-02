@@ -108,7 +108,19 @@ export interface SceneSettings {
   sky?: SkySettings;
   /** Screen UI and the items the player can carry (missing: none). */
   ui?: UiSettings;
+  /** Ambient occlusion: corners, creases and the ground under things darken (missing: on, as default). */
+  ao?: AoSettings;
 }
+
+export interface AoSettings {
+  enabled: boolean;
+  /** 0–2: how dark. */
+  strength: number;
+  /** How far, in units, things darken each other (32 is half a grid square of 64). */
+  radius: number;
+}
+export const DEFAULT_AO: AoSettings = { enabled: true, strength: 1, radius: 32 };
+export const aoOf = (s: { ao?: AoSettings } | undefined): AoSettings => ({ ...DEFAULT_AO, ...(s?.ao ?? {}) });
 
 export interface SkySettings {
   enabled: boolean;

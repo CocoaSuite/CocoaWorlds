@@ -35,6 +35,7 @@ import {
   type WeaponDef,
   weaponOf,
   uiOf,
+  UI_SCRIPT_OWNER,
   uiShown,
 } from '@cocoaworlds/core';
 import { EventBus } from './events';
@@ -474,6 +475,15 @@ export class GameWorld {
       programs.push(r.program);
       scripts.push([e.id, script]);
       this.scriptProblems.push(...r.problems);
+    }
+    // The screens' own script (edited in the Screens workspace).
+    const uiScript = uiOf(doc.settings).script as Script | undefined;
+    if (uiScript?.handlers?.length) {
+      const r = compileScript(UI_SCRIPT_OWNER, uiScript, info);
+      programs.push(r.program);
+      scripts.push([UI_SCRIPT_OWNER, uiScript]);
+      this.scriptProblems.push(...r.problems);
+      this.names.set(UI_SCRIPT_OWNER, 'Screens');
     }
 
     // Objects scripts move or switch become "units": one body for the object and everything inside it.

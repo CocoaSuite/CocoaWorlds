@@ -59,3 +59,9 @@ pick a hotbar slot, and a **left click** uses the item in it.
 
 The checker reports screens, elements and items that no longer exist, and clicks on something that isn't a
 button.
+
+## Blocks in the Screens workspace
+
+Under the screen is the **screen script**: blocks that belong to the screens, not to any object, run like any
+object's script. Pick a button and press **+ When clicked (blocks)** (or a list: **+ When a row is picked**) to
+start a stack for it, then add blocks below. Object scripts can still listen for the same clicks.

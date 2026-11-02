@@ -3,6 +3,8 @@
  * selected screen in the middle, where elements are picked, dragged and resized; the picked element's settings
  * on the right. Everything is saved in the scene and undoable.
  */
+import { blockId, emptyScript, type Script } from '@cocoaworlds/scripting';
+import { ScriptPanel } from './script/ScriptPanel';
 import {
   UI_ANCHORS,
   newUiElement,
@@ -210,9 +212,27 @@ export function ScreensPanel() {
           )}
         </div>
         </div>
+        <section className="cw-screens-script" aria-label={t('script.screenBlocks')}>
+          <ScriptPanel screens />
+        </section>
       </div>
 
       <aside className="cw-screens-side right" aria-label={t('ui.element')}>
+        {element && (element.kind === 'button' || element.kind === 'list') && (
+          <Button
+            size="sm"
+            onClick={() => {
+              // A stack for this element in the screens' script, ready for blocks.
+              const event = element.kind === 'button' ? { id: blockId(), kind: 'uiClick' as const, element: element.id } : { id: blockId(), kind: 'listPick' as const, list: element.id };
+              update((u) => {
+                const sc = ((u.script as Script | undefined) ?? emptyScript()) as Script;
+                return { ...u, script: { ...sc, handlers: [...sc.handlers, { id: blockId(), event, body: [] }] } };
+              }, element.kind === 'button' ? 'Add When clicked' : 'Add When a row is picked');
+            }}
+          >
+            {element.kind === 'button' ? t('ui.addClick') : t('ui.addPick')}
+          </Button>
+        )}
         {element && screen ? (
           <ElementProps
             e={element}
