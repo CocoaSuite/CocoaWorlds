@@ -96,6 +96,7 @@ const W = {
   stopSound: ['Stop the sounds of', 'Остановить звуки'],
   pickSound: ['pick a sound', 'выберите звук'],
   breaks: ['When this breaks', 'Когда это ломается'],
+  hit: ['When this is hit (shot, struck or blasted)', 'Когда в это попадают (выстрел, удар, взрыв)'],
   spawn: ['Make a copy of', 'Создать копию'],
   at: ['at', 'в месте:'],
   aim: ['where the player looks', 'куда смотрит игрок'],
@@ -166,6 +167,7 @@ const PALETTE_EVENT: Record<EventKind, Pair> = {
   every: ['Every few seconds', 'Каждые несколько секунд'],
   die: ['When the player dies', 'Когда игрок погибает'],
   breaks: ['When this breaks', 'Когда это ломается'],
+  hit: ['When this is hit (shot, struck or blasted)', 'Когда в это попадают (выстрел, удар, взрыв)'],
 };
 export const eventName = (k: EventKind) => pick(PALETTE_EVENT[k]);
 

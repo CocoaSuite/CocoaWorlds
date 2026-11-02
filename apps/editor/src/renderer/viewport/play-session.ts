@@ -14,6 +14,7 @@ import { worldBrushes } from '../brush/brushes';
 import { buildLevel } from './world-build';
 import { toGeometry } from './world-render';
 import { buildSign, type SignObject } from './sign';
+import { Effects } from './effects';
 import { assetUrl } from '../assets';
 import { modelGeometry, modelInstance, type ModelInstance } from './models';
 
@@ -142,6 +143,12 @@ export class PlaySession {
     this.world.bus.on('use', (e) => void this.uses.push(e.target));
     this.world.bus.on('player.die', (e) => void this.notes.push(`The player died (${e.cause}) and starts again`));
     this.world.bus.on('sound', (e) => void this.startSound(e));
+    this.group.add(this.effects.group);
+    this.world.bus.on('shot', (e) => {
+      const yaw = this.world.player?.input.yaw ?? 0;
+      this.effects.tracer(e.from, e.to, e.by === 'player', [Math.cos(yaw), 0, -Math.sin(yaw)]);
+    });
+    this.world.bus.on('explosion', (e) => this.effects.explosion(e.at, e.radius));
     this.world.bus.on('anim', (e) => {
       const inst = this.models.get(e.target);
       if (inst && !inst.play(e.name, e.loop)) this.notes.push(`The model has no animation called “${e.name}”`);
@@ -316,6 +323,8 @@ export class PlaySession {
   /** Advance the game and move what moved. Returns what happened this frame. */
   tick(dt: number): PlayFrame {
     this.world.step(dt);
+    this.effects.syncProjectiles(this.world.projectilesNow());
+    this.effects.tick(dt);
     const changes = this.world.drainChanges();
     for (const b of changes.spawned) this.addMover(b);
     if (changes.removed.length) {
@@ -439,6 +448,7 @@ export class PlaySession {
     this.world.use();
   }
 
+  private effects = new Effects();
   private waterFog: { key: string; fog: THREE.Fog; color: THREE.Color } | null = null;
 
   /** With the camera under water: the water's colour all round, and only as far as it is clear. */
@@ -483,6 +493,7 @@ export class PlaySession {
 
   dispose(): void {
     this.disposed = true;
+    this.effects.dispose();
     for (const s of [...this.sounds]) {
       if (s.audio.isPlaying) s.audio.stop();
       this.dropSound(s);

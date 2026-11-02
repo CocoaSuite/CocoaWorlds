@@ -14,6 +14,9 @@ import {
   type UiKind,
   type UiScreen,
   type UiSettings,
+  type WeaponDef,
+  newWeapon,
+  weaponOf,
 } from '@cocoaworlds/core';
 import { Button, ColorField, IconButton, NumberField, Switch } from '@cocoaworlds/ui';
 import { useEffect, useMemo, useState } from 'react';
@@ -45,6 +48,7 @@ export function ScreensPanel() {
   const doc = useEditor((s) => s.doc);
   const project = useEditor((s) => s.session?.project);
   const textures = useEditor((s) => s.assets.textures);
+  const sounds = useEditor((s) => s.assets.sounds);
   const st = useEditor.getState();
   const ui = uiOf(doc?.settings);
   const [screenId, setScreenId] = useState<string | null>(null);
@@ -175,7 +179,7 @@ export function ScreensPanel() {
             </li>
           ))}
         </ul>
-        <Items items={ui.items} textures={textures} update={update} />
+        <Items items={ui.items} textures={textures} sounds={sounds} update={update} />
       </aside>
 
       <div className="cw-screens-main">
@@ -473,8 +477,19 @@ function ElementProps({
 }
 
 /** The items the player can carry: a name and a picture each. */
-function Items({ items, textures, update }: { items: ItemDef[]; textures: { path: string; name: string }[]; update: (fn: (u: UiSettings) => UiSettings, label: string) => void }) {
+function Items({
+  items,
+  textures,
+  sounds,
+  update,
+}: {
+  items: ItemDef[];
+  textures: { path: string; name: string }[];
+  sounds: { path: string; name: string }[];
+  update: (fn: (u: UiSettings) => UiSettings, label: string) => void;
+}) {
   const set = (i: number, next: ItemDef, label: string) => update((u) => ({ ...u, items: u.items.map((x, j) => (j === i ? next : x)) }), label);
+  const [open, setOpen] = useState<string | null>(null);
   return (
     <section className="cw-screens-items" aria-label={t('ui.items')}>
       <div className="cw-screens-h">
@@ -505,10 +520,121 @@ function Items({ items, textures, update }: { items: ItemDef[]; textures: { path
                 </option>
               ))}
             </select>
+            <Button size="sm" className={it.weapon ? 'on' : ''} aria-label={`${it.name}: ${t('wpn.title')}`} aria-expanded={open === it.name} onClick={() => setOpen(open === it.name ? null : it.name)}>
+              {it.weapon ? '⌖' : '+⌖'}
+            </Button>
             <IconButton icon="close" label={`${t('ui.remove')} ${it.name}`} onClick={() => update((u) => ({ ...u, items: u.items.filter((_, j) => j !== i) }), 'Remove item')} />
+            {open === it.name && <WeaponProps item={it} items={items} sounds={sounds} onChange={(weapon, label) => set(i, { ...it, weapon }, label)} />}
           </li>
         ))}
       </ul>
     </section>
+  );
+}
+
+const PRESETS: { id: string; key: Parameters<typeof t>[0] }[] = [
+  { id: 'crowbar', key: 'wpn.crowbar' },
+  { id: 'pistol', key: 'wpn.pistol' },
+  { id: 'smg', key: 'wpn.smg' },
+  { id: 'shotgun', key: 'wpn.shotgun' },
+  { id: 'rocket', key: 'wpn.rocket' },
+  { id: 'grenade', key: 'wpn.grenade' },
+];
+
+/** An item's weapon settings: off, a ready-made weapon, or each number by hand. */
+function WeaponProps({
+  item,
+  items,
+  sounds,
+  onChange,
+}: {
+  item: ItemDef;
+  items: ItemDef[];
+  sounds: { path: string; name: string }[];
+  onChange: (w: WeaponDef | undefined, label: string) => void;
+}) {
+  const w = weaponOf(item.weapon);
+  const set = (patch: Partial<WeaponDef>) => w && onChange({ ...w, ...patch }, 'Weapon settings');
+  const num = (key: 'damage' | 'rate' | 'range' | 'spread' | 'pellets' | 'speed' | 'blast' | 'push', label: Parameters<typeof t>[0], step: number) => (
+    <Row label={t(label)}>
+      <NumberField label="#" ariaLabel={`${item.name}: ${t(label)}`} value={w![key]} step={step} onCommit={(v) => set({ [key]: Math.max(0, v) })} />
+    </Row>
+  );
+  return (
+    <div className="cw-weapon" role="group" aria-label={`${item.name}: ${t('wpn.title')}`}>
+      <Row label={t('wpn.title')}>
+        <select
+          className="cw-input"
+          aria-label={`${item.name}: ${t('wpn.preset')}`}
+          value=""
+          onChange={(e) => {
+            const v = e.currentTarget.value;
+            if (v === 'none') onChange(undefined, 'Not a weapon');
+            else if (v) onChange(newWeapon(v), 'Make a weapon');
+          }}
+        >
+          <option value="">{w ? t('wpn.change') : t('wpn.make')}</option>
+          {PRESETS.map((p) => (
+            <option key={p.id} value={p.id}>
+              {t(p.key)}
+            </option>
+          ))}
+          {w && <option value="none">{t('wpn.none')}</option>}
+        </select>
+      </Row>
+      {w && (
+        <>
+          <Row label={t('wpn.kind')}>
+            <select className="cw-input" aria-label={`${item.name}: ${t('wpn.kind')}`} value={w.kind} onChange={(e) => set({ kind: e.currentTarget.value as WeaponDef['kind'] })}>
+              <option value="bullet">{t('wpn.bullet')}</option>
+              <option value="projectile">{t('wpn.projectile')}</option>
+              <option value="melee">{t('wpn.melee')}</option>
+            </select>
+          </Row>
+          {num('damage', 'wpn.damage', 1)}
+          {num('rate', 'wpn.rate', 0.5)}
+          <label className="cw-screens-sw">
+            <Switch label={`${item.name}: ${t('wpn.automatic')}`} checked={w.automatic} onChange={(v) => set({ automatic: v })} />
+            {t('wpn.automatic')}
+          </label>
+          {w.kind !== 'projectile' && num('range', 'wpn.range', 64)}
+          {w.kind === 'bullet' && num('spread', 'wpn.spread', 0.5)}
+          {w.kind === 'bullet' && num('pellets', 'wpn.pellets', 1)}
+          {w.kind === 'projectile' && num('speed', 'wpn.speed', 50)}
+          {w.kind === 'projectile' && (
+            <label className="cw-screens-sw">
+              <Switch label={`${item.name}: ${t('wpn.arc')}`} checked={w.arc} onChange={(v) => set({ arc: v })} />
+              {t('wpn.arc')}
+            </label>
+          )}
+          {num('blast', 'wpn.blast', 16)}
+          {num('push', 'wpn.push', 50)}
+          <Row label={t('wpn.ammo')}>
+            <select className="cw-input" aria-label={`${item.name}: ${t('wpn.ammo')}`} value={w.ammo} onChange={(e) => set({ ammo: e.currentTarget.value })}>
+              <option value="">{t('wpn.noAmmo')}</option>
+              {items
+                .filter((x) => x.name !== item.name)
+                .map((x) => (
+                  <option key={x.name} value={x.name}>
+                    {x.name}
+                  </option>
+                ))}
+              {w.ammo && !items.some((x) => x.name === w.ammo) && <option value={w.ammo}>{w.ammo}</option>}
+            </select>
+          </Row>
+          <Row label={t('wpn.sound')}>
+            <select className="cw-input" aria-label={`${item.name}: ${t('wpn.sound')}`} value={w.sound} onChange={(e) => set({ sound: e.currentTarget.value })}>
+              <option value="">{t('mat.noImage')}</option>
+              {sounds.map((x) => (
+                <option key={x.path} value={x.path}>
+                  {x.name}
+                </option>
+              ))}
+            </select>
+          </Row>
+          <p className="cw-muted cw-screens-note">{t('wpn.hint')}</p>
+        </>
+      )}
+    </div>
   );
 }

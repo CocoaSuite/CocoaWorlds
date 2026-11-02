@@ -10,6 +10,8 @@ export interface Hud {
   maxHealth: number;
   /** Shown once the player has any. */
   armour: number;
+  /** The weapon in hand and its ammo (null when it needs none). */
+  weapon: { name: string; ammo: number | null; ammoName: string } | null;
   score: number;
   showScore: boolean;
   /** Just hurt: flash red. */
@@ -40,6 +42,7 @@ export function hudOf(play: PlaySession, locked: boolean): Hud {
     health: Math.ceil(status?.health ?? 0),
     maxHealth: status?.maxHealth ?? 100,
     armour: Math.floor(status?.armour ?? 0),
+    weapon: status?.weapon ?? null,
     score: status?.score ?? 0,
     showScore: !!status?.showScore,
     hurt: (status?.sinceHurt ?? Infinity) < 0.35,
@@ -72,6 +75,18 @@ export function HudView({ hud }: { hud: Hud }) {
         </div>
       )}
       {hud.hurt && hud.showHealth && <div className="cw-hurt" aria-hidden="true" />}
+      {hud.weapon && (
+        <div className="cw-ov cw-hud cw-hud-weapon" data-testid="hud-weapon">
+          <div className="cw-hud-item">
+            <span className="cw-hud-label">{hud.weapon.ammo === null ? hud.weapon.name : `${hud.weapon.name} · ${hud.weapon.ammoName}`}</span>
+            {hud.weapon.ammo !== null && (
+              <span className={`cw-hud-value${hud.weapon.ammo === 0 ? ' empty' : ''}`} data-testid="hud-ammo">
+                {hud.weapon.ammo}
+              </span>
+            )}
+          </div>
+        </div>
+      )}
       {(hud.showHealth || hud.showScore || hud.values.length > 0) && (
       <div className="cw-ov cw-hud" data-testid="hud">
         {hud.showHealth && (

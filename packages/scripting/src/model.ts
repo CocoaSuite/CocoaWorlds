@@ -139,6 +139,8 @@ export type EventBlock =
   | { id: string; kind: 'die' }
   /** This breakable object's health reached 0 (it is removed after this starts). */
   | { id: string; kind: 'breaks' }
+  /** Hit by a shot, a swing or a blast (this object or anything inside it). */
+  | { id: string; kind: 'hit' }
   /** The player clicked a button of the screen UI (by id). */
   | { id: string; kind: 'uiClick'; element: string }
   /** The player used (clicked with) an item from the hotbar; '' for any item. */

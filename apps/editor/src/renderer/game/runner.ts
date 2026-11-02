@@ -230,7 +230,10 @@ export class GameRunner {
 
   private mouseDown = (e: MouseEvent): void => {
     if (e.button !== 0 || !this.play) return;
-    if (this.locked) this.play.useItem();
+    if (this.locked) {
+      this.play.useItem();
+      this.play.setInput({ fire: true });
+    }
     else if (!this.uiFree) this.lockPointer();
   };
 
@@ -240,7 +243,12 @@ export class GameRunner {
     this.play.selectSlot(this.play.uiState().slot + Math.sign(e.deltaY));
   };
 
+  private mouseUp = (e: MouseEvent): void => {
+    if (e.button === 0) this.play?.setInput({ fire: false });
+  };
+
   private lockChange = (): void => {
+    if (!this.locked) this.play?.setInput({ fire: false });
     if (!this.locked && !this.uiFree) {
       this.keys.clear();
       this.send();
@@ -256,6 +264,7 @@ export class GameRunner {
     window.addEventListener('keyup', this.keyUp);
     document.addEventListener('mousemove', this.mouseMove);
     el.addEventListener('mousedown', this.mouseDown);
+    window.addEventListener('mouseup', this.mouseUp);
     el.addEventListener('wheel', this.wheel, { passive: false });
     el.addEventListener('contextmenu', (e) => e.preventDefault());
     document.addEventListener('pointerlockchange', this.lockChange);
@@ -273,6 +282,7 @@ export class GameRunner {
     cancelAnimationFrame(this.raf);
     window.removeEventListener('keydown', this.keyDown);
     window.removeEventListener('keyup', this.keyUp);
+    window.removeEventListener('mouseup', this.mouseUp);
     document.removeEventListener('mousemove', this.mouseMove);
     document.removeEventListener('pointerlockchange', this.lockChange);
     window.removeEventListener('pagehide', this.pageHide);

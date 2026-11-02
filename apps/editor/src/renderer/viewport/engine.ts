@@ -547,6 +547,7 @@ export class ViewportEngine {
   }
 
   private onLockChange = (): void => {
+    if (!this.locked) this.play?.setInput({ fire: false });
     if (!this.asPlayer) return;
     if (!this.locked && !this.uiFree) {
       this.gameKeys.clear();
@@ -1356,8 +1357,10 @@ export class ViewportEngine {
     const el = this.renderer.domElement;
     el.focus();
     if (this.asPlayer) {
-      if (this.locked && e.button === 0) this.play?.useItem();
-      else if (!this.locked && !this.uiFree && e.button === 0) this.lockPointer();
+      if (this.locked && e.button === 0) {
+        this.play?.useItem();
+        this.play?.setInput({ fire: true });
+      } else if (!this.locked && !this.uiFree && e.button === 0) this.lockPointer();
       return;
     }
     if (this.gizmo.dragging || (this.gizmo as unknown as { axis: string | null }).axis) return;
@@ -1588,6 +1591,7 @@ export class ViewportEngine {
   };
 
   private onPointerUp = (e: PointerEvent): void => {
+    if (this.asPlayer && e.button === 0) this.play?.setInput({ fire: false });
     const d = this.drag;
     this.drag = null;
     if (!d) return;

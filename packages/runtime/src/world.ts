@@ -28,6 +28,8 @@ import {
   type GameRules,
   type ModelData,
   type UiSettings,
+  type WeaponDef,
+  weaponOf,
   uiOf,
   uiShown,
 } from '@cocoaworlds/core';
@@ -35,6 +37,7 @@ import { EventBus } from './events';
 import { DIRECTIONS, ScriptRunner, compileScript, type ActionName, type GameValueDef, type Problem, type Program, type SceneInfo, type Script, type Value } from '@cocoaworlds/scripting';
 import { scriptTargets } from './script-targets';
 import { PLAYER, Player, fallDamage, type PlayerInput } from './player';
+import { Weapons, type V3 } from './weapons';
 import { bounds, brushToWorld, buildMesh, buildWorld, fromData, hullPoints, vertices, type Brush, type BrushData, type WorldBrush } from '@cocoaworlds/geometry';
 
 /** Units per metre (an inch-based world). */
@@ -154,6 +157,8 @@ export interface PlayerStatus {
   maxHealth: number;
   /** Armour (0–100); shown once the player has some. */
   armour: number;
+  /** The weapon in hand: its name and how much of its ammo is carried (null: it needs none). */
+  weapon: { name: string; ammo: number | null; ammoName: string } | null;
   score: number;
   /** Whether any script uses the score (otherwise the screen doesn't show it). */
   showScore: boolean;
@@ -300,6 +305,11 @@ export class GameWorld {
   private inventory = new Map<string, number>();
   /** The hotbar slot the player has picked. */
   private slot = 0;
+  /** Weapons and their projectiles; when the weapon in hand can fire again; whether fire was held last step. */
+  readonly weapons: Weapons;
+  private nextShotAt = 0;
+  private fireHeld = false;
+  private fireQueued = false;
 
   /** Model triangles by file (see `create`). */
   private models: Map<string, ModelMesh>;
@@ -415,6 +425,21 @@ export class GameWorld {
       this.killY = low - 2048;
     }
 
+    this.weapons = new Weapons({
+      world: this.world,
+      time: () => this.time,
+      ownerOf: (h) => this.owner.get(h),
+      passes: (c) => this.triggers.has(c.handle) || this.volumes.has(c.handle) || this.standInOf.has(c.handle),
+      damage: (target, amount, by, cause) => this.weaponDamage(target, amount, by, cause),
+      pushPlayer: (dx, dy, dz) => this.player?.push(dx, dy, dz),
+      playerCentre: () => {
+        const p = this.player;
+        if (!p) return null;
+        const t = p.body.translation();
+        return [t.x, t.y, t.z];
+      },
+      announce: (e) => this.bus.emit({ ...e, time: this.time }),
+    });
     this.runner = new ScriptRunner(programs, {
       now: () => this.time,
       random: Math.random,
@@ -704,9 +729,11 @@ export class GameWorld {
         }
         if (this.useQueued) this.doUse();
         if (this.player.input.use) this.charge();
+        this.fireWeapon();
         this.breathe();
       }
       this.useQueued = false;
+      this.weapons.step(STEP, Math.abs(this.world.gravity.y));
       this.floatBodies();
       this.carryOnBelts();
       this.syncStandIns();
@@ -726,6 +753,8 @@ export class GameWorld {
 
   /** What the player is pressing (from the keyboard and mouse). */
   setPlayerInput(input: Partial<PlayerInput>): void {
+    // (A click can press and let go between two steps: the press still fires once.)
+    if (input.fire) this.fireQueued = true;
     if (this.player) Object.assign(this.player.input, input);
   }
 
@@ -742,6 +771,55 @@ export class GameWorld {
     const prompt = this.runner.usePrompt(targets);
     if (prompt !== null) return prompt;
     return targets.some((t) => (this.chargers.get(t)?.left ?? 0) > 0) ? '' : null;
+  }
+
+  /** The weapon in hand (its item's name and settings), or null. */
+  weaponInHand(): { name: string; weapon: WeaponDef } | null {
+    const name = this.selectedItem();
+    const weapon = weaponOf(this.ui.items.find((i) => i.name === name)?.weapon);
+    return name && weapon ? { name, weapon } : null;
+  }
+
+  private weaponStatus(): PlayerStatus['weapon'] {
+    const w = this.weaponInHand();
+    if (!w) return null;
+    return { name: w.name, ammo: w.weapon.ammo ? (this.inventory.get(w.weapon.ammo) ?? 0) : null, ammoName: w.weapon.ammo };
+  }
+
+  /** Fire the weapon in hand while the button is held (once per click unless it is automatic), using up ammo. */
+  private fireWeapon(): void {
+    const p = this.player!;
+    const queued = this.fireQueued;
+    this.fireQueued = false;
+    const held = !!p.input.fire || queued;
+    const fresh = (held && !this.fireHeld) || (queued && !p.input.fire);
+    this.fireHeld = !!p.input.fire;
+    const w = this.weaponInHand();
+    if (!w || !held || (!w.weapon.automatic && !fresh) || this.time < this.nextShotAt) return;
+    const { weapon, name } = w;
+    if (weapon.ammo) {
+      if ((this.inventory.get(weapon.ammo) ?? 0) <= 0) return;
+      this.giveItem(weapon.ammo, -1);
+    }
+    this.nextShotAt = this.time + 1 / weapon.rate;
+    if (weapon.sound) this.bus.emit({ type: 'sound', sound: weapon.sound, at: null, follow: null, volume: 1, loop: false, range: 2048, source: 'player', time: this.time });
+    this.weapons.fire(weapon, name, p.eye(), p.lookDirection(), 'player', p.collider.handle);
+  }
+
+  /** A hit by a weapon or a blast: “When this is hit” runs on it and what it is inside; breakables lose health. */
+  private weaponDamage(target: string, amount: number, by: string, cause: string): void {
+    if (!(amount > 0)) return;
+    if (target === 'player') return this.hurt(amount, by === 'player' ? `your own ${cause}` : cause);
+    const targets: string[] = [];
+    for (let x: string | null | undefined = target; x; x = this.parentOf.get(x)) targets.push(x);
+    this.runner.dispatch({ type: 'hit', targets });
+    const breakable = targets.find((t) => this.breakHealth.has(t));
+    if (breakable) this.damage(breakable, amount);
+  }
+
+  /** Projectiles in flight, for drawing. */
+  projectilesNow(): { id: number; at: V3; arc: boolean }[] {
+    return this.weapons.projectiles.map((p) => ({ id: p.id, at: [...p.at] as V3, arc: p.weapon.arc }));
   }
 
   /** Holding Use on a charger: it gives health or armour, a little each step, until it is empty or the player is full. */
@@ -881,7 +959,7 @@ export class GameWorld {
 
   playerStatus(): PlayerStatus | null {
     if (!this.player) return null;
-    return { showHealth: this.rules.health, health: this.health, maxHealth: PLAYER.maxHealth, armour: this.armour, score: this.score, showScore: this.usesScore, sinceHurt: this.time - this.hurtAt, deaths: this.deaths };
+    return { showHealth: this.rules.health, health: this.health, maxHealth: PLAYER.maxHealth, armour: this.armour, weapon: this.weaponStatus(), score: this.score, showScore: this.usesScore, sinceHurt: this.time - this.hurtAt, deaths: this.deaths };
   }
 
   // ── What scripts can do ──
@@ -1405,9 +1483,10 @@ export class GameWorld {
     return [...this.inventory.keys()][this.slot] ?? '';
   }
 
-  /** Pick a hotbar slot (0-based; wraps around the hotbar's slots). */
+  /** Pick a hotbar slot (0-based; wraps around the hotbar's slots, or the items carried when there is no hotbar). */
   selectSlot(slot: number): void {
-    const n = Math.max(1, ...this.ui.screens.flatMap((s) => s.elements.filter((e) => e.kind === 'hotbar').map((e) => e.slots)));
+    const bars = this.ui.screens.flatMap((s) => s.elements.filter((e) => e.kind === 'hotbar').map((e) => e.slots));
+    const n = Math.max(1, ...(bars.length ? bars : [this.inventory.size]));
     this.slot = ((Math.round(slot) % n) + n) % n;
   }
 

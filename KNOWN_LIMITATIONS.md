@@ -21,6 +21,7 @@
 - **Moving platforms carry the player's feet, not their view:** on a turning platform the player goes round with it but keeps facing the same way. While a lift moves the player can't jump.
 - **The player is an upright cylinder** (radius 16, 72 tall) rather than Source's box, so they slide round pillars and balls; they also step off a ledge a little sooner at its corners.
 - **Screen UI:** one font, no animations or transitions, and no text input boxes; screens belong to the scene (a second scene would need its own); lists hold text rows or the inventory (not other data).
+- **Weapons:** there's no weapon model in the player's hands, no reloading (ammo is used straight from the inventory), and no muzzle flash or recoil. Bullets can't hit the player yet (nothing but blasts shoots back until creatures arrive). Weapons belong to the scene's items, like other items. Clicks closer together than a weapon's rate are ignored.
 - **Ladders and water** are fixed in place (scripts can't move them, so no rising water yet). Water's surface is the top of its brush (keep the top flat), there is no air meter on screen, health lost to drowning doesn't come back on its own, and the player can't throw objects into water to make splashes (no splash sounds or particles yet).
 - **Player speeds are fixed** (Half-Life 2's: run 190, walk 100, crouch 64 u/s); a per-scene setting comes later.
 - **Keys while playing are fixed** (WASD, Space, Ctrl or C, Shift, E); rebinding comes later. While the mouse is captured, editor shortcuts are off; F5 still stops.

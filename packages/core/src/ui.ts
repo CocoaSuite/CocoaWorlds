@@ -72,6 +72,74 @@ export interface ItemDef {
   name: string;
   /** A texture from the project to show in the hotbar ('' for the name's first letters). */
   icon: string;
+  /** Held in the hotbar, the item is a weapon: clicking (or holding, if automatic) fires it. */
+  weapon?: WeaponDef;
+}
+
+/**
+ * A weapon (A1). Bullets hit at once along the view; projectiles fly (rockets straight, grenades in an arc);
+ * melee hits what is within reach. A blast hurts and pushes everything around where it lands, the player
+ * included, less with distance and not through walls.
+ */
+export interface WeaponDef {
+  kind: 'bullet' | 'projectile' | 'melee';
+  /** Damage of each hit (each pellet, for a shotgun), or at the middle of a blast. */
+  damage: number;
+  /** Shots a second at most. */
+  rate: number;
+  /** Keeps firing while the button is held. */
+  automatic: boolean;
+  /** How far bullets and swings reach (units). */
+  range: number;
+  /** How far shots stray from the crosshair (degrees). */
+  spread: number;
+  /** Bullets per shot (6 or more for a shotgun). */
+  pellets: number;
+  /** The item each shot uses up ('' for none: a crowbar). */
+  ammo: string;
+  /** Projectiles: how fast they fly (units a second), and whether they fall (grenades). */
+  speed: number;
+  arc: boolean;
+  /** Blast radius where it hits (0: no blast). */
+  blast: number;
+  /** How hard hits push physics objects. */
+  push: number;
+  /** A project sound played on each shot ('' for none). */
+  sound: string;
+}
+
+/** Ready-made weapons, Half-Life's numbers. */
+export const WEAPON_PRESETS: Record<string, WeaponDef> = {
+  crowbar: { kind: 'melee', damage: 10, rate: 2.5, automatic: true, range: 64, spread: 0, pellets: 1, ammo: '', speed: 0, arc: false, blast: 0, push: 200, sound: '' },
+  pistol: { kind: 'bullet', damage: 8, rate: 4, automatic: false, range: 8192, spread: 1, pellets: 1, ammo: '9mm', speed: 0, arc: false, blast: 0, push: 150, sound: '' },
+  smg: { kind: 'bullet', damage: 5, rate: 10, automatic: true, range: 8192, spread: 3, pellets: 1, ammo: '9mm', speed: 0, arc: false, blast: 0, push: 100, sound: '' },
+  shotgun: { kind: 'bullet', damage: 5, rate: 1.3, automatic: false, range: 2048, spread: 5, pellets: 6, ammo: 'Shells', speed: 0, arc: false, blast: 0, push: 120, sound: '' },
+  rocket: { kind: 'projectile', damage: 100, rate: 0.6, automatic: false, range: 0, spread: 0, pellets: 1, ammo: 'Rockets', speed: 1000, arc: false, blast: 160, push: 900, sound: '' },
+  grenade: { kind: 'projectile', damage: 100, rate: 1, automatic: false, range: 0, spread: 0, pellets: 1, ammo: 'Grenades', speed: 500, arc: true, blast: 160, push: 700, sound: '' },
+};
+
+export const newWeapon = (preset = 'pistol'): WeaponDef => ({ ...(WEAPON_PRESETS[preset] ?? WEAPON_PRESETS.pistol!) });
+
+/** A weapon with every field present (older or hand-edited data). */
+export function weaponOf(w: Partial<WeaponDef> | undefined): WeaponDef | null {
+  if (!w) return null;
+  const d = WEAPON_PRESETS.pistol!;
+  const num = (v: unknown, def: number, min = 0) => (typeof v === 'number' && Number.isFinite(v) ? Math.max(min, v) : def);
+  return {
+    kind: w.kind === 'projectile' || w.kind === 'melee' ? w.kind : 'bullet',
+    damage: num(w.damage, d.damage),
+    rate: num(w.rate, d.rate, 0.05),
+    automatic: !!w.automatic,
+    range: num(w.range, d.range, 1),
+    spread: num(w.spread, 0),
+    pellets: Math.max(1, Math.round(num(w.pellets, 1, 1))),
+    ammo: typeof w.ammo === 'string' ? w.ammo : '',
+    speed: num(w.speed, 1000, 1),
+    arc: !!w.arc,
+    blast: num(w.blast, 0),
+    push: num(w.push, 0),
+    sound: typeof w.sound === 'string' ? w.sound : '',
+  };
 }
 
 export interface UiSettings {
@@ -219,6 +287,7 @@ export function validateUi(ui: unknown): string | null {
     const i = it as Partial<ItemDef>;
     if (typeof i?.name !== 'string' || !i.name.trim()) return 'Each item needs a name.';
     if (names.has(i.name)) return `Two items are called ${i.name}.`;
+    if (i.weapon !== undefined && (typeof i.weapon !== 'object' || i.weapon === null)) return `The weapon settings of ${i.name} are not valid.`;
     names.add(i.name);
   }
   return null;

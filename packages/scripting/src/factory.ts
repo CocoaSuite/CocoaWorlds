@@ -22,6 +22,7 @@ export function newEvent(kind: EventKind, zone: Ref = self): EventBlock {
     case 'use':
     case 'die':
     case 'breaks':
+    case 'hit':
       return { id: id(), kind };
     case 'enter':
     case 'leave':

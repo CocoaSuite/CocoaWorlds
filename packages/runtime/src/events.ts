@@ -22,7 +22,11 @@ export type GameEvent =
   | { type: 'sound.stop'; source: string; time: number }
   /** Play an animation of an object's model (the game world has no models; whoever draws them plays it). */
   | { type: 'anim'; target: string; name: string; loop: boolean; time: number }
-  | { type: 'message'; name: string; from: string | null; time: number; data?: unknown };
+  | { type: 'message'; name: string; from: string | null; time: number; data?: unknown }
+  /** Weapons (A1): a bullet's line or a swing, where it hit, and blasts. */
+  | { type: 'shot'; from: [number, number, number]; to: [number, number, number]; by: string; weapon: string; time: number }
+  | { type: 'impact'; at: [number, number, number]; normal: [number, number, number]; target: string | null; melee: boolean; time: number }
+  | { type: 'explosion'; at: [number, number, number]; radius: number; time: number };
 
 export type EventType = GameEvent['type'];
 type Of<T extends EventType> = Extract<GameEvent, { type: T }>;

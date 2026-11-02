@@ -117,6 +117,7 @@ export type CompiledEvent =
   | { kind: 'use'; prompt: string }
   | { kind: 'die' }
   | { kind: 'breaks' }
+  | { kind: 'hit' }
   | { kind: 'every'; seconds: number }
   | { kind: 'uiClick'; element: string }
   | { kind: 'useItem'; item: string }
@@ -221,6 +222,7 @@ class HandlerCompiler {
     if (ev.kind === 'start') event = { kind: 'start' };
     else if (ev.kind === 'use') event = { kind: 'use', prompt: (ev.prompt ?? '').trim() };
     else if (ev.kind === 'breaks') event = { kind: 'breaks' };
+    else if (ev.kind === 'hit') event = { kind: 'hit' };
     else if (ev.kind === 'die') {
       event = { kind: 'die' };
       this.ruleOff('health', ev.id);
