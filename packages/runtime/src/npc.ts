@@ -77,6 +77,8 @@ export class Npc {
   private nextStumble = 0;
   /** Its own beat for weaving, so a flock doesn't weave in step. */
   private phase: number;
+  /** Whether it has been lifted clear of whatever it was placed inside (done on its first step). */
+  private placed = false;
 
   constructor(
     private w: NpcWorld,
@@ -162,7 +164,26 @@ export class Npc {
     return () => !this.goal || !this.alive;
   }
 
+  /**
+   * Placed inside a floor (or anything else), it rises until it fits, as the player does, so a creature put at
+   * height 0 on a raised floor stands on it instead of being stuck in it up to its middle.
+   */
+  private standClear(): void {
+    this.placed = true;
+    const shape = new RAPIER.Capsule(this.height / 2 - this.radius, this.radius);
+    let y = this.feet.y;
+    for (let i = 0; i < 64; i++, y += 4) {
+      const hit = this.w.world.intersectionWithShape({ x: this.feet.x, y: y + this.height / 2, z: this.feet.z }, { x: 0, y: 0, z: 0, w: 1 }, shape, RAPIER.QueryFilterFlags.EXCLUDE_SENSORS, undefined, this.collider, undefined, (c) => !this.w.passes(c));
+      if (!hit) break;
+    }
+    if (y === this.feet.y) return;
+    this.feet.y = y;
+    this.home.y = y;
+    this.body.setTranslation({ x: this.feet.x, y: y + this.height / 2, z: this.feet.z }, true);
+  }
+
   step(dt: number): void {
+    if (!this.placed) this.standClear();
     if (!this.alive) {
       this.fall(dt, 0, 0);
       return;

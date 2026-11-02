@@ -240,6 +240,16 @@ describe('creatures', () => {
   });
 });
 
+it('a creature placed inside a raised floor stands on top of it', () => {
+  const raised = brush('raised', [-512, 0, -512], [512, 32, 0]);
+  const hen = npc('hen', [0, 0, -300], { side: 'neutral', height: 56, radius: 14 });
+  const w = GameWorld.create(scene(floor(), raised, spawn([0, 0, 200]), hen));
+  run(w, 1);
+  expect(state(w, hen.id).feet[1]).toBeGreaterThan(31);
+  expect(state(w, hen.id).feet[1]).toBeLessThan(40);
+  w.dispose();
+});
+
 describe('animation names', () => {
   it('roles map to the names listed; missing ones fall back', async () => {
     const { npcAnimation } = await import('../src');
