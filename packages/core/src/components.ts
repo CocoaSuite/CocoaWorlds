@@ -543,6 +543,23 @@ export const COMPONENTS: ComponentDef[] = [
     fields: [{ key: 'speed', label: e('Climb speed', 'Скорость'), type: { kind: 'number', min: 10, step: 10, unit: 'u/s' }, default: 200 }],
   },
   {
+    name: 'scatter',
+    label: e('Foliage', 'Растительность'),
+    description: e(
+      'Scatters grass tufts over this brush’s upward-facing surfaces. Purely visual: nothing collides with them. The same seed always gives the same pattern; the tufts are made when the scene is shown or played.',
+      'Разбрасывает пучки травы по верхним поверхностям этого браша. Только для вида: с ними ничего не сталкивается. Один и тот же seed всегда даёт один и тот же рисунок; пучки делаются при показе и игре.',
+    ),
+    appliesTo: 'brush',
+    fields: [
+      { key: 'spacing', label: e('Spacing', 'Шаг'), hint: e('About how far apart the tufts are.', 'Примерно расстояние между пучками.'), type: { kind: 'number', min: 4, step: 2, unit: 'u' }, default: 12 },
+      { key: 'density', label: e('Density', 'Густота'), hint: e('How many spots get a tuft (1 = all).', 'Сколько мест получают пучок (1 = все).'), type: { kind: 'number', min: 0, max: 1, step: 0.05 }, default: 0.6 },
+      { key: 'size', label: e('Size', 'Размер'), type: { kind: 'number', min: 2, step: 2, unit: 'u' }, default: 24 },
+      { key: 'slope', label: e('Steepest', 'Круче'), hint: e('The steepest slope that grows tufts, in degrees.', 'Самый крутой склон, на котором растут пучки, в градусах.'), type: { kind: 'number', min: 0, max: 90, step: 5, unit: '°' }, default: 40 },
+      { key: 'colour', label: e('Colour', 'Цвет'), type: { kind: 'color' }, default: '#4f9a3c' },
+      { key: 'seed', label: e('Seed', 'Seed'), hint: e('Change it for a different pattern.', 'Измените для другого рисунка.'), type: { kind: 'number', min: 0, step: 1 }, default: 1 },
+    ],
+  },
+  {
     name: 'water',
     label: e('Water', 'Вода'),
     description: e(
@@ -619,6 +636,16 @@ export interface ColliderData {
 export interface TriggerData {
   detects: 'player' | 'physics' | 'anything';
   once: boolean;
+  [k: string]: unknown;
+}
+
+export interface ScatterData {
+  spacing: number;
+  density: number;
+  size: number;
+  slope: number;
+  colour: string;
+  seed: number;
   [k: string]: unknown;
 }
 

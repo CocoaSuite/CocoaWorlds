@@ -30,7 +30,7 @@ From here the order follows the benchmark: [BENCHMARK.md](BENCHMARK.md) — can 
 | CM3 ✅ | Cocoa Materials: node-graph materials baked on the GPU, triplanar mapping, variants, wear from mesh edges ([proposal](docs/proposals/cocoa-materials.md)) | Every target looks its best | 7 |
 | R1 ✅ | Procedural objects: Repeat with caps (ladders, pipes, railings) | Half-Life, Roblox builds | 7 |
 | A2a ✅ | Navigation: where creatures can walk, measured from the level; paths round walls, through doors and between floors; shown in the editor | Half-Life NPCs, Slime Rancher creatures | 7, 10 |
-| A2b | Scattering foliage (grass, flowers, rocks) over surfaces | Slime Rancher, outdoor maps | 7 |
+| A2b ✅ | Scattering foliage: grass tufts over a brush’s upward-facing surfaces (Foliage component: spacing, density, size, slope, colour, seed); drawn in the editor and in Play | Slime Rancher, outdoor maps | 7 |
 | A2c | Many-objects performance: instancing and culling for thousands of copies | Slime Rancher, Roblox builds | 7 |
 | T1 | Voxel terrain with heightmap import: sculpt, dig and paint | Slime Rancher, outdoor maps | 7 |
 | M1 | Hosting and joining games (single-player until then) | Roblox-style online play | after 9 |

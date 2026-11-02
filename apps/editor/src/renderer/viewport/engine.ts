@@ -25,6 +25,7 @@ import { GAME_KEYS, inputFromKeys, isScriptKey, lookFromMouse } from '../game/co
 import { hudOf, type Hud } from '../ui/Hud';
 import { loadProgress, storeProgress } from '../game/progress';
 import { SceneLighting } from './scene-lighting';
+import { FoliageRenderer } from './foliage';
 
 
 export type { Hud } from '../ui/Hud';
@@ -239,6 +240,7 @@ export class ViewportEngine {
     this.pivotMarker.renderOrder = 21;
     this.pivotMarker.visible = false;
     this.scene.add(this.pivotMarker);
+    this.scene.add(this.foliage.group);
     this.repeatHandle.renderOrder = 21;
     this.repeatHandle.visible = false;
     this.repeatHandle.name = 'repeat-handle';
@@ -328,6 +330,7 @@ export class ViewportEngine {
   syncAll(): void {
     // What is shown: the scene with Repeat groups built out (their copies are drawn, never saved).
     const doc = this.doc ? this.shownDoc(this.doc) : null;
+    this.foliage.sync(doc);
     if (this.navOn) this.queueNav();
     this.mats = doc ? worldMatrices(doc) : new Map();
     const seen = new Set<string>();
@@ -775,6 +778,8 @@ export class ViewportEngine {
   private navOn = false;
   private navTimer: ReturnType<typeof setTimeout> | null = null;
   private navDraw: THREE.Group | null = null;
+  /** Grass tufts (Foliage component). */
+  private foliage = new FoliageRenderer();
 
   /** View › Navigation: draw where creatures can walk (worked out again a moment after each change). */
   setNavVisible(on: boolean): void {
@@ -898,6 +903,7 @@ export class ViewportEngine {
 
   dispose(): void {
     this.disposed = true;
+    this.foliage.dispose();
     cancelAnimationFrame(this.raf);
     this.resizeObs.disconnect();
     this.unbindInput();

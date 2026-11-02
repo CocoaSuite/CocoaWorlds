@@ -22,10 +22,10 @@ describe('component registry', () => {
   it('offers only what fits: brushes vs point objects, conflicts, no duplicates, no internal ones', () => {
     const brush = { brush: {} };
     const names = (c: Record<string, unknown>, isBrush: boolean) => addableComponents(c, isBrush).map((x) => x.name).sort();
-    expect(names(brush, true)).toEqual(['breakable', 'charger', 'conveyor', 'ladder', 'levelChange', 'rigidBody', 'script', 'sound', 'train', 'trigger', 'water']);
-    expect(names({ ...brush, trigger: {} }, true)).toEqual(['breakable', 'charger', 'script', 'sound']);
-    expect(names({ ...brush, rigidBody: {} }, true)).toEqual(['breakable', 'charger', 'script', 'sound']);
-    expect(names({ ...brush, water: {} }, true)).toEqual(['breakable', 'charger', 'script', 'sound']);
+    expect(names(brush, true)).toEqual(['breakable', 'charger', 'conveyor', 'ladder', 'levelChange', 'rigidBody', 'scatter', 'script', 'sound', 'train', 'trigger', 'water']);
+    expect(names({ ...brush, trigger: {} }, true)).toEqual(['breakable', 'charger', 'scatter', 'script', 'sound']);
+    expect(names({ ...brush, rigidBody: {} }, true)).toEqual(['breakable', 'charger', 'scatter', 'script', 'sound']);
+    expect(names({ ...brush, water: {} }, true)).toEqual(['breakable', 'charger', 'scatter', 'script', 'sound']);
     expect(names({}, false)).toEqual(['breakable', 'charger', 'collider', 'landmark', 'light', 'model', 'npc', 'particles', 'pathPoint', 'playerSpawn', 'repeat', 'rigidBody', 'script', 'sign', 'sound', 'train']);
     expect(names({ light: {} }, false)).toEqual(['breakable', 'charger', 'collider', 'landmark', 'model', 'npc', 'particles', 'pathPoint', 'playerSpawn', 'repeat', 'rigidBody', 'script', 'sign', 'sound', 'train']);
     expect(componentDef('group')?.internal).toBe(true);

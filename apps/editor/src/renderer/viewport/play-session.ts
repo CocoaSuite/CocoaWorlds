@@ -11,6 +11,7 @@ import { GameWorld, initPhysics, type NavGrid, type BodyInfo, type ModelMesh, ty
 import type { Problem, ScriptError } from '@cocoaworlds/scripting';
 import * as THREE from 'three';
 import { brushBounds, worldBrushes } from '../brush/brushes';
+import { FoliageRenderer } from './foliage';
 import { WEAR_RING, buildLevel } from './world-build';
 import { toGeometry } from './world-render';
 import { buildSign, type SignObject } from './sign';
@@ -42,6 +43,7 @@ export interface PlayFrame {
 export class PlaySession {
   readonly group = new THREE.Group();
   private world: GameWorld;
+  private foliage = new FoliageRenderer();
   /** Where the game's creatures can walk. */
   navigation(): NavGrid | null {
     return this.world.navigation();
@@ -93,6 +95,9 @@ export class PlaySession {
       for (const mat of levelMesh.material as THREE.Material[]) mat.shadowSide = THREE.DoubleSide;
       this.group.add(levelMesh);
     }
+    // Grass tufts (Foliage): placed from the same scene, seen but never touched.
+    this.foliage.sync(doc);
+    this.group.add(this.foliage.group);
     // Water, drawn with its own materials (it hides nothing behind it, and casts no shadow).
     for (const b of worldBrushes(doc)) {
       if (b.role !== 'water') continue;
@@ -594,6 +599,7 @@ export class PlaySession {
   dispose(): void {
     this.disposed = true;
     this.effects.dispose();
+    this.foliage.dispose();
     for (const m of this.models.values()) m.dispose();
     for (const s of [...this.sounds]) {
       if (s.audio.isPlaying) s.audio.stop();

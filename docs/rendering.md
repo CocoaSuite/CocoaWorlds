@@ -97,3 +97,13 @@ model's coordinates (triplanar) comes with CM2.
 
 Images can be used on faces directly, or through a project material that adds a colour, bumps, shine, metal,
 see-through, glow and scrolling. See [materials.md](materials.md).
+
+## Foliage (A2b)
+
+A **Foliage** component on a brush scatters grass tufts over its upward-facing surfaces (faces whose normals
+point within the **Steepest** slope of straight up). **Spacing** is about how far apart the tufts are, and
+**Density** the share of spots that get one. **Size** varies each tuft by ±25%. The same **Seed** always gives the
+same pattern, and no two tufts share a cell of the spacing, so a patch looks even. Each tuft is three crossed
+quads drawn as one instanced mesh per brush, with a darker root; only the component is saved. The placement is
+in `@cocoaworlds/geometry` (`scatterTufts`); the drawing in `viewport/foliage.ts`, shared by the editor and Play.
+
