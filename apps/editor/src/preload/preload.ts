@@ -29,6 +29,7 @@ const api: CocoaApi = {
     listAssets: (dir) => ipcRenderer.invoke(IPC.listAssets, dir),
     writeAsset: (dir, kind, name, bytes) => ipcRenderer.invoke(IPC.writeAsset, dir, kind, name, bytes),
     readAsset: (dir, path) => ipcRenderer.invoke(IPC.readAsset, dir, path),
+    addSample: (dir, name) => ipcRenderer.invoke(IPC.addSample, dir, name),
   },
   game: {
     export: (dir, target) => ipcRenderer.invoke(IPC.exportGame, dir, target),

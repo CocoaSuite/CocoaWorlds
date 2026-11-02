@@ -109,7 +109,7 @@ export type Op =
 export type GameAction = 'hurt' | 'heal' | 'addScore' | 'giveArmour';
 export type GameValue = 'health' | 'score' | 'armour';
 
-export type ActionName = 'move' | 'turn' | 'turnTo' | 'return' | 'show' | 'hide' | 'turnOn' | 'turnOff' | 'startTrain' | 'stopTrain' | 'walkTo' | 'freeze' | 'unfreeze' | 'viewFrom' | 'remove' | 'scale' | 'physical' | 'push' | 'moveTo' | 'teleport' | 'damage';
+export type ActionName = 'move' | 'turn' | 'turnTo' | 'return' | 'show' | 'hide' | 'turnOn' | 'turnOff' | 'startTrain' | 'stopTrain' | 'walkTo' | 'setSide' | 'freeze' | 'unfreeze' | 'viewFrom' | 'remove' | 'scale' | 'physical' | 'push' | 'moveTo' | 'teleport' | 'damage';
 
 export type CompiledEvent =
   | { kind: 'start' }
@@ -591,6 +591,11 @@ class HandlerCompiler {
         this.expect(s.seconds, 'number', 'The time must be a number of seconds.');
         this.emit({ op: 'act', name: 'viewFrom', argc: 1 });
         this.waits = true;
+        break;
+      case 'setSide':
+        this.actTarget(s.target, s.id);
+        this.emit({ op: 'push', v: s.side });
+        this.emit({ op: 'act', name: 'setSide', argc: 1 });
         break;
       case 'walkTo':
         this.actTarget(s.target, s.id);

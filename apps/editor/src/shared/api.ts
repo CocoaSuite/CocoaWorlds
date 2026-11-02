@@ -69,6 +69,8 @@ export interface CocoaApi {
     /** Copy a file the user picked into the project's assets. */
     writeAsset(dir: string, kind: AssetKind, name: string, bytes: Uint8Array): Promise<Result<AssetEntry>>;
     readAsset(dir: string, path: string): Promise<Result<Uint8Array>>;
+    /** Put a ready-made asset the editor ships with (“chicken”) into the project's assets, once. */
+    addSample(dir: string, name: string): Promise<Result<AssetEntry>>;
   };
   game: {
     /**
@@ -109,6 +111,7 @@ export const IPC = {
   listAssets: 'assets:list',
   writeAsset: 'assets:write',
   readAsset: 'assets:read',
+  addSample: 'assets:addSample',
   exportGame: 'game:export',
   exportProgress: 'game:exportProgress',
   revealGame: 'game:reveal',

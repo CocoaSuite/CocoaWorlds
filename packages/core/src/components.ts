@@ -328,9 +328,35 @@ export const COMPONENTS: ComponentDef[] = [
       { key: 'reach', label: e('Reach', 'Дотягивается'), type: { kind: 'number', min: 16, step: 8, unit: 'u' }, default: 64, when: { key: 'attack', is: ['melee'] } },
       { key: 'spread', label: e('Aim spread', 'Разброс'), hint: e('Degrees: higher misses more.', 'В градусах: больше — чаще промахивается.'), type: { kind: 'number', min: 0, step: 1, unit: '°' }, default: 4, when: { key: 'attack', is: ['shoot'] } },
       {
+        key: 'wander',
+        label: e('Wanders about', 'Бродит'),
+        hint: e('Pottering near where it started, stopping to peck or sniff (its busy animation).', 'Ходит около места, где стоял, останавливаясь клевать или нюхать (анимация «занят»).'),
+        type: { kind: 'boolean' },
+        default: false,
+      },
+      {
+        key: 'flee',
+        label: e('Runs away', 'Убегает'),
+        type: {
+          kind: 'enum',
+          options: [
+            { value: 'never', label: e('Never', 'Никогда') },
+            { value: 'hurt', label: e('When hurt', 'Когда ранен') },
+            { value: 'near', label: e('When the player comes near', 'Когда игрок рядом') },
+          ],
+        },
+        default: 'never',
+      },
+      { key: 'clumsy', label: e('Clumsy', 'Неуклюжий'), hint: e('Weaves as it goes and stumbles now and then.', 'Петляет на ходу и иногда спотыкается.'), type: { kind: 'boolean' }, default: false },
+      { key: 'height', label: e('Height', 'Рост'), type: { kind: 'number', min: 8, step: 4, unit: 'u' }, default: 72 },
+      { key: 'radius', label: e('Thickness', 'Толщина'), hint: e('Half its width (for bumping into things).', 'Половина ширины (для столкновений).'), type: { kind: 'number', min: 2, step: 2, unit: 'u' }, default: 16 },
+      {
         key: 'anims',
         label: e('Animations', 'Анимации'),
-        hint: e('Names in its model for standing, walking, attacking and dying, separated by commas.', 'Имена анимаций модели: стоит, идёт, атакует, погибает — через запятую.'),
+        hint: e(
+          'Names in its model for standing, walking, attacking, dying, running, being busy and being hurt, separated by commas. Leave out what it hasn’t got.',
+          'Имена анимаций модели: стоит, идёт, атакует, погибает, бежит, занят, ранен — через запятую. Чего нет, не пишите.',
+        ),
         type: { kind: 'text' },
         default: 'idle, walk, attack, die',
       },
@@ -619,5 +645,10 @@ export interface NpcData {
   reach: number;
   spread: number;
   anims: string;
+  wander: boolean;
+  flee: 'never' | 'hurt' | 'near';
+  clumsy: boolean;
+  height: number;
+  radius: number;
   [k: string]: unknown;
 }

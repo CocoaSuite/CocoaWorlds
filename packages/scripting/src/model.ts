@@ -102,6 +102,8 @@ export type Statement =
   | { id: string; kind: 'freezePlayer' }
   | { id: string; kind: 'unfreezePlayer' }
   | { id: string; kind: 'viewFrom'; target: Ref; seconds: Expr }
+  /** Make a creature an enemy, a friend or neutral (a guard turning on the player who took an egg). */
+  | { id: string; kind: 'setSide'; target: Ref; side: 'hostile' | 'friendly' | 'neutral' }
   /** Walk a creature to a place (a scripted scene); the stack waits until it gets there. */
   | { id: string; kind: 'walkTo'; target: Ref; to: Place }
   /** Put the player at a place (facing the way that object faces). */

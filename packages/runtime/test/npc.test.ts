@@ -174,4 +174,80 @@ describe('creatures', () => {
     expect(w.playerView()!.eye[0]).toBeCloseTo(w.player!.feetPosition.x, 0);
     w.dispose();
   });
+
+  it('the chicken: wanders near home pecking the ground, runs off when hurt, stumbles now and then', () => {
+    const chicken = npc('chicken', [0, 0, -300], {
+      side: 'friendly', attack: 'none', health: 20, speed: 110, wander: true, flee: 'hurt', clumsy: true, height: 56, radius: 14,
+      anims: 'idle, walk, peck, die, run, peck, flap',
+    });
+    const w = GameWorld.create(scene(floor(), spawn(), chicken));
+    const anims: string[] = [];
+    w.bus.on('anim', (e) => void anims.push(e.name));
+    // Wandering: it moves about, pecks, and never strays far from home.
+    let far = 0, moved = 0;
+    let last = state(w, chicken.id).feet;
+    for (let i = 0; i < 20 * 60; i++) {
+      w.step(1 / 60);
+      const f = state(w, chicken.id).feet;
+      moved += Math.hypot(f[0] - last[0], f[2] - last[2]);
+      last = f;
+      far = Math.max(far, Math.hypot(f[0], f[2] + 300));
+    }
+    expect(moved).toBeGreaterThan(150);
+    expect(far).toBeLessThan(260);
+    expect(anims).toContain('peck');
+    expect(anims).toContain('walk');
+    // Clumsy: it stumbled (flapped) without being hurt.
+    expect(anims).toContain('flap');
+    // Hurt: away from the player, running.
+    const before = Math.hypot(...([0, 2].map((k) => state(w, chicken.id).feet[k]! - [w.player!.feetPosition.x, 0, w.player!.feetPosition.z][k]!) as [number, number]));
+    (w as unknown as { weaponDamage(t: string, a: number, b: string, c: string): void }).weaponDamage(chicken.id, 5, 'player', 'a kick');
+    run(w, 0.5);
+    expect(state(w, chicken.id).state).toBe('flee');
+    expect(anims.slice(-3)).toContain('run');
+    run(w, 1.5);
+    const after = Math.hypot(...([0, 2].map((k) => state(w, chicken.id).feet[k]! - [w.player!.feetPosition.x, 0, w.player!.feetPosition.z][k]!) as [number, number]));
+    expect(after).toBeGreaterThan(before + 100);
+    w.dispose();
+  });
+
+  it('its size comes from the component', () => {
+    const small = npc('small', [0, 0, -300], { side: 'neutral', height: 40, radius: 10 });
+    const w = GameWorld.create(scene(floor(), spawn(), small));
+    const n = (w as unknown as { npcs: Map<string, { height: number; radius: number; eye(): { y: number } }> }).npcs.get(small.id)!;
+    expect([n.height, n.radius]).toEqual([40, 10]);
+    // (Eyes 8 below the top; it stands 1 above where it was placed until it settles.)
+    expect(n.eye().y).toBeCloseTo(33, 0);
+    w.dispose();
+  });
+
+  it('a script can make a friend an enemy (a nest missing its egg)', () => {
+    const hen = npc('hen', [0, 0, -300], { side: 'friendly', attack: 'melee', damage: 5 });
+    hen.components.script = {
+      version: 1,
+      variables: [],
+      handlers: [{ id: 'h', event: { id: 'e', kind: 'message', message: 'egg taken' }, body: [{ id: 's', kind: 'setSide', target: { self: true }, side: 'hostile' }] }],
+    } satisfies Script as never;
+    const w = GameWorld.create(scene(floor(), spawn(), hen));
+    expect(w.scriptProblems).toEqual([]);
+    run(w, 1);
+    expect(state(w, hen.id).state).toBe('idle');
+    (w as unknown as { runner: { dispatch(e: unknown): void } }).runner.dispatch({ type: 'message', message: 'egg taken', to: null, from: null });
+    run(w, 4);
+    expect(['chase', 'attack']).toContain(state(w, hen.id).state);
+    expect(w.playerStatus()!.health).toBeLessThan(100);
+    w.dispose();
+  });
+});
+
+describe('animation names', () => {
+  it('roles map to the names listed; missing ones fall back', async () => {
+    const { npcAnimation } = await import('../src');
+    const list = 'idle, walk, peck, die';
+    expect(npcAnimation(list, 'attack')).toBe('peck');
+    expect(npcAnimation(list, 'run')).toBe('walk');
+    expect(npcAnimation(list, 'busy')).toBe('idle');
+    expect(npcAnimation(list, 'hurt')).toBe('');
+    expect(npcAnimation('idle, walk, peck, die, run, peck, flap', 'hurt')).toBe('flap');
+  });
 });

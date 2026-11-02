@@ -67,6 +67,27 @@ export async function writeAsset(dir: string, kind: unknown, name: unknown, byte
   return { path: `${sub}/${file}`, name: path.basename(file, e), bytes: bytes.byteLength };
 }
 
+/** Ready-made assets the editor ships with (Add › Chicken), by name: where they come from and where they go. */
+const SAMPLES: Record<string, { file: string; kind: AssetKind }> = { chicken: { file: 'chicken.glb', kind: 'models' } };
+
+/**
+ * Put a ready-made asset into the project (once: if it's there already, that one is used). `samplesDir` is the
+ * folder the editor's samples ship in.
+ */
+export async function addSample(dir: string, samplesDir: string, name: unknown): Promise<AssetEntry> {
+  const s = typeof name === 'string' ? SAMPLES[name] : undefined;
+  if (!s) throw new ProjectError('There is no ready-made asset by that name.');
+  const { dir: sub } = ASSET_KINDS[s.kind];
+  const rel = `${sub}/${s.file}`;
+  const to = resolveInside(dir, rel);
+  if (!(await exists(to))) {
+    await fs.mkdir(path.dirname(to), { recursive: true });
+    await fs.copyFile(path.join(samplesDir, s.file), to);
+  }
+  const st = await fs.stat(to);
+  return { path: rel, name: path.basename(s.file, path.extname(s.file)), bytes: st.size };
+}
+
 /** The bytes of an asset (only files inside the project's assets folder). */
 export async function readAsset(dir: string, rel: unknown): Promise<Uint8Array> {
   if (typeof rel !== 'string' || !rel.startsWith('assets/')) throw new ProjectError('Only files in the assets folder can be read.');

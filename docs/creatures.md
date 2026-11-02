@@ -12,23 +12,53 @@ own; it faces −Z.
 | A friend | Stands about. When the player uses it (E), it follows them, keeping 80–160 u away. Used again, it stays. |
 | Neutral | Stands about until hurt, then fights back like an enemy. |
 
+More settings:
+
+- **Wanders about**: it potters near where it started. It walks a little way, stops and plays its busy
+  animation (pecking, sniffing) once to three times, then goes on.
+- **Runs away**: **when hurt** it runs from the player for 3 seconds (then an enemy comes back for more);
+  **when the player comes near**, it keeps away from them (shy animals).
+- **Clumsy**: it weaves as it goes and stumbles now and then, nearly stopping and playing its hurt animation.
+- **Height** and **Thickness**: the size of the capsule it bumps into things with (72 × 16 is a person).
+
 **Attacks** can be **Up close** (within **Reach**, **Damage** at **Attacks a second**), **Shooting** (it stops
 where it can see the player and fires bullets with an **Aim spread**), or **Never**.
 
-Shots, swings and blasts take its **Health**. At 0 it dies: a plain figure falls over, a model plays its dying
-animation, and shots go through. **Animations** names the model's animations for standing, walking, attacking
-and dying, separated by commas (the default is `idle, walk, attack, die`). Animations it doesn't have are
-skipped.
+Shots, swings and blasts take its **Health**; a hit that doesn't kill plays its hurt animation. At 0 it dies: a plain figure falls over, a model plays its dying
+animation, and shots go through. **Animations** names the model's animations for standing, walking, attacking,
+dying, running, being busy and being hurt, separated by commas (the default is `idle, walk, attack, die`).
+Missing ones are skipped: running falls back to walking, and busy to standing. Animations blend into each
+other over 0.15 s.
 
 Blocks for creatures:
 
 - **When this is hit** runs when it is shot, struck or blasted. **When this creature dies** runs when it dies.
 - **Damage** works on creatures as on breakable objects.
+- **Make a creature an enemy, a friend or neutral** (Objects) changes its side while playing: a nest's
+  guard turns on the player who took an egg. A new enemy that can see the player comes for them at once.
 - **Walk a creature to a place** (Objects) walks it to an object, the player, or where the player looks. The
   stack waits until it gets there; meanwhile it does nothing else.
 
 Creatures go straight towards where they're heading, sliding along walls and climbing steps. Finding a way
 round obstacles comes with navigation meshes (A2).
+
+## The chicken
+
+**Add › Chicken (enemy)** and **Add › Chicken (friend)** give a ready-made creature to start from: a rigged
+chicken model (copied into the project's models the first time) at half size, with clumsy animations (`idle`,
+`walk`, `run`, `peck`, `flap`, `die`) and these settings:
+
+| | Enemy | Friend |
+|---|---|---|
+| Is | An enemy | A friend (follows when you press E) |
+| Attacks | Up close: pecks for 4, 1.2 a second | Never |
+| Wanders about, pecking the ground | yes | yes |
+| Runs away | when hurt | when hurt |
+| Clumsy | yes | yes |
+| Health, speed, size | 20, 110 u/s, 56 × 14 | the same |
+
+They are ordinary Creature and Model components, so every setting can be changed. How the chicken was rigged
+and animated, and how to redo it, is in `tools/chicken/README.md`.
 
 ## Scripted scenes
 

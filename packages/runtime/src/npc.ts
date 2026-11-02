@@ -6,6 +6,9 @@
  * - Friends follow the player once used (E), keeping a little way off; used again, they stay.
  * - Neutral ones stand about until hurt, then fight back.
  *
+ * Any of them can also wander about (stopping to peck or sniff at the ground), run away (when hurt, or when
+ * the player comes near) and be clumsy (stumbling now and then, weaving as it goes): the chicken is all three.
+ *
  * Scripts can walk any of them to a place (a scripted scene); while walking, a creature does nothing else.
  * They go straight towards where they're heading, sliding along walls and climbing steps; finding a way round
  * obstacles (navigation meshes) comes in A2.
@@ -17,7 +20,11 @@ type V = { x: number; y: number; z: number };
 
 export const NPC_SIZE = { radius: 16, height: 72, eye: 64 };
 
-export type NpcState = 'idle' | 'chase' | 'attack' | 'walk' | 'follow' | 'dead';
+export type NpcState = 'idle' | 'wander' | 'busy' | 'flee' | 'chase' | 'attack' | 'walk' | 'follow' | 'dead';
+
+/** What an animation is for; the Creature component names the model's animation for each. */
+export type AnimRole = 'idle' | 'walk' | 'attack' | 'die' | 'run' | 'busy' | 'hurt';
+export const ANIM_ROLES: AnimRole[] = ['idle', 'walk', 'attack', 'die', 'run', 'busy', 'hurt'];
 
 /** What a creature can ask the world. */
 export interface NpcWorld {
@@ -32,8 +39,10 @@ export interface NpcWorld {
   hurtPlayer(amount: number, by: string): void;
   /** Fire a shot from `from` along `dir`. */
   shoot(from: V, dir: V, npc: Npc): void;
-  /** Play one of the creature's animations (by role: idle, walk, attack, die). */
-  animate(npc: Npc, role: 'idle' | 'walk' | 'attack' | 'die', loop: boolean): void;
+  /** Play one of the creature's animations (by role). */
+  animate(npc: Npc, role: AnimRole, loop: boolean): void;
+  /** 0…1 (replaceable in tests). */
+  random(): number;
 }
 
 export class Npc {
@@ -55,6 +64,19 @@ export class Npc {
   /** Where a script is walking it (null: not walking). */
   goal: V | null = null;
   private anim = '';
+  /** Its size (a capsule this tall and this thick), from the component. */
+  readonly height: number;
+  readonly radius: number;
+  /** Where it started: wandering stays near it. */
+  private home: V;
+  private wanderTo: V | null = null;
+  private nextWander = 0;
+  private busyUntil = 0;
+  private fleeUntil = 0;
+  private stumbleUntil = 0;
+  private nextStumble = 0;
+  /** Its own beat for weaving, so a flock doesn't weave in step. */
+  private phase: number;
 
   constructor(
     private w: NpcWorld,
@@ -65,10 +87,16 @@ export class Npc {
   ) {
     this.health = data.health;
     this.yaw = yaw;
+    this.height = Math.max(8, Number(data.height) || NPC_SIZE.height);
+    this.radius = Math.min(this.height / 2, Math.max(2, Number(data.radius) || NPC_SIZE.radius));
     this.feet = { ...feet, y: feet.y + 1 };
+    this.home = { ...this.feet };
+    this.phase = w.random() * 10;
+    this.nextWander = w.time() + 0.5 + w.random() * 2;
+    this.nextStumble = w.time() + 2 + w.random() * 4;
     // A fixed body moved by hand each step: the player (and other creatures) bump into it like a wall.
-    this.body = w.world.createRigidBody(RAPIER.RigidBodyDesc.fixed().setTranslation(this.feet.x, this.feet.y + NPC_SIZE.height / 2, this.feet.z));
-    this.collider = w.world.createCollider(RAPIER.ColliderDesc.capsule(NPC_SIZE.height / 2 - NPC_SIZE.radius, NPC_SIZE.radius).setFriction(0), this.body);
+    this.body = w.world.createRigidBody(RAPIER.RigidBodyDesc.fixed().setTranslation(this.feet.x, this.feet.y + this.height / 2, this.feet.z));
+    this.collider = w.world.createCollider(RAPIER.ColliderDesc.capsule(this.height / 2 - this.radius, this.radius).setFriction(0), this.body);
     this.controller = w.world.createCharacterController(0.5);
     this.controller.enableAutostep(18, 4, false);
     this.controller.enableSnapToGround(9);
@@ -85,7 +113,7 @@ export class Npc {
   }
 
   eye(): V {
-    return { x: this.feet.x, y: this.feet.y + NPC_SIZE.eye, z: this.feet.z };
+    return { x: this.feet.x, y: this.feet.y + Math.max(this.height * 0.5, this.height - 8), z: this.feet.z };
   }
 
   /** Hurt by a shot, a swing or a blast. Returns true if this killed it. */
@@ -99,12 +127,26 @@ export class Npc {
       this.seenAt = this.w.time();
       this.lastSeen = { ...p.feet };
     }
-    if (this.health > 0) return false;
+    if (this.health > 0) {
+      // Startled: a flap, and away if it's the running kind.
+      this.play('hurt', false, true);
+      if (this.data.flee === 'hurt' || this.data.flee === 'near') this.fleeUntil = this.w.time() + 3;
+      this.busyUntil = 0;
+      return false;
+    }
     this.state = 'dead';
     this.goal = null;
     this.collider.setEnabled(false);
     this.play('die', false);
     return true;
+  }
+
+  /** Change sides (a script's “Make a creature …”): a new enemy notices the player at once if it can see them. */
+  setSide(side: NpcData['side']): void {
+    this.data.side = side;
+    this.angry = false;
+    if (this.state === 'follow' && side !== 'friendly') this.state = 'idle';
+    if (side === 'hostile') this.seenAt = Math.max(this.seenAt, this.w.time() - 2.5);
   }
 
   /** Used by the player: friends start or stop following. */
@@ -130,11 +172,22 @@ export class Npc {
     let move: V | null = null;
     let face: V | null = null;
     let speed = this.data.speed;
+    let running = false;
+    // Running away when the player comes near (the shy kind).
+    if (p && this.data.flee === 'near' && this.state !== 'follow' && this.flatDistance(p.feet) < Math.min(192, this.data.sight)) this.fleeUntil = Math.max(this.fleeUntil, now + 1);
 
     if (this.goal) {
       // A scripted walk: nothing else until there.
       if (this.flatDistance(this.goal) < 3) this.goal = null;
       else move = this.goal;
+    } else if (p && now < this.fleeUntil) {
+      // Away from the player, as fast as it can.
+      this.state = 'flee';
+      const away = { x: this.feet.x - p.feet.x, z: this.feet.z - p.feet.z };
+      const len = Math.hypot(away.x, away.z) || 1;
+      move = { x: this.feet.x + (away.x / len) * 200, y: this.feet.y, z: this.feet.z + (away.z / len) * 200 };
+      speed *= 1.6;
+      running = true;
     } else if (p && this.hostile) {
       const sees = this.sees(p);
       if (sees) {
@@ -143,7 +196,7 @@ export class Npc {
       }
       const dist = this.flatDistance(p.feet);
       const melee = this.data.attack === 'melee';
-      const inReach = melee ? dist <= this.data.reach + NPC_SIZE.radius * 2 && Math.abs(p.feet.y - this.feet.y) < 64 : sees && dist <= this.data.sight;
+      const inReach = melee ? dist <= this.data.reach + this.radius + 16 && Math.abs(p.feet.y - this.feet.y) < 64 : sees && dist <= this.data.sight;
       if (this.data.attack !== 'none' && inReach && sees) {
         this.state = 'attack';
         face = p.feet;
@@ -168,24 +221,58 @@ export class Npc {
         speed *= 0.5;
       }
       face = p.feet;
+    } else if (this.state !== 'follow' && this.data.wander) {
+      // Pottering about near home: walk somewhere close, stop, peck at the ground, go on.
+      if (now < this.busyUntil) this.state = 'busy';
+      else if (this.wanderTo) {
+        this.state = 'wander';
+        if (this.flatDistance(this.wanderTo) < 6) {
+          this.wanderTo = null;
+          this.busyUntil = now + 0.7 * (1 + Math.floor(this.w.random() * 3));
+          this.nextWander = this.busyUntil + 0.3 + this.w.random() * 1.5;
+        } else {
+          move = this.wanderTo;
+          speed *= 0.5;
+        }
+      } else {
+        this.state = 'idle';
+        if (now >= this.nextWander) {
+          const a = this.w.random() * Math.PI * 2, r = 48 + this.w.random() * 144;
+          this.wanderTo = { x: this.home.x + Math.cos(a) * r, y: this.home.y, z: this.home.z + Math.sin(a) * r };
+        }
+      }
     } else if (this.state !== 'follow') this.state = 'idle';
+
+    // Clumsy: now and then it stumbles (nearly stops, flapping), and it weaves as it goes.
+    let clumsyTurn = 0;
+    if (this.data.clumsy && move) {
+      if (now >= this.nextStumble) {
+        this.stumbleUntil = now + 0.45;
+        this.nextStumble = now + 2.5 + this.w.random() * 4;
+        this.play('hurt', false, true);
+      }
+      if (now < this.stumbleUntil) speed *= 0.25;
+      clumsyTurn = 0.35 * Math.sin(now * 3.3 + this.phase) + 0.15 * Math.sin(now * 7.9 + this.phase * 2);
+    }
 
     let dx = 0, dz = 0;
     if (move) {
       const d = { x: move.x - this.feet.x, z: move.z - this.feet.z };
       const len = Math.hypot(d.x, d.z);
       if (len > 1) {
-        dx = (d.x / len) * speed;
-        dz = (d.z / len) * speed;
-        face ??= move;
+        const c = Math.cos(clumsyTurn), s = Math.sin(clumsyTurn);
+        dx = ((d.x * c - d.z * s) / len) * speed;
+        dz = ((d.x * s + d.z * c) / len) * speed;
+        face ??= { x: this.feet.x + dx, y: this.feet.y, z: this.feet.z + dz };
       }
     }
     if (face) {
       const fx = face.x - this.feet.x, fz = face.z - this.feet.z;
       if (Math.hypot(fx, fz) > 1) this.turnTowards(Math.atan2(-fx, -fz), dt);
     }
-    // (Attacking in place, the attack itself plays its animation.)
-    if (this.state !== 'attack' || dx || dz) this.play(dx || dz ? 'walk' : 'idle', true);
+    // (Attacking in place, the attack itself plays its animation; a stumble plays out.)
+    if (now >= this.stumbleUntil && (this.state !== 'attack' || dx || dz))
+      this.play(this.state === 'busy' ? 'busy' : dx || dz ? (running ? 'run' : 'walk') : 'idle', true);
     this.fall(dt, dx, dz);
   }
 
@@ -205,7 +292,7 @@ export class Npc {
     const m = this.controller.computedMovement();
     if (this.controller.computedGrounded() && this.vy < 0) this.vy = 0;
     this.feet = { x: this.feet.x + m.x, y: this.feet.y + m.y, z: this.feet.z + m.z };
-    this.body.setTranslation({ x: this.feet.x, y: this.feet.y + NPC_SIZE.height / 2, z: this.feet.z }, true);
+    this.body.setTranslation({ x: this.feet.x, y: this.feet.y + this.height / 2, z: this.feet.z }, true);
   }
 
   private attack(p: { feet: V; eye: V }): void {
@@ -243,10 +330,15 @@ export class Npc {
     return Math.hypot(to.x - this.feet.x, to.z - this.feet.z);
   }
 
-  private play(role: 'idle' | 'walk' | 'attack' | 'die', loop: boolean): void {
+  /** The animation playing now (its role), for tests and the editor. */
+  get animation(): string {
+    return this.anim.split('/')[0]!;
+  }
+
+  private play(role: AnimRole, loop: boolean, again = false): void {
     const key = `${role}/${loop}`;
-    // (Attacks restart each time; the rest only when they change.)
-    if (key === this.anim && role !== 'attack') return;
+    // (Attacks, flaps and anything asked again restart; the rest only when they change.)
+    if (key === this.anim && role !== 'attack' && !again) return;
     this.anim = key;
     this.w.animate(this, role, loop);
   }

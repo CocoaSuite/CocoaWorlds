@@ -25,6 +25,8 @@ From here the order follows the benchmark: [BENCHMARK.md](BENCHMARK.md) — can 
 | B4 ✅ | Standalone export (Windows, macOS, Linux, web) and saved progress | Games others can play and come back to | 8–9 |
 | B5 ✅ | Screen UI editor (text, images, buttons, bars, lists) and an inventory/hotbar | Shops, inventories, menus | 6–7 |
 | A1 ✅ | Half-Life set: ladders, water and swimming, armour and chargers, weapons (hitscan, projectiles, explosions, ammo), paths and trains, level changes with landmarks, decals and particles, scripted scenes, NPCs | Half-Life 1 | 6, 10 |
+| CM1–CM3 | Cocoa Materials: node-graph materials baked on the GPU, triplanar mapping, variants, wear from mesh edges ([proposal](docs/proposals/cocoa-materials.md)) | Every target looks its best | 7 |
+| R1 | Procedural objects: Repeat with caps (ladders, pipes, railings) | Half-Life, Roblox builds | 7 |
 | A2 | Animated models, creature behaviours, navigation meshes, scattering foliage, many-objects performance | Half-Life NPCs, Slime Rancher creatures | 7, 10 |
 | T1 | Voxel terrain with heightmap import: sculpt, dig and paint | Slime Rancher, outdoor maps | 7 |
 | M1 | Hosting and joining games (single-player until then) | Roblox-style online play | after 9 |
@@ -105,4 +107,4 @@ Order may shift where dependencies require it (for example, the project format f
 
 ## Next
 
-A2 (navigation meshes so creatures find their way, animated models, creature behaviours for Slime Rancher, foliage, many-objects performance), then T1 (voxel terrain). Installers and signing for exported games come with packaging the editor itself (Phase 9).
+Cocoa Materials (CM1 → CM2 → CM3) and procedural objects (R1), then A2 (navigation meshes so creatures find their way, animated models, creature behaviours for Slime Rancher, foliage, many-objects performance), then T1 (voxel terrain). Installers and signing for exported games come with packaging the editor itself (Phase 9).

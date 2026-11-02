@@ -172,6 +172,8 @@ interface Actions {
   undo(): void;
   redo(): void;
   add(kind: AddKind, at?: [number, number, number]): void;
+  /** Add the ready-made chicken (its model is copied into the project the first time): an enemy or a friend. */
+  addChicken(friendly: boolean, at?: [number, number, number]): Promise<void>;
   deleteSelection(): void;
   duplicateSelection(): void;
   rename(id: string, name: string): void;
@@ -426,6 +428,18 @@ export const useEditor = create<State & Actions>()((set, get) => ({
     get().execute(addEntitiesCmd(doc, [e], `Add ${e.name}`));
     set({ selection: [e.id] });
     get().log('info', 'Scene', `Added ${e.name}`);
+  },
+
+  async addChicken(friendly, at = [0, 0, 0]) {
+    const { doc, session } = get();
+    if (!doc || !session) return;
+    const r = await window.cocoa.projects.addSample(session.dir, 'chicken');
+    if (!r.ok) return get().notify(r.error);
+    void get().loadAssets();
+    const e = newEntity(friendly ? 'chicken_friend' : 'chicken', chickenComponents(r.value.path, friendly), { position: [at[0], at[1], at[2]], scale: [0.5, 0.5, 0.5] });
+    get().execute(addEntitiesCmd(doc, [e], `Add ${e.name}`));
+    set({ selection: [e.id] });
+    get().log('info', 'Scene', `Added a chicken (${friendly ? 'a friend: it follows you when you press E' : 'an enemy: it pecks'})`);
   },
 
   deleteSelection() {
@@ -1427,3 +1441,31 @@ useEditor.subscribe((s) => {
   shownMaterials = list;
   setProjectMaterials(list ?? []);
 });
+
+/**
+ * The ready-made chicken: its model at half size (set on the object's scale) and a Creature that wanders and
+ * pecks at the ground, is clumsy, and runs away when hurt. The enemy pecks the player; the friend follows when
+ * used. Everything is ordinary component settings, so it's a starting point to change.
+ */
+export function chickenComponents(model: string, friendly: boolean): EntityData['components'] {
+  return {
+    model: { ...defaultComponent('model'), model, collision: 'none' },
+    npc: {
+      ...defaultComponent('npc'),
+      side: friendly ? 'friendly' : 'hostile',
+      health: 20,
+      speed: 110,
+      sight: 640,
+      attack: friendly ? 'none' : 'melee',
+      damage: 4,
+      rate: 1.2,
+      reach: 24,
+      wander: true,
+      flee: 'hurt',
+      clumsy: true,
+      height: 56,
+      radius: 14,
+      anims: 'idle, walk, peck, die, run, peck, flap',
+    },
+  };
+}

@@ -42,7 +42,7 @@ import { DIRECTIONS, ScriptRunner, compileScript, type ActionName, type GameValu
 import { scriptTargets } from './script-targets';
 import { PLAYER, Player, fallDamage, type PlayerInput } from './player';
 import { Weapons, type V3 } from './weapons';
-import { NPC_SIZE, Npc } from './npc';
+import { ANIM_ROLES, Npc, type AnimRole } from './npc';
 import { bounds, brushToWorld, buildMesh, buildWorld, fromData, hullPoints, vertices, type Brush, type BrushData, type WorldBrush } from '@cocoaworlds/geometry';
 
 /** Units per metre (an inch-based world). */
@@ -152,6 +152,16 @@ interface Body {
   model?: { data: ModelData; mesh: ModelMesh; matrix: number[] };
   /** Physics settings, when it has a Physics component. */
   rb?: RigidBodyData;
+}
+
+/**
+ * The model animation a creature plays for a role, from its list (“idle, walk, attack, die, run, busy, hurt”).
+ * Roles left out fall back: running to walking, busy to standing; a missing hurt plays nothing.
+ */
+export function npcAnimation(list: string, role: AnimRole): string {
+  const names = String(list ?? '').split(',').map((x) => x.trim());
+  const of = (r: AnimRole) => names[ANIM_ROLES.indexOf(r)] ?? '';
+  return of(role) || (role === 'run' ? of('walk') : role === 'busy' ? of('idle') : '');
 }
 
 /**
@@ -357,6 +367,9 @@ export class GameWorld {
     if (!zone) this.zonesArmed = true;
     else if (this.zonesArmed && zone.data.scene) this.changeScene(zone.data.scene, zone.data.landmark.trim());
   }
+
+  /** 0…1 for scripts' random numbers and creatures' whims (replaceable for tests). */
+  random: () => number = Math.random;
 
   /** The real time in seconds since 1970 (replaceable for tests). */
   private clock = () => Date.now() / 1000;
@@ -567,7 +580,7 @@ export class GameWorld {
     });
     this.runner = new ScriptRunner(programs, {
       now: () => this.time,
-      random: Math.random,
+      random: () => this.random(),
       nameOf: (id) => this.names.get(id) ?? id,
       act: (name, target, args) => this.act(name, target, args),
       send: (message, to, from) => {
@@ -1004,10 +1017,10 @@ export class GameWorld {
           npc.collider.handle,
         ),
       animate: (npc, role, loop) => {
-        const names = npc.data.anims.split(',').map((x) => x.trim());
-        const name = names[['idle', 'walk', 'attack', 'die'].indexOf(role)] ?? '';
+        const name = npcAnimation(npc.data.anims, role);
         if (name) this.bus.emit({ type: 'anim', target: npc.id, name, loop, time: this.time });
       },
+      random: () => this.random(),
     };
   }
 
@@ -1266,6 +1279,11 @@ export class GameWorld {
     if (target === 'player') return this.actOnPlayer(name, args);
     const label = this.names.get(target) ?? 'That object';
     const npc = this.npcs.get(target);
+    if (name === 'setSide') {
+      if (!npc) throw new Error(`${label} isn't a creature. Add the Creature component to it.`);
+      npc.setSide(args[0] === 'friendly' || args[0] === 'neutral' ? args[0] : 'hostile');
+      return null;
+    }
     if (name === 'walkTo') {
       if (!npc) throw new Error(`${label} isn't a creature. Add the Creature component to it.`);
       const to = this.placePoint(args[0] ?? null);

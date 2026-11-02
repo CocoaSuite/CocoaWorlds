@@ -104,6 +104,11 @@ const W = {
   hit: ['When this is hit (shot, struck or blasted)', 'Когда в это попадают (выстрел, удар, взрыв)'],
   dies: ['When this creature dies', 'Когда это существо погибает'],
   walkTo: ['Walk', 'Отвести'],
+  setSide: ['Make', 'Сделать'],
+  sideIs: ['side', 'сторона'],
+  sideHostile: ['an enemy', 'врагом'],
+  sideFriendly: ['a friend', 'другом'],
+  sideNeutral: ['neutral', 'нейтральным'],
   freezePlayer: ['Freeze the player (a scripted scene)', 'Остановить игрока (сценка)'],
   unfreezePlayer: ['Let the player move again', 'Снова дать игроку двигаться'],
   viewFrom: ['Look through', 'Смотреть через'],
@@ -192,6 +197,7 @@ const PALETTE_STMT: Record<StatementKind, Pair> = {
   hide: ['Hide', 'Скрыть'],
   turnOn: ['Turn on', 'Включить'],
   walkTo: ['Walk a creature to a place', 'Отвести существо к месту'],
+  setSide: ['Make a creature an enemy, a friend or neutral', 'Сделать существо врагом, другом или нейтральным'],
   freezePlayer: ['Freeze the player', 'Остановить игрока'],
   unfreezePlayer: ['Let the player move again', 'Снова дать игроку двигаться'],
   viewFrom: ['Look through an object (camera)', 'Смотреть через объект (камера)'],
@@ -243,7 +249,7 @@ export const statementName = (k: StatementKind) => pick(PALETTE_STMT[k]);
 
 export const STATEMENT_GROUPS: { title: Pair; kinds: StatementKind[] }[] = [
   { title: ['Do', 'Действия'], kinds: ['move', 'turn', 'turnTo', 'return', 'show', 'hide', 'turnOn', 'turnOff', 'startTrain', 'stopTrain', 'send', 'log'] },
-  { title: ['Objects', 'Объекты'], kinds: ['spawn', 'remove', 'moveTo', 'walkTo', 'scale', 'physical', 'push', 'damage'] },
+  { title: ['Objects', 'Объекты'], kinds: ['spawn', 'remove', 'moveTo', 'walkTo', 'setSide', 'scale', 'physical', 'push', 'damage'] },
   { title: ['Player and score', 'Игрок и счёт'], kinds: ['teleport', 'hurt', 'heal', 'giveArmour', 'addScore', 'freezePlayer', 'unfreezePlayer', 'viewFrom', 'changeScene'] },
   { title: ['Screen and signs', 'Экран и таблички'], kinds: ['say', 'showScreen', 'hideScreen', 'toggleScreen', 'showUi', 'hideUi', 'setUiText', 'addRow', 'removeRow', 'clearList', 'setText'] },
   { title: ['Inventory', 'Инвентарь'], kinds: ['giveItem', 'takeItem'] },

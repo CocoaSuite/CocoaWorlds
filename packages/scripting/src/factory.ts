@@ -107,6 +107,8 @@ export function newStatement(kind: StatementKind, opts: { target?: Ref; variable
       return { id: id(), kind };
     case 'viewFrom':
       return { id: id(), kind, target, seconds: num(3) };
+    case 'setSide':
+      return { id: id(), kind, target, side: 'hostile' };
     case 'walkTo':
       return { id: id(), kind, target, to: { player: true } };
     case 'moveTo':

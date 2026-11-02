@@ -37,7 +37,8 @@ test('creatures: an enemy hunts the player and can be shot', async () => {
     await until(() => page.evaluate(() => !!window.__cwViewport.play), true, 10000);
     const npcState = () => page.evaluate(() => window.__cwViewport.play.world.npcStates()[0]);
     await until(async () => ['chase', 'attack'].includes((await npcState()).state), true, 8000);
-    await until(async () => (await npcState()).state === 'attack', true, 10000);
+    // (500 u at 150 u/s, on a test renderer that can run the game at a third of real speed.)
+    await until(async () => (await npcState()).state === 'attack', true, 30000);
     await until(() => page.evaluate(() => window.__cwViewport.play.world.playerStatus().health < 100), true, 5000);
     await shot(page, 'c02-attacked');
 

@@ -781,6 +781,17 @@ function statementWords(s: Statement, set: (patch: Record<string, unknown>, merg
           {w('seconds')}
         </>
       );
+    case 'setSide':
+      return (
+        <>
+          {w('setSide')} <RefSlot value={s.target} onChange={(target) => set({ target })} label={w('setSide')} />{' '}
+          <select className="cw-input cw-var-slot" aria-label={`${w('setSide')} ${w('sideIs')}`} value={s.side} onChange={(e) => set({ side: e.target.value as typeof s.side })}>
+            <option value="hostile">{w('sideHostile')}</option>
+            <option value="friendly">{w('sideFriendly')}</option>
+            <option value="neutral">{w('sideNeutral')}</option>
+          </select>
+        </>
+      );
     case 'walkTo':
       return (
         <>

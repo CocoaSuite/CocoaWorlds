@@ -97,14 +97,24 @@ export async function modelInstance(data: ModelData): Promise<ModelInstance> {
   root.add(inner);
   const box = new THREE.Box3().setFromObject(root);
   const mixer = m.animations.length ? new THREE.AnimationMixer(inner) : null;
+  // One animation at a time, blending from the last over a moment (a walk eases into a peck).
+  let current: THREE.AnimationAction | null = null;
+  const played = new Set<THREE.AnimationAction>();
   const play = (name: string, loop: boolean) => {
     const clip = m.animations.find((a) => a.name === name);
     if (!clip || !mixer) return false;
-    mixer.stopAllAction();
     const action = mixer.clipAction(clip);
+    const from = current;
+    // (Everything older than the one fading out stops now.)
+    for (const a of played) if (a !== from && a !== action) a.stop();
+    played.add(action);
     action.setLoop(loop ? THREE.LoopRepeat : THREE.LoopOnce, loop ? Infinity : 1);
     action.clampWhenFinished = !loop;
-    action.reset().play();
+    action.reset();
+    action.setEffectiveWeight(1);
+    action.play();
+    if (from && from !== action) action.crossFadeFrom(from, 0.15, false);
+    current = action;
     return true;
   };
   if (data.animation) play(data.animation, true);
