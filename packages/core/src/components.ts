@@ -414,6 +414,16 @@ export const COMPONENTS: ComponentDef[] = [
     fields: [],
   },
   {
+    name: 'reflectionProbe',
+    label: e('Reflection probe', 'Зонд отражений'),
+    description: e(
+      'Shiny surfaces inside this box reflect what this point sees, fitted to the box (so walls and floors reflect where they really are). Put one in a room; rooms are also found automatically.',
+      'Блестящие поверхности в этой коробке отражают то, что видно из этой точки, с подгонкой под коробку (стены и пол отражаются там, где они есть). Ставьте по одному на комнату; комнаты находятся и сами.',
+    ),
+    appliesTo: 'point',
+    fields: [{ key: 'size', label: e('Box size', 'Размер коробки'), type: { kind: 'vec3', step: 16, min: 16 }, default: [256, 128, 256] }],
+  },
+  {
     name: 'pathPoint',
     label: e('Path point', 'Точка пути'),
     description: e(

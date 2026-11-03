@@ -16,6 +16,7 @@ export function iconFor(e: EntityData): IconName {
   if (light?.kind === 'spot') return 'spot';
   if (light) return 'light';
   if (e.components.playerSpawn) return 'person';
+  if (e.components.reflectionProbe) return 'sphere';
   return 'cube';
 }
 

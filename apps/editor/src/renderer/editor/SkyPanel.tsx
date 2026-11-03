@@ -185,10 +185,15 @@ export function SkyPanel() {
         <Row label={L('Reflect the scene', 'Отражать сцену')}>
           <Switch label={L('Reflect the scene', 'Отражать сцену')} checked={settings.reflections !== false} onChange={(v) => st.setSceneSettings({ reflections: v ? undefined : false }, v ? 'Scene reflections on' : 'Scene reflections off')} />
         </Row>
+        {settings.reflections !== false && (
+          <Row label={L('Probes for rooms', 'Зонды для комнат')}>
+            <Switch label={L('Probes for rooms', 'Зонды для комнат')} checked={settings.autoProbes !== false} onChange={(v) => st.setSceneSettings({ autoProbes: v ? undefined : false }, v ? 'Room probes on' : 'Room probes off')} />
+          </Row>
+        )}
         <Row label={L('Ambient brightness', 'Яркость окружения')}>
           <NumberField label="#" ariaLabel={L('Ambient brightness', 'Яркость окружения')} step={0.05} value={settings.ambientIntensity} onChange={(v) => st.setSceneSettings({ ambientIntensity: Math.max(0, v) }, 'Ambient', 'sky-amb')} onCommit={(v) => st.setSceneSettings({ ambientIntensity: Math.max(0, v) }, 'Ambient', 'sky-amb')} />
         </Row>
-        <div className="cw-muted cw-hint">{L('Light from the sky: the ambient light (and fog, if on) take their colours from the sky, so the scene matches what’s above it. Reflect the scene: shiny and metal materials reflect the level around the camera (captured as you move), not just the sky.', 'Свет от неба: окружающий свет (и туман, если включён) берут цвета неба, и сцена совпадает с тем, что над ней.')}</div>
+        <div className="cw-muted cw-hint">{L('Light from the sky: the ambient light (and fog, if on) take their colours from the sky, so the scene matches what’s above it. Reflect the scene: shiny and metal materials reflect the level around the camera (captured as you move), not just the sky. Probes for rooms: rooms the brushes make get their own reflections, fitted to their walls (View › Show reflection probes shows them; add a Reflection probe to place one yourself).', 'Свет от неба: окружающий свет (и туман, если включён) берут цвета неба, и сцена совпадает с тем, что над ней.')}</div>
       </aside>
     </div>
   );

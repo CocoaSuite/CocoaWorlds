@@ -109,7 +109,7 @@ export type ViewMode = 'perspective' | 'top' | 'front' | 'side';
 /** Grid sizes to snap to (u). */
 export const GRID_SIZES = [1, 2, 4, 8, 16, 32, 64, 128, 256, 512];
 
-export type AddKind = 'empty' | 'pointLight' | 'spotLight' | 'sun' | 'spawn' | 'sign';
+export type AddKind = 'empty' | 'pointLight' | 'spotLight' | 'sun' | 'spawn' | 'sign' | 'reflectionProbe';
 export interface LogEntry {
   at: string;
   level: 'info' | 'warn' | 'error';
@@ -138,6 +138,7 @@ interface State {
   showNav: boolean;
   /** View › Show grass (the editor only; the game always shows it). */
   showGrass: boolean;
+  showProbes: boolean;
   /** Z is up in what the editor shows (as in Blender); the engine stays Y-up. */
   zUp: boolean;
   /** The UV editor open beside the 3D view. */
@@ -204,7 +205,7 @@ interface Actions {
   /** A finished terrain stroke, already made: recorded so it can be undone. */
   terrainEdit(cmd: { label: string; apply(): void; revert(): void }): void;
   setView(v: ViewMode): void;
-  toggle(k: 'showGrid' | 'showNav' | 'showGrass' | 'zUp' | 'uvPane' | 'showStats' | 'showBottom' | 'snap' | 'vertexSnap' | 'pivotEdit' | 'gameLighting'): void;
+  toggle(k: 'showGrid' | 'showNav' | 'showGrass' | 'showProbes' | 'zUp' | 'uvPane' | 'showStats' | 'showBottom' | 'snap' | 'vertexSnap' | 'pivotEdit' | 'gameLighting'): void;
   /** Put an object's pivot at a world position (null: back to the default, its middle). */
   setPivot(id: string, world: Vec3 | null, mergeKey?: string): void;
   execute(cmd: Command): void;
@@ -360,6 +361,7 @@ export const useEditor = create<State & Actions>()((set, get) => ({
   showGrid: true,
   showNav: false,
   showGrass: true,
+  showProbes: false,
   zUp: savedZUp(),
   uvPane: false,
   gameLighting: false,
@@ -518,6 +520,7 @@ export const useEditor = create<State & Actions>()((set, get) => ({
       spotLight: () => base('spot_light', { light: { kind: 'spot', color: '#ffffff', intensity: 2, range: 768, angle: 40, castShadows: true } }, 192),
       sun: () => base('sun', { light: { kind: 'directional', color: '#fff4e0', intensity: 2, castShadows: true } }, 512),
       spawn: () => base('player_spawn', { playerSpawn: {} }),
+      reflectionProbe: () => base('reflection_probe', { reflectionProbe: { size: [256, 128, 256] } }, 64),
       sign: () => base('sign', { sign: { text: 'Text', size: 16, color: '#ffffff', background: true, faceCamera: false } }, 64),
     }[kind]();
     get().execute(addEntitiesCmd(doc, [e], `Add ${e.name}`));

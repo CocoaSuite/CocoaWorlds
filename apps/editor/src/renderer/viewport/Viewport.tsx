@@ -55,6 +55,7 @@ export function Viewport() {
   const showGrid = useEditor((s) => s.showGrid);
   const showNav = useEditor((s) => s.showNav);
   const showGrass = useEditor((s) => s.showGrass);
+  const showProbes = useEditor((s) => s.showProbes);
   const terrainBrush = useEditor((s) => s.terrainBrush);
   const gameLighting = useEditor((s) => s.gameLighting);
   const showStats = useEditor((s) => s.showStats);
@@ -232,6 +233,9 @@ export function Viewport() {
   useEffect(() => {
     engine.current?.setGrassVisible(showGrass);
   }, [showGrass]);
+  useEffect(() => {
+    engine.current?.setProbesVisible(showProbes);
+  }, [showProbes]);
   const zUp = useEditor((s) => s.zUp);
   useEffect(() => {
     engine.current?.setZUp(zUp);

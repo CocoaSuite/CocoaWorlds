@@ -214,6 +214,22 @@ shader takes that picture's colour where the surface behind is within reach (`vi
 
 Shiny and metal project materials reflect the actual level: a reflection probe captures the scene into a cube
 map (6 small renders, blurred by roughness) at eye height (in Play the player's eye; in the editor above what the
-view orbits), again when the camera has moved ~192 u or the level changed, at most twice a second. Not
-parallax-corrected: near things reflect approximately. Sky tab › Reflect the scene (on by default); off, they
-reflect the sky gradient as before. `viewport/reflections.ts`.
+view orbits), again when the camera has moved ~192 u or the level changed, at most twice a second. Sky tab ›
+Reflect the scene (on by default); off, they reflect the sky gradient as before. `viewport/reflections.ts`.
+
+### Reflection probes (rooms)
+
+Rooms get their own probes. `autoProbes` (geometry) samples the built level's solid pieces on a grid (16 u
+cells, bigger on huge levels): air with a roof within 1024 u and walls on three sides or more is inside. Rooms
+are split where the inside air narrows below ~112 u (doorways): cells further than that from anything not inside
+seed rooms, which grow back over the rest; rooms longer than 1024 u are cut. Each room is a box (its air's
+bounds) captured once from its air nearest the box's middle, and again ~0.6 s after the level stops changing.
+Placed **Reflection probe** objects (Add menu; a box of Size round the object) come first; found rooms whose
+middle is in a placed box are dropped. At most 15 box probes.
+
+All probes live in one atlas (`viewport/probe-shader.ts`): 16 rows (row 0: the camera's capture), each six
+octahedral pictures blurred for roughness 0–1. Project materials look up per pixel: the box they're in (full
+strength up to 8 u outside, fading over 24 u) with the reflection direction fitted to the box (where the ray
+leaves the box, seen from the capture point), two boxes blended near doorways, the camera's capture elsewhere.
+The ambient (irradiance) look-up uses it too, so rooms take their light colour from their own walls. Sky tab ›
+Probes for rooms (on by default); View › Show reflection probes draws the boxes.

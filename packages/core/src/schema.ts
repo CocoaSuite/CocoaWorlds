@@ -118,6 +118,8 @@ export interface SceneSettings {
   ui?: UiSettings;
   /** Shiny and metal materials reflect the level around the camera (missing: on). */
   reflections?: boolean;
+  /** Reflection probes for the rooms the level's brushes make (missing: on). Placed Reflection probes count either way. */
+  autoProbes?: boolean;
   /** Ambient occlusion: corners, creases and the ground under things darken (missing: on, as default). */
   ao?: AoSettings;
 }

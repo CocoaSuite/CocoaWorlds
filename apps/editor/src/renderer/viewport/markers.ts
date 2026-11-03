@@ -19,6 +19,7 @@ export const COLORS = {
   idle: 0xb8b8b8,
   spawn: 0x8fb04a,
   light: 0xffd36b,
+  probe: 0x5fd4e8,
   selected: 0x4b9cff,
 };
 
@@ -154,6 +155,14 @@ export function buildMarker(e: EntityData): Marker {
     baseColor = side === 'friendly' ? 0x5a84b6 : side === 'neutral' ? 0x9a9a92 : 0xd06a5e;
     lines.push(segs(spawnLines(), baseColor));
     pick = new THREE.Mesh(new THREE.BoxGeometry(32, 72, 32).translate(0, 36, 0), pickMat);
+  } else if (e.components.reflectionProbe) {
+    // A reflection probe: a small cross where it captures from, and its box (faint).
+    baseColor = COLORS.probe;
+    lines.push(segs([[-10, 0, 0], [10, 0, 0], [0, -10, 0], [0, 10, 0], [0, 0, -10], [0, 0, 10]], baseColor));
+    const size = ((e.components.reflectionProbe as { size?: number[] }).size ?? [256, 128, 256]) as [number, number, number];
+    const l = new THREE.LineSegments(boxEdges(new THREE.Vector3(...size), new THREE.Vector3()), new THREE.LineBasicMaterial({ color: baseColor, transparent: true, opacity: 0.35 }));
+    lines.push(l);
+    pick = new THREE.Mesh(new THREE.SphereGeometry(12, 8, 6), pickMat);
   } else if (e.components.playerSpawn) {
     baseColor = COLORS.spawn;
     lines.push(segs(spawnLines(), baseColor));
@@ -249,5 +258,5 @@ export function disposeMarker(m: Marker): void {
 
 /** Stable key for "does this marker need rebuilding" (shape-affecting data only). */
 export function markerKey(e: EntityData): string {
-  return JSON.stringify([e.components.light ?? null, !!e.components.playerSpawn, e.components.sign ?? null, e.components.model ?? null, (e.components.npc as { side?: string } | undefined)?.side ?? null]);
+  return JSON.stringify([e.components.light ?? null, !!e.components.playerSpawn, e.components.sign ?? null, e.components.model ?? null, (e.components.npc as { side?: string } | undefined)?.side ?? null, e.components.reflectionProbe ?? null]);
 }

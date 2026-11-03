@@ -6,7 +6,7 @@
  * preview watched with the free camera.
  */
 import { SceneDoc, expandRepeats, readComponent, type ParticlesData, type ColliderData, type GameRules, type GameValue, type ModelData, type SceneFile, type SignData, type TerrainData } from '@cocoaworlds/core';
-import { buildMesh, isInvisibleMaterial, type WorldBrush } from '@cocoaworlds/geometry';
+import { buildMesh, isInvisibleMaterial, type Brush, type WorldBrush } from '@cocoaworlds/geometry';
 import { GameWorld, initPhysics, type NavGrid, type BodyInfo, type ModelMesh, type SavedProgress, type Travel, type UiState, type PlayerInput, type PlayerStatus, type ScriptLog, type TriggerEvent } from '@cocoaworlds/runtime';
 import type { Problem, ScriptError } from '@cocoaworlds/scripting';
 import * as THREE from 'three';
@@ -46,6 +46,8 @@ export interface PlayFrame {
 
 export class PlaySession {
   readonly group = new THREE.Group();
+  /** The level's solid pieces as built (for finding reflection probes). */
+  levelPieces: Brush[] = [];
   private world: GameWorld;
   private foliage = new FoliageRenderer();
   private terrains = new TerrainRenderer();
@@ -117,6 +119,7 @@ export class PlaySession {
     // The level as players see it: only still brushes (no trigger zones, no subtract volumes, nothing that moves).
     const still: WorldBrush[] = worldBrushes(doc).filter((b) => this.world.levelIds.has(b.id) || (b.role === 'subtract' && !bodies.has(b.id)));
     const level = buildLevel({ seq: 0, brushes: still });
+    this.levelPieces = level.pieces.flatMap(([, ps]) => ps);
     if (level.mesh) {
       const m = level.mesh;
       const levelMesh = new THREE.Mesh(toGeometry(m), m.groups.map((g) => material(g.material)));

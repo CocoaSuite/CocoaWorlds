@@ -2,7 +2,7 @@
  * An exported game (B4): one scene played full-window, with the same game code, controls, display and screen
  * UI as Play in the editor. Saved progress is kept in this browser's storage (a desktop game has its own).
  */
-import { SceneReflections } from '../viewport/reflections';
+import { SceneReflections, sceneProbes } from '../viewport/reflections';
 import { GroundBlend } from '../viewport/ground-blend';
 import { SceneDoc, expandRepeats, type GameRules, type GameValue, type MaterialDef, type PlantDef, type SceneFile } from '@cocoaworlds/core';
 import { isInvisibleMaterial } from '@cocoaworlds/geometry';
@@ -57,6 +57,7 @@ export class GameRunner {
   private ao: AoRenderer | null = null;
   private groundBlend: GroundBlend | null = null;
   private reflections: SceneReflections | null = null;
+  private probesFor: PlaySession | null = null;
   private materials = new Map<string, THREE.Material>();
   private keys = new Set<string>();
   private raf = 0;
@@ -189,7 +190,12 @@ export class GameRunner {
     if (play.travel) return void this.go(play.travel);
     if (play.placeCamera(this.cam)) {
       play.applyWater(this.scene, this.cam);
-      (this.reflections ??= new SceneReflections(this.renderer)).update(this.scene, this.cam.getWorldPosition(new THREE.Vector3()), this.play?.doc.settings.reflections !== false);
+      this.reflections ??= new SceneReflections(this.renderer);
+      if (this.probesFor !== play) {
+        this.probesFor = play;
+        this.reflections.setProbes(sceneProbes(this.doc, play.levelPieces, this.doc.settings.autoProbes !== false));
+      }
+      this.reflections.update(this.scene, this.cam.getWorldPosition(new THREE.Vector3()), this.play?.doc.settings.reflections !== false);
       (this.groundBlend ??= new GroundBlend()).prepare(this.renderer, this.scene, this.cam);
       if (!(this.ao ??= new AoRenderer(this.renderer)).render(this.scene, this.cam, this.play?.doc.settings)) this.renderer.render(this.scene, this.cam);
     }

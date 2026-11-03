@@ -5,6 +5,7 @@
  */
 import { MAP_FIELDS, type MaterialDef } from '@cocoaworlds/core';
 import * as THREE from 'three';
+import { withProbes } from './probe-shader';
 import { DEV_TEXTURE_SIZE, devMaterial } from '../brush/materials';
 import type { Lang } from '../i18n';
 import { assetUrl } from '../assets';
@@ -250,6 +251,8 @@ function restyle(l: Live): void {
   const has = (role: MapRole) => !!(livePics?.[role] ?? d[MAP_FIELDS[role]]);
   m.color.set(d.color);
   setShading(m, d.mapping ?? 'face', d.tile ?? 128, d.wear ?? null, d.bevel ?? 0, d.blend ? { distance: d.blend, noise: d.blendNoise ?? 0.5, size: d.blendSize ?? 24 } : null);
+  // (Rooms' reflection probes, when scene reflections are on.)
+  withProbes(m);
   // A map replaces its slider (Three.js multiplies the two).
   m.roughness = has('roughness') ? 1 : d.roughness;
   m.metalness = has('metalness') ? 1 : d.metalness;

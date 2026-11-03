@@ -2,7 +2,7 @@
  * The editor viewport: draws the level, grid and gizmos, handles camera navigation, picking, transform dragging
  * and the brush tool. Renders on demand (only after something changes) so an idle editor costs no GPU time.
  */
-import { SceneReflections } from './reflections';
+import { SceneReflections, sceneProbes } from './reflections';
 import { GroundBlend } from './ground-blend';
 import { SceneDoc, expandRepeats, ownerOf, type EntityData, type Transform, type Vec3 } from '@cocoaworlds/core';
 import { bounds, faceAt, loopCut, nearestEdge, transform as transformBrush, translate, vertices, type Brush, type Plane, type V3 } from '@cocoaworlds/geometry';
@@ -1577,6 +1577,63 @@ export class ViewportEngine {
     return (!!this.play || this.gameLighting) && this.doc?.settings.reflections !== false;
   }
 
+  private probeKey = '';
+  private probeWant = '';
+  private probeAt = 0;
+  private probeLines: THREE.LineSegments | null = null;
+  private showProbes = false;
+
+  /** Show the reflection probes' boxes (View menu). */
+  setProbesVisible(v: boolean): void {
+    this.showProbes = v;
+    this.probeLinesUpdate();
+    this.invalidate();
+  }
+
+  private probeLinesUpdate(): void {
+    this.probeLines?.removeFromParent();
+    this.probeLines?.geometry.dispose();
+    this.probeLines = null;
+    const boxes = this.reflections?.boxes ?? [];
+    if (!this.showProbes || !boxes.length) return;
+    const pts: number[] = [];
+    for (const b of boxes) {
+      const c = (i: number) => [i & 1 ? b.max[0] : b.min[0], i & 2 ? b.max[1] : b.min[1], i & 4 ? b.max[2] : b.min[2]];
+      for (const [i, j] of [[0, 1], [2, 3], [4, 5], [6, 7], [0, 2], [1, 3], [4, 6], [5, 7], [0, 4], [1, 5], [2, 6], [3, 7]]) pts.push(...c(i!), ...c(j!));
+      // (A small cross where it captures from.)
+      pts.push(b.at[0] - 8, b.at[1], b.at[2], b.at[0] + 8, b.at[1], b.at[2], b.at[0], b.at[1] - 8, b.at[2], b.at[0], b.at[1] + 8, b.at[2]);
+    }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3));
+    this.probeLines = new THREE.LineSegments(g, new THREE.LineBasicMaterial({ color: 0x5fd4e8, transparent: true, opacity: 0.7, depthTest: false }));
+    this.probeLines.name = 'reflection-probes';
+    this.probeLines.renderOrder = 10;
+    this.scene.add(this.probeLines);
+  }
+
+  /** Find the scene's reflection probes again once the level or its probes changed (and edits paused a moment). */
+  private syncProbes(): void {
+    const doc = this.doc;
+    if (!doc || !this.reflections) return;
+    const auto = doc.settings.autoProbes !== false;
+    let placed = '';
+    for (const e of doc.entities) if (e.components.reflectionProbe) placed += `${e.id}:${JSON.stringify(e.components.reflectionProbe)}:${doc.worldMatrix(e.id).join(',')}|`;
+    const key = `${this.play ? 'play' : this.world.version}|${auto}|${placed}`;
+    const now = performance.now();
+    if (key !== this.probeWant) {
+      this.probeWant = key;
+      this.probeAt = now + (this.play ? 0 : 600);
+    }
+    if (key === this.probeKey) return;
+    if (now < this.probeAt) {
+      setTimeout(() => this.invalidate(), this.probeAt - now + 10);
+      return;
+    }
+    this.probeKey = key;
+    this.reflections.setProbes(sceneProbes(doc, this.play ? this.play.levelPieces : this.world.solidPieces, auto));
+    this.probeLinesUpdate();
+  }
+
   private renderAo(cam: THREE.Camera): boolean {
     if (!(this.play || this.gameLighting)) return false;
     return (this.ao ??= new AoRenderer(this.renderer)).render(this.scene, cam, this.doc?.settings);
@@ -1598,7 +1655,10 @@ export class ViewportEngine {
       this.play.updateFoliage(this.fpCam);
       this.plants.update(this.fpCam);
       this.waterDepth.prepare(r, this.scene, this.fpCam);
+      this.reflections ??= new SceneReflections(r);
+      if (this.reflectOn()) this.syncProbes();
       (this.reflections ??= new SceneReflections(r)).update(this.scene, this.fpCam.getWorldPosition(new THREE.Vector3()), this.reflectOn(), [this.grid.object]);
+      if (this.reflections.busy) this.invalidate();
       this.groundBlend.prepare(r, this.scene, this.fpCam, [this.grid.object]);
       this.play.applyWater(this.scene, this.fpCam);
       if (!this.renderAo(this.fpCam)) r.render(this.scene, this.fpCam);
@@ -1611,7 +1671,10 @@ export class ViewportEngine {
     this.waterDepth.prepare(r, this.scene, this.rig.camera);
     // (Captured at eye height above what the view looks at: from up where the editor camera is, floors would only
     // reflect sky.)
+    this.reflections ??= new SceneReflections(r);
+    if (this.reflectOn()) this.syncProbes();
     (this.reflections ??= new SceneReflections(r)).update(this.scene, this.rig.target.clone().add(new THREE.Vector3(0, 64, 0)), this.reflectOn(), [this.grid.object]);
+    if (this.reflections.busy) this.invalidate();
     this.groundBlend.prepare(r, this.scene, this.rig.camera, [this.grid.object]);
     if (!this.renderAo(this.rig.camera)) r.render(this.scene, this.rig.camera);
     const s = 72;

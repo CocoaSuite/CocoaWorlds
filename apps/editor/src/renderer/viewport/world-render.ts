@@ -71,6 +71,12 @@ export class WorldRenderer {
   private faceEdgeMat = new THREE.LineBasicMaterial({ color: 0x4b9cff, transparent: true, opacity: 1, depthTest: false });
   /** Rendered pieces (after live subtract) of each solid, for highlighting faces as they are seen. */
   private piecesById = new Map<string, Brush[]>();
+  /** Counts level builds (what reflection probes are found from changed). */
+  version = 0;
+  /** Every solid piece of the level as built (after live subtract). */
+  get solidPieces(): Brush[] {
+    return [...this.piecesById.values()].flat();
+  }
   private faceRefs: FaceRef[] = [];
   private materials = new Map<string, THREE.Material>();
   // Subtract brushes are coral (they remove); trigger zones are amber (DESIGN_SYSTEM.md: --cw-warn).
@@ -171,6 +177,7 @@ export class WorldRenderer {
 
   private apply(r: WorldResult): void {
     this.piecesById = new Map(r.pieces);
+    this.version++;
     this.stats = { ...r.stats, buildMs: Math.round(r.ms) };
     if (this.solidMesh) {
       this.group.remove(this.solidMesh);
