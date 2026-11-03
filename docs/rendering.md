@@ -59,6 +59,22 @@ Models (GLB, glTF) can be imported the same way; see Models below.
 - **Stop the sounds of [object]**: its Sound component and anything its scripts played. Removing an object
   stops its sounds too.
 
+### Background sound and Sound areas
+
+- **Background sound** (Inspector with nothing selected › Sound): a sound and volume that loop everywhere
+  while playing: wind, birds, a hum. It starts with the game and isn't in 3D.
+- **Sound area** (a component for brushes): while the player's ears are inside, everything sounds like the
+  place. *Sounds like*: Nothing special, Room (short echo), Hall, Cave (long echo), Under water (muffled),
+  Outdoors (no echo); *Amount* 0–1 mixes it in. Its own *Background sound* plays in place of the scene's
+  while inside, and the scene's comes back on leaving. Changes fade over 0.3 s, so doors don't click.
+- Where areas overlap the **smallest wins** (a room inside a cave sounds like a room). The area is the space
+  inside the brush's faces (draw it as a box or other convex shape). A Sound area brush is never solid or
+  drawn in the game, and can also be a Trigger zone.
+- **Under water** everything is muffled, with or without an area: water does it by itself.
+- A Sound component's **Changed by sound areas** (on by default) can be turned off for music and interface
+  sounds, which then sound the same everywhere. Sounds from blocks and weapons are always changed.
+- The echoes are made in code (decaying noise through a convolver); no audio files ship for them.
+
 ## Models
 
 **Assets › Models › Import…** takes GLB files (and glTF files with their data embedded). Give any point object

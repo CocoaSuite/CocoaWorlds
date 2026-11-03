@@ -2,7 +2,7 @@
 import { PaintPanel } from '../viewport/PaintPanel';
 import { useState } from 'react';
 import { shown, stored, type AxisKind } from '../axes';
-import { PIVOT, aoOf, gameRules, pivotOf, sceneSettings, worldBoundsOf, type EntityData, type SceneSettings as SceneSettingsData, type Transform, type Vec3 } from '@cocoaworlds/core';
+import { PIVOT, aoOf, backgroundSoundOf, gameRules, pivotOf, sceneSettings, worldBoundsOf, type EntityData, type SceneSettings as SceneSettingsData, type Transform, type Vec3 } from '@cocoaworlds/core';
 import { brushBounds } from '../brush/brushes';
 import { Button, ColorField, Field, NumberField, PanelHeader, Section, Switch } from '@cocoaworlds/ui';
 import { storeProgress } from '../game/progress';
@@ -154,6 +154,8 @@ function SceneSettings() {
   const ao = aoOf(doc.settings);
   const set = (patch: Partial<SceneSettingsData>, label: string, mergeKey?: string) => st.setSceneSettings(patch, label, mergeKey);
   const sky = cur.sky!;
+  const bg = backgroundSoundOf(doc.settings);
+  const sounds = useEditor((s) => s.assets.sounds);
   const num = (label: string, value: number, step: number, onChange: (v: number) => void, unit = '#') => (
     <NumberField label={unit} ariaLabel={label} value={value} step={step} onChange={onChange} onCommit={onChange} />
   );
@@ -213,6 +215,21 @@ function SceneSettings() {
           </>
         )}
         <p className="cw-hint">{t('insp.skyHint')}</p>
+      </Fold>
+      <Fold id="sound" title={t('insp.sound')}>
+        <Field label={t('insp.bgSound')}>
+          <select className="cw-input cw-select" aria-label={t('insp.bgSound')} value={bg.sound} onChange={(ev) => set({ backgroundSound: { ...bg, sound: ev.target.value } }, 'Background sound')}>
+            <option value="">{t('assets.pick')}</option>
+            {bg.sound && !sounds.some((a) => a.path === bg.sound) && <option value={bg.sound}>{bg.sound} ?</option>}
+            {sounds.map((a) => (
+              <option key={a.path} value={a.path}>
+                {a.name}
+              </option>
+            ))}
+          </select>
+        </Field>
+        {bg.sound && <Field label={t('insp.bgVolume')}>{num(t('insp.bgVolume'), bg.volume, 0.1, (v) => set({ backgroundSound: { ...bg, volume: Math.max(0, Math.min(4, v)) } }, 'Background volume', 'scene-bg-vol'))}</Field>}
+        <p className="cw-hint">{t('insp.bgSoundHint')}</p>
       </Fold>
       <GameRulesSection />
     </>

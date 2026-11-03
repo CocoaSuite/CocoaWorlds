@@ -7,7 +7,12 @@
 
 export type Lang = 'en' | 'ru';
 
-export type SoundData = { sound: string; volume: number; loop: boolean; playOnStart: boolean; range: number };
+export type SoundData = { sound: string; volume: number; loop: boolean; playOnStart: boolean; range: number; areaEffects: boolean };
+/** How a place makes things sound (component `soundArea`): see SOUND_EFFECTS. */
+export type SoundEffect = 'none' | 'room' | 'hall' | 'cave' | 'underwater' | 'outdoors';
+/** A brush that changes how everything sounds while the player's ears are inside it. */
+export type SoundAreaData = { effect: SoundEffect; mix: number; sound: string; volume: number };
+export const SOUND_EFFECTS: SoundEffect[] = ['none', 'room', 'hall', 'cave', 'underwater', 'outdoors'];
 /** How a model collides: not at all, by its bounding box, by its convex hull, or by its exact triangles. */
 export type ModelCollision = 'none' | 'box' | 'hull' | 'exact';
 export type ModelData = {
@@ -131,6 +136,13 @@ export const COMPONENTS: ComponentDef[] = [
         hint: e('Full volume within a quarter of this, silent beyond it.', 'Полная громкость на четверти расстояния, дальше — тише, после — тишина.'),
         type: { kind: 'number', min: 16, step: 64, unit: 'u' },
         default: 1024,
+      },
+      {
+        key: 'areaEffects',
+        label: e('Changed by sound areas', 'Меняется в звуковых зонах'),
+        hint: e('Off: sounds the same everywhere (music, interface sounds), not echoed in caves or muffled under water.', 'Выкл.: звучит везде одинаково (музыка, звуки интерфейса), без эха в пещерах и приглушения под водой.'),
+        type: { kind: 'boolean' },
+        default: true,
       },
     ],
   },
@@ -308,6 +320,43 @@ export const COMPONENTS: ComponentDef[] = [
         default: 'player',
       },
       { key: 'once', label: e('Only once', 'Один раз'), hint: e('Stops noticing after the first time.', 'Срабатывает только в первый раз.'), type: { kind: 'boolean' }, default: false },
+    ],
+  },
+  {
+    name: 'soundArea',
+    label: e('Sound area', 'Звуковая зона'),
+    description: e(
+      'Changes how everything sounds while the player is inside: echo in a room or cave, muffled under water. Can swap in its own background sound. Where areas overlap, the smallest wins.',
+      'Меняет звучание всего, пока игрок внутри: эхо в комнате или пещере, приглушение под водой. Может заменить фоновый звук своим. Где зоны пересекаются, побеждает меньшая.',
+    ),
+    appliesTo: 'brush',
+    conflicts: ['rigidBody', 'conveyor', 'train', 'levelChange', 'ladder', 'water'],
+    fields: [
+      {
+        key: 'effect',
+        label: e('Sounds like', 'Звучит как'),
+        type: {
+          kind: 'enum',
+          options: [
+            { value: 'none', label: e('Nothing special', 'Без эффекта') },
+            { value: 'room', label: e('Room (short echo)', 'Комната (короткое эхо)') },
+            { value: 'hall', label: e('Hall', 'Зал') },
+            { value: 'cave', label: e('Cave (long echo)', 'Пещера (долгое эхо)') },
+            { value: 'underwater', label: e('Under water (muffled)', 'Под водой (глухо)') },
+            { value: 'outdoors', label: e('Outdoors (no echo)', 'Улица (без эха)') },
+          ],
+        },
+        default: 'room',
+      },
+      { key: 'mix', label: e('Amount', 'Сила'), hint: e('0: no effect, 1: full effect.', '0 — без эффекта, 1 — в полную силу.'), type: { kind: 'number', min: 0, max: 1, step: 0.05 }, default: 1 },
+      {
+        key: 'sound',
+        label: e('Background sound', 'Фоновый звук'),
+        hint: e('Played in place of the scene’s background sound while inside (empty: keep the scene’s).', 'Играет вместо фонового звука сцены, пока игрок внутри (пусто — звук сцены).'),
+        type: { kind: 'asset', asset: 'sounds' },
+        default: '',
+      },
+      { key: 'volume', label: e('Background volume', 'Громкость фона'), type: { kind: 'number', min: 0, max: 4, step: 0.1 }, default: 1 },
     ],
   },
   {

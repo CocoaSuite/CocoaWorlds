@@ -7,7 +7,7 @@
  */
 import { SceneDoc, expandRepeats, readComponent, type ParticlesData, type ColliderData, type GameRules, type GameValue, type ModelData, type SceneFile, type SignData, type TerrainData } from '@cocoaworlds/core';
 import { buildMesh, isInvisibleMaterial, type Brush, type VoxelField, type WorldBrush } from '@cocoaworlds/geometry';
-import { GameWorld, initPhysics, type NavGrid, type BodyInfo, type ModelMesh, type SavedProgress, type Travel, type UiState, type PlayerInput, type PlayerStatus, type ScriptLog, type TriggerEvent } from '@cocoaworlds/runtime';
+import { GameWorld, initPhysics, type Hearing, type NavGrid, type BodyInfo, type ModelMesh, type SavedProgress, type Travel, type UiState, type PlayerInput, type PlayerStatus, type ScriptLog, type TriggerEvent } from '@cocoaworlds/runtime';
 import type { Problem, ScriptError } from '@cocoaworlds/scripting';
 import * as THREE from 'three';
 import { brushBounds, worldBrushes } from '../brush/brushes';
@@ -24,6 +24,7 @@ import { Effects } from './effects';
 import { EMITTER_DEFAULTS } from './particles';
 import { assetUrl } from '../assets';
 import { modelGeometry, modelInstance, type ModelInstance } from './models';
+import { SoundStage, ramp } from './area-sound';
 
 export interface PlayInfo {
   moving: number;
@@ -315,26 +316,41 @@ export class PlaySession {
   /** Sounds playing now (for following moving objects and stopping). */
   readonly sounds: { source: string; sound: string; audio: THREE.Audio | THREE.PositionalAudio; follow: string | null }[] = [];
 
+  /** How things sound where the ears are (Sound areas, water): the effect chain every changed sound goes through. */
+  stage: SoundStage | null = null;
+  /** What the ears hear through now (null: not worked out yet, or no ears). */
+  hearingNow: Hearing | null = null;
+  /** The background sound playing now (the scene's, or the area's in its place), and ones fading out. */
+  background: { key: string; sound: string; audio: THREE.Audio | null } | null = null;
+  private fading: THREE.Audio[] = [];
+
   /** Hear the game from this camera. */
   setEars(cam: THREE.Camera): void {
     if (this.listener?.parent === cam) return;
     this.listener?.removeFromParent();
-    this.listener ??= new THREE.AudioListener();
+    if (!this.listener) {
+      this.listener = new THREE.AudioListener();
+      this.stage = new SoundStage(this.listener);
+    }
     cam.add(this.listener);
   }
 
-  private async startSound(e: { sound: string; at: [number, number, number] | null; follow: string | null; volume: number; loop: boolean; range: number; source: string }): Promise<void> {
+  private static load(sound: string): Promise<AudioBuffer> {
+    let p = PlaySession.buffers.get(sound);
+    if (!p) {
+      p = assetUrl(sound).then((url) => new THREE.AudioLoader().loadAsync(url));
+      PlaySession.buffers.set(sound, p);
+      p.catch(() => PlaySession.buffers.delete(sound));
+    }
+    return p;
+  }
+
+  private async startSound(e: { sound: string; at: [number, number, number] | null; follow: string | null; volume: number; loop: boolean; range: number; source: string; areaEffects?: boolean }): Promise<void> {
     const listener = this.listener;
     if (!listener || this.disposed) return;
     let buffer: AudioBuffer;
     try {
-      let p = PlaySession.buffers.get(e.sound);
-      if (!p) {
-        p = assetUrl(e.sound).then((url) => new THREE.AudioLoader().loadAsync(url));
-        PlaySession.buffers.set(e.sound, p);
-        p.catch(() => PlaySession.buffers.delete(e.sound));
-      }
-      buffer = await p;
+      buffer = await PlaySession.load(e.sound);
     } catch {
       this.notes.push(`Could not play ${e.sound}`);
       return;
@@ -351,6 +367,7 @@ export class PlaySession {
       if (e.at) pa.position.set(...e.at);
       audio = pa;
     } else audio = new THREE.Audio<GainNode>(listener);
+    if (e.areaEffects === false) this.stage?.bypass(audio);
     audio.setBuffer(buffer);
     audio.setLoop(e.loop);
     audio.setVolume(e.volume);
@@ -377,6 +394,65 @@ export class PlaySession {
     if (i >= 0) this.sounds.splice(i, 1);
     s.audio.removeFromParent();
     s.audio.disconnect?.();
+  }
+
+  /** Each frame: the effect and background sound for where the ears are now. */
+  private hear(): void {
+    const listener = this.listener;
+    if (!listener?.parent || !this.stage) return;
+    const h = this.world.hearing(listener.getWorldPosition(new THREE.Vector3()));
+    this.hearingNow = h;
+    this.stage.set(h.effect, h.mix);
+    const key = h.background ? `${h.background.sound}|${h.background.volume}` : '';
+    if ((this.background?.key ?? '') === key) return;
+    // Same sound, new volume: just glide to it.
+    const cur = this.background;
+    if (cur?.audio && h.background && cur.sound === h.background.sound) {
+      ramp(listener.context, cur.audio.gain.gain, h.background.volume);
+      this.background = { ...cur, key };
+      return;
+    }
+    if (cur?.audio) this.fadeOut(cur.audio);
+    this.background = h.background ? { key, sound: h.background.sound, audio: null } : null;
+    if (h.background) void this.startBackground(key, h.background.sound, h.background.volume);
+  }
+
+  /** A background loop, heard everywhere, fading in. */
+  private async startBackground(key: string, sound: string, volume: number): Promise<void> {
+    const listener = this.listener!;
+    let buffer: AudioBuffer;
+    try {
+      buffer = await PlaySession.load(sound);
+    } catch {
+      this.notes.push(`Could not play the background sound ${sound}`);
+      if (this.background?.key === key) this.background = null;
+      return;
+    }
+    // (Gone already, or another one wanted by now.)
+    if (this.disposed || this.background?.key !== key) return;
+    const audio = new THREE.Audio<GainNode>(listener);
+    audio.name = 'background-sound';
+    audio.setBuffer(buffer);
+    audio.setLoop(true);
+    audio.gain.gain.value = 0;
+    this.group.add(audio);
+    audio.play();
+    ramp(listener.context, audio.gain.gain, volume);
+    this.background.audio = audio;
+  }
+
+  private fadeOut(audio: THREE.Audio): void {
+    ramp(audio.context, audio.gain.gain, 0);
+    this.fading.push(audio);
+    setTimeout(() => this.dropBackground(audio), FADE_MS);
+  }
+
+  private dropBackground(audio: THREE.Audio): void {
+    const i = this.fading.indexOf(audio);
+    if (i >= 0) this.fading.splice(i, 1);
+    if (audio.isPlaying) audio.stop();
+    audio.removeFromParent();
+    audio.disconnect();
   }
 
   private disposed = false;
@@ -479,6 +555,7 @@ export class PlaySession {
       }
     }
     for (const m of this.mixers) m.update(dt);
+    this.hear();
     // Sounds that travel with a moving object.
     for (const s of this.sounds) {
       if (!s.follow) continue;
@@ -676,6 +753,10 @@ export class PlaySession {
       if (s.audio.isPlaying) s.audio.stop();
       this.dropSound(s);
     }
+    if (this.background?.audio) this.dropBackground(this.background.audio);
+    for (const a of [...this.fading]) this.dropBackground(a);
+    this.background = null;
+    this.stage?.dispose();
     this.listener?.removeFromParent();
     this.world.dispose();
     for (const s of this.signs.values()) s.sign.dispose();
@@ -685,6 +766,9 @@ export class PlaySession {
     this.shapeMat.dispose();
   }
 }
+
+/** How long a background sound takes to fade out before it's stopped (ms, a little over the fade). */
+const FADE_MS = 400;
 
 /** A plain creature: a capsule 32 × 72 with a dark visor showing which way it faces (−Z). */
 function npcFigure(side: string): THREE.Object3D {

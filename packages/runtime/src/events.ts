@@ -18,9 +18,10 @@ export type GameEvent =
   | { type: 'break'; target: string; time: number }
   /**
    * A sound starts. `at` is where (null: everywhere, not in 3D); `follow` is a moving object it travels with;
-   * `source` is the object making it (for stopping); `range` is how far it carries (units).
+   * `source` is the object making it (for stopping); `range` is how far it carries (units); `areaEffects`
+   * false: Sound areas and water don't change it (music, interface sounds; missing: they do).
    */
-  | { type: 'sound'; sound: string; at: [number, number, number] | null; follow: string | null; volume: number; loop: boolean; range: number; source: string; time: number }
+  | { type: 'sound'; sound: string; at: [number, number, number] | null; follow: string | null; volume: number; loop: boolean; range: number; source: string; areaEffects?: boolean; time: number }
   | { type: 'sound.stop'; source: string; time: number }
   /** Play an animation of an object's model (the game world has no models; whoever draws them plays it). */
   | { type: 'anim'; target: string; name: string; loop: boolean; time: number }

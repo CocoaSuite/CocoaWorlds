@@ -84,6 +84,8 @@ export function validateScene(data: unknown): Result<SceneFile> {
   if (isObj(data.settings)) {
     const bad = validateUi(data.settings.ui);
     need(p, !bad, 'settings.ui', bad ?? '');
+    const bg = data.settings.backgroundSound;
+    need(p, bg === undefined || (isObj(bg) && isStr(bg.sound) && isNum(bg.volume) && bg.volume >= 0), 'settings.backgroundSound', 'The background sound needs a sound (its path, or empty) and a volume of 0 or more.');
   }
   if (!Array.isArray(data.entities)) {
     need(p, false, 'entities', 'Entities must be a list.');

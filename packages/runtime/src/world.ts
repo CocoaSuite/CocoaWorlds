@@ -30,6 +30,9 @@ import {
   type BreakableData,
   type ConveyorData,
   type SoundData,
+  type SoundAreaData,
+  type SoundEffect,
+  backgroundSoundOf,
   type GameRules,
   type ModelData,
   type UiSettings,
@@ -48,6 +51,22 @@ import { Weapons, type V3 } from './weapons';
 import { ANIM_ROLES, Npc, type AnimRole } from './npc';
 import { NavGrid } from './navgrid';
 import { COLLIDER_MATERIAL, signedDist, type Plane, bounds, brushToWorld, isNoGrassBrush, buildMesh, buildWorld, fromData, hullPoints, vertices, type Brush, type BrushData, type WorldBrush } from '@cocoaworlds/geometry';
+
+/**
+ * What the player hears through, at one point: the area's effect (and how much of it), the background sound
+ * that should be playing, and whether that's because they're under water. See `GameWorld.hearing`.
+ */
+export interface Hearing {
+  /** The Sound area the ears are in (the smallest, where they overlap), or null. */
+  area: string | null;
+  effect: SoundEffect;
+  /** 0…1: how much of the effect. */
+  mix: number;
+  /** The background sound to play now (the area's, else the scene's), or null for silence. */
+  background: { sound: string; volume: number } | null;
+  /** Under water: muffled whatever area it is. */
+  underwater: boolean;
+}
 
 /** Units per metre (an inch-based world). */
 export const UNITS_PER_METRE = 39.37;
@@ -295,6 +314,8 @@ export class GameWorld {
   private waters: { id: string; collider: RAPIER.Collider; top: number; data: WaterData }[] = [];
   private ladders: { id: string; collider: RAPIER.Collider; data: LadderData }[] = [];
   private volumes = new Set<number>();
+  /** Sound areas: the brush's planes (inside is behind all of them), its size (smallest wins) and settings. */
+  private soundAreas: { id: string; planes: Plane[]; size: number; data: SoundAreaData }[] = [];
   /** Seconds the player's head has been under water (for drowning), and when it last hurt. */
   private underwaterFor = 0;
   private drownedAt = 0;
@@ -519,7 +540,7 @@ export class GameWorld {
 
     // Objects scripts move or switch become "units": one body for the object and everything inside it.
     // (Water and ladders stay where they are: they are zones, not something that moves.)
-    const own = (e: EntityData) => !!e.components.rigidBody || !!e.components.trigger || !!e.components.water || !!e.components.ladder || !!e.components.levelChange || !!e.components.npc;
+    const own = (e: EntityData) => !!e.components.rigidBody || !!e.components.trigger || !!e.components.water || !!e.components.ladder || !!e.components.levelChange || !!e.components.npc || !!e.components.soundArea;
     // (Breakable objects too: they disappear when they break.)
     const breakables = doc.entities.filter((e) => e.components.breakable && shown(e)).map((e) => e.id);
     for (const e of doc.entities) {
@@ -544,7 +565,7 @@ export class GameWorld {
     this.colVolumes = [];
     for (const e of doc.entities) {
       const d = e.components.brush as unknown as BrushData | undefined;
-      if (!shown(e) || !d?.faces || d.mesh || e.components.rigidBody || unitOf.has(e.id) || e.components.trigger || e.components.water || e.components.ladder || e.components.levelChange) continue;
+      if (!shown(e) || !d?.faces || d.mesh || e.components.rigidBody || unitOf.has(e.id) || e.components.trigger || e.components.water || e.components.ladder || e.components.levelChange || e.components.soundArea) continue;
       const b = brushToWorld(fromData({ faces: d.faces }), doc.worldMatrix(e.id));
       if (b.faces.length && b.faces.every((f) => f.surface.material === COLLIDER_MATERIAL)) this.colVolumes.push(b.faces.map((f) => f.plane));
     }
@@ -554,6 +575,9 @@ export class GameWorld {
       const brushData = e.components.brush as unknown as (BrushData & { role?: string }) | undefined;
       if (brushData?.faces) {
         const brush = brushToWorld(fromData({ faces: brushData.faces, mesh: brushData.mesh }), doc.worldMatrix(e.id));
+        // (A Sound area is heard, not touched: also a trigger zone when it has one, never part of the level.)
+        if (e.components.soundArea) this.addSoundArea(e, brush);
+        if (e.components.soundArea && !e.components.trigger) continue;
         if (e.components.levelChange) this.addLevelZone(e, brush);
         else if (e.components.ladder || e.components.water) this.addVolume(e, brush);
         else if (e.components.trigger) this.addTrigger(e, brush, scriptedZones.has(e.id));
@@ -934,6 +958,29 @@ export class GameWorld {
     this.owner.set(c.handle, e.id);
     if (e.components.water) this.waters.push({ id: e.id, collider: c, top: bounds(brush)?.max[1] ?? 0, data: readComponent<WaterData>('water', e.components.water) });
     else this.ladders.push({ id: e.id, collider: c, data: readComponent<LadderData>('ladder', e.components.ladder) });
+  }
+
+  /** A Sound area: the space inside the brush's faces. */
+  private addSoundArea(e: EntityData, brush: Brush): void {
+    const b = bounds(brush);
+    if (!b || !brush.faces.length) return;
+    const size = (b.max[0] - b.min[0]) * (b.max[1] - b.min[1]) * (b.max[2] - b.min[2]);
+    this.soundAreas.push({ id: e.id, planes: brush.faces.map((f) => f.plane), size, data: readComponent<SoundAreaData>('soundArea', e.components.soundArea) });
+  }
+
+  /**
+   * How things sound to ears at `p`: the smallest Sound area round it sets the effect and may swap the
+   * background sound; under water everything is muffled, area or not.
+   */
+  hearing(p: { x: number; y: number; z: number }): Hearing {
+    const at: [number, number, number] = [p.x, p.y, p.z];
+    let area: (typeof this.soundAreas)[number] | null = null;
+    for (const a of this.soundAreas) if ((!area || a.size < area.size) && a.planes.every((pl) => signedDist(pl, at) <= 0)) area = a;
+    const scene = backgroundSoundOf(this.doc.settings);
+    const bg = area?.data.sound ? { sound: area.data.sound, volume: area.data.volume } : scene.sound ? { sound: scene.sound, volume: scene.volume } : null;
+    const underwater = !!this.waterAt(p);
+    const mix = Math.max(0, Math.min(1, area?.data.mix ?? 1));
+    return { area: area?.id ?? null, effect: underwater ? 'underwater' : (area?.data.effect ?? 'none'), mix: underwater ? 1 : mix, background: bg, underwater };
   }
 
   /** The water a point is in (its id, surface height and look under water), or null. */
@@ -1883,7 +1930,7 @@ export class GameWorld {
   private startSound(id: string, s: SoundData, at: Q3 | null): void {
     if (!s.sound || !s.playOnStart) return;
     const p = at ?? this.placePoint({ ref: id });
-    this.bus.emit({ type: 'sound', sound: s.sound, at: p, follow: this.bodyOf(id), volume: s.volume, loop: s.loop, range: s.range, source: id, time: this.time });
+    this.bus.emit({ type: 'sound', sound: s.sound, at: p, follow: this.bodyOf(id), volume: s.volume, loop: s.loop, range: s.range, source: id, areaEffects: s.areaEffects !== false, time: this.time });
   }
 
   /** The moving body an object belongs to (itself, or the unit it is part of), if any. */

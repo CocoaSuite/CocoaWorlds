@@ -49,7 +49,8 @@
 - **Windows distribution.** Unsigned builds show a SmartScreen warning until a code-signing certificate is used.
 - **Geometry.** Brushes are convex; edited meshes (G4) can take any closed shape but don't take part in carving. Carve results are several convex brushes. Arbitrary mesh booleans on imported models are not planned for v1.
 - **Level scale.** No visibility precompilation (PVS); very large, dense levels rely on frustum culling and batching.
-- **Web export.** Audio waits for the first click (browser autoplay rules); mouse look needs a click to lock the pointer; large assets download before play.
+- **Sound areas.** Six built-in effects only (no custom echo settings); the area is the space inside all of the brush's faces, so draw it convex (an edited concave mesh counts as less than its shape); the area is found from the player's ears (the camera), not per sound; sounds from blocks and weapons can't opt out.
+- **Web export.** Audio, including the background sound, waits for the first click (browser autoplay rules); mouse look needs a click to lock the pointer; large assets download before play.
 - **Custom code.** No user JavaScript in v1; behaviour is built with blocks.
 - **Platforms.** The editor targets desktop and laptop screens only.
 

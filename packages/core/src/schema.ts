@@ -122,7 +122,16 @@ export interface SceneSettings {
   autoProbes?: boolean;
   /** Ambient occlusion: corners, creases and the ground under things darken (missing: on, as default). */
   ao?: AoSettings;
+  /** The map's background sound (wind, birds, a hum), looping and heard everywhere while playing (missing: none). */
+  backgroundSound?: BackgroundSound;
 }
+
+export interface BackgroundSound {
+  /** A project sound, by its path ('' for none). */
+  sound: string;
+  volume: number;
+}
+export const backgroundSoundOf = (s: { backgroundSound?: Partial<BackgroundSound> } | undefined): BackgroundSound => ({ sound: '', volume: 1, ...(s?.backgroundSound ?? {}) });
 
 export interface AoSettings {
   enabled: boolean;
