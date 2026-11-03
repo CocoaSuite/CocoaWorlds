@@ -230,7 +230,7 @@ function PlantPreview({ def }: { def: PlantDef }) {
   }, [def]);
   return (
     <div className="cw-plants-preview" ref={host} data-testid="plant-preview">
-      <div className="cw-plants-height">{(h / UNITS_PER_METRE).toFixed(2)} m · {Math.round(h)} u · {L('triangles', 'треугольников')}: {tris.map((n) => n.toLocaleString()).join(' / ')} {L('(near / mid / far)', '(близко / средне / далеко)')}</div>
+      <div className="cw-plants-height">{(h / UNITS_PER_METRE).toFixed(2)} m · {Math.round(h)} u · {L('triangles', 'треугольников')}: {tris.map((n) => n.toLocaleString()).join(' / ')} {def.form === 'tree' ? L('(near / mid / far) · then a 2-triangle picture', '(близко / средне / далеко) · дальше картинка из 2 треугольников') : L('(near / mid / far)', '(близко / средне / далеко)')}</div>
     </div>
   );
 }

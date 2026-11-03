@@ -241,6 +241,55 @@ export function plantGeometry(d: PlantDef, seed = d.seed, level = 0): THREE.Buff
   return g;
 }
 
+// ── Impostors: a far tree as one picture of itself, facing the camera ──
+
+let bake: { r: THREE.WebGLRenderer; scene: THREE.Scene; cam: THREE.OrthographicCamera; mesh: THREE.Mesh } | null = null;
+const impostors = new Map<string, { map: THREE.Texture; width: number; height: number }>();
+
+/**
+ * A picture of the plant from the side (rendered once, with soft light from the front and above), cut out
+ * against a clear background, and its size in u.
+ */
+export function plantImpostor(d: PlantDef, seed = d.seed): { map: THREE.Texture; width: number; height: number } {
+  const key = JSON.stringify([d, seed]);
+  const have = impostors.get(key);
+  if (have) return have;
+  if (!bake) {
+    const r = new THREE.WebGLRenderer({ alpha: true, antialias: true, preserveDrawingBuffer: true });
+    r.setSize(256, 256);
+    r.setClearColor(0x000000, 0);
+    const scene = new THREE.Scene();
+    scene.add(new THREE.HemisphereLight('#f2f6ff', '#7d8a72', 1.7));
+    const sun = new THREE.DirectionalLight('#ffffff', 1.6);
+    sun.position.set(0.4, 1, 1);
+    scene.add(sun);
+    const mesh = new THREE.Mesh(new THREE.BufferGeometry(), PLANT_MATERIAL);
+    scene.add(mesh);
+    bake = { r, scene, cam: new THREE.OrthographicCamera(-1, 1, 1, -1, -10000, 10000), mesh };
+  }
+  const g = plantGeometry(d, seed);
+  const box = g.boundingBox!;
+  const height = Math.max(1, box.max.y);
+  const width = Math.max(1, 2 * Math.max(Math.abs(box.min.x), box.max.x, Math.abs(box.min.z), box.max.z));
+  const half = Math.max(width, height) / 2;
+  // (Square picture; the plant stands on its bottom edge, centred.)
+  Object.assign(bake.cam, { left: -half, right: half, top: half * 2, bottom: 0 });
+  bake.cam.position.set(0, 0, 5000);
+  bake.cam.lookAt(0, 0, 0);
+  bake.cam.updateProjectionMatrix();
+  bake.mesh.geometry = g;
+  bake.r.render(bake.scene, bake.cam);
+  const c = document.createElement('canvas');
+  c.width = c.height = 256;
+  c.getContext('2d')!.drawImage(bake.r.domElement, 0, 0);
+  const map = new THREE.CanvasTexture(c);
+  map.colorSpace = THREE.SRGBColorSpace;
+  const out = { map, width: half * 2, height: half * 2 };
+  if (impostors.size > 100) impostors.clear();
+  impostors.set(key, out);
+  return out;
+}
+
 /** The material plants are drawn with: their own colours, both sides, lit softly. */
 export const PLANT_MATERIAL = new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide });
 
@@ -280,6 +329,15 @@ export class PlantRenderer {
           m.userData.entityId = e.id;
           mesh.addLevel(m, [0, size * 6, size * 16][l]!);
         });
+        // Trees, very far away: a picture of themselves, always facing the camera (two triangles).
+        if (def.form === 'tree') {
+          const imp = plantImpostor(def, p.seed);
+          const card = new THREE.Sprite(new THREE.SpriteMaterial({ map: imp.map, alphaTest: 0.5 }));
+          card.center.set(0.5, 0);
+          card.scale.set(imp.width, imp.height, 1);
+          card.userData.entityId = e.id;
+          mesh.addLevel(card, size * 40);
+        }
         mesh.name = `plant:${e.id}`;
         mesh.userData.entityId = e.id;
         mesh.matrixAutoUpdate = false;
