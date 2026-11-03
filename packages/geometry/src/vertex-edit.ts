@@ -141,6 +141,9 @@ export function moveVertices(b: Brush, moves: Map<number, V3>, _mode: NonPlanarM
   const m = toEditMesh(b);
   const verts = m.mesh.verts.map((v, i) => moves.get(i) ?? v);
   const { brush, splitFaces } = rebuildMesh(verts, m.mesh.polys, m.faces.map((f) => f.surface));
+  // An open mesh (a plane: a face or a few, no inside) only needs a face left; a closed one mustn't collapse.
+  const open = m.mesh.polys.length < 4;
+  if (open) return brush.mesh.polys.length ? { ok: true, brush, splitFaces, mesh: true } : { ok: false, reason: 'collapsed' };
   if (brush.mesh.polys.length < 4 || volume(brush) <= 0.01) return { ok: false, reason: 'collapsed' };
   const convex = tryConvex(brush);
   return convex ? { ok: true, brush: convex, splitFaces, mesh: false } : { ok: true, brush, splitFaces, mesh: true };

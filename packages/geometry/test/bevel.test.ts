@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { bevelBrush, box, buildWorld, plane, polygons, validate, volume } from '../src';
+import { bevelBrush, box, buildWorld, moveVertices, plane, polygons, validate, vertices, volume } from '../src';
 
 describe('bevel, plane, chosen cuts', () => {
   it('bevels a box: more faces, a little less volume, still valid', () => {
@@ -15,6 +15,15 @@ describe('bevel, plane, chosen cuts', () => {
     const ps = polygons(p);
     expect(ps.length).toBe(1);
     expect(ps[0]!.plane.n).toEqual([0, 1, 0]);
+  });
+  it("a plane's corners can be moved (bending it splits it into two triangles)", () => {
+    const p = plane([0, 0, 0], [128, 4, 128]);
+    const vs = vertices(p);
+    const r = moveVertices(p, new Map([[0, [vs[0]![0], vs[0]![1] + 32, vs[0]![2]]]]));
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(polygons(r.brush).length).toBe(2);
+    const flat = moveVertices(p, new Map([[1, [vs[1]![0] + 16, vs[1]![1], vs[1]![2]]]]));
+    expect(flat.ok && polygons(flat.brush).length).toBe(1);
   });
   it('a subtract brush cuts only the solids it is told to', () => {
     const a = box([0, 0, 0], [64, 64, 64]), b = box([0, 0, 64], [64, 64, 128]), cutter = box([16, 16, 48], [48, 48, 80]);
