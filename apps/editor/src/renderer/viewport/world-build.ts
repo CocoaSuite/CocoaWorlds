@@ -37,7 +37,10 @@ export function buildLevel(job: WorldJob): WorldResult {
       owners.push(s.id);
     }
   }
-  const mesh = pieces.length ? buildMesh(pieces, { cullTouchingFaces: true, wearRing: WEAR_RING }) : null;
+  // Smooth shading by solid (its pieces after live subtract shade as one).
+  const smoothOf = new Map(job.brushes.filter((b) => (b.smooth ?? 0) > 0).map((b) => [b.id, b.smooth!]));
+  const smooth = smoothOf.size ? (i: number) => (smoothOf.has(owners[i]!) ? { group: owners[i]!, angle: smoothOf.get(owners[i]!)! } : null) : undefined;
+  const mesh = pieces.length ? buildMesh(pieces, { cullTouchingFaces: true, wearRing: WEAR_RING, smooth }) : null;
   return {
     seq: job.seq,
     mesh,

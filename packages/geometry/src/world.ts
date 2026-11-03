@@ -20,6 +20,8 @@ export interface WorldBrush {
   id: string;
   role: WorldRole;
   brush: Brush;
+  /** Smooth shading: the steepest angle (degrees) still shaded as one surface; 0 or missing: flat. */
+  smooth?: number;
 }
 
 export interface BuiltSolid {

@@ -70,6 +70,10 @@ function BrushEntity({ e }: { e: EntityData }) {
           <span>{t('insp.clearsGrass')}</span>
           <Switch label={t('insp.clearsGrass')} checked={clearsGrass(e)} onChange={(v) => s.setFlag(e.id, 'keepsGrass', !v)} />
         </div>
+        <div className="cw-flagrow">
+          <span>{t('insp.smooth')}</span>
+          <Switch label={t('insp.smooth')} checked={!!e.components.smooth} onChange={(v) => s.setSmooth(e.id, v)} />
+        </div>
       </Section>
     </>
   );

@@ -344,7 +344,8 @@ export class ViewportEngine {
   syncAll(): void {
     // What is shown: the scene with Repeat groups built out (their copies are drawn, never saved).
     const doc = this.doc ? this.shownDoc(this.doc) : null;
-    this.foliage.sync(doc);
+    // (Grass follows once a drag ends: placing it again on every step of a drag would hold the drag up.)
+    if (!this.dragSet && !this.stroke) this.foliage.sync(doc);
     this.terrains.sync(doc);
     if (this.navOn) this.queueNav();
     this.mats = doc ? worldMatrices(doc) : new Map();
@@ -369,7 +370,7 @@ export class ViewportEngine {
     const wb = doc ? worldBrushes(doc) : [];
     // Faces and where each brush sits (a moved group moves its brushes without touching their faces).
     // (A water body's look counts too: it's drawn with it.)
-    const key = wb.map((b) => `${b.id}:${b.role}:${faceKey(doc!.get(b.id)!)}:${mat4Key(this.mats.get(b.id) ?? [])}${b.role === 'water' ? JSON.stringify(doc!.get(b.id)!.components.water ?? '') : ''}`).join('|');
+    const key = wb.map((b) => `${b.id}:${b.role}:${faceKey(doc!.get(b.id)!)}:${mat4Key(this.mats.get(b.id) ?? [])}${b.role === 'water' ? JSON.stringify(doc!.get(b.id)!.components.water ?? '') : ''}:${b.smooth ?? 0}`).join('|');
     if (key !== this.worldKey) {
       this.worldKey = key;
       this.world.waterLookOf = (id) => waterLookOf(doc, id);

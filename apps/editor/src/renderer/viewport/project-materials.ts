@@ -227,7 +227,7 @@ function restyle(l: Live): void {
   const livePics = liveMaps.get(d.id);
   const has = (role: MapRole) => !!(livePics?.[role] ?? d[MAP_FIELDS[role]]);
   m.color.set(d.color);
-  setShading(m, d.mapping ?? 'face', d.tile ?? 128, d.wear ?? null);
+  setShading(m, d.mapping ?? 'face', d.tile ?? 128, d.wear ?? null, d.bevel ?? 0);
   // A map replaces its slider (Three.js multiplies the two).
   m.roughness = has('roughness') ? 1 : d.roughness;
   m.metalness = has('metalness') ? 1 : d.metalness;

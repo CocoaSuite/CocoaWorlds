@@ -166,3 +166,13 @@ depth with what's behind each pixel, and everything follows from how much water 
 The water is lit like any surface (shadows fall on it) with a little light of its own, so it stays bright in shade.
 Everything moves with a shared clock; in the editor the picture moves when the view is redrawn. (`viewport/water-look.ts`.)
 
+## Smooth shading and bevelled edges
+
+A brush's **Smooth shading** (Inspector, Display) shades faces meeting at up to 50° as one surface, averaging
+their normals at shared corners: cylinders and spheres look round, a box stays crisp. New cylinders and spheres
+start smooth. It's kept as its own small component, so moving, clipping or painting the brush keeps it. Smoothed
+brushes have no wear ring.
+
+A material's **Bevel edges** (u, up to 32) makes brush edges look rounded off: within that distance of an edge
+the lighting leans out over it (from each face's distance to its edges, the same data wear uses).
+

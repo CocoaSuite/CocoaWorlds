@@ -394,6 +394,13 @@ export class FoliageRenderer {
     if (!field) return false;
     const sc = readComponent<ScatterData>('scatter', e.components.scatter);
     const m = new THREE.Matrix4().fromArray(doc.worldMatrix(e.id));
+    // Up to date already? (Checked from the terrain's extent, before building anything.)
+    const box = new THREE.Box3(new THREE.Vector3(), new THREE.Vector3((field.n[0] - 1) * field.cell, (field.n[1] - 1) * field.cell, (field.n[2] - 1) * field.cell)).applyMatrix4(m);
+    const blockers = blockersOf(doc, e.id, sc.size * 0.45, (sc.height ?? sc.size) * 1.25).filter(
+      (b) => b.max[0]! >= box.min.x && b.min[0]! <= box.max.x && b.max[2]! >= box.min.z && b.min[2]! <= box.max.z && b.max[1]! >= box.min.y && b.min[1]! <= box.max.y + 8,
+    );
+    const key = JSON.stringify([sc, file, terrainVersion(file), doc.worldMatrix(e.id), blockers.map((b) => b.key)]);
+    if (this.entries.get(e.id)?.key === key) return true;
     // The whole surface in world space (with each corner's layer weights).
     const parts = terrainChunks(file, field);
     let count = 0, tris = 0;
@@ -415,12 +422,6 @@ export class FoliageRenderer {
       vo += mesh.positions.length;
       io += mesh.indices.length;
     }
-    const box = new THREE.Box3().setFromArray(P);
-    const blockers = blockersOf(doc, e.id, sc.size * 0.45, (sc.height ?? sc.size) * 1.25).filter(
-      (b) => b.max[0]! >= box.min.x && b.min[0]! <= box.max.x && b.max[2]! >= box.min.z && b.min[2]! <= box.max.z && b.max[1]! >= box.min.y && b.min[1]! <= box.max.y + 8,
-    );
-    const key = JSON.stringify([sc, file, terrainVersion(file), doc.worldMatrix(e.id), blockers.map((b) => b.key)]);
-    if (this.entries.get(e.id)?.key === key) return true;
     this.remove(e.id);
     const entry: Entry = { key, chunks: [] };
     this.entries.set(e.id, entry);

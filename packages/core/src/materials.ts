@@ -66,6 +66,8 @@ export interface MaterialDef {
    * edges, in creases, on surfaces facing up, broken up by noise. Missing: no wear.
    */
   wear?: WearDef;
+  /** Bevelled edges (u, up to 32): brush edges look rounded off by this much, by their lighting. Missing: none. */
+  bevel?: number;
   /** The wear layer's images, baked from a graph's Wear outputs. */
   wearMap?: string;
   wearRoughnessMap?: string;

@@ -184,6 +184,8 @@ interface Actions {
   selectAll(): void;
   setTool(t: Tool): void;
   setTerrainBrush(b: Partial<TerrainBrush>): void;
+  /** Smooth shading on a brush, or off. */
+  setSmooth(id: string, on: boolean): void;
   /** A finished terrain stroke, already made: recorded so it can be undone. */
   terrainEdit(cmd: { label: string; apply(): void; revert(): void }): void;
   setView(v: ViewMode): void;
@@ -299,6 +301,9 @@ let clipboard: { entities: EntityData[]; pastes: number } | null = null;
 let unsubHist: (() => void) | null = null;
 
 /** A short name for new brush entities: block, block_2, … */
+/** Smooth shading: faces meeting at up to this angle (degrees) shade as one surface. */
+export const SMOOTH_ANGLE = 50;
+
 function uniqueName(doc: SceneDoc, base: string): string {
   const names = new Set(doc.entities.map((e) => e.name));
   if (!names.has(base)) return base;
@@ -429,6 +434,10 @@ export const useEditor = create<State & Actions>()((set, get) => ({
     if (doc) set({ selection: doc.entities.filter((e) => isShown(doc, e) && !isLocked(doc, e)).map((e) => e.id) });
   },
 
+  setSmooth(id, on) {
+    const doc = get().doc;
+    if (doc) get().execute(setComponentCmd(doc, id, 'smooth', on ? { angle: SMOOTH_ANGLE } : undefined, on ? 'Smooth shading' : 'Flat shading'));
+  },
   setTerrainBrush: (b) => set((s) => ({ terrainBrush: { ...s.terrainBrush, ...b } })),
   terrainEdit(cmd) {
     get().execute(cmd);
@@ -654,6 +663,8 @@ export const useEditor = create<State & Actions>()((set, get) => ({
       const ent = newBrushEntity(uniqueName(doc, base), b, brushRole === 'subtract' ? 'subtract' : 'solid');
       // A trigger zone is a brush with a trigger component; it never becomes level geometry.
       if (brushRole === 'trigger' || brushRole === 'water' || brushRole === 'ladder') ent.components[brushRole] = defaultComponent(brushRole);
+      // Round shapes start smooth.
+      if (brushRole === 'solid' && (brushOptions.shape === 'cylinder' || brushOptions.shape === 'sphere')) ent.components.smooth = { angle: SMOOTH_ANGLE };
       return ent;
     });
     // Give each a unique name even within one batch (stairs).

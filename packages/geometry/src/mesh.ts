@@ -41,6 +41,12 @@ export interface MeshOptions {
    * edges and creases, for wear on edges and dirt in corners (CM3).
    */
   wearRing?: number;
+  /**
+   * Smooth shading: for brush `i`, the smoothing group it's in and the steepest angle (degrees) between faces still
+   * shaded as one surface (null: flat). Faces of one group meeting at a gentler angle share normals at their
+   * corners, so cylinders and spheres look round. Smoothed brushes get no wear ring (it would show as stripes).
+   */
+  smooth?: (brush: number) => { group: string; angle: number } | null;
 }
 
 /**
@@ -67,19 +73,23 @@ export function buildMesh(brushes: Brush[], opts: MeshOptions = {}): BrushMesh {
   }
 
   const pos: number[] = [], nor: number[] = [], uv: number[] = [], idx: number[] = [], tf: number[] = [], tb: number[] = [], wr: number[] = [];
+  /** Each vertex's brush (for smoothing). */
+  const vb: number[] = [];
   const ring = opts.wearRing ?? 0;
   const shown = new Set(visible.map((x) => x.poly));
   const groups: MeshGroup[] = [];
   for (const [material, list] of byMat) {
     const start = idx.length;
     for (const { poly, brush } of list) {
-      if (ring > 0) {
+      const sm = opts.smooth?.(brush) ?? null;
+      if (ring > 0 && !sm) {
         ringFace(poly, brush, perBrush[brush]!, shown, ring, (p, d) => {
           pos.push(p[0], p[1], p[2]);
           nor.push(poly.plane.n[0], poly.plane.n[1], poly.plane.n[2]);
           const [u, w] = uvAt(p, poly.plane, poly.surface, uvAxes(poly.plane, poly.surface));
           uv.push(u, w);
           wr.push(d[0] + 1, d[1] + 1);
+          vb.push(brush);
           return pos.length / 3 - 1;
         }, (a, b, c) => {
           idx.push(a, b, c);
@@ -95,6 +105,8 @@ export function buildMesh(brushes: Brush[], opts: MeshOptions = {}): BrushMesh {
         nor.push(poly.plane.n[0], poly.plane.n[1], poly.plane.n[2]);
         const [u, w] = uvAt(p, poly.plane, poly.surface, axes);
         uv.push(u, w);
+        if (ring > 0) wr.push(ring + 1, ring + 1);
+        vb.push(brush);
       }
       for (let i = 1; i + 1 < poly.points.length; i++) {
         idx.push(base, base + i, base + i + 1);
@@ -104,6 +116,7 @@ export function buildMesh(brushes: Brush[], opts: MeshOptions = {}): BrushMesh {
     }
     groups.push({ material, start, count: idx.length - start });
   }
+  if (opts.smooth) smoothNormals(pos, nor, vb, opts.smooth);
   return {
     positions: new Float32Array(pos),
     normals: new Float32Array(nor),
@@ -114,6 +127,47 @@ export function buildMesh(brushes: Brush[], opts: MeshOptions = {}): BrushMesh {
     triangleBrushes: new Uint32Array(tb),
     ...(ring > 0 ? { wear: new Float32Array(wr) } : {}),
   };
+}
+
+/** Average the normals of smoothed faces where their corners meet (see `MeshOptions.smooth`). */
+function smoothNormals(pos: number[], nor: number[], vb: number[], smooth: NonNullable<MeshOptions['smooth']>): void {
+  const at = new Map<string, number[]>();
+  const settings = new Map<number, { group: string; angle: number } | null>();
+  const of = (b: number) => {
+    if (!settings.has(b)) settings.set(b, smooth(b));
+    return settings.get(b)!;
+  };
+  for (let v = 0; v < vb.length; v++) {
+    const s = of(vb[v]!);
+    if (!s) continue;
+    const k = `${s.group}|${Math.round(pos[v * 3]! * 64)},${Math.round(pos[v * 3 + 1]! * 64)},${Math.round(pos[v * 3 + 2]! * 64)}`;
+    const list = at.get(k);
+    if (list) list.push(v);
+    else at.set(k, [v]);
+  }
+  const flat = nor.slice();
+  for (const list of at.values()) {
+    if (list.length < 2) continue;
+    for (const v of list) {
+      const min = Math.cos((of(vb[v]!)!.angle * Math.PI) / 180);
+      let x = 0, y = 0, z = 0;
+      // (Each face counted once, however many of its corners land here.)
+      const seen: number[][] = [];
+      for (const u of list) {
+        const n = [flat[u * 3]!, flat[u * 3 + 1]!, flat[u * 3 + 2]!];
+        if (n[0]! * flat[v * 3]! + n[1]! * flat[v * 3 + 1]! + n[2]! * flat[v * 3 + 2]! < min - 1e-6) continue;
+        if (seen.some((s) => Math.abs(s[0]! - n[0]!) + Math.abs(s[1]! - n[1]!) + Math.abs(s[2]! - n[2]!) < 1e-5)) continue;
+        seen.push(n);
+        x += n[0]!;
+        y += n[1]!;
+        z += n[2]!;
+      }
+      const l = Math.hypot(x, y, z) || 1;
+      nor[v * 3] = x / l;
+      nor[v * 3 + 1] = y / l;
+      nor[v * 3 + 2] = z / l;
+    }
+  }
 }
 
 /** Points shared by two polygons of a brush: the edge between them. */

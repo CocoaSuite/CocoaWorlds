@@ -141,7 +141,7 @@ export function worldBrushes(doc: SceneDoc): WorldBrush[] {
     if (!e.components.brush || !isShown(doc, e)) continue;
     const b = worldBrushOf(doc, e, mats.get(e.id));
     // Trigger zones are brushes too, but they never become level geometry.
-    if (b) out.push({ id: e.id, role: e.components.water ? 'water' : e.components.ladder ? 'ladder' : e.components.trigger || e.components.levelChange ? 'trigger' : b.role, brush: b.brush });
+    if (b) out.push({ id: e.id, role: e.components.water ? 'water' : e.components.ladder ? 'ladder' : e.components.trigger || e.components.levelChange ? 'trigger' : b.role, brush: b.brush, smooth: Number((e.components.smooth as { angle?: number } | undefined)?.angle ?? 0) });
   }
   return out;
 }

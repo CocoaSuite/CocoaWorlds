@@ -33,6 +33,7 @@ const WEAR = /* glsl */ `
 varying vec2 vWear;
 varying vec3 vWearPos;
 varying vec3 vWearN;
+uniform float bevelWidth;
 uniform vec3 wearColor;
 uniform vec4 wearParams;   // edge, crease, up, width
 uniform vec3 wearMat;      // roughness, metalness, noise
@@ -108,6 +109,7 @@ interface Uniforms {
   wearRoughnessMap: { value: THREE.Texture };
   wearMetalMap: { value: THREE.Texture };
   wearNoiseMap: { value: THREE.Texture };
+  bevelWidth: { value: number };
 }
 
 function uniformsOf(m: THREE.Material): Uniforms {
@@ -121,6 +123,7 @@ function uniformsOf(m: THREE.Material): Uniforms {
     wearRoughnessMap: { value: blankTexture() },
     wearMetalMap: { value: blankTexture() },
     wearNoiseMap: { value: blankTexture() },
+    bevelWidth: { value: 0 },
   }) as Uniforms;
 }
 
@@ -149,19 +152,22 @@ export function wearTextures(m: THREE.Material): THREE.Texture[] {
  * Set a material's mapping (face or triplanar), size in the world (`tile`, units per repeat) and wear layer.
  * The shader is rebuilt only when the mapping or whether there is wear changes.
  */
-export function setShading(m: THREE.MeshStandardMaterial, mapping: Mapping, tile: number, wear: WearDef | null): void {
+export function setShading(m: THREE.MeshStandardMaterial, mapping: Mapping, tile: number, wear: WearDef | null, bevel = 0): void {
   const u = uniformsOf(m);
+  u.bevelWidth.value = Math.min(32, Math.max(0, bevel));
+  // (Wear and bevels both need each face's distances to its edges.)
+  const edges = !!wear || bevel > 0;
   u.triScale.value = 1 / Math.max(1, tile);
   if (wear) {
     u.wearColor.value.set(wear.color);
     u.wearParams.value.set(wear.edge, wear.crease, wear.up, Math.min(32, Math.max(0.5, wear.width)));
     u.wearMat.value.set(wear.roughness, wear.metalness, wear.noise);
   }
-  const key = `${mapping}|${wear ? 'wear' : ''}`;
+  const key = `${mapping}|${wear ? 'wear' : ''}${bevel > 0 ? '|bevel' : ''}`;
   if ((m.userData.shadingKey ?? 'face|') === key) return;
   m.userData.shadingKey = key;
   m.needsUpdate = true;
-  if (mapping === 'face' && !wear) {
+  if (mapping === 'face' && !edges) {
     m.onBeforeCompile = () => {};
     m.customProgramCacheKey = () => '';
     return;
@@ -174,17 +180,20 @@ export function setShading(m: THREE.MeshStandardMaterial, mapping: Mapping, tile
     shader.vertexShader = shader.vertexShader
       .replace(
         '#include <common>',
-        `#include <common>\nvarying vec3 vTriPos;\nvarying vec3 vTriNormal;${wear ? '\nattribute vec2 aWear;\nvarying vec2 vWear;\nvarying vec3 vWearPos;\nvarying vec3 vWearN;' : ''}`,
+        `#include <common>\nvarying vec3 vTriPos;\nvarying vec3 vTriNormal;${edges ? '\nattribute vec2 aWear;\nvarying vec2 vWear;\nvarying vec3 vWearPos;\nvarying vec3 vWearN;' : ''}`,
       )
       .replace(
         '#include <project_vertex>',
         (project === 'world'
           ? 'vTriPos = (modelMatrix * vec4(transformed, 1.0)).xyz;\nvTriNormal = normalize(mat3(modelMatrix) * objectNormal);\n'
           : 'vTriPos = transformed;\nvTriNormal = normalize(objectNormal);\n') +
-          (wear ? 'vWear = aWear;\nvWearPos = (modelMatrix * vec4(transformed, 1.0)).xyz;\nvWearN = normalize(mat3(modelMatrix) * objectNormal);\n' : '') +
+          (edges ? 'vWear = aWear;\nvWearPos = (modelMatrix * vec4(transformed, 1.0)).xyz;\nvWearN = normalize(mat3(modelMatrix) * objectNormal);\n' : '') +
           '#include <project_vertex>',
       );
-    let f = shader.fragmentShader.replace('#include <common>', `#include <common>\n${project === 'world' ? '#define TRI_WORLD' : ''}\n${HELPERS}\n${wear ? WEAR : ''}`);
+    let f = shader.fragmentShader.replace(
+      '#include <common>',
+      `#include <common>\n${project === 'world' ? '#define TRI_WORLD' : ''}\n${HELPERS}\n${wear ? WEAR : edges ? EDGE_VARYINGS : ''}\n${bevel > 0 ? BEVEL : ''}`,
+    );
     // Each map chunk: projected when triplanar, as it was otherwise; the wear blends in after colour, roughness
     // and metal are read.
     const chunk = (c: string) => (mapping !== 'face' ? projected(c) : THREE.ShaderChunk[c as keyof typeof THREE.ShaderChunk]);
@@ -198,9 +207,36 @@ export function setShading(m: THREE.MeshStandardMaterial, mapping: Mapping, tile
     for (const c of ['map_fragment', 'roughnessmap_fragment', 'metalnessmap_fragment', 'emissivemap_fragment', 'alphamap_fragment', 'aomap_fragment'])
       if (mapping !== 'face' || after[c]) f = f.replace(`#include <${c}>`, `${chunk(c)}\n${after[c] ?? ''}`);
     if (mapping !== 'face') f = f.replace('#include <normal_fragment_maps>', NORMALS);
+    if (bevel > 0) f = f.replace('#include <lights_physical_fragment>', 'bevelNormal(normal);\n#include <lights_physical_fragment>');
     shader.fragmentShader = f;
   };
 }
+
+/** The edge distances alone (bevels without wear). */
+const EDGE_VARYINGS = 'varying vec2 vWear;\nvarying vec3 vWearPos;\nvarying vec3 vWearN;\nuniform float bevelWidth;';
+
+/**
+ * Bevelled edges: within `bevelWidth` of a brush face's edge, the normal leans out over the edge, more the closer
+ * it gets (as a rounded-off edge would), so the edge catches the light. Which way is "out" comes from how the
+ * distance to the edge changes across the screen.
+ */
+const BEVEL = `
+void bevelNormal(inout vec3 n) {
+  if (vWear.x < 0.5 || bevelWidth <= 0.0) return;
+  float e = vWear.x - 1.0;
+  float t = clamp(e / bevelWidth, 0.0, 1.0);
+  if (t >= 1.0) return;
+  vec3 dpx = dFdx(-vViewPosition), dpy = dFdy(-vViewPosition);
+  float ex = dFdx(e), ey = dFdy(e);
+  vec3 r1 = cross(dpy, n), r2 = cross(n, dpx);
+  float det = dot(dpx, r1);
+  vec3 g = (ex * r1 + ey * r2) * sign(det) / max(abs(det), 1e-8);
+  float gl = length(g);
+  if (gl < 1e-6) return;
+  // (A quarter circle: flat inside, leaning to 45 degrees right at the edge.)
+  float lean = 1.0 - sqrt(max(0.0, 1.0 - (1.0 - t) * (1.0 - t)));
+  n = normalize(n - (g / gl) * (1.0 - t) * (0.6 + 0.4 * (1.0 - lean)));
+}`;
 
 /** Face or triplanar mapping only (no wear). */
 export function setMapping(m: THREE.MeshStandardMaterial, mapping: Mapping, tile: number): void {

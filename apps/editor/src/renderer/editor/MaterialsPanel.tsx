@@ -442,6 +442,9 @@ function MaterialProps({
           </Row>
         </>
       )}
+      <Row label={t('mat.bevel')}>
+        <Slider label={t('mat.bevel')} value={m.bevel ?? 0} min={0} max={32} step={1} digits={0} onChange={(v) => edit({ bevel: v > 0 ? v : undefined }, 'Bevel edges', `mat-bevel-${m.id}`)} />
+      </Row>
       <WearSettings m={m} edit={edit} />
       <label className="cw-screens-sw" title={t('mat.twoSidedHint')}>
         <Switch label={t('mat.twoSided')} checked={!!m.doubleSided} onChange={(v) => edit({ doubleSided: v || undefined }, v ? 'Two-sided on' : 'Two-sided off')} />
