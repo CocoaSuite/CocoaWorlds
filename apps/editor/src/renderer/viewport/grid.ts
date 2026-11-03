@@ -18,6 +18,7 @@ const vertex = /* glsl */ `
 
 const fragment = /* glsl */ `
   uniform float uStep;
+  uniform float uMajorStep;  // bold lines: a fixed size, so finer snapping shows as small squares inside
   uniform int uPlane;          // 0 = XZ (floor), 1 = XY (front), 2 = ZY (side)
   uniform vec3 uCam;
   uniform float uFade;
@@ -49,7 +50,7 @@ const fragment = /* glsl */ `
     float fade = 1.0 - smoothstep(uFade * 0.35, uFade, length(c - cam));
 
     float minor = gridLine(c, uStep);
-    float major = gridLine(c, uStep * 4.0);
+    float major = gridLine(c, uMajorStep);
     vec3 col = uMinor;
     float a = minor * 0.55;
     if (major > 0.0) { col = mix(col, uMajor, major); a = max(a, major * 0.9); }
@@ -84,6 +85,7 @@ export class EditorGrid {
       side: THREE.DoubleSide,
       uniforms: {
         uStep: { value: 16 },
+        uMajorStep: { value: 64 },
         uPlane: { value: 0 },
         uCam: { value: new THREE.Vector3() },
         uFade: { value: 8192 },
@@ -106,6 +108,8 @@ export class EditorGrid {
     while (step / unitsPerPixel < 6 && step < 4096) step *= 4;
     this.step = step;
     this.mat.uniforms.uStep!.value = step;
+    // (Bold every 64 u, or every fourth line once the lines are wider than that.)
+    this.mat.uniforms.uMajorStep!.value = Math.max(64, step * 4);
     this.mat.uniforms.uFade!.value = Math.max(2048, unitsPerPixel * 1600);
   }
 

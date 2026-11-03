@@ -626,3 +626,4 @@ button.cw-sec.cw-fold { width: 100%; border: 0; border-top: 1px solid var(--line
 .cw-paint-side { display: flex; flex-direction: column; gap: 10px; }
 .cw-paint-side .cw-brush-hint { color: var(--mute); font-size: 12px; line-height: 1.4; }
 .cw-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.cw-pill-select { background: transparent; border: 0; color: inherit; font: inherit; padding: 0 2px; cursor: pointer; }

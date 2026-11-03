@@ -17,6 +17,7 @@ export const SHORTCUTS: { label: string; keys: string[] }[] = [
   { label: 'Faces: add or remove / whole brush', keys: [`${mod}+click`, 'Shift+click'] },
   { label: 'Paint tool (click faces to apply a material)', keys: ['P'] },
   { label: 'Vertex tool (pick corners or edge middles, move with the arrows)', keys: ['X'] },
+  { label: 'Finer or coarser snapping grid', keys: ['[', ']'] },
   { label: 'Clip tool (drag a line across brushes; Tab: what to keep; Enter: clip)', keys: ['C'] },
   { label: 'Loop cut (hover a brush, wheel for more cuts, click to cut)', keys: [`${mod}+R`] },
   { label: 'Edit pivot: the move gizmo moves the selected object’s pivot (snaps to corners)', keys: ['O'] },
@@ -142,6 +143,10 @@ export function useShortcuts(openKeys: () => void): void {
           return s.setView('front');
         case 'Digit4':
           return s.setView('side');
+        case 'BracketLeft':
+          return s.stepGrid(-1);
+        case 'BracketRight':
+          return s.stepGrid(1);
         case 'F2':
           if (s.selection.length === 1) {
             e.preventDefault();

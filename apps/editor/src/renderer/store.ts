@@ -106,6 +106,9 @@ export interface TerrainBrush {
 export type { FaceRef };
 export type Justify = 'left' | 'right' | 'top' | 'bottom' | 'center';
 export type ViewMode = 'perspective' | 'top' | 'front' | 'side';
+/** Grid sizes to snap to (u). */
+export const GRID_SIZES = [1, 2, 4, 8, 16, 32, 64, 128, 256, 512];
+
 export type AddKind = 'empty' | 'pointLight' | 'spotLight' | 'sun' | 'spawn' | 'sign';
 export interface LogEntry {
   at: string;
@@ -291,6 +294,10 @@ interface Actions {
   setGameRule(rule: keyof GameRules, on: boolean): Promise<void>;
   /** Change the scene's settings (lighting, sky, fog, gravity), with undo. */
   setSceneSettings(patch: Partial<SceneSettings>, label: string, mergeKey?: string): void;
+  /** The snapping grid's size (u; saved with the project). */
+  setGridSize(size: number): void;
+  /** Next finer or coarser grid (×½ or ×2). */
+  stepGrid(dir: -1 | 1): void;
   /** Replace the project's game values (saved to the project file at once). */
   setGameValues(values: GameValue[], label: string): Promise<boolean>;
   /** Open another scene of the project (saving this one first). */
@@ -1369,6 +1376,21 @@ export const useEditor = create<State & Actions>()((set, get) => ({
     });
     set({ session: { ...s, project: { ...s.project, settings: { ...s.project.settings, materials: list } } }, rev: get().rev + 1 });
     saveProjectSoon(get);
+  },
+
+  setGridSize(size) {
+    const s = get().session;
+    if (!s) return;
+    const g = Math.min(512, Math.max(1, size));
+    set({ session: { ...s, project: { ...s.project, settings: { ...s.project.settings, gridSize: g } } }, rev: get().rev + 1 });
+    saveProjectSoon(get);
+  },
+
+  stepGrid(dir) {
+    const now = get().session?.project.settings.gridSize ?? 16;
+    const i = GRID_SIZES.findIndex((g) => g >= now);
+    const at = i < 0 ? GRID_SIZES.length - 1 : i;
+    get().setGridSize(GRID_SIZES[Math.min(GRID_SIZES.length - 1, Math.max(0, (GRID_SIZES[at] === now ? at : dir > 0 ? at - 1 : at) + dir))]!);
   },
 
   async setGameRule(rule, on) {

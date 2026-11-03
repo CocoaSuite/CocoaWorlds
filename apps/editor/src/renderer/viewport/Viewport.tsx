@@ -7,7 +7,7 @@ import { ContextMenu, Segmented, type MenuEntry } from '@cocoaworlds/ui';
 import { useEffect, useRef, useState } from 'react';
 import { flyState } from '../editor/shortcuts';
 import { t } from '../i18n';
-import { useSelectedEntities, useEditor, type ViewMode } from '../store';
+import { GRID_SIZES, useSelectedEntities, useEditor, type ViewMode } from '../store';
 import type { DraftState } from './brush-draft';
 import { BrushPanel } from './BrushPanel';
 import { TerrainPanel } from './TerrainPanel';
@@ -303,7 +303,20 @@ export function Viewport() {
       {!asPlayer && (
       <div className="cw-ov cw-ov-tr cw-pill">
         <span className="cw-pill-k">{t('grid.grid')}</span>
-        <span className="mono">{gridSize}u</span>
+        <select
+          className="cw-pill-select mono"
+          aria-label={t('grid.size')}
+          title={t('grid.sizeTitle')}
+          value={gridSize}
+          onPointerDown={(e) => e.stopPropagation()}
+          onChange={(e) => useEditor.getState().setGridSize(Number(e.currentTarget.value))}
+        >
+          {GRID_SIZES.map((g) => (
+            <option key={g} value={g}>
+              {g}u
+            </option>
+          ))}
+        </select>
         <span className="cw-pill-sep" />
         <span className="cw-pill-k">{t('grid.snap')}</span>
         <span>{snap ? t('grid.on') : t('grid.off')}</span>
