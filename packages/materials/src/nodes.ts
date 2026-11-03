@@ -369,6 +369,26 @@ else off = vec2(cos(radians(p_angle)), sin(radians(p_angle))) * (inG_by(uv) - 0.
 outColor = vec4(inC_in(uv + off).rgb, 1.);`,
   },
   {
+    type: 'directionalWarp',
+    group: 'change',
+    label: l('Directional warp', 'Направленное искажение'),
+    hint: l('Push the picture along one direction by how bright another is: once (a shift), or flowing step by step (smeared, streaky).', 'Сдвинуть картинку в одном направлении по яркости другой: один раз (сдвиг) или течением шаг за шагом (размазанно, полосами).'),
+    inputs: [IN_COLOR(), IN_GREY('by', l('Intensity', 'Сила'), [0.5, 0.5, 0.5])],
+    output: 'color',
+    params: [
+      { id: 'angle', label: l('Direction', 'Направление'), kind: 'number', min: 0, max: 360, step: 1, default: 0 },
+      { id: 'amount', label: l('Amount', 'Сила'), kind: 'number', min: 0, max: 1, default: 0.15 },
+      { id: 'mode', label: l('How', 'Как'), kind: 'choice', options: [opt('shift', 'Shift', 'Сдвиг'), opt('flow', 'Flow', 'Течение')], default: 'shift' },
+      { id: 'centred', label: l('Grey stays put', 'Серое на месте'), kind: 'bool', default: true },
+    ],
+    glsl: `vec2 dir = vec2(cos(radians(p_angle)), sin(radians(p_angle)));
+float bias = p_centred > 0.5 ? 0.5 : 0.;
+vec2 q = uv;
+if (p_mode < 0.5) q += dir * (inG_by(uv) - bias) * p_amount;
+else for (int k = 0; k < 12; k++) q += dir * (inG_by(q) - bias) * p_amount / 12.;
+outColor = vec4(inC_in(q).rgb, 1.);`,
+  },
+  {
     type: 'transform',
     group: 'change',
     label: l('Transform', 'Трансформация'),
