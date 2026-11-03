@@ -3,9 +3,9 @@
  * sun, clouds and stars, previewed live over a little test ground (a tree, a ball, a box, a person) lit as the game
  * will light it. The sun's height and direction are the scene's Sun light, moved from here.
  */
-import { PLANT_PRESETS, SKY_PRESETS, readComponent, sceneSettings, skyOf, type PlantDef, type SkySettings } from '@cocoaworlds/core';
+import { PLANT_PRESETS, SKY_PRESETS, type SavedSky, readComponent, sceneSettings, skyOf, type PlantDef, type SkySettings } from '@cocoaworlds/core';
 import { Button, ColorField, NumberField, Switch } from '@cocoaworlds/ui';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { getLang } from '../i18n';
@@ -35,6 +35,8 @@ export function SkyPanel() {
   useEditor((s) => s.rev);
   const sun = useSun();
   const st = useEditor.getState();
+  const saved = useEditor((s) => s.session?.project.settings.skies) ?? [];
+  const [renaming, setRenaming] = useState<string | null>(null);
   if (!doc) return null;
   const settings = sceneSettings(doc.settings);
   const sky = skyOf(settings.sky);
@@ -45,16 +47,24 @@ export function SkyPanel() {
     if (!e) return;
     st.setTransform(e.id, { ...e.transform, rotation: [-height, turn, 0] }, key);
   };
-  const apply = (p: (typeof SKY_PRESETS)[number]) => {
+  const apply = (p: { name: { en: string }; sky: Omit<SkySettings, 'enabled'>; sun?: { height: number; colour: string; intensity: number } }) => {
     st.begin(`Sky: ${p.name.en}`);
     st.setSceneSettings({ sky: { ...sky, ...p.sky, enabled: true } }, `Sky: ${p.name.en}`);
-    if (sun) {
+    if (sun && p.sun) {
       aimSun(p.sun.height, sun.turn);
       st.setComponentField(sun.id, 'light', 'color', p.sun.colour);
       st.setComponentField(sun.id, 'light', 'intensity', p.sun.intensity);
     }
     st.commit();
   };
+  // Save the scene's sky (and where its sun stands) into the project, for any scene; then name it.
+  const save = () => {
+    const { enabled: _on, ...rest } = sky;
+    const item: SavedSky = { id: `sky_${Date.now().toString(36)}`, name: `${L('Sky', 'Небо')} ${saved.length + 1}`, sky: rest, ...(sun ? { sun: { height: Math.round(sun.height), colour: sun.colour, intensity: sun.intensity } } : {}) };
+    st.setSkies([...saved, item], 'Save sky');
+    setRenaming(item.id);
+  };
+  const swatch = (x: Omit<SkySettings, 'enabled'>) => ({ background: `linear-gradient(${x.top}, ${x.horizon} 62%, ${x.ground} 64%)` });
   const num = (k: keyof SkySettings, label: string, min: number, max: number, step: number, unit = '#') => {
     const set = (v: number) => setSky({ [k]: Math.min(max, Math.max(min, v)) } as Partial<SkySettings>, k);
     return (
@@ -75,12 +85,46 @@ export function SkyPanel() {
         <div className="cw-sky-presets">
           {SKY_PRESETS.map((p) => (
             <button key={p.key} type="button" className="cw-sky-preset" aria-label={L(`Sky preset ${p.name.en}`, `Заготовка неба ${p.name.ru}`)} onClick={() => apply(p)}>
-              <span className="cw-sky-swatch" style={{ background: `linear-gradient(${p.sky.top}, ${p.sky.horizon} 62%, ${p.sky.ground} 64%)` }} />
+              <span className="cw-sky-swatch" style={swatch(p.sky)} />
               <span>{p.name[getLang() === 'ru' ? 'ru' : 'en']}</span>
             </button>
           ))}
         </div>
-        <div className="cw-muted cw-hint">{L('A preset also sets the scene’s Sun: its height, colour and brightness (not its direction).', 'Заготовка задаёт и Солнце сцены: высоту, цвет и яркость (не направление).')}</div>
+        <div className="cw-lib-cats-h">{L('Project skies', 'Небо проекта')}</div>
+        <div className="cw-sky-presets" role="list" aria-label={L('Project skies', 'Небо проекта')}>
+          {saved.map((x) => (
+            <div key={x.id} className="cw-plants-tile" role="listitem">
+              {renaming === x.id ? (
+                <input
+                  className="cw-input"
+                  autoFocus
+                  aria-label={L('Sky name', 'Имя неба')}
+                  defaultValue={x.name}
+                  onBlur={(e) => {
+                    const name = e.currentTarget.value.trim();
+                    if (name && name !== x.name) st.setSkies(saved.map((y) => (y.id === x.id ? { ...y, name } : y)), 'Rename sky');
+                    setRenaming(null);
+                  }}
+                  onKeyDown={(e) => {
+                    e.stopPropagation();
+                    if (e.key === 'Enter') e.currentTarget.blur();
+                    if (e.key === 'Escape') setRenaming(null);
+                  }}
+                />
+              ) : (
+                <button type="button" className="cw-sky-preset" aria-label={L(`Use sky ${x.name}`, `Взять небо ${x.name}`)} title={L('Double-click to rename', 'Двойной щелчок — переименовать')} onClick={() => apply({ name: { en: x.name }, sky: x.sky, sun: x.sun })} onDoubleClick={() => setRenaming(x.id)}>
+                  <span className="cw-sky-swatch" style={swatch(x.sky)} />
+                  <span>{x.name}</span>
+                </button>
+              )}
+              <button type="button" className="cw-plants-tile-x" aria-label={L(`Delete sky ${x.name}`, `Удалить небо ${x.name}`)} onClick={() => st.setSkies(saved.filter((y) => y.id !== x.id), 'Delete sky')}>
+                ×
+              </button>
+            </div>
+          ))}
+        </div>
+        <Button onClick={save}>{L('Save this sky', 'Сохранить это небо')}</Button>
+        <div className="cw-muted cw-hint">{L('A preset also sets the scene’s Sun: its height, colour and brightness (not its direction). Saved skies are kept in the project, for every scene; double-click one to rename it.', 'Заготовка задаёт и Солнце сцены: высоту, цвет и яркость (не направление). Сохранённое небо хранится в проекте, для всех сцен; двойной щелчок — переименовать.')}</div>
       </aside>
       <div className="cw-plants-view">
         <SkyPreview sky={settings.sky} ambient={{ colour: settings.ambientColor, intensity: settings.ambientIntensity }} sun={sun ? { toward: sun.toward, colour: sun.colour, intensity: sun.intensity } : null} />

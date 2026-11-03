@@ -35,6 +35,8 @@ export interface ProjectSettings {
   materials?: MaterialDef[];
   /** Plants made in the Plants workspace, shared by every scene. */
   plants?: import('./plants').PlantDef[];
+  /** Skies saved from the Sky workspace, for any scene (missing: none). */
+  skies?: SavedSky[];
 }
 
 /** A value every script in the game shares, defined once for the project. */
@@ -171,6 +173,14 @@ export function skyOf(s: SkySettings | undefined): Required<SkySettings> {
     lightFromSky: false,
     ...(s ?? {}),
   } as Required<SkySettings>;
+}
+
+/** A sky saved in the project: its settings and where its sun stood (height, colour, brightness). */
+export interface SavedSky {
+  id: string;
+  name: string;
+  sky: Omit<SkySettings, 'enabled'>;
+  sun?: { height: number; colour: string; intensity: number };
 }
 
 /** Ready-made skies, each with where its sun stands (degrees up, its colour and brightness). */

@@ -2,6 +2,7 @@
  * Editor state. Scene data lives in a SceneDoc and changes only through History commands;
  * this store holds everything around it (session, selection, tools, view, logs) and exposes actions.
  */
+import type { SavedSky } from '@cocoaworlds/core';
 import { saveZUp, savedZUp } from './axes';
 import {
   History,
@@ -287,6 +288,8 @@ interface Actions {
   setMaterials(materials: MaterialDef[], label: string, mergeKey?: string): void;
   /** The project's plants (Plants workspace), as one undo step. */
   setPlants(plants: PlantDef[], label: string, mergeKey?: string): void;
+  /** The project's saved skies (Sky workspace), as one undo step. */
+  setSkies(skies: SavedSky[], label: string): void;
   /** A plant object where the view is looking. */
   placePlant(id: string): void;
   /** Change a material without an undo step (baked map paths: they follow the graph, not the user). */
@@ -1276,6 +1279,19 @@ export const useEditor = create<State & Actions>()((set, get) => ({
       saveProjectSoon(get);
     };
     get().execute({ label, mergeKey, apply: () => put(materials), revert: () => put(before) });
+  },
+
+  setSkies(list, label) {
+    const dir = get().session?.dir;
+    if (!dir) return;
+    const before = get().session!.project.settings.skies ?? [];
+    const put = (next: SavedSky[]) => {
+      const s = get().session;
+      if (s?.dir !== dir) return;
+      set({ session: { ...s, project: { ...s.project, settings: { ...s.project.settings, skies: next } } }, rev: get().rev + 1 });
+      saveProjectSoon(get);
+    };
+    get().execute({ label, apply: () => put(list), revert: () => put(before) });
   },
 
   setPlants(list, label, mergeKey) {

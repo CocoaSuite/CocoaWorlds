@@ -34,6 +34,18 @@ test('sky workspace: presets, sun height, clouds, undo', async () => {
     await page.keyboard.press('Control+z');
     await until(async () => (await sky()).horizon, '#ff9a5c', 4000);
     await until(() => page.getByLabel('Sun height').inputValue(), '35', 4000);
+    // Save it to the project, name it, and bring it back after another preset.
+    await page.getByRole('button', { name: 'Save this sky' }).click();
+    const name = page.getByLabel('Sky name');
+    await name.fill('Dusk');
+    await name.press('Enter');
+    await page.getByRole('button', { name: 'Sky preset Night' }).click();
+    await until(async () => (await sky()).horizon, '#1b2440', 4000);
+    await page.getByRole('button', { name: 'Use sky Dusk' }).click();
+    await until(async () => (await sky()).horizon, '#ff9a5c', 4000);
+    await until(() => page.getByLabel('Sun height').inputValue(), '35', 4000);
+    const kept = await page.evaluate(() => window.__cwStore.getState().session.project.settings.skies.map((x) => x.name));
+    assert.deepEqual(kept, ['Dusk']);
   } catch (e) {
     await shot(page, 'sky-failure');
     throw e;

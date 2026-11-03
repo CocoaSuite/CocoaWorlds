@@ -363,15 +363,19 @@ void main() {
           '#include <opaque_fragment>',
           `{
             vec3 toEye = normalize(vViewPosition);
-            float facing = dot(-toEye, uRimDir);
-            float side = 1.0 - abs(dot(normalize(normal), toEye));
-            // Light through the leaves: a soft glow, only looking right into the sun.
-            float through = pow(max(0.0, facing), 3.0) * (0.2 + 0.6 * side * side);
-            // Rim: a thin bright edge along the silhouette, whenever the sun is anywhere behind it (fading in from the
-            // side), paler than the leaf (lit, not just tinted).
-            float rim = smoothstep(0.55, 0.92, side) * smoothstep(-0.15, 0.6, facing);
-            vec3 leaf = diffuseColor.rgb;
-            outgoingLight += uRimColour * (leaf * through + mix(leaf, vec3(1.0, 0.97, 0.85), 0.5) * rim * 1.0);
+            vec3 n = normalize(normal);
+            // Rim: a thin pale outline right at the silhouette, on the edges that face the sun (above and towards
+            // it), stronger with the sun behind. No glow over the rest of the plant.
+            float side = 1.0 - abs(dot(n, toEye));
+            // (The crown's rounded normals say where its outline is; the face's own slant keeps it to the faces that
+            // actually turn away at the outline, so lumps in front don't get outlined too.)
+            vec3 g = normalize(cross(dFdx(vViewPosition), dFdy(vViewPosition)));
+            float slant = 1.0 - abs(dot(g, toEye));
+            float band = smoothstep(0.72, 0.94, side) * smoothstep(0.25, 0.65, slant);
+            float lit = smoothstep(-0.1, 0.5, dot(n, uRimDir));
+            float behind = 0.65 + 0.35 * smoothstep(-0.3, 0.7, dot(-toEye, uRimDir));
+            vec3 pale = mix(diffuseColor.rgb, vec3(0.86, 1.0, 0.72), 0.55) * 1.25;
+            outgoingLight = mix(outgoingLight, pale * uRimColour, clamp(band * lit * behind, 0.0, 1.0) * step(0.001, dot(uRimColour, uRimColour)));
           }
           #include <opaque_fragment>`,
         );
@@ -398,7 +402,7 @@ export function aimRim(root: THREE.Object3D, cam: THREE.Camera): void {
   }
   const at = s.getWorldPosition(new THREE.Vector3()).sub(s.target.getWorldPosition(new THREE.Vector3())).normalize();
   PLANT_RIM.dir.value.copy(at).transformDirection(cam.matrixWorldInverse);
-  PLANT_RIM.colour.value.copy(s.color).multiplyScalar(Math.min(3, s.intensity) * 0.35);
+  PLANT_RIM.colour.value.copy(s.color).multiplyScalar(Math.min(1.3, 0.45 + s.intensity * 0.3));
 }
 
 /** The wind clock plants sway by (seconds). */
