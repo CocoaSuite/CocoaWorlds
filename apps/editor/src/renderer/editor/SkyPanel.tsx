@@ -211,6 +211,7 @@ function SkyPreview({ sky, ambient, sun }: { sky: SkySettings | undefined; ambie
     light.shadow.mapSize.set(2048, 2048);
     Object.assign(light.shadow.camera, { left: -700, right: 700, top: 700, bottom: -700, near: 1, far: 4000 });
     light.shadow.normalBias = 2.5;
+    light.shadow.radius = 1.5;
     scene.add(hemi, light, light.target);
     // The test ground: grass-green floor, a tree, a ball, a box and a person for scale.
     const floor = new THREE.Mesh(new THREE.CircleGeometry(2400, 48).rotateX(-Math.PI / 2), new THREE.MeshStandardMaterial({ color: '#6b8a4e', roughness: 1 }));
