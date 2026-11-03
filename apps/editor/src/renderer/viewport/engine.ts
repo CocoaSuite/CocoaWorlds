@@ -2,6 +2,7 @@
  * The editor viewport: draws the level, grid and gizmos, handles camera navigation, picking, transform dragging
  * and the brush tool. Renders on demand (only after something changes) so an idle editor costs no GPU time.
  */
+import { SceneReflections } from './reflections';
 import { GroundBlend } from './ground-blend';
 import { SceneDoc, expandRepeats, ownerOf, type EntityData, type Transform, type Vec3 } from '@cocoaworlds/core';
 import { bounds, faceAt, loopCut, nearestEdge, transform as transformBrush, translate, vertices, type Brush, type Plane, type V3 } from '@cocoaworlds/geometry';
@@ -380,6 +381,7 @@ export class ViewportEngine {
       this.worldKey = key;
       this.world.waterLookOf = (id) => waterLookOf(doc, id);
       this.world.rebuild(wb);
+      if (this.reflections) this.reflections.dirty = true;
     }
     this.applySelection();
     this.invalidate();
@@ -1567,6 +1569,11 @@ export class ViewportEngine {
 
   /** Draw with ambient occlusion when the scene's lighting is shown and it is on. False: draw plainly. */
   private groundBlend = new GroundBlend();
+  private reflections: SceneReflections | null = null;
+  /** Scene reflections on (the scene's setting; shown with game lighting and in Play). */
+  private reflectOn(): boolean {
+    return (!!this.play || this.gameLighting) && this.doc?.settings.reflections !== false;
+  }
 
   private renderAo(cam: THREE.Camera): boolean {
     if (!(this.play || this.gameLighting)) return false;
@@ -1589,6 +1596,7 @@ export class ViewportEngine {
       this.play.updateFoliage(this.fpCam);
       this.plants.update(this.fpCam);
       this.waterDepth.prepare(r, this.scene, this.fpCam);
+      (this.reflections ??= new SceneReflections(r)).update(this.scene, this.fpCam.getWorldPosition(new THREE.Vector3()), this.reflectOn(), [this.grid.object]);
       this.groundBlend.prepare(r, this.scene, this.fpCam, [this.grid.object]);
       this.play.applyWater(this.scene, this.fpCam);
       if (!this.renderAo(this.fpCam)) r.render(this.scene, this.fpCam);
@@ -1599,6 +1607,9 @@ export class ViewportEngine {
     this.play?.updateFoliage(this.rig.camera, this.rig.unitsPerPixel);
     this.plants.update(this.rig.camera);
     this.waterDepth.prepare(r, this.scene, this.rig.camera);
+    // (Captured at eye height above what the view looks at: from up where the editor camera is, floors would only
+    // reflect sky.)
+    (this.reflections ??= new SceneReflections(r)).update(this.scene, this.rig.target.clone().add(new THREE.Vector3(0, 64, 0)), this.reflectOn(), [this.grid.object]);
     this.groundBlend.prepare(r, this.scene, this.rig.camera, [this.grid.object]);
     if (!this.renderAo(this.rig.camera)) r.render(this.scene, this.rig.camera);
     const s = 72;

@@ -177,6 +177,21 @@ function paintReflection(): void {
 }
 
 /** The sky's colours (top, horizon, ground), for what shiny materials reflect. */
+/** The captured scene (reflection probe), when there is one: reflected instead of the sky gradient. */
+let sceneEnv: THREE.Texture | null = null;
+
+/** Reflect the captured scene (null: the sky gradient again). */
+export function setSceneReflection(tex: THREE.Texture | null): void {
+  const kindChanged = !!sceneEnv !== !!tex;
+  sceneEnv = tex;
+  for (const l of live.values()) {
+    if (!l.m.envMap) continue;
+    l.m.envMap = tex ?? reflectionMap();
+    // (Switching between the gradient and a captured cube is a different shader.)
+    if (kindChanged) l.m.needsUpdate = true;
+  }
+}
+
 export function setReflection(top: string, horizon: string, ground: string): void {
   if (skyColors[0] === top && skyColors[1] === horizon && skyColors[2] === ground) return;
   skyColors = [top, horizon, ground];
@@ -238,7 +253,7 @@ function restyle(l: Live): void {
   // A map replaces its slider (Three.js multiplies the two).
   m.roughness = has('roughness') ? 1 : d.roughness;
   m.metalness = has('metalness') ? 1 : d.metalness;
-  m.envMap = reflectionMap();
+  m.envMap = sceneEnv ?? reflectionMap();
   // (Worn bare metal needs something to reflect, however matte the paint is.)
   m.envMapIntensity = Math.max(has('roughness') || has('metalness') ? 0.6 : reflects(d), d.wear ? 0.35 + 0.5 * d.wear.metalness : 0);
   const glowMap = has('glow');

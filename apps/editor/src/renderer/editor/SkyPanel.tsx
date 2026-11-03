@@ -182,10 +182,13 @@ export function SkyPanel() {
         <Row label={L('Light from the sky', 'Свет от неба')}>
           <Switch label={L('Light from the sky', 'Свет от неба')} checked={sky.lightFromSky} onChange={(v) => setSky({ lightFromSky: v })} />
         </Row>
+        <Row label={L('Reflect the scene', 'Отражать сцену')}>
+          <Switch label={L('Reflect the scene', 'Отражать сцену')} checked={settings.reflections !== false} onChange={(v) => st.setSceneSettings({ reflections: v ? undefined : false }, v ? 'Scene reflections on' : 'Scene reflections off')} />
+        </Row>
         <Row label={L('Ambient brightness', 'Яркость окружения')}>
           <NumberField label="#" ariaLabel={L('Ambient brightness', 'Яркость окружения')} step={0.05} value={settings.ambientIntensity} onChange={(v) => st.setSceneSettings({ ambientIntensity: Math.max(0, v) }, 'Ambient', 'sky-amb')} onCommit={(v) => st.setSceneSettings({ ambientIntensity: Math.max(0, v) }, 'Ambient', 'sky-amb')} />
         </Row>
-        <div className="cw-muted cw-hint">{L('Light from the sky: the ambient light (and fog, if on) take their colours from the sky, so the scene matches what’s above it.', 'Свет от неба: окружающий свет (и туман, если включён) берут цвета неба, и сцена совпадает с тем, что над ней.')}</div>
+        <div className="cw-muted cw-hint">{L('Light from the sky: the ambient light (and fog, if on) take their colours from the sky, so the scene matches what’s above it. Reflect the scene: shiny and metal materials reflect the level around the camera (captured as you move), not just the sky.', 'Свет от неба: окружающий свет (и туман, если включён) берут цвета неба, и сцена совпадает с тем, что над ней.')}</div>
       </aside>
     </div>
   );

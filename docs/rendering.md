@@ -209,3 +209,11 @@ terrain, a floor, another mesh) where they meet: fully the ground's look at the 
 that distance, with a noisy edge (**Blend edge noise**, **Blend blotch size**). Each frame where such a material
 is shown, the scene is drawn once more at half size without it (no shadow pass, no fog, no editor aids), and its
 shader takes that picture's colour where the surface behind is within reach (`viewport/ground-blend.ts`).
+
+## Scene reflections
+
+Shiny and metal project materials reflect the actual level: a reflection probe captures the scene into a cube
+map (6 small renders, blurred by roughness) at eye height (in Play the player's eye; in the editor above what the
+view orbits), again when the camera has moved ~192 u or the level changed, at most twice a second. Not
+parallax-corrected: near things reflect approximately. Sky tab › Reflect the scene (on by default); off, they
+reflect the sky gradient as before. `viewport/reflections.ts`.

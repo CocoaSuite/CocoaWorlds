@@ -116,6 +116,8 @@ export interface SceneSettings {
   sky?: SkySettings;
   /** Screen UI and the items the player can carry (missing: none). */
   ui?: UiSettings;
+  /** Shiny and metal materials reflect the level around the camera (missing: on). */
+  reflections?: boolean;
   /** Ambient occlusion: corners, creases and the ground under things darken (missing: on, as default). */
   ao?: AoSettings;
 }

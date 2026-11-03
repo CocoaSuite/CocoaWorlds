@@ -132,7 +132,8 @@ export function skyMesh(m: THREE.ShaderMaterial): THREE.Mesh {
   sky.renderOrder = -100;
   sky.onBeforeRender = (_r, _s, cam) => {
     SKY_TIME.value = performance.now() / 1000;
-    sky.position.copy(cam.position);
+    // (World position: a reflection probe's cameras sit inside a moved group.)
+    cam.getWorldPosition(sky.position);
     sky.scale.setScalar(1000);
     sky.updateMatrixWorld();
   };
