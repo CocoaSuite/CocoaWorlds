@@ -226,6 +226,8 @@ export class ViewportEngine {
     this.renderer.setClearColor(0x1f1f1f);
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    // (Glass draws what's behind it once more each frame: at half size, which the blur hides.)
+    this.renderer.transmissionResolutionScale = 0.5;
     this.renderer.autoClear = false;
     this.renderer.info.autoReset = false; // count the whole frame, not just the last pass
     this.renderer.domElement.className = 'cw-canvas';

@@ -55,13 +55,18 @@ export class GroundBlend {
   /** Draw the scene without blending surfaces (if any are shown), for their shader to blend into. */
   prepare(r: THREE.WebGLRenderer, scene: THREE.Scene, cam: THREE.Camera, helpers: THREE.Object3D[] = []): void {
     const mats = new Set<THREE.Material>();
+    const glass = new Set<THREE.Material>();
     // (Editor aids, lines and points aren't ground: left out of what's blended into.)
     const aids: THREE.Object3D[] = [];
     scene.traverseVisible((o) => {
       if ((o as THREE.Line).isLine || (o as THREE.Points).isPoints || (o as THREE.Sprite).isSprite) aids.push(o);
       const m = (o as THREE.Mesh).material;
       if (!m) return;
-      for (const x of Array.isArray(m) ? m : [m]) if (x.userData.groundBlend && x.visible) mats.add(x);
+      for (const x of Array.isArray(m) ? m : [m]) {
+        if (x.userData.groundBlend && x.visible) mats.add(x);
+        // (Glass would make this pass draw the scene behind it again: left out, it isn't ground.)
+        if ((x as THREE.MeshPhysicalMaterial).transmission > 0 && x.visible) glass.add(x);
+      }
     });
     GROUND_BLEND.gbCam.value.w = mats.size ? 1 : 0;
     if (!mats.size) return;
@@ -69,7 +74,7 @@ export class GroundBlend {
     const w = Math.max(1, Math.floor(size.x / 2)), h = Math.max(1, Math.floor(size.y / 2));
     if (!this.target) this.target = new THREE.WebGLRenderTarget(w, h, { type: THREE.HalfFloatType, depthTexture: new THREE.DepthTexture(w, h) });
     if (this.target.width !== w || this.target.height !== h) this.target.setSize(w, h);
-    this.hidden = [...mats];
+    this.hidden = [...mats, ...glass];
     for (const m of this.hidden) m.visible = false;
     const off = [...aids, ...helpers.filter((h) => h.visible)];
     for (const o of off) o.visible = false;

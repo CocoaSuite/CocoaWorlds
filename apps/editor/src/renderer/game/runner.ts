@@ -80,6 +80,7 @@ export class GameRunner {
     r.setClearColor(0x1f1f1f);
     r.shadowMap.enabled = true;
     r.shadowMap.type = THREE.PCFSoftShadowMap;
+    r.transmissionResolutionScale = 0.5;
     r.domElement.className = 'cw-canvas';
     r.domElement.tabIndex = 0;
     r.domElement.setAttribute('aria-label', data.name);

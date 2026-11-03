@@ -36,8 +36,11 @@ export class AoRenderer {
       const pass = new GTAOPass(scene, cam, size.x, size.y);
       // Objects marked `noAo` (grass) are left out of what the occlusion is measured from, so they get only the
       // little the ground under them gets: barely any.
-      const p = pass as unknown as { _overrideVisibility(): void; _visibilityCache: THREE.Object3D[] };
+      const p = pass as unknown as { _overrideVisibility(): void; _restoreVisibility(): void; _visibilityCache: THREE.Object3D[] };
       const hide = p._overrideVisibility.bind(p);
+      const show = p._restoreVisibility.bind(p);
+      // (Glass is left out too: it would make this pass draw the scene behind it once more.)
+      const glass: THREE.Material[] = [];
       p._overrideVisibility = () => {
         hide();
         scene.traverse((o) => {
@@ -45,7 +48,17 @@ export class AoRenderer {
             o.visible = false;
             p._visibilityCache.push(o);
           }
+          const m = (o as THREE.Mesh).material;
+          if (m) for (const x of Array.isArray(m) ? m : [m]) if ((x as THREE.MeshPhysicalMaterial).transmission > 0 && x.visible) {
+            x.visible = false;
+            glass.push(x);
+          }
         });
+      };
+      p._restoreVisibility = () => {
+        show();
+        for (const x of glass) x.visible = true;
+        glass.length = 0;
       };
       // Occlusion is measured without them, then multiplied over the finished picture: so where one is in front, the
       // darkening belongs to what's hidden behind it (the crease at a bush's foot, a wall's corner) and painted dark

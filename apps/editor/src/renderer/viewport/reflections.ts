@@ -46,6 +46,13 @@ export class SceneReflections {
       if ((o as THREE.Line).isLine || (o as THREE.Points).isPoints || (o as THREE.Sprite).isSprite || (o as THREE.Object3D & { isTransformControlsRoot?: boolean }).isTransformControlsRoot) aids.push(o);
     });
     for (const o of aids) o.visible = false;
+    // (Glass is left out of the capture: it would draw the scene behind it again for each of the six views.)
+    const glass = new Set<THREE.Material>();
+    scene.traverseVisible((o) => {
+      const m = (o as THREE.Mesh).material;
+      if (m) for (const x of Array.isArray(m) ? m : [m]) if ((x as THREE.MeshPhysicalMaterial).transmission > 0 && x.visible) glass.add(x);
+    });
+    for (const m of glass) m.visible = false;
     const auto = this.r.shadowMap.autoUpdate;
     this.r.shadowMap.autoUpdate = false;
     this.cam.position.copy(eye);
@@ -53,6 +60,7 @@ export class SceneReflections {
     this.cam.update(this.r, scene);
     this.r.shadowMap.autoUpdate = auto;
     for (const o of aids) o.visible = true;
+    for (const m of glass) m.visible = true;
     const next = this.pmrem.fromCubemap(this.cube.texture);
     setSceneReflection(next.texture);
     this.env?.dispose();
