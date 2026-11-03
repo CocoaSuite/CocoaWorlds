@@ -5,13 +5,14 @@
  * With a Player start in the scene you play as the player (first person); without one, Play is a physics
  * preview watched with the free camera.
  */
-import { SceneDoc, expandRepeats, readComponent, type ParticlesData, type ColliderData, type GameRules, type GameValue, type ModelData, type SceneFile, type SignData } from '@cocoaworlds/core';
+import { SceneDoc, expandRepeats, readComponent, type ParticlesData, type ColliderData, type GameRules, type GameValue, type ModelData, type SceneFile, type SignData, type TerrainData } from '@cocoaworlds/core';
 import { buildMesh, isInvisibleMaterial, type WorldBrush } from '@cocoaworlds/geometry';
 import { GameWorld, initPhysics, type NavGrid, type BodyInfo, type ModelMesh, type SavedProgress, type Travel, type UiState, type PlayerInput, type PlayerStatus, type ScriptLog, type TriggerEvent } from '@cocoaworlds/runtime';
 import type { Problem, ScriptError } from '@cocoaworlds/scripting';
 import * as THREE from 'three';
 import { brushBounds, worldBrushes } from '../brush/brushes';
 import { FoliageRenderer } from './foliage';
+import { TerrainRenderer, loadTerrain, terrainChunks } from './terrains';
 import { BATCH_MIN, ModelBatches, batchKey } from './model-batches';
 import { WEAR_RING, buildLevel } from './world-build';
 import { toGeometry } from './world-render';
@@ -45,6 +46,7 @@ export class PlaySession {
   readonly group = new THREE.Group();
   private world: GameWorld;
   private foliage = new FoliageRenderer();
+  private terrains = new TerrainRenderer();
   /** Still models drawn many at a time (A2c). */
   readonly batches = new ModelBatches();
   /** Grass detail by distance from the camera. */
@@ -81,14 +83,22 @@ export class PlaySession {
           .catch(() => {}),
       ),
     );
+    // Terrains: their surfaces, chunk by chunk, to collide with (the same meshes are drawn).
+    const terrains = new Map<string, ModelMesh[]>();
+    for (const e of scene.entities) {
+      const file = (e.components.terrain as Partial<TerrainData> | undefined)?.file;
+      if (!file) continue;
+      const f = await loadTerrain(file);
+      if (f) terrains.set(e.id, terrainChunks(file, f).map(({ mesh }) => ({ positions: mesh.positions, indices: mesh.indices })));
+    }
     // Invisible colliders (COL) collide but aren't drawn in the game.
     const hidden = new THREE.MeshBasicMaterial({ visible: false });
-    return new PlaySession(scene, (name) => (isInvisibleMaterial(name) ? hidden : material(name)), rules, values, models, saved ?? null, arrive ?? null);
+    return new PlaySession(scene, (name) => (isInvisibleMaterial(name) ? hidden : material(name)), rules, values, models, terrains, saved ?? null, arrive ?? null);
   }
 
-  private constructor(scene: SceneFile, material: (name: string) => THREE.Material, rules: GameRules | undefined, values: GameValue[] | undefined, models: Map<string, ModelMesh>, saved: SavedProgress | null, arrive: Travel | null) {
+  private constructor(scene: SceneFile, material: (name: string) => THREE.Material, rules: GameRules | undefined, values: GameValue[] | undefined, models: Map<string, ModelMesh>, terrains: Map<string, ModelMesh[]>, saved: SavedProgress | null, arrive: Travel | null) {
     this.group.name = 'play';
-    this.world = GameWorld.create(scene, { rules, values, models, saved, arrive });
+    this.world = GameWorld.create(scene, { rules, values, models, terrains, saved, arrive });
     // The same copies the game world made (Repeat groups).
     const doc = new SceneDoc(expandRepeats(structuredClone(scene), brushBounds));
     const bodies = new Set(this.world.movingBodies().map((b) => b.id));
@@ -103,6 +113,9 @@ export class PlaySession {
       for (const mat of levelMesh.material as THREE.Material[]) mat.shadowSide = THREE.DoubleSide;
       this.group.add(levelMesh);
     }
+    // Terrains, as the editor shows them.
+    this.terrains.sync(doc);
+    this.group.add(this.terrains.group);
     // Grass tufts (Foliage): placed from the same scene, seen but never touched.
     this.foliage.sync(doc);
     this.group.add(this.foliage.group);
@@ -633,6 +646,7 @@ export class PlaySession {
     this.disposed = true;
     this.effects.dispose();
     this.foliage.dispose();
+    this.terrains.dispose();
     this.batches.dispose();
     for (const m of this.models.values()) m.dispose();
     for (const s of [...this.sounds]) {

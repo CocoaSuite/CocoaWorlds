@@ -26,6 +26,7 @@ import { hudOf, type Hud } from '../ui/Hud';
 import { loadProgress, storeProgress } from '../game/progress';
 import { SceneLighting } from './scene-lighting';
 import { FOLIAGE_TIME, FoliageRenderer } from './foliage';
+import { TerrainRenderer } from './terrains';
 
 
 export type { Hud } from '../ui/Hud';
@@ -241,6 +242,7 @@ export class ViewportEngine {
     this.pivotMarker.visible = false;
     this.scene.add(this.pivotMarker);
     this.scene.add(this.foliage.group);
+    this.scene.add(this.terrains.group);
     this.repeatHandle.renderOrder = 21;
     this.repeatHandle.visible = false;
     this.repeatHandle.name = 'repeat-handle';
@@ -331,6 +333,7 @@ export class ViewportEngine {
     // What is shown: the scene with Repeat groups built out (their copies are drawn, never saved).
     const doc = this.doc ? this.shownDoc(this.doc) : null;
     this.foliage.sync(doc);
+    this.terrains.sync(doc);
     if (this.navOn) this.queueNav();
     this.mats = doc ? worldMatrices(doc) : new Map();
     const seen = new Set<string>();
@@ -780,6 +783,8 @@ export class ViewportEngine {
   private navDraw: THREE.Group | null = null;
   /** Grass tufts (Foliage component). */
   private foliage = new FoliageRenderer();
+  /** Voxel terrains (T1). */
+  readonly terrains = new TerrainRenderer(() => this.invalidate());
 
   /** View › Navigation: draw where creatures can walk (worked out again a moment after each change). */
   setNavVisible(on: boolean): void {
@@ -904,6 +909,7 @@ export class ViewportEngine {
   dispose(): void {
     this.disposed = true;
     this.foliage.dispose();
+    this.terrains.dispose();
     cancelAnimationFrame(this.raf);
     this.resizeObs.disconnect();
     this.unbindInput();
@@ -1517,7 +1523,11 @@ export class ViewportEngine {
     const markerHit = this.raycaster.intersectObjects(targets, false)[0];
     const worldHit = this.world.pick(this.raycaster);
     const locked = (id: string) => !!this.doc && isLocked(this.doc, this.doc.get(id));
-    const w = worldHit && !locked(worldHit.entityId) ? worldHit : null;
+    let w = worldHit && !locked(worldHit.entityId) ? worldHit : null;
+    // Terrain picks its object, when it's nearer than the level.
+    const ground = this.raycaster.intersectObjects(this.terrains.meshes, false)[0];
+    const groundId = ground?.object.userData.terrain as string | undefined;
+    if (ground && groundId && !locked(groundId) && (!w || ground.distance < w.distance)) w = { entityId: groundId, distance: ground.distance } as typeof w;
     // (A Repeat group's copies pick the group.)
     if (markerHit && (!w || markerHit.distance <= w.distance)) return markerHit.object.userData.entityId ? ownerOf(markerHit.object.userData.entityId as string) : null;
     return w ? ownerOf(w.entityId) : null;

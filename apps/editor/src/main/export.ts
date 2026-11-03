@@ -64,7 +64,7 @@ export async function gameData(projectDir: string): Promise<{ project: ProjectFi
 
 /** Every project asset the game's data mentions (textures on faces, sounds, models, pictures on screen). */
 export function usedAssets(json: string): string[] {
-  return [...new Set(json.match(/assets\/(?:textures|sounds|models)\/[^"\\]+/g) ?? [])].sort();
+  return [...new Set(json.match(/assets\/(?:textures|sounds|models|terrain)\/[^"\\]+/g) ?? [])].sort();
 }
 
 /** The player page's files, from the build manifest: its script, the chunks it loads, and their styles. */

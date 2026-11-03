@@ -70,6 +70,7 @@ import {
   type Brush,
   type BrushRole,
   type V3,
+  VoxelField,
 } from '@cocoaworlds/geometry';
 import { create } from 'zustand';
 import { modelSlots } from './viewport/models';
@@ -77,6 +78,7 @@ import { brushBounds, brushComponent, brushOf, isLocked, isShown, newBrushEntity
 import { useShallow } from 'zustand/react/shallow';
 import type { AssetEntry, AssetKind, OpenedProject, PrefabEntry } from '../shared/api';
 import { setAssetProject } from './assets';
+import { addTerrainField, forgetTerrains, saveTerrains } from './viewport/terrains';
 import { setProjectMaterials } from './viewport/project-materials';
 import { blockId, emptyScript, newEvent, newStatement, num, recipe as findRecipe, type EventBlock, type Script, type Statement } from '@cocoaworlds/scripting';
 import { copyRootOf, recordAllChanges, repivot, syncCommands, unlinked } from './prefabs';
@@ -184,6 +186,8 @@ interface Actions {
   addChicken(friendly: boolean, at?: [number, number, number]): Promise<void>;
   /** A ready-made ladder: a Repeat group of rail-and-rung segments with a climbing zone in each, and a top cap. */
   addLadder(at?: [number, number, number]): void;
+  /** A new terrain: flat ground 2048 u square, 768 u deep, its surface at `at` (T1). */
+  addTerrain(at?: [number, number, number]): void;
   deleteSelection(): void;
   duplicateSelection(): void;
   rename(id: string, name: string): void;
@@ -372,6 +376,7 @@ export const useEditor = create<State & Actions>()((set, get) => ({
     set({ prefabs: new Map() });
     void get().loadPrefabs();
     setAssetProject(o.dir);
+    forgetTerrains();
     set({ assets: { textures: [], sounds: [], models: [] } });
     void get().loadAssets();
   },
@@ -448,6 +453,21 @@ export const useEditor = create<State & Actions>()((set, get) => ({
     get().execute(addEntitiesCmd(doc, [e], `Add ${e.name}`));
     set({ selection: [e.id] });
     get().log('info', 'Scene', `Added ${e.name}`);
+  },
+
+  addTerrain(at = [0, 0, 0]) {
+    const doc = get().doc;
+    if (!doc) return;
+    const name = uniqueName(doc, 'terrain');
+    const file = `assets/terrain/${name}_${Date.now().toString(36)}.cwvox`;
+    // 129 × 49 × 129 grid points, 16 u apart; the ground 256 u up, so there's room to dig as well as to build.
+    const field = new VoxelField([129, 49, 129], 16);
+    field.fillFlat(256);
+    addTerrainField(file, field);
+    const e = newEntity(name, { terrain: { ...defaultComponent('terrain'), file } }, { position: [at[0] - 1024, at[1] - 256, at[2] - 1024] });
+    get().execute(addEntitiesCmd(doc, [e], `Add ${name}`));
+    set({ selection: [e.id] });
+    get().log('info', 'Scene', 'Added a terrain: shape it with the Terrain tool (T)');
   },
 
   addLadder(at = [0, 0, 0]) {
@@ -536,7 +556,13 @@ export const useEditor = create<State & Actions>()((set, get) => ({
     set({ saving: true });
     await flushProjectSave();
     const r = await window.cocoa.projects.saveScene(session.dir, session.scenePath, sceneForSaving(doc, get().prefabs));
+    // Terrains keep their shape in their own files, saved with the scene.
+    const terrainError = r.ok ? await saveTerrains(session.dir) : null;
     set({ saving: false });
+    if (terrainError) {
+      get().notify(`${t('error.save')}: ${terrainError}`);
+      return false;
+    }
     if (!r.ok) {
       get().log('error', 'Save', `${r.error}${r.details?.length ? ` — ${r.details.join('; ')}` : ''}`);
       get().notify(`${t('error.save')}: ${r.error}`);

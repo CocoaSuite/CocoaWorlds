@@ -150,6 +150,7 @@ export function SceneTree() {
             { label: t('add.chicken'), onSelect: () => void s.addChicken(false) },
             { label: t('add.chickenFriend'), onSelect: () => void s.addChicken(true) },
             { label: t('add.ladder'), onSelect: () => s.addLadder() },
+            { label: t('add.terrain'), onSelect: () => s.addTerrain() },
           ]}
         />
       )}

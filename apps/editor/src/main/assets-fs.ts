@@ -199,3 +199,17 @@ export async function writeGenerated(dir: string, name: unknown, bytes: unknown)
   await fs.writeFile(full, bytes);
   return rel;
 }
+
+/** Save a terrain's shape as `assets/terrain/<name>` (a `.cwvox` file, already compressed). Returns its path. */
+export async function writeTerrain(dir: string, name: unknown, bytes: unknown): Promise<string> {
+  if (typeof name !== 'string' || !/^[\w-]+\.cwvox$/.test(name)) throw new ProjectError('A terrain needs a plain .cwvox name.');
+  if (!(bytes instanceof Uint8Array) || bytes.byteLength > 256 * 1024 * 1024) throw new ProjectError('The terrain could not be saved.');
+  const rel = `assets/terrain/${name}`;
+  const full = resolveInside(dir, rel);
+  await fs.mkdir(path.dirname(full), { recursive: true });
+  // (Written beside, then moved over the old one: a crash mid-save never leaves half a terrain.)
+  await fs.writeFile(`${full}.tmp`, bytes);
+  await fs.rename(`${full}.tmp`, full);
+  return rel;
+}
+

@@ -65,8 +65,10 @@ export interface ComponentDef {
   fields: FieldDef[];
   /** Components that can't be on the same entity. */
   conflicts?: string[];
-  /** Hidden from the Add menu (made by tools, e.g. brushes and groups). */
+  /** Hidden from the Add menu and the Inspector (made by tools, e.g. brushes and groups). */
   internal?: boolean;
+  /** Shown in the Inspector but not offered in Add component (made by its own Add menu item). */
+  madeBy?: 'add-menu';
 }
 
 const e = (en: string, ru: string): Text => ({ en, ru });
@@ -543,6 +545,23 @@ export const COMPONENTS: ComponentDef[] = [
     fields: [{ key: 'speed', label: e('Climb speed', 'Скорость'), type: { kind: 'number', min: 10, step: 10, unit: 'u/s' }, default: 200 }],
   },
   {
+    name: 'terrain',
+    label: e('Terrain', 'Ландшафт'),
+    description: e(
+      'Ground you sculpt, dig and paint (Terrain tool): hills, cliffs, caves. Its shape is kept in its own file in the project; four layers colour it where they are painted.',
+      'Земля, которую лепят, копают и раскрашивают (инструмент «Ландшафт»): холмы, скалы, пещеры. Форма хранится в отдельном файле проекта; четыре слоя красят её там, где нарисованы.',
+    ),
+    appliesTo: 'point',
+    madeBy: 'add-menu',
+    fields: [
+      { key: 'file', label: e('Shape file', 'Файл формы'), hint: e('Where its shape is kept (set by the editor).', 'Где хранится форма (задаёт редактор).'), type: { kind: 'text' }, default: '' },
+      { key: 'layer0', label: e('Layer 1', 'Слой 1'), type: { kind: 'color' }, default: '#5f8f3a' },
+      { key: 'layer1', label: e('Layer 2', 'Слой 2'), type: { kind: 'color' }, default: '#8a6a45' },
+      { key: 'layer2', label: e('Layer 3', 'Слой 3'), type: { kind: 'color' }, default: '#8c8c8c' },
+      { key: 'layer3', label: e('Layer 4', 'Слой 4'), type: { kind: 'color' }, default: '#d9c58a' },
+    ],
+  },
+  {
     name: 'scatter',
     label: e('Foliage', 'Растительность'),
     description: e(
@@ -608,7 +627,7 @@ export function defaultComponent(name: string): Record<string, unknown> {
 /** Components that could be added to an entity right now. */
 export function addableComponents(components: Record<string, unknown>, isBrush: boolean): ComponentDef[] {
   return COMPONENTS.filter((c) => {
-    if (c.internal || components[c.name] !== undefined) return false;
+    if (c.internal || c.madeBy || components[c.name] !== undefined) return false;
     if (c.appliesTo === 'brush' && !isBrush) return false;
     if (c.appliesTo === 'point' && isBrush) return false;
     if (c.conflicts?.some((x) => components[x] !== undefined)) return false;
@@ -637,6 +656,16 @@ export interface ColliderData {
 export interface TriggerData {
   detects: 'player' | 'physics' | 'anything';
   once: boolean;
+  [k: string]: unknown;
+}
+
+export interface TerrainData {
+  /** `assets/terrain/<name>.cwvox`: the voxel grid (see @cocoaworlds/geometry VoxelField). */
+  file: string;
+  layer0: string;
+  layer1: string;
+  layer2: string;
+  layer3: string;
   [k: string]: unknown;
 }
 

@@ -5,7 +5,7 @@
 import { BrowserWindow, Menu, app, dialog, ipcMain, shell, type IpcMainInvokeEvent } from 'electron';
 import path from 'node:path';
 import { IPC, type Result } from '../shared/api';
-import { listAssets, readAsset, writeAsset, addSample, librarySounds, readLibrarySound, addLibrarySound, readGraph, writeGraph, writeGenerated } from './assets-fs';
+import { listAssets, readAsset, writeAsset, addSample, librarySounds, readLibrarySound, addLibrarySound, writeTerrain, readGraph, writeGraph, writeGenerated } from './assets-fs';
 import { ProjectError, autosaveScene, createProject, discardRecovery, listPrefabs, openProject, savePrefab, saveProjectSettings, saveScene, createScene, setStartScene, readScene } from './project-fs';
 import { SettingsStore } from './settings';
 import { downloadRuntime, gameData, gameFileName, ownRuntime, writeDesktopGame, writeWebGame, type ExportTarget } from './export';
@@ -216,6 +216,7 @@ function registerIpc(): void {
   handle(IPC.writeAsset, async (dir, kind, name, bytes) => writeAsset(str(dir), kind, name, bytes));
   handle(IPC.readAsset, async (dir, rel) => readAsset(str(dir), rel));
   handle(IPC.addSample, async (dir, name) => addSample(str(dir), path.join(app.getAppPath(), 'samples'), name));
+  handle(IPC.writeTerrain, async (dir, name, bytes) => writeTerrain(str(dir), name, bytes));
   handle(IPC.librarySounds, async () => librarySounds(path.join(app.getAppPath(), 'samples')));
   handle(IPC.readLibrarySound, async (p) => readLibrarySound(path.join(app.getAppPath(), 'samples'), p));
   handle(IPC.addLibrarySound, async (dir, p) => addLibrarySound(str(dir), path.join(app.getAppPath(), 'samples'), p));

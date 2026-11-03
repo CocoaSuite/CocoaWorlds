@@ -80,6 +80,8 @@ export interface CocoaApi {
     readAsset(dir: string, path: string): Promise<Result<Uint8Array>>;
     /** Put a ready-made asset the editor ships with (“chicken”) into the project's assets, once. */
     addSample(dir: string, name: string): Promise<Result<AssetEntry>>;
+    /** Save a terrain's shape (`<name>.cwvox`, compressed) in `assets/terrain`. Returns its path. */
+    writeTerrain(dir: string, name: string, bytes: Uint8Array): Promise<Result<string>>;
     /** The sound library that ships with the editor: every sound, by folder. */
     librarySounds(): Promise<Result<LibrarySound[]>>;
     /** A library sound's bytes (to listen to it before using it). */
@@ -134,6 +136,7 @@ export const IPC = {
   readAsset: 'assets:read',
   addSample: 'assets:addSample',
   librarySounds: 'assets:librarySounds',
+  writeTerrain: 'assets:writeTerrain',
   readLibrarySound: 'assets:readLibrarySound',
   addLibrarySound: 'assets:addLibrarySound',
   readGraph: 'materials:readGraph',

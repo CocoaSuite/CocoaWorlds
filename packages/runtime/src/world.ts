@@ -9,6 +9,7 @@
 import RAPIER from '@dimforge/rapier3d-compat';
 import {
   SceneDoc,
+  applyMat4,
   composeTransform,
   decomposeMat4,
   pivotOf,
@@ -296,9 +297,18 @@ export class GameWorld {
   /** `models`: the triangles of the model files that objects collide by (Model component, Collision). */
   static create(
     scene: SceneFile,
-    options: { rules?: Partial<GameRules>; values?: GameValueDef[]; models?: Map<string, ModelMesh>; saved?: SavedProgress | null; clock?: () => number; arrive?: Travel | null } = {},
+    options: {
+      rules?: Partial<GameRules>;
+      values?: GameValueDef[];
+      models?: Map<string, ModelMesh>;
+      /** Each terrain's surface (terrain space), by object: it collides as fixed ground. */
+      terrains?: Map<string, ModelMesh[]>;
+      saved?: SavedProgress | null;
+      clock?: () => number;
+      arrive?: Travel | null;
+    } = {},
   ): GameWorld {
-    const w = new GameWorld(scene, gameRules({ game: options.rules }), options.values ?? [], options.models ?? new Map());
+    const w = new GameWorld(scene, gameRules({ game: options.rules }), options.values ?? [], options.models ?? new Map(), options.terrains ?? new Map());
     if (options.clock) w.clock = options.clock;
     if (options.saved) w.loadProgress(options.saved);
     if (options.arrive) w.arrive(options.arrive);
@@ -436,9 +446,11 @@ export class GameWorld {
 
   /** Model triangles by file (see `create`). */
   private models: Map<string, ModelMesh>;
+  private terrains: Map<string, ModelMesh[]>;
 
-  private constructor(scene: SceneFile, rules: GameRules, values: GameValueDef[], models: Map<string, ModelMesh>) {
+  private constructor(scene: SceneFile, rules: GameRules, values: GameValueDef[], models: Map<string, ModelMesh>, terrains: Map<string, ModelMesh[]>) {
     this.models = models;
+    this.terrains = terrains;
     this.ui = uiOf(scene.settings);
     for (const sc of this.ui.screens) {
       if (sc.shownAtStart) this.uiShown.add(sc.id);
@@ -527,6 +539,8 @@ export class GameWorld {
         // (NOGRASS brushes only clear grass: nothing to collide with.)
         else if (!isNoGrassBrush(brush)) level.push({ id: e.id, role: brushData.role === 'subtract' ? 'subtract' : 'solid', brush });
         if (e.components.conveyor && !unitOf.has(e.id)) conveyors.set(e.id, readComponent<ConveyorData>('conveyor', e.components.conveyor));
+      } else if (e.components.terrain) {
+        this.addTerrain(e.id, doc.worldMatrix(e.id));
       } else if (e.components.npc) {
         this.npcEntities.push(e);
       } else if (e.components.rigidBody || e.components.collider || this.modelShape(e)) {
@@ -753,6 +767,33 @@ export class GameWorld {
    * A point object (empty, light, model …) with a collision shape: a Collision shape component, or its model's
    * shape. Without Physics it stays put.
    */
+  /** A terrain: fixed ground, its surface as triangles (one collider per chunk). */
+  private addTerrain(id: string, m: number[]): void {
+    const parts = this.terrains.get(id);
+    if (!parts?.length) return;
+    const t = decomposeMat4(m);
+    const body = this.world.createRigidBody(
+      RAPIER.RigidBodyDesc.fixed()
+        .setTranslation(t.position[0], t.position[1], t.position[2])
+        .setRotation(quatFromMatrix(composeTransform({ position: [0, 0, 0], rotation: t.rotation, scale: [1, 1, 1] }))),
+    );
+    for (const p of parts) {
+      if (p.indices.length < 3) continue;
+      const c = this.world.createCollider(RAPIER.ColliderDesc.trimesh(p.positions, p.indices).setFriction(0.8), body);
+      this.owner.set(c.handle, id);
+      const min = [Infinity, Infinity, Infinity], max = [-Infinity, -Infinity, -Infinity];
+      for (let i = 0; i < p.positions.length; i += 3) {
+        const w = applyMat4(m, [p.positions[i]!, p.positions[i + 1]!, p.positions[i + 2]!]);
+        for (let k = 0; k < 3; k++) {
+          min[k] = Math.min(min[k]!, w[k]!);
+          max[k] = Math.max(max[k]!, w[k]!);
+        }
+      }
+      this.grow({ min, max });
+    }
+    this.levelIds.add(id);
+  }
+
   private grow(b: { min: number[]; max: number[] }): void {
     const x = (this.extent ??= { min: [Infinity, Infinity, Infinity], max: [-Infinity, -Infinity, -Infinity] });
     for (let k = 0; k < 3; k++) {

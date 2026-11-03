@@ -31,6 +31,7 @@ const api: CocoaApi = {
     readAsset: (dir, path) => ipcRenderer.invoke(IPC.readAsset, dir, path),
     addSample: (dir, name) => ipcRenderer.invoke(IPC.addSample, dir, name),
     librarySounds: () => ipcRenderer.invoke(IPC.librarySounds),
+    writeTerrain: (dir, name, bytes) => ipcRenderer.invoke(IPC.writeTerrain, dir, name, bytes),
     readLibrarySound: (p) => ipcRenderer.invoke(IPC.readLibrarySound, p),
     addLibrarySound: (dir, p) => ipcRenderer.invoke(IPC.addLibrarySound, dir, p),
     readGraph: (dir, path) => ipcRenderer.invoke(IPC.readGraph, dir, path),
