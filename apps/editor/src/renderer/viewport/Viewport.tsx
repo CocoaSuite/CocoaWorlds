@@ -9,6 +9,7 @@ import { t } from '../i18n';
 import { useSelectedEntities, useEditor, type ViewMode } from '../store';
 import type { DraftState } from './brush-draft';
 import { BrushPanel } from './BrushPanel';
+import { TerrainPanel } from './TerrainPanel';
 import { PaintPanel } from './PaintPanel';
 import { ClipPanel } from './ClipPanel';
 import { VertexPanel } from './VertexPanel';
@@ -53,6 +54,7 @@ export function Viewport() {
   const pivotEdit = useEditor((s) => s.pivotEdit);
   const showGrid = useEditor((s) => s.showGrid);
   const showNav = useEditor((s) => s.showNav);
+  const terrainBrush = useEditor((s) => s.terrainBrush);
   const gameLighting = useEditor((s) => s.gameLighting);
   const showStats = useEditor((s) => s.showStats);
   const gridSize = useEditor((s) => s.session?.project.settings.gridSize ?? 16);
@@ -67,6 +69,7 @@ export function Viewport() {
       e = new ViewportEngine(host.current, {
         select: (ids, mode) => useEditor.getState().select(ids, mode),
         beginEdit: (label) => useEditor.getState().begin(label),
+        terrainEdit: (cmd) => useEditor.getState().terrainEdit(cmd),
         repeatLength: (id, length) => useEditor.getState().setComponentField(id, 'repeat', 'length', length, `repeat-${id}`),
         clickSelect: (id, additive, deep) => useEditor.getState().clickSelect(id, additive, deep),
         liveMany: (changes) => useEditor.getState().applyLive(changes),
@@ -163,7 +166,7 @@ export function Viewport() {
     engine.current?.setSelection(selection);
   }, [selection]);
   useEffect(() => {
-    engine.current?.setGizmoMode(tool === 'select' || tool === 'brush' || tool === 'face' || tool === 'paint' || tool === 'vertex' || tool === 'clip' || tool === 'loopcut' ? 'none' : tool === 'move' ? 'translate' : tool);
+    engine.current?.setGizmoMode(tool === 'select' || tool === 'brush' || tool === 'face' || tool === 'paint' || tool === 'vertex' || tool === 'clip' || tool === 'loopcut' || tool === 'terrain' ? 'none' : tool === 'move' ? 'translate' : tool);
   }, [tool]);
   useEffect(() => {
     engine.current?.setBrushTool(tool === 'brush', brushOptions, brushRole);
@@ -225,6 +228,9 @@ export function Viewport() {
   useEffect(() => {
     engine.current?.setNavVisible(showNav);
   }, [showNav]);
+  useEffect(() => {
+    engine.current?.setTerrainTool(tool === 'terrain' && !playing ? terrainBrush : null);
+  }, [tool, terrainBrush, playing]);
   useEffect(() => {
     engine.current?.setGameLighting(gameLighting);
   }, [gameLighting]);
@@ -349,6 +355,7 @@ export function Viewport() {
         />
       )}
       {tool === 'paint' && <PaintPanel />}
+      {!playing && tool === 'terrain' && <TerrainPanel />}
       {!playing && tool === 'loopcut' && <LoopCutPanel cuts={loop.cuts} fits={loop.fits} onCuts={(n) => engine.current?.setLoopCuts(n)} />}
       {tool === 'vertex' && <VertexPanel count={vertexCount} hasBrushes={sel.some((e) => !!e.components.brush) || selection.length > 0} />}
       {tool === 'clip' && (

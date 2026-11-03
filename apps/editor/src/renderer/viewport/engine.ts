@@ -26,7 +26,8 @@ import { hudOf, type Hud } from '../ui/Hud';
 import { loadProgress, storeProgress } from '../game/progress';
 import { SceneLighting } from './scene-lighting';
 import { FOLIAGE_TIME, FoliageRenderer } from './foliage';
-import { TerrainRenderer } from './terrains';
+import { TerrainRenderer, changed as terrainChanged, terrainField } from './terrains';
+import type { VoxelBox, VoxelField } from '@cocoaworlds/geometry';
 
 
 export type { Hud } from '../ui/Hud';
@@ -36,11 +37,21 @@ import type { GameRules, GameValue, SceneFile } from '@cocoaworlds/core';
 /** Path lines in the editor (cyan, like a route on a map). */
 const PATH_LINE = new THREE.LineBasicMaterial({ color: 0x4fd0d6, transparent: true, opacity: 0.9, depthTest: false });
 
+/** The Terrain tool's brush, as the store has it. */
+export interface TerrainToolBrush {
+  mode: 'raise' | 'lower' | 'smooth' | 'flatten' | 'dig' | 'fill' | 'paint';
+  radius: number;
+  strength: number;
+  layer: number;
+}
+
 export interface ViewportCallbacks {
   select(ids: string[], mode: 'replace' | 'toggle'): void;
   /** A click in the view: the store resolves groups (`deep` = double-click, pick the object itself). */
   clickSelect(id: string | null, additive: boolean, deep: boolean): void;
   beginEdit(label: string): void;
+  /** A finished Terrain tool stroke (already made), to record for undo. */
+  terrainEdit?(cmd: { label: string; apply(): void; revert(): void }): void;
   /** The length handle of a Repeat group was dragged. */
   repeatLength?(id: string, length: number): void;
   /** Live result of a gizmo drag for every moving object. */
@@ -158,7 +169,7 @@ export class ViewportEngine {
   private raf = 0;
   private lastTick = performance.now();
   private keys = new Set<string>();
-  private drag: { button: number; x: number; y: number; moved: boolean; mode: 'look' | 'pan' | 'orbit' | 'click' | 'draw' | 'height' | 'box' | 'clip' | 'repeat'; sx: number; sy: number } | null = null;
+  private drag: { button: number; x: number; y: number; moved: boolean; mode: 'look' | 'pan' | 'orbit' | 'click' | 'draw' | 'height' | 'box' | 'clip' | 'repeat' | 'terrain'; sx: number; sy: number } | null = null;
   private spaceHeld = false;
   private doc: SceneDoc | null = null;
   private selection: string[] = [];
@@ -851,6 +862,138 @@ export class ViewportEngine {
       this.scene.add(g);
     }
     this.invalidate();
+  }
+
+  // ── Terrain tool (T1) ──
+
+  private terrainBrush: TerrainToolBrush | null = null;
+  private terrainCursor = (() => {
+    const ring = new THREE.Mesh(new THREE.RingGeometry(0.94, 1, 64), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.85, depthTest: false, side: THREE.DoubleSide }));
+    ring.renderOrder = 22;
+    ring.visible = false;
+    ring.name = 'terrain-cursor';
+    return ring;
+  })();
+  private stroke: {
+    id: string;
+    file: string;
+    field: VoxelField;
+    holder: THREE.Object3D;
+    density: Float32Array;
+    weights: Uint8Array;
+    box: VoxelBox | null;
+    level: number;
+    at: THREE.Vector3 | null;
+    timer: ReturnType<typeof setInterval>;
+  } | null = null;
+
+  /** The Terrain tool's brush (null: the tool is off). */
+  setTerrainTool(brush: TerrainToolBrush | null): void {
+    this.terrainBrush = brush;
+    if (!this.terrainCursor.parent) this.scene.add(this.terrainCursor);
+    if (!brush) this.terrainCursor.visible = false;
+    this.invalidate();
+  }
+
+  /** The terrain under the cursor: where, its object, and the surface's facing. */
+  private terrainHit(e: { clientX: number; clientY: number }): { point: THREE.Vector3; normal: THREE.Vector3; mesh: THREE.Mesh; id: string } | null {
+    this.raycaster.setFromCamera(this.ndc(e), this.rig.camera);
+    const hit = this.raycaster.intersectObjects(this.terrains.meshes, false)[0];
+    const id = hit?.object.userData.terrain as string | undefined;
+    if (!hit || !id || (this.doc && isLocked(this.doc, this.doc.get(id)))) return null;
+    const normal = hit.face ? hit.face.normal.clone().transformDirection(hit.object.matrixWorld) : new THREE.Vector3(0, 1, 0);
+    return { point: hit.point.clone(), normal, mesh: hit.object as THREE.Mesh, id };
+  }
+
+  /** Show the brush ring on the ground under the cursor. */
+  private showTerrainCursor(e: { clientX: number; clientY: number }): void {
+    const b = this.terrainBrush;
+    const h = b ? this.terrainHit(e) : null;
+    this.terrainCursor.visible = !!h;
+    if (h && b) {
+      this.terrainCursor.position.copy(h.point).addScaledVector(h.normal, 1);
+      this.terrainCursor.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), h.normal);
+      this.terrainCursor.scale.setScalar(b.radius);
+      (this.terrainCursor.material as THREE.MeshBasicMaterial).color.set(b.mode === 'dig' || b.mode === 'lower' ? 0xff8a6a : b.mode === 'paint' ? 0xffd27a : 0xffffff);
+    }
+    this.invalidate();
+  }
+
+  /** Begin a stroke where the cursor is on a terrain (false: not on one). */
+  private startStroke(e: PointerEvent): boolean {
+    const h = this.terrainHit(e);
+    if (!h || !this.doc) return false;
+    const file = (this.doc.get(h.id)?.components.terrain as { file?: string } | undefined)?.file;
+    const field = file ? terrainField(file) : null;
+    if (!file || !field) return false;
+    const holder = h.mesh.parent!;
+    const local = holder.worldToLocal(h.point.clone());
+    this.stroke = {
+      id: h.id,
+      file,
+      field,
+      holder,
+      density: field.density.slice(),
+      weights: field.weights.slice(),
+      box: null,
+      level: local.y,
+      at: h.point,
+      // (Held still, the brush keeps working.)
+      timer: setInterval(() => this.stroke?.at && this.dab(this.stroke.at), 50),
+    };
+    this.dab(h.point);
+    return true;
+  }
+
+  private strokeMove(e: PointerEvent): void {
+    const s = this.stroke;
+    if (!s) return;
+    this.showTerrainCursor(e);
+    const h = this.terrainHit(e);
+    // (Digging moves the ground away from under the cursor: keep to where the stroke was if nothing's hit.)
+    if (h && h.id === s.id) s.at = h.point;
+    if (s.at) this.dab(s.at);
+  }
+
+  /** One touch of the brush at a world point. */
+  private dab(at: THREE.Vector3): void {
+    const s = this.stroke, b = this.terrainBrush;
+    if (!s || !b) return;
+    const c = s.holder.worldToLocal(at.clone());
+    const p: [number, number, number] = [c.x, c.y, c.z];
+    const k = b.strength;
+    const box =
+      b.mode === 'paint'
+        ? s.field.paint(b.layer, p, b.radius, k * 0.3)
+        : s.field.sculpt(b.mode, p, b.radius, b.mode === 'raise' || b.mode === 'lower' ? k * 0.25 : k * 0.5, s.level);
+    if (!box) return;
+    s.box = s.box ? { min: s.box.min.map((v, i) => Math.min(v, box.min[i]!)) as typeof box.min, max: s.box.max.map((v, i) => Math.max(v, box.max[i]!)) as typeof box.max } : box;
+    terrainChanged(s.file, s.field.chunksIn(box));
+  }
+
+  /** The stroke is done: one undo step for all of it. */
+  private endStroke(): void {
+    const s = this.stroke;
+    this.stroke = null;
+    if (!s) return;
+    clearInterval(s.timer);
+    if (!s.box) return;
+    const before = s.field.saveFrom(s.density, s.weights, s.box);
+    const after = s.field.save(s.box);
+    const chunks = s.field.chunksIn(s.box);
+    const { field, file } = s;
+    const mode = this.terrainBrush?.mode ?? 'raise';
+    this.cb.terrainEdit?.({
+      label: `Terrain: ${mode}`,
+      apply: () => {
+        field.restore(after);
+        terrainChanged(file, chunks);
+      },
+      revert: () => {
+        field.restore(before);
+        terrainChanged(file, chunks);
+      },
+    });
   }
 
   setGridVisible(v: boolean): void {
@@ -1664,6 +1807,8 @@ export class ViewportEngine {
       this.invalidate();
     }
     if (mode === 'click' && this.editTool === 'none' && this.startRepeatDrag(e)) mode = 'repeat';
+    // Terrain tool: a stroke on the ground (elsewhere, a click still selects).
+    if (mode === 'click' && this.terrainBrush && !this.play && this.startStroke(e)) mode = 'terrain';
     this.drag = { button: e.button, x: e.clientX, y: e.clientY, sx: e.clientX, sy: e.clientY, moved: false, mode };
     el.setPointerCapture(e.pointerId);
     if (mode === 'look') this.cb.setFlying(true);
@@ -1781,6 +1926,8 @@ export class ViewportEngine {
   };
 
   private onPointerMove = (e: PointerEvent): void => {
+    // Terrain tool: the brush ring follows the ground under the cursor.
+    if (!this.drag && this.terrainBrush && !this.play) this.showTerrainCursor(e);
     // Polygon outline: the next corner follows the cursor.
     if (!this.drag && this.draft?.points && this.draft.stage === 'footprint') {
       const p = this.drawPoint(e, this.draft.bounds().min[draftAxes(this.rig.kind).e]);
@@ -1799,6 +1946,11 @@ export class ViewportEngine {
     if (!d) return;
     const dx = e.clientX - d.x;
     const dy = e.clientY - d.y;
+    if (d.mode === 'terrain') {
+      this.strokeMove(e);
+      d.moved = true;
+      return;
+    }
     if (d.mode === 'repeat') {
       const r = this.repeatDrag;
       if (!r) return;
@@ -1864,6 +2016,10 @@ export class ViewportEngine {
       /* already released */
     }
     if (this.play) return;
+    if (d.mode === 'terrain') {
+      this.endStroke();
+      return;
+    }
     if (d.mode === 'repeat') {
       this.repeatDrag = null;
       this.cb.endEdit();

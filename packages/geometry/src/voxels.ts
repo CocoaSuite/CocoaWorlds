@@ -178,6 +178,16 @@ export class VoxelField {
     return { box: { min: [...box.min], max: [...box.max] }, density: Float32Array.from(out), weights: Uint8Array.from(w) };
   }
 
+  /** A copy of a range as it was in earlier copies of the whole grid (the start of a stroke, for undo). */
+  saveFrom(density: Float32Array, weights: Uint8Array, box: VoxelBox): { box: VoxelBox; density: Float32Array; weights: Uint8Array } {
+    const out: number[] = [], w: number[] = [];
+    this.each(box, (i) => {
+      out.push(density[i]!);
+      for (let k = 0; k < 4; k++) w.push(weights[i * 4 + k]!);
+    });
+    return { box: { min: [...box.min], max: [...box.max] }, density: Float32Array.from(out), weights: Uint8Array.from(w) };
+  }
+
   /** Put back a copy made with `save`. */
   restore(s: { box: VoxelBox; density: Float32Array; weights: Uint8Array }): void {
     let k = 0;

@@ -88,7 +88,15 @@ import type { LiveChange } from './viewport/engine';
 import { cloneSnapshot, isGroup, rootsOf, snapshotSubtrees } from './scene-ops';
 import { getLang, setLang, t, type Lang } from './i18n';
 
-export type Tool = 'select' | 'move' | 'rotate' | 'scale' | 'brush' | 'face' | 'paint' | 'vertex' | 'clip' | 'loopcut';
+export type Tool = 'select' | 'move' | 'rotate' | 'scale' | 'brush' | 'face' | 'paint' | 'vertex' | 'clip' | 'loopcut' | 'terrain';
+
+/** The Terrain tool's brush: what it does, how big (u), how strong (0…1), and the layer it paints (0…3). */
+export interface TerrainBrush {
+  mode: 'raise' | 'lower' | 'smooth' | 'flatten' | 'dig' | 'fill' | 'paint';
+  radius: number;
+  strength: number;
+  layer: number;
+}
 export type { FaceRef };
 export type Justify = 'left' | 'right' | 'top' | 'bottom' | 'center';
 export type ViewMode = 'perspective' | 'top' | 'front' | 'side';
@@ -114,6 +122,7 @@ interface State {
   rev: number;
   selection: string[];
   tool: Tool;
+  terrainBrush: TerrainBrush;
   view: ViewMode;
   showGrid: boolean;
   /** View › Navigation: where creatures can walk. */
@@ -172,6 +181,9 @@ interface Actions {
   select(ids: string[], mode?: 'replace' | 'toggle' | 'add'): void;
   selectAll(): void;
   setTool(t: Tool): void;
+  setTerrainBrush(b: Partial<TerrainBrush>): void;
+  /** A finished terrain stroke, already made: recorded so it can be undone. */
+  terrainEdit(cmd: { label: string; apply(): void; revert(): void }): void;
   setView(v: ViewMode): void;
   toggle(k: 'showGrid' | 'showNav' | 'showStats' | 'showBottom' | 'snap' | 'vertexSnap' | 'pivotEdit' | 'gameLighting'): void;
   /** Put an object's pivot at a world position (null: back to the default, its middle). */
@@ -301,6 +313,7 @@ export const useEditor = create<State & Actions>()((set, get) => ({
   rev: 0,
   selection: [],
   tool: 'select',
+  terrainBrush: { mode: 'raise', radius: 96, strength: 0.5, layer: 1 },
   view: 'perspective',
   showGrid: true,
   showNav: false,
@@ -413,6 +426,10 @@ export const useEditor = create<State & Actions>()((set, get) => ({
     if (doc) set({ selection: doc.entities.filter((e) => isShown(doc, e) && !isLocked(doc, e)).map((e) => e.id) });
   },
 
+  setTerrainBrush: (b) => set((s) => ({ terrainBrush: { ...s.terrainBrush, ...b } })),
+  terrainEdit(cmd) {
+    get().execute(cmd);
+  },
   setTool: (tool) => set((s) => (tool === 'face' || s.tool !== 'face' ? { tool } : { tool, faceSelection: [] })),
   setView: (view) => set({ view }),
   toggle: (k) => set((s) => ({ [k]: !s[k] }) as Partial<State>),
@@ -467,7 +484,7 @@ export const useEditor = create<State & Actions>()((set, get) => ({
     const e = newEntity(name, { terrain: { ...defaultComponent('terrain'), file } }, { position: [at[0] - 1024, at[1] - 256, at[2] - 1024] });
     get().execute(addEntitiesCmd(doc, [e], `Add ${name}`));
     set({ selection: [e.id] });
-    get().log('info', 'Scene', 'Added a terrain: shape it with the Terrain tool (T)');
+    get().log('info', 'Scene', 'Added a terrain: shape it with the Terrain tool (H)');
   },
 
   addLadder(at = [0, 0, 0]) {

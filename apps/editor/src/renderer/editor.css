@@ -534,3 +534,6 @@ code { font: 12px var(--mono); color: var(--fg); }
 .cm-param > :first-child { flex: 1; min-width: 0; }
 .cm-expose.on { color: var(--cw-brand-hi); border-color: var(--cw-brand); }
 .cm-own { display: flex; flex-direction: column; gap: 6px; padding: 8px 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.cw-terrain-sliders > :not(.cw-brush-k) { flex: 1 1 160px; min-width: 0; }
+.cw-terrain-layer { width: 26px; height: 26px; border-radius: 7px; border: 2px solid transparent; cursor: pointer; box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.35); }
+.cw-terrain-layer.on { border-color: var(--cw-brand-hi); }

@@ -124,6 +124,8 @@ export function useShortcuts(openKeys: () => void): void {
           return s.setTool('clip');
         case 'KeyP':
           return s.setTool('paint');
+        case 'KeyH':
+          return s.setTool('terrain');
         case 'KeyF':
           return s.frameSelection();
         case 'KeyO':

@@ -62,6 +62,7 @@ export function ToolBar() {
         }}
       />
       {T('paint', 'paint', t('tool.paint'), 'P')}
+      {T('terrain', 'terrain', t('tool.terrain'), 'H')}
       <Divider />
       <button type="button" className={`cw-snap${snap ? ' on' : ''}`} aria-pressed={snap} title="Grid snapping (G)" onClick={() => toggle('snap')}>
         {t('grid.snap')} {snap ? `${grid}u` : t('grid.off')}
