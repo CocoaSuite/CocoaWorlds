@@ -190,3 +190,14 @@ works on models as well as brushes and terrains (the model's posed shape, placed
 View › **Z is up** (on by default) shows axes as Blender does: shown X = X, shown Y = −Z, shown Z = Y, scale swapping
 Y and Z. Only what the editor shows changes (Inspector, brush size/centre, component vectors, the corner axes, the
 move gizmo's and grid's colours, the selection readout); the engine and saved files stay Y-up (`renderer/axes.ts`).
+
+## Sky
+
+The Sky workspace edits the current scene's sky (`settings.sky`): colours overhead, at the horizon and below, haze,
+the sun's disc and glow (placed where the scene's first Sun shines from; its height, direction, colour and
+brightness are edited on that light from here), drifting clouds lit from the sun's side, and stars where the sky is
+dark. **Light from the sky** takes the ambient light's colours (and the fog's) from the sky. Presets set the sky and
+the Sun's height, colour and brightness in one undo step. The shader is `viewport/sky.ts`, shared by the editor,
+Play, exported games and the workspace's preview.
+
+Plants are backlit by the sun: a soft glow looking into it and a thin rim along their silhouette (`plants.ts`).

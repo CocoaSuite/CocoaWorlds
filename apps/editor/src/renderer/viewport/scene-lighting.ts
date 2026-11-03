@@ -9,6 +9,7 @@
 import { readComponent, sceneSettings, type EntityData, type SceneDoc } from '@cocoaworlds/core';
 import * as THREE from 'three';
 import { setReflection } from './project-materials';
+import { applySky, skyAmbient, skyMaterial, skyMesh, sunSkyColour } from './sky';
 
 type LightData = {
   kind: 'point' | 'spot' | 'directional';
@@ -32,37 +33,8 @@ export class SceneLighting {
 
   constructor() {
     this.group.name = 'scene-lighting';
-    this.skyMat = new THREE.ShaderMaterial({
-      uniforms: { top: { value: new THREE.Color() }, horizon: { value: new THREE.Color() }, ground: { value: new THREE.Color() } },
-      vertexShader: /* glsl */ `
-        varying vec3 vDir;
-        void main() {
-          vDir = normalize(position);
-          vec4 p = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-          gl_Position = p.xyww; // on the far plane: always behind everything
-        }`,
-      fragmentShader: /* glsl */ `
-        uniform vec3 top; uniform vec3 horizon; uniform vec3 ground;
-        varying vec3 vDir;
-        void main() {
-          float y = vDir.y;
-          vec3 c = y >= 0.0 ? mix(horizon, top, pow(y, 0.6)) : mix(horizon, ground, pow(-y, 0.4));
-          gl_FragColor = vec4(c, 1.0);
-          #include <colorspace_fragment>
-        }`,
-      side: THREE.BackSide,
-      depthWrite: false,
-    });
-    this.sky = new THREE.Mesh(new THREE.SphereGeometry(1, 32, 16), this.skyMat);
-    this.sky.name = 'sky';
-    this.sky.frustumCulled = false;
-    this.sky.renderOrder = -100;
-    // Follows the camera, so it never gets nearer.
-    this.sky.onBeforeRender = (_r, _s, cam) => {
-      this.sky.position.copy(cam.position);
-      this.sky.scale.setScalar(1000);
-      this.sky.updateMatrixWorld();
-    };
+    this.skyMat = skyMaterial();
+    this.sky = skyMesh(this.skyMat);
   }
 
   /**
@@ -84,8 +56,12 @@ export class SceneLighting {
     this.clear();
 
     // Ambient: sky-tinted from above, darker from below, so shapes read even out of direct light.
-    const amb = new THREE.Color(settings.ambientColor);
-    this.group.add(new THREE.HemisphereLight(amb, amb.clone().multiplyScalar(0.35), settings.ambientIntensity * 2.2));
+    // (Or from the sky, when it's set to light the scene.)
+    const fromSky = !!settings.sky?.enabled && !!settings.sky.lightFromSky;
+    const skyLight = skyAmbient(settings.sky);
+    const amb = fromSky ? skyLight.above : new THREE.Color(settings.ambientColor);
+    this.group.add(new THREE.HemisphereLight(amb, fromSky ? skyLight.below : amb.clone().multiplyScalar(0.35), settings.ambientIntensity * 2.2));
+    let sunForSky: { dir: THREE.Vector3; colour: THREE.Color } | null = null;
 
     const center = levelBounds.isEmpty() ? new THREE.Vector3() : levelBounds.getCenter(new THREE.Vector3());
     const radius = levelBounds.isEmpty() ? 1024 : Math.max(256, levelBounds.getSize(new THREE.Vector3()).length() / 2);
@@ -98,6 +74,8 @@ export class SceneLighting {
       let light: THREE.Light;
       if (l.kind === 'directional') {
         const sun = new THREE.DirectionalLight(color, l.intensity);
+        // (The sky shows the first sun, where it shines from.)
+        sunForSky ??= { dir: forward.clone().negate(), colour: sunSkyColour(l.color, l.intensity) };
         sun.position.copy(center).addScaledVector(forward, -radius * 2);
         sun.target.position.copy(center);
         this.group.add(sun.target);
@@ -146,16 +124,14 @@ export class SceneLighting {
 
     // Sky, background and fog.
     const sky = settings.sky!;
-    this.skyMat.uniforms.top!.value.set(sky.top);
-    this.skyMat.uniforms.horizon!.value.set(sky.horizon);
-    this.skyMat.uniforms.ground!.value.set(sky.ground);
+    applySky(this.skyMat, sky, sunForSky);
     if (sky.enabled) this.group.add(this.sky);
     // What shiny and metal project materials reflect: the sky, or the ambient light without one.
     const a = amb.clone().multiplyScalar(Math.min(1.5, settings.ambientIntensity * 2.2));
     if (sky.enabled) setReflection(sky.top, sky.horizon, sky.ground);
     else setReflection(`#${a.getHexString()}`, `#${a.clone().multiplyScalar(0.7).getHexString()}`, `#${a.clone().multiplyScalar(0.3).getHexString()}`);
     this.background = new THREE.Color(settings.backgroundColor);
-    this.fog = settings.fog.enabled ? new THREE.Fog(settings.fog.color, settings.fog.near, settings.fog.far) : null;
+    this.fog = settings.fog.enabled ? new THREE.Fog(fromSky ? skyLight.fog : settings.fog.color, settings.fog.near, settings.fog.far) : null;
     this.applyTo(scene);
   }
 

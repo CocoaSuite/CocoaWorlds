@@ -363,9 +363,15 @@ void main() {
           '#include <opaque_fragment>',
           `{
             vec3 toEye = normalize(vViewPosition);
-            float towardSun = pow(max(0.0, dot(-toEye, uRimDir)), 3.0);
-            float edge = pow(1.0 - abs(dot(normalize(normal), toEye)), 2.0);
-            outgoingLight += diffuseColor.rgb * uRimColour * towardSun * (0.25 + 1.4 * edge);
+            float facing = dot(-toEye, uRimDir);
+            float side = 1.0 - abs(dot(normalize(normal), toEye));
+            // Light through the leaves: a soft glow, only looking right into the sun.
+            float through = pow(max(0.0, facing), 3.0) * (0.2 + 0.6 * side * side);
+            // Rim: a thin bright edge along the silhouette, whenever the sun is anywhere behind it (fading in from the
+            // side), paler than the leaf (lit, not just tinted).
+            float rim = smoothstep(0.55, 0.92, side) * smoothstep(-0.15, 0.6, facing);
+            vec3 leaf = diffuseColor.rgb;
+            outgoingLight += uRimColour * (leaf * through + mix(leaf, vec3(1.0, 0.97, 0.85), 0.5) * rim * 1.0);
           }
           #include <opaque_fragment>`,
         );

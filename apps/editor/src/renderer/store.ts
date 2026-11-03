@@ -175,7 +175,7 @@ interface State {
   /** The bottom workspace's open tab. */
   bottomTab: 'script' | 'assets' | 'console' | 'problems';
   /** Which workspace fills the window: the scene (3D view and panels) or the screen UI editor. */
-  workspace: 'scene' | 'screens' | 'materials' | 'plants';
+  workspace: 'scene' | 'screens' | 'materials' | 'plants' | 'sky';
   /** While playing: the blocks each object's script is running (for highlighting). */
   activeBlocks: Map<string, string[]>;
 }

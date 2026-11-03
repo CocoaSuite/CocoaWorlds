@@ -563,3 +563,7 @@ code { font: 12px var(--mono); color: var(--fg); }
 .cw-plants-variants button.on { border-color: var(--accent, #6aa0ff); }
 .cw-plants-variants .cw-plants-thumb { width: 100%; height: 72px; }
 .cw-plants-reset { margin-left: 4px; padding: 0 3px; border: 0; background: transparent; color: var(--accent, #6aa0ff); font-size: 12px; cursor: pointer; }
+.cw-sky-presets { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; }
+.cw-sky-preset { display: flex; flex-direction: column; gap: 3px; align-items: stretch; padding: 4px; border: 1px solid var(--line); border-radius: 8px; background: transparent; color: inherit; font-size: 11px; cursor: pointer; }
+.cw-sky-preset:hover { border-color: var(--accent, #6aa0ff); }
+.cw-sky-swatch { display: block; height: 44px; border-radius: 5px; }
