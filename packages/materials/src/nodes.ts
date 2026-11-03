@@ -800,13 +800,21 @@ outColor = vec4(vec3(v), 1.);`,
       { id: 'sizeRandom', label: l('Size varies', 'Разный размер'), kind: 'number', min: 0, max: 1, default: 0.4 },
       { id: 'turn', label: l('Turn varies', 'Разный поворот'), kind: 'number', min: 0, max: 1, default: 1 },
       { id: 'brightRandom', label: l('Brightness varies', 'Разная яркость'), kind: 'number', min: 0, max: 1, default: 0.3 },
+      { id: 'apart', label: l('Keep apart', 'Не пересекать'), kind: 'bool', default: false },
+      { id: 'margin', label: l('Space between', 'Промежуток'), kind: 'number', min: 0, max: 0.5, default: 0.05 },
       seed,
     ],
     glsl: `vec2 p = uv * p_count; vec2 c = floor(p); float best = 0.; vec3 col = vec3(0.); vec2 o = seedv(p_seed);
+// Keep apart: each copy stays inside its own cell (its turned corners too, plus the space between), so none touch.
+float reach = p_turn > 0. ? 0.70711 : 0.5;
+float room = max(0., 1. - p_margin);
 for (int y = -1; y <= 1; y++) for (int x = -1; x <= 1; x++) {
   vec2 cc = c + vec2(float(x), float(y)); vec2 cm = mod(cc, p_count);
-  vec2 ctr = cc + 0.5 + (hash22(cm + o) - 0.5) * 0.8;
+  if (p_apart > 0.5 && (x != 0 || y != 0)) continue;
   float s = p_size * (1. - p_sizeRandom * hash12(cm + o + 1.7));
+  if (p_apart > 0.5) s = min(s, room / (2. * reach));
+  float slack = p_apart > 0.5 ? max(0., room - 2. * reach * s) : 0.8;
+  vec2 ctr = cc + 0.5 + (hash22(cm + o) - 0.5) * slack;
   float a = hash12(cm + o + 4.4) * 6.2831853 * p_turn;
   vec2 d = mat2(cos(a), -sin(a), sin(a), cos(a)) * ((p - ctr) / max(s, 1e-3));
   if (abs(d.x) < 0.5 && abs(d.y) < 0.5) {
