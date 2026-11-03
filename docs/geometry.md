@@ -164,3 +164,16 @@ The shape is saved with the scene as `assets/terrain/<name>.cwvox` (gzip: a smal
 numbers, then the weights). In the game the terrain is fixed ground, one triangle collider per chunk, and
 navigation finds its surface like any other.
 
+
+## UV editor and hotspots
+
+The **UV** workspace shows the selected faces (or every face of the selected brushes) as islands over their
+material's texture, Blender-style: click / Shift-click to pick islands, drag or **G** to move, **R** to turn, **S**
+to scale (X / Y keep to one axis; click or Enter finishes, Esc or right-click cancels; A picks all). Brush faces keep
+Hammer-style offset, scale and turn, so islands change whole; every gesture is one undo step.
+
+**Hotspots** mode edits a material's hotspot sheet: rectangles on its texture (0…1, v down; drawn by dragging,
+snapped to a grid, or from quick sheets), each optionally allowed to turn 90°. With **Map when painted**, faces
+painted with that material are fitted into the rectangle that best matches their shape, then size (at 0.25 u per
+texel), equally good ones picked between by face (`hotspotSurface` in `surface.ts`). **Hotspot fit** (UV workspace
+and the Face inspector) refits faces already painted.

@@ -66,6 +66,7 @@ import {
   justifySurface,
   setSurface,
   type SurfacePatch,
+  hotspotSurface,
   hollowBox,
   type HollowDirection,
   mergeAll,
@@ -84,7 +85,7 @@ import type { AssetEntry, AssetKind, OpenedProject, PrefabEntry } from '../share
 import { setAssetProject } from './assets';
 import { setProjectPlants } from './viewport/plants';
 import { addTerrainField, forgetTerrains, saveTerrains } from './viewport/terrains';
-import { setProjectMaterials } from './viewport/project-materials';
+import { materialSheet, projectMaterialDef, setProjectMaterials } from './viewport/project-materials';
 import { blockId, emptyScript, newEvent, newStatement, num, recipe as findRecipe, type EventBlock, type Script, type Statement } from '@cocoaworlds/scripting';
 import { copyRootOf, recordAllChanges, repivot, syncCommands, unlinked } from './prefabs';
 import { DEV_TEXTURE_SIZE } from './brush/materials';
@@ -176,7 +177,7 @@ interface State {
   /** The bottom workspace's open tab. */
   bottomTab: 'script' | 'assets' | 'console' | 'problems';
   /** Which workspace fills the window: the scene (3D view and panels) or the screen UI editor. */
-  workspace: 'scene' | 'screens' | 'materials' | 'plants' | 'sky';
+  workspace: 'scene' | 'screens' | 'materials' | 'plants' | 'sky' | 'uv';
   /** While playing: the blocks each object's script is running (for highlighting). */
   activeBlocks: Map<string, string[]>;
 }
@@ -236,6 +237,10 @@ interface Actions {
   selectAllFaces(): void;
   setFaces(patch: SurfacePatch, mergeKey?: string, label?: string): void;
   fitFaces(repeat?: [number, number]): void;
+  /** Fit the selected faces into their materials' hotspot rectangles. */
+  hotspotFaces(): void;
+  /** Change several faces' texture settings at once (each its own), as one undo step merging with `mergeKey`. */
+  setFaceSurfaces(changes: { id: string; face: number; patch: SurfacePatch }[], label: string, mergeKey?: string): void;
   justifyFaces(side: Justify): void;
   setPaintMaterial(id: string): void;
   // multi-object editing, groups, clipboard
@@ -832,7 +837,10 @@ export const useEditor = create<State & Actions>()((set, get) => ({
         if (m) set({ paintMaterial: m });
         return;
       }
-      const painted = setSurface(b.brush, { material: st.paintMaterial }, mode === 'brush' ? undefined : [ref.face]);
+      const faces = mode === 'brush' ? b.brush.faces.map((_, i) => i) : [ref.face];
+      let painted = setSurface(b.brush, { material: st.paintMaterial }, faces);
+      // A hotspot material set to map itself: fitted into its rectangles as it's painted.
+      if (projectMaterialDef(st.paintMaterial)?.hotspotAuto) painted = hotspotByMaterial(painted, faces);
       st.execute(setComponentCmd(doc, ref.id, 'brush', brushComponent(painted, b.role) as never, 'Paint'));
       return;
     }
@@ -874,6 +882,27 @@ export const useEditor = create<State & Actions>()((set, get) => ({
 
   fitFaces(repeat = [1, 1]) {
     applyToFaces(get, (b, faces) => fitSurface(b, faces, DEV_TEXTURE_SIZE, repeat), 'Fit texture');
+  },
+
+  hotspotFaces() {
+    applyToFaces(get, (b, faces) => hotspotByMaterial(b, faces), 'Hotspot fit');
+  },
+
+  setFaceSurfaces(changes, label, mergeKey) {
+    const doc = get().doc;
+    if (!doc || !changes.length) return;
+    const byId = new Map<string, { face: number; patch: SurfacePatch }[]>();
+    for (const c of changes) byId.set(c.id, [...(byId.get(c.id) ?? []), c]);
+    const cmds: Command[] = [];
+    for (const [id, list] of byId) {
+      const cur = brushOf(doc.get(id));
+      if (!cur || isLocked(doc, doc.get(id))) continue;
+      let b = cur.brush;
+      for (const c of list) b = setSurface(b, c.patch, [c.face]);
+      cmds.push(setComponentCmd(doc, id, 'brush', brushComponent(b, cur.role) as never, label));
+    }
+    if (!cmds.length) return;
+    get().execute({ label, mergeKey, apply: () => cmds.forEach((c) => c.apply()), revert: () => [...cmds].reverse().forEach((c) => c.revert()) });
   },
 
   justifyFaces(side) {
@@ -1566,6 +1595,17 @@ function applyToFaces(get: () => State & Actions, fn: (b: Brush, faces: number[]
     apply: () => cmds.forEach((c) => c.apply()),
     revert: () => [...cmds].reverse().forEach((c) => c.revert()),
   });
+}
+
+/** Fit faces into their own materials' hotspot rectangles (faces whose material has none are left as they are). */
+function hotspotByMaterial(b: Brush, faces: number[]): Brush {
+  let out = b;
+  for (const face of faces) {
+    const id = out.faces[face]?.surface.material;
+    const rects = id ? projectMaterialDef(id)?.hotspots : undefined;
+    if (rects?.length) out = hotspotSurface(out, [face], rects, materialSheet(id!), face + 1);
+  }
+  return out;
 }
 
 /** What a click on `id` selects: the outermost group around it, unless the user has stepped into that group. */

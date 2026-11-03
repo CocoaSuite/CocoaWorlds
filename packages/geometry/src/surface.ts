@@ -47,7 +47,7 @@ export function setSurface(b: Brush, patch: SurfacePatch, faces?: number[]): Bru
 const nonZero = (n: number) => (Math.abs(n) < 1e-4 ? (n < 0 ? -1e-4 : 1e-4) : n);
 
 /** Extent of a face's polygon along its texture axes, in world units. */
-function faceExtent(b: Brush, face: number): { u: [number, number]; v: [number, number] } | null {
+export function faceExtent(b: Brush, face: number): { u: [number, number]; v: [number, number] } | null {
   const poly = polygons(b).find((p) => p.face === face);
   if (!poly) return null;
   const axes = uvAxes(poly.plane, poly.surface);
@@ -93,6 +93,56 @@ export function justifySurface(b: Brush, faces: number[], side: 'left' | 'right'
     }
     const wrap = (n: number) => ((n % texSize) + texSize) % texSize;
     out = setSurface(out, { offset: [wrap(ou), wrap(ov)] }, [face]);
+  }
+  return out;
+}
+
+/** A rectangle on a hotspot sheet (0…1 of the texture, v down), and whether faces may lie in it turned 90°. */
+export interface HotspotRect {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  rotate?: boolean;
+}
+
+/**
+ * Hotspot mapping: each face takes the rectangle of the sheet that best matches its shape (aspect first, then size
+ * at `density` u per texel), turned 90° when that fits better and the rectangle allows it, and its texture is fitted
+ * to that rectangle exactly. Equally good rectangles are picked between by `seed`, so repeats vary. `sheet` is the
+ * texture's size in texels (one repeat).
+ */
+export function hotspotSurface(b: Brush, faces: number[], rects: readonly HotspotRect[], sheet: [number, number], seed = 1, density = 0.25): Brush {
+  if (!rects.length) return b;
+  let out = b;
+  for (const face of faces) {
+    const s0 = out.faces[face]?.surface;
+    if (!s0) continue;
+    // The face's size along its texture axes, unturned.
+    const flat = setSurface(out, { rotation: 0 }, [face]);
+    const ext = faceExtent(flat, face);
+    if (!ext) continue;
+    const fw = Math.max(1e-3, ext.u[1] - ext.u[0]), fh = Math.max(1e-3, ext.v[1] - ext.v[0]);
+    const scored: { r: HotspotRect; turn: boolean; score: number }[] = [];
+    for (const r of rects) {
+      const rw = Math.max(1e-6, r.w * sheet[0] * density), rh = Math.max(1e-6, r.h * sheet[1] * density);
+      for (const turn of r.rotate === false ? [false] : [false, true]) {
+        const [w, h] = turn ? [fh, fw] : [fw, fh];
+        const aspect = Math.abs(Math.log(w / h / (rw / rh)));
+        const size = Math.abs(Math.log(Math.sqrt((w * h) / (rw * rh))));
+        scored.push({ r, turn, score: aspect * 2 + size * 0.5 + (turn ? 0.01 : 0) });
+      }
+    }
+    const best = Math.min(...scored.map((x) => x.score));
+    const near = scored.filter((x) => x.score <= best + 0.05);
+    const pick = near[Math.abs(Math.floor(Math.sin((face + 1) * 12.9898 + seed * 78.233) * 43758.5453)) % near.length]!;
+    out = setSurface(out, { rotation: pick.turn ? 90 : 0 }, [face]);
+    const e = faceExtent(out, face);
+    if (!e) continue;
+    const ru = pick.r.x * sheet[0], rv = pick.r.y * sheet[1], rw = pick.r.w * sheet[0], rh = pick.r.h * sheet[1];
+    const su = (e.u[1] - e.u[0]) / rw, sv = (e.v[1] - e.v[0]) / rh;
+    if (!(su > 0) || !(sv > 0)) continue;
+    out = setSurface(out, { scale: [su, sv], offset: [ru - e.u[0] / su, rv - e.v[0] / sv] }, [face]);
   }
   return out;
 }

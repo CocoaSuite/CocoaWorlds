@@ -68,6 +68,10 @@ export interface MaterialDef {
   wear?: WearDef;
   /** Bevelled edges (u, up to 32): brush edges look rounded off by this much, by their lighting. Missing: none. */
   bevel?: number;
+  /** Hotspot sheet: rectangles of its texture (0…1, v down) that faces are fitted into (made in the UV editor)… */
+  hotspots?: { x: number; y: number; w: number; h: number; rotate?: boolean }[];
+  /** …automatically, whenever it's painted onto faces. */
+  hotspotAuto?: boolean;
   /** Blend into ground: fades into whatever it stands in within this many u (0 / missing: off)… */
   blend?: number;
   /** …with a noisy edge (0…1) whose blotches are about this big (u). */

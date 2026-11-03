@@ -109,6 +109,7 @@ export function FaceInspector() {
         <p className="cw-hint">{t('face.alignHint')}</p>
         <div className="cw-row cw-face-actions">
           <Button onClick={() => s.fitFaces()}>{t('face.fit')}</Button>
+          <Button onClick={() => s.hotspotFaces()}>{t('face.hotspot')}</Button>
           <Button onClick={() => s.setFaces({ offset: [0, 0], scale: [0.25, 0.25], rotation: 0 }, undefined, 'Reset texture')}>{t('face.reset')}</Button>
           <Button onClick={() => s.selectAllFaces()}>{t('face.selectAll')}</Button>
         </div>

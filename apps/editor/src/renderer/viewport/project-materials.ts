@@ -49,6 +49,12 @@ export function setProjectMaterials(list: readonly MaterialDef[]): void {
 }
 
 export const projectMaterialDef = (id: string): MaterialDef | undefined => defs.get(id);
+
+/** How many texels one repeat of a face material's texture spans (as its image and scale make it; 256 without one). */
+export function materialSheet(id: string): [number, number] {
+  for (const l of live.values()) if (l.id === id && !l.modelUv) return [TEX_SIZE / (l.repeat[0] || 1), TEX_SIZE / (l.repeat[1] || 1)];
+  return [TEX_SIZE, TEX_SIZE];
+}
 export const projectMaterialList = (): MaterialDef[] => [...defs.values()];
 
 /** A face material's name for people: built-in, project material, or the image's file name. */
