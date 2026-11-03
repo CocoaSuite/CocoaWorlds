@@ -17,7 +17,7 @@ export interface WaterLook {
   foam: boolean;
 }
 
-export const DEFAULT_WATER_LOOK: WaterLook = { shallow: '#8fdcea', deep: '#3360c8', depth: 192, foam: true };
+export const DEFAULT_WATER_LOOK: WaterLook = { shallow: '#7fd8e6', deep: '#1f4fb0', depth: 192, foam: true };
 
 /** Shared by every water material: the depth picture, the camera's range, the screen size and the clock. */
 export const WATER_UNIFORMS = {
@@ -97,24 +97,19 @@ vec3 cwCol = mix(uShallow, uDeep, pow(cwT, 0.7));
 // Rippling light below the surface: soft lighter patches between drifting cells, only where it's shallow-ish.
 vec2 cwC = cwCells(cwP / 90.0, uTime * 0.5);
 cwCol += (1.0 - smoothstep(0.0, 0.18, cwC.y)) * 0.07 * (1.0 - cwT);
-// Foam, all broken up by drifting cells (white where the cells meet, holes in their middles):
-vec2 cwH = cwCells(cwP / 13.0 + vec2(uTime * 0.04, 0.0), uTime * 0.7);
-float cwEdge = cwD / 26.0;
-// a solid band right at the shore and round anything in the water, its outer edge blobby...
-float cwShore = 1.0 - smoothstep(0.55, 0.65, cwEdge + cwH.x * 0.6);
-// ...lace with holes a little way out...
-vec2 cwL = cwCells(cwP / 30.0 + vec2(0.0, uTime * 0.03), uTime * 0.4);
-// (White, with a round hole round each cell's middle: bigger holes in some places than others.)
-float cwHole = 0.26 + 0.16 * cwNoise(cwP / 45.0);
-float cwLace = (smoothstep(0.85, 1.05, cwEdge) - smoothstep(1.9, 2.4, cwEdge)) * smoothstep(cwHole, cwHole + 0.05, cwL.x);
-// ...bands rolling in towards the shore, in pieces...
-float cwBand = fract(cwEdge * 0.3 - uTime * 0.15);
-float cwLine = smoothstep(0.0, 0.06, cwBand) * (1.0 - smoothstep(0.06, 0.16, cwBand));
-cwLine *= step(0.5, cwNoise(cwP / 30.0 + uTime * 0.08)) * (1.0 - smoothstep(2.0, 4.0, cwEdge)) * step(2.1, cwEdge);
+// Foam: a blobby band with holes along every shore and round anything in the water...
+float cwEdge = cwD / 18.0;
+vec2 cwH = cwCells(cwP / 11.0 + vec2(uTime * 0.05, 0.0), uTime * 0.8);
+float cwShore = 1.0 - smoothstep(0.5, 0.58, cwEdge + cwH.x * 0.55);
+// ...bands rolling in towards it, wobbling off the straight (big slow bends and small kinks), broken up...
+float cwBend = (cwNoise(cwP / 55.0 + uTime * 0.04) - 0.5) * 1.6 + (cwNoise(cwP / 17.0 - uTime * 0.07) - 0.5) * 0.6;
+float cwBand = fract((cwEdge + cwBend) * 0.35 - uTime * 0.18);
+float cwLine = smoothstep(0.0, 0.05, cwBand) * (1.0 - smoothstep(0.05, 0.13, cwBand));
+cwLine *= step(0.45, cwNoise(cwP / 14.0 + uTime * 0.1)) * (1.0 - smoothstep(1.2, 3.2, cwEdge));
 // ...and glints twinkling on the open water.
 vec2 cwG = floor(cwP / 9.0);
 float cwSpark = step(0.985, cwHash(cwG)) * step(length(fract(cwP / 9.0) - 0.5), 0.12) * step(0.55, sin(uTime * 2.5 + cwHash(cwG + 7.0) * 6.2831));
-float cwFoam = clamp(cwShore + cwLace * 0.95 + cwLine * 0.85 + cwSpark, 0.0, 1.0) * uFoamOn;
+float cwFoam = clamp(cwShore + cwLine * 0.9 + cwSpark, 0.0, 1.0) * uFoamOn;
 cwCol = mix(cwCol, vec3(1.0), cwFoam);
 diffuseColor.rgb = cwCol;
 // Clear where shallow (the bottom shows through), solid where deep or foaming.

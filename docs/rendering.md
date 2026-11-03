@@ -155,9 +155,9 @@ depth with what's behind each pixel, and everything follows from how much water 
 
 - **Colour**: the Water component's **Shallow colour**, blending to its **Deep colour** by **Deep from** (u). Shallow
   water is see-through, so the bottom shows; deep water is nearly solid.
-- **Foam**: a solid, blobby band right where the water meets anything (shores, rocks, legs, piers), then lace (white
-  with round holes) a little further out, bands rolling in towards the shore in pieces, and glints twinkling on open
-  water. **Foam** switches it all off.
+- **Foam**: a blobby band with holes right where the water meets anything (shores, rocks, legs, piers), bands
+  rolling in towards the shore in pieces, bending off the straight (big slow bends and small kinks), and glints
+  twinkling on open water. **Foam** switches it all off.
 - **Light below**: soft lighter patches between slowly drifting cells, where it's shallow.
 
 The water is lit like any surface (shadows fall on it) with a little light of its own, so it stays bright in shade.

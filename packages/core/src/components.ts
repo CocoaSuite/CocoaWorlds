@@ -606,8 +606,8 @@ export const COMPONENTS: ComponentDef[] = [
     appliesTo: 'brush',
     conflicts: ['rigidBody', 'trigger', 'conveyor', 'ladder'],
     fields: [
-      { key: 'shallow', label: e('Shallow colour', 'Цвет на мели'), type: { kind: 'color' }, default: '#8fdcea' },
-      { key: 'deep', label: e('Deep colour', 'Цвет в глубине'), type: { kind: 'color' }, default: '#3360c8' },
+      { key: 'shallow', label: e('Shallow colour', 'Цвет на мели'), type: { kind: 'color' }, default: '#7fd8e6' },
+      { key: 'deep', label: e('Deep colour', 'Цвет в глубине'), type: { kind: 'color' }, default: '#1f4fb0' },
       { key: 'depthLook', label: e('Deep from', 'Глубоко с'), hint: e('How deep the water is before it shows its deep colour.', 'С какой глубины вода показывает цвет глубины.'), type: { kind: 'number', min: 8, step: 16, unit: 'u' }, default: 192 },
       { key: 'foam', label: e('Foam', 'Пена'), hint: e('White foam along the shores and round whatever stands in it, and glints on the water.', 'Белая пена у берегов и вокруг всего, что стоит в воде, и блики.'), type: { kind: 'boolean' }, default: true },
       { key: 'tint', label: e('Colour under water', 'Цвет под водой'), type: { kind: 'color' }, default: '#28607a' },
