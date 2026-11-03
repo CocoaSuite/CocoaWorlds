@@ -54,6 +54,7 @@ export function Viewport() {
   const pivotEdit = useEditor((s) => s.pivotEdit);
   const showGrid = useEditor((s) => s.showGrid);
   const showNav = useEditor((s) => s.showNav);
+  const showGrass = useEditor((s) => s.showGrass);
   const terrainBrush = useEditor((s) => s.terrainBrush);
   const gameLighting = useEditor((s) => s.gameLighting);
   const showStats = useEditor((s) => s.showStats);
@@ -228,6 +229,9 @@ export function Viewport() {
   useEffect(() => {
     engine.current?.setNavVisible(showNav);
   }, [showNav]);
+  useEffect(() => {
+    engine.current?.setGrassVisible(showGrass);
+  }, [showGrass]);
   useEffect(() => {
     engine.current?.setTerrainTool(tool === 'terrain' && !playing ? terrainBrush : null);
   }, [tool, terrainBrush, playing]);

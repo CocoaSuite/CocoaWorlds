@@ -1001,6 +1001,12 @@ export class ViewportEngine {
     });
   }
 
+  /** View › Show grass: hides the editor's grass (Play still shows it). */
+  setGrassVisible(v: boolean): void {
+    this.foliage.group.visible = v;
+    this.invalidate();
+  }
+
   setGridVisible(v: boolean): void {
     this.grid.object.visible = v;
     this.invalidate();

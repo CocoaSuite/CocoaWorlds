@@ -127,6 +127,8 @@ interface State {
   showGrid: boolean;
   /** View › Navigation: where creatures can walk. */
   showNav: boolean;
+  /** View › Show grass (the editor only; the game always shows it). */
+  showGrass: boolean;
   /** Show the scene's own lighting (lights, sky, fog) in the editor instead of the flat preview lights. */
   gameLighting: boolean;
   showStats: boolean;
@@ -185,7 +187,7 @@ interface Actions {
   /** A finished terrain stroke, already made: recorded so it can be undone. */
   terrainEdit(cmd: { label: string; apply(): void; revert(): void }): void;
   setView(v: ViewMode): void;
-  toggle(k: 'showGrid' | 'showNav' | 'showStats' | 'showBottom' | 'snap' | 'vertexSnap' | 'pivotEdit' | 'gameLighting'): void;
+  toggle(k: 'showGrid' | 'showNav' | 'showGrass' | 'showStats' | 'showBottom' | 'snap' | 'vertexSnap' | 'pivotEdit' | 'gameLighting'): void;
   /** Put an object's pivot at a world position (null: back to the default, its middle). */
   setPivot(id: string, world: Vec3 | null, mergeKey?: string): void;
   execute(cmd: Command): void;
@@ -317,6 +319,7 @@ export const useEditor = create<State & Actions>()((set, get) => ({
   view: 'perspective',
   showGrid: true,
   showNav: false,
+  showGrass: true,
   gameLighting: false,
   assets: { textures: [], sounds: [], models: [] },
   showStats: true,
