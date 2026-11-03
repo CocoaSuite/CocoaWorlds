@@ -292,40 +292,84 @@ export function clipBrush(b: Brush, p: Plane): { front: Brush | null; back: Brus
 }
 
 /**
- * Round (or chamfer) a convex brush's edges: each edge is replaced by `segments` flat strips following a quarter
- * round of `radius` (1 segment: a plain chamfer). Corners where three edges meet come out faceted. Edited meshes
- * are left as they are. The strips take the surface of the face they lean towards.
+ * Round (or chamfer) all of a convex brush's edges by `radius` (see `bevelEdges`). Edited meshes are bevelled
+ * when they're still convex, and left as they are when not.
  */
 export function bevelBrush(b: Brush, radius: number, segments: number): Brush {
-  if (b.mesh || radius <= 0 || segments < 1) return b;
+  return bevelEdges(b, null, radius, segments) ?? b;
+}
+
+/** A convex edited mesh as plain faces (its polygons' planes); null if it isn't convex. Plain brushes as they are. */
+export function asPlanes(b: Brush): Brush | null {
+  if (!b.mesh) return b;
   const polys = polygons(b);
-  const box = bounds(b);
-  if (!box) return b;
-  // (No rounder than half the brush's thinnest side.)
-  const r = Math.min(radius, 0.5 * Math.min(box.max[0] - box.min[0], box.max[1] - box.min[1], box.max[2] - box.min[2]) - 1e-3);
-  if (r <= 0) return b;
+  const vs = vertices(b);
+  for (const p of polys) for (const v of vs) if (signedDist(p.plane, v) > 0.01) return null;
+  const faces: BrushFace[] = [];
+  for (const p of polys) if (!faces.some((f) => samePlane(f.plane, p.plane))) faces.push({ plane: p.plane, surface: cloneSurface(p.surface) });
+  return { faces };
+}
+
+/** Blender's bevel profile (0.25 straight, 0.5 round, towards 1 square) as a superellipse exponent. */
+export function profileExponent(profile: number): number {
+  const p = Math.max(0.25, Math.min(0.99, profile));
+  return 2 ** (Math.log(p / (1 - p)) / Math.log(3) + 1);
+}
+
+/**
+ * Bevel chosen edges of a convex brush (each edge by its two corners; null: every edge), like Blender's bevel:
+ * `width` is how far the new edges are from the old one along each face; `segments` flat strips follow the
+ * `profile` (0.25: a straight chamfer, 0.5: a round, nearer 1: squarer). The strips take the surface of the face
+ * they lean towards. Where bevelled edges meet, the corner comes out faceted. Edited meshes are made plain faces
+ * first (null when one isn't convex); a width too big for a face is cut down to fit.
+ */
+export function bevelEdges(b0: Brush, chosen: [V3, V3][] | null, width: number, segments: number, profile = 0.5): Brush | null {
+  const b = asPlanes(b0);
+  if (!b) return null;
+  if (width <= 0 || segments < 1) return b0;
+  const polys = polygons(b);
   const near = (p: V3, q: V3) => Math.abs(p[0] - q[0]) + Math.abs(p[1] - q[1]) + Math.abs(p[2] - q[2]) < 0.01;
+  const e = profileExponent(profile);
   const extra: BrushFace[] = [];
   for (let i = 0; i < polys.length; i++)
     for (let j = i + 1; j < polys.length; j++) {
       const A = polys[i]!, B = polys[j]!;
       const shared = A.points.filter((p) => B.points.some((q) => near(p, q)));
       if (shared.length < 2) continue;
+      const [p0, p1] = [shared[0]!, shared[shared.length - 1]!];
+      if (chosen && !chosen.some(([u, v]) => (near(u, p0) && near(v, p1)) || (near(u, p1) && near(v, p0)))) continue;
       const n1 = A.plane.n, n2 = B.plane.n;
-      const c = dot(n1, n2);
-      if (c > 0.999) continue;
-      const theta = Math.acos(Math.max(-1, Math.min(1, c)));
-      // The round's axis: the edge moved in by the radius from both faces.
-      const k = r / (1 + c);
-      const axis = sub(shared[0]!, scale(add(n1, n2), k));
-      for (let s = 1; s <= segments; s++) {
-        const t = s / (segments + 1);
-        const n = normalize(add(scale(n1, Math.sin((1 - t) * theta)), scale(n2, Math.sin(t * theta))));
-        extra.push({ plane: { n, d: dot(n, axis) + r }, surface: cloneSurface((t < 0.5 ? A : B).surface) });
+      if (dot(n1, n2) > 0.999) continue;
+      const dir = normalize(sub(p1, p0));
+      // Across each face, away from the edge.
+      const across = (poly: typeof A, n: V3) => {
+        let d = normalize(cross(n, dir));
+        const reach = (v: V3) => Math.max(...poly.points.map((q) => dot(sub(q, p0), v)));
+        if (reach(d) < reach(scale(d, -1))) d = scale(d, -1);
+        return { d, reach: reach(d) };
+      };
+      const a = across(A, n1), c = across(B, n2);
+      // (No wider than half of either face, so strips from the far edge can't cross.)
+      const w = Math.min(width, 0.5 * a.reach - 1e-3, 0.5 * c.reach - 1e-3);
+      if (w <= 1e-4) continue;
+      const T1 = add(p0, scale(a.d, w)), T2 = add(p0, scale(c.d, w));
+      // The profile: a superellipse quarter from T1 to T2 round the point opposite the edge.
+      const O = sub(add(T1, T2), p0);
+      const pt = (k: number) => {
+        const phi = (k / segments) * (Math.PI / 2);
+        const cx = Math.pow(Math.max(0, Math.cos(phi)), 2 / e), sy = Math.pow(Math.max(0, Math.sin(phi)), 2 / e);
+        return add(O, add(scale(sub(T1, O), k === segments ? 0 : cx), scale(sub(T2, O), k === 0 ? 0 : sy)));
+      };
+      const out = add(n1, n2);
+      for (let k = 0; k < segments; k++) {
+        const P = pt(k), Q = pt(k + 1);
+        let n = normalize(cross(dir, sub(Q, P)));
+        if (dot(n, out) < 0) n = scale(n, -1);
+        extra.push({ plane: { n, d: dot(n, P) }, surface: cloneSurface(((k + 0.5) / segments < 0.5 ? A : B).surface) });
       }
     }
-  const out: Brush = { faces: [...b.faces.map((f) => ({ plane: f.plane, surface: cloneSurface(f.surface) })), ...extra] };
+  const all: Brush = { faces: [...b.faces.map((f) => ({ plane: f.plane, surface: cloneSurface(f.surface) })), ...extra] };
   // Drop faces that ended up with nothing left of them.
-  const kept = new Set(polygons(out).map((p) => p.face));
-  return { faces: out.faces.filter((_, i) => kept.has(i)) };
+  const kept = new Set(polygons(all).map((p) => p.face));
+  return { faces: all.faces.filter((_, i) => kept.has(i)) };
 }

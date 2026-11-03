@@ -5,7 +5,7 @@
 import { SceneReflections, sceneProbes } from './reflections';
 import { GroundBlend } from './ground-blend';
 import { SceneDoc, expandRepeats, ownerOf, type EntityData, type Transform, type Vec3 } from '@cocoaworlds/core';
-import { bounds, faceAt, loopCut, nearestEdge, transform as transformBrush, translate, vertices, type Brush, type Plane, type V3 } from '@cocoaworlds/geometry';
+import { bevelEdges, bounds, faceAt, loopCut, nearestEdge, transform as transformBrush, translate, vertices, type Brush, type Plane, type V3 } from '@cocoaworlds/geometry';
 import * as THREE from 'three';
 import { AoRenderer } from './ao';
 import { TransformControls } from 'three/addons/controls/TransformControls.js';
@@ -47,6 +47,19 @@ export interface TerrainToolBrush {
   radius: number;
   strength: number;
   layer: number;
+}
+
+export interface BevelInfo {
+  live: boolean;
+  width: number;
+  segments: number;
+  profile: number;
+  /** What's being typed for the width (live only). */
+  typed: string;
+  /** Mouse sets the profile instead of the width (P). */
+  profileMode: boolean;
+  /** Brushes that couldn't be bevelled (not convex). */
+  refused: number;
 }
 
 export interface ViewportCallbacks {
@@ -94,6 +107,12 @@ export interface ViewportCallbacks {
   loopCutState(cuts: number, fits: boolean | null): void;
   /** Loop cut tool: replace this brush (world space) with the cut one. */
   applyLoopCut(id: string, brush: Brush): void;
+  /** Drop the open edit and undo what it changed live (a cancelled bevel). */
+  cancelEdit?(): void;
+  /** Bevel: what it's set to now (`live`: being dragged; otherwise the last one, still adjustable), or null. */
+  bevelState?(s: BevelInfo | null): void;
+  /** Bevel adjusted after it was made: replace it (one undo step) with these brushes (world space). */
+  rebevel?(changes: { id: string; brush: Brush }[]): void;
   /** Edit pivot mode: the pivot was dragged to this world position. */
   livePivot(id: string, world: V3): void;
   /** Play mode: the player left for another scene (a level change). */
@@ -426,6 +445,7 @@ export class ViewportEngine {
   }
 
   setSelection(ids: string[]): void {
+    if (ids.join() !== this.selection.join() && !this.bevel) this.forgetBevel();
     this.selection = ids;
     this.applySelection();
     this.invalidate();
@@ -1275,6 +1295,8 @@ export class ViewportEngine {
 
   setEditTool(tool: 'none' | 'vertex' | 'clip' | 'loopcut'): void {
     if (this.editTool === tool) return;
+    if (this.bevel) this.endBevel(false);
+    this.forgetBevel();
     if (this.editTool === 'loopcut') this.showLoop(null);
     if (this.editTool === 'clip') {
       this.clipTool.clear();
@@ -1902,6 +1924,11 @@ export class ViewportEngine {
       } else if (!this.locked && !this.uiFree && e.button === 0) this.lockPointer();
       return;
     }
+    if (this.bevel) {
+      e.preventDefault();
+      this.endBevel(e.button === 0);
+      return;
+    }
     if (this.gizmo.dragging || (this.gizmo as unknown as { axis: string | null }).axis) return;
     const persp = this.rig.kind === 'perspective';
     let mode: NonNullable<typeof this.drag>['mode'];
@@ -2068,7 +2095,170 @@ export class ViewportEngine {
 
   private trackPointer = (e: PointerEvent): void => {
     this.lastPointer = { x: e.clientX, y: e.clientY };
+    if (this.bevel) this.updateBevel(e.shiftKey, e.ctrlKey);
   };
+
+  // ── Bevel (vertex tool, Ctrl+B), as in Blender ──
+
+  private bevel: {
+    originals: { id: string; brush: Brush }[];
+    edges: Map<string, [V3, V3][]>;
+    centre: { x: number; y: number };
+    /** Screen pixels per world unit at the centre. */
+    pxPerUnit: number;
+    /** Where the current sensitivity started: the value then and the mouse distance then. */
+    base: number;
+    from: number;
+    fine: boolean;
+    width: number;
+    segments: number;
+    profile: number;
+    profileMode: boolean;
+    typed: string;
+    refused: number;
+    /** Wider makes no difference (half the thinnest brush). */
+    maxWidth: number;
+  } | null = null;
+  /** The last bevel made: adjustable (width, segments, profile) until the selection or tool changes. */
+  private lastBevel: { originals: { id: string; brush: Brush }[]; edges: Map<string, [V3, V3][]>; width: number; segments: number; profile: number } | null = null;
+
+  /** Ctrl+B: start bevelling the picked edges (both corners of an edge picked). False when there are none. */
+  startBevel(): boolean {
+    if (this.editTool !== 'vertex' || this.bevel) return false;
+    const edges = this.vertexTool.pickedEdges();
+    if (!edges.size) return false;
+    const originals = this.editBrushes().filter((b) => edges.has(b.id));
+    const pts = [...edges.values()].flat(2);
+    const c: V3 = [0, 0, 0];
+    for (const p of pts) for (let i = 0; i < 3; i++) c[i]! += p[i]! / pts.length;
+    const sc = this.toScreen(c);
+    const right = new THREE.Vector3(1, 0, 0).applyQuaternion(this.rig.camera.quaternion);
+    const sr = this.toScreen([c[0] + right.x, c[1] + right.y, c[2] + right.z]);
+    const pxPerUnit = Math.max(1e-3, Math.hypot(sr.x - sc.x, sr.y - sc.y));
+    const from = Math.hypot(this.lastPointer.x - sc.x, this.lastPointer.y - sc.y);
+    const last = this.lastBevel;
+    this.forgetBevel();
+    let maxWidth = Infinity;
+    for (const o of originals) {
+      const bb = bounds(o.brush);
+      if (bb) maxWidth = Math.min(maxWidth, 0.5 * Math.min(bb.max[0] - bb.min[0], bb.max[1] - bb.min[1], bb.max[2] - bb.min[2]));
+    }
+    this.bevel = { originals, edges, centre: { x: sc.x, y: sc.y }, pxPerUnit, base: 0, from, fine: false, width: 0, segments: last?.segments ?? 1, profile: last?.profile ?? 0.5, profileMode: false, typed: '', refused: 0, maxWidth };
+    this.cb.beginEdit('Bevel');
+    this.gizmo.detach();
+    this.updateBevel(false, false);
+    return true;
+  }
+
+  private updateBevel(fine: boolean, snap: boolean): void {
+    const b = this.bevel;
+    if (!b) return;
+    const d = Math.hypot(this.lastPointer.x - b.centre.x, this.lastPointer.y - b.centre.y);
+    // Shift: ten times finer from here on.
+    if (fine !== b.fine) {
+      b.base = b.profileMode ? b.profile : b.width;
+      b.from = d;
+      b.fine = fine;
+    }
+    const k = fine ? 0.1 : 1;
+    if (b.profileMode) b.profile = Math.max(0.25, Math.min(0.99, b.base + ((d - b.from) * k) / 300));
+    else if (b.typed) b.width = Math.max(0, Number(b.typed) || 0);
+    else {
+      b.width = Math.min(b.maxWidth, Math.max(0, b.base + ((d - b.from) * k) / b.pxPerUnit));
+      // (Back from past the widest: it grows again as soon as the mouse comes back in.)
+      if (b.width >= b.maxWidth && !fine) {
+        b.base = b.maxWidth;
+        b.from = d;
+      }
+      // Ctrl: whole units (a tenth of one with Shift).
+      if (snap) b.width = fine ? Math.round(b.width * 10) / 10 : Math.round(b.width);
+    }
+    this.previewBevel();
+  }
+
+  private bevelled(originals: { id: string; brush: Brush }[], edges: Map<string, [V3, V3][]>, width: number, segments: number, profile: number): { changes: { id: string; brush: Brush }[]; refused: number } {
+    let refused = 0;
+    const changes = originals.map((o) => {
+      const r = bevelEdges(o.brush, edges.get(o.id) ?? [], width, segments, profile);
+      if (!r) refused++;
+      return { id: o.id, brush: r ?? o.brush };
+    });
+    return { changes, refused };
+  }
+
+  private previewBevel(): void {
+    const b = this.bevel;
+    if (!b) return;
+    const r = this.bevelled(b.originals, b.edges, b.width, b.segments, b.profile);
+    b.refused = r.refused;
+    this.cb.liveMany(r.changes);
+    this.cb.bevelState?.({ live: true, width: b.width, segments: b.segments, profile: b.profile, typed: b.typed, profileMode: b.profileMode, refused: b.refused });
+    this.invalidate();
+  }
+
+  /** Finish the bevel: keep it (click, Enter) or put everything back (right-click, Esc). */
+  endBevel(keep: boolean): void {
+    const b = this.bevel;
+    if (!b) return;
+    this.bevel = null;
+    if (keep && b.width > 0) {
+      this.cb.endEdit();
+      this.lastBevel = { originals: b.originals, edges: b.edges, width: b.width, segments: b.segments, profile: b.profile };
+      this.vertexTool.clearPicks();
+      this.cb.vertexInfo(0);
+      this.cb.bevelState?.({ live: false, width: b.width, segments: b.segments, profile: b.profile, typed: '', profileMode: false, refused: b.refused });
+    } else {
+      this.cb.liveMany(b.originals);
+      if (this.cb.cancelEdit) this.cb.cancelEdit();
+      else this.cb.endEdit();
+      this.cb.bevelState?.(null);
+    }
+    this.applySelection();
+    this.invalidate();
+  }
+
+  /** Change the bevel just made (the adjust panel): it's made again from the brushes as they were. */
+  adjustBevel(patch: { width?: number; segments?: number; profile?: number }): void {
+    const l = this.lastBevel;
+    if (!l) return;
+    Object.assign(l, patch);
+    l.width = Math.max(0, l.width);
+    l.segments = Math.max(1, Math.min(32, Math.round(l.segments)));
+    l.profile = Math.max(0.25, Math.min(0.99, l.profile));
+    const r = this.bevelled(l.originals, l.edges, l.width, l.segments, l.profile);
+    this.cb.rebevel?.(r.changes);
+    this.cb.bevelState?.({ live: false, width: l.width, segments: l.segments, profile: l.profile, typed: '', profileMode: false, refused: r.refused });
+  }
+
+  private forgetBevel(): void {
+    if (!this.lastBevel) return;
+    this.lastBevel = null;
+    this.cb.bevelState?.(null);
+  }
+
+  /** Keys while bevelling: digits type the width, P switches to the profile, Enter/Esc finish. */
+  private bevelKey(e: KeyboardEvent): boolean {
+    const b = this.bevel;
+    if (!b) return false;
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.key === 'Enter') this.endBevel(true);
+    else if (e.key === 'Escape') this.endBevel(false);
+    else if (/^[0-9.]$/.test(e.key)) b.typed += e.key;
+    else if (e.key === 'Backspace') b.typed = b.typed.slice(0, -1);
+    else if (e.key === 'p' || e.key === 'P') {
+      b.profileMode = !b.profileMode;
+      b.base = b.profileMode ? b.profile : b.width;
+      b.from = Math.hypot(this.lastPointer.x - b.centre.x, this.lastPointer.y - b.centre.y);
+    } else if (e.key === 'PageUp' || e.key === '+' || e.key === '=') b.segments = Math.min(32, b.segments + 1);
+    else if (e.key === 'PageDown' || e.key === '-') b.segments = Math.max(1, b.segments - 1);
+    else if (e.key === 'Shift' || e.key === 'Control') {
+      this.updateBevel(e.shiftKey, e.ctrlKey);
+      return true;
+    }
+    this.updateBevel(e.shiftKey, e.ctrlKey);
+    return true;
+  }
 
   private onPointerMove = (e: PointerEvent): void => {
     // Terrain tool: the brush ring follows the ground under the cursor.
@@ -2247,6 +2437,11 @@ export class ViewportEngine {
       return;
     }
     e.preventDefault();
+    if (this.bevel) {
+      this.bevel.segments = Math.max(1, Math.min(32, this.bevel.segments + (e.deltaY < 0 ? 1 : -1)));
+      this.updateBevel(e.shiftKey, e.ctrlKey);
+      return;
+    }
     if (this.editTool === 'loopcut' && this.loopHover && !this.drag) {
       this.setLoopCuts(this.loopCuts + (e.deltaY < 0 ? 1 : -1));
       return;
@@ -2266,6 +2461,13 @@ export class ViewportEngine {
     // Another workspace (Screens) fills the window: the 3D view is hidden and takes no keys.
     if (this.host.offsetParent === null) return;
     if (this.isTyping(e)) return;
+    if (this.bevelKey(e)) return;
+    if (this.editTool === 'vertex' && (e.ctrlKey || e.metaKey) && (e.key === 'b' || e.key === 'B' || e.code === 'KeyB')) {
+      e.preventDefault();
+      e.stopPropagation();
+      if (!this.startBevel()) this.cb.message('bevelNone');
+      return;
+    }
     if (this.draft?.points && this.draft.stage === 'footprint' && (e.key === 'Enter' || e.key === 'Backspace')) {
       e.preventDefault();
       e.stopPropagation();
@@ -2317,6 +2519,7 @@ export class ViewportEngine {
 
   private onKeyUp = (e: KeyboardEvent): void => {
     if (this.gameKey(e, false)) return;
+    if (this.bevel && (e.key === 'Shift' || e.key === 'Control')) this.updateBevel(e.shiftKey, e.ctrlKey);
     if (e.code === 'Space') this.spaceHeld = false;
     this.keys.delete(e.code);
   };

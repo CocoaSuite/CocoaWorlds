@@ -182,8 +182,21 @@ and the Face inspector) refits faces already painted.
 
 - **Plane** (brush shapes flyout): one flat face across the drawn box's two widest sides, at its top along the
   thinnest, facing that way (an edited mesh with a single polygon; seen from its front only).
-- **Bevel edges** (Brush section): rounds every edge of a convex brush with N flat segments of the given radius
+- **Bevel edges** (Brush section): bevels every edge of a convex brush with N flat segments of the given width
   (1 segment: a chamfer); corners come out faceted. `bevelBrush` in `ops.ts`. Undoable.
+- **Bevel chosen edges** (vertex tool, as in Blender): pick both corners of each edge (click an edge's middle,
+  Ctrl+click more; the picked edges show blue), then **Ctrl+B**. Moving the mouse away from the edges sets the
+  width (the distance of the new edges from the old one along each face, in the view's units at the edges); the
+  wheel, + / − or PageUp / PageDown set segments (1–32); **P** switches the mouse to the profile; typing digits
+  sets the width exactly; Shift is ten times finer, Ctrl rounds to whole units. Click or Enter makes it;
+  right-click or Esc puts everything back. Afterwards a panel keeps **Width, Segments, Profile** adjustable
+  (“Adjust last operation”: the bevel is made again from the brush as it was, still one undo step) until the
+  selection or tool changes. Width is capped at half the brush's thinnest side.
+  `bevelEdges(brush, edges, width, segments, profile)`: for each chosen edge, the new edges sit `width` across
+  each face (no more than half of either face), and the segments are flat strips through points on a
+  superellipse quarter from one to the other (profile 0.25 straight, 0.5 round, towards 1 square; exponent
+  2^(log₃(p/(1−p))+1)). Profiles below 0.25 (hollowed) can't be made from flat cutting planes. Convex edited
+  meshes are turned back into plain faces first (`asPlanes`); others are refused and left as they are.
 - **Cuts** (a subtract brush's Brush section): Everything it touches, or Only chosen brushes (the internal `cuts`
   component, `WorldBrush.cuts`), in the editor and the game.
 

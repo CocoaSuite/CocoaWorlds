@@ -25,6 +25,8 @@ export class VertexTool {
   private corners: THREE.Points;
   private pickedPts: THREE.Points;
   private mids: THREE.Points;
+  /** Edges with both corners picked (what Bevel works on). */
+  private edgeLines: THREE.LineSegments;
   /** During a drag: the brushes as they were, and the last move that worked. */
   private drag: { originals: VertexBrush[]; good: V3 } | null = null;
   lastRefusal: 'collapsed' | null = null;
@@ -42,6 +44,10 @@ export class VertexTool {
       this.group.add(p);
     }
     this.pickedPts.renderOrder = 31;
+    this.edgeLines = new THREE.LineSegments(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ color: 0x4b9cff, depthTest: false, transparent: true }));
+    this.edgeLines.frustumCulled = false;
+    this.edgeLines.renderOrder = 30;
+    this.group.add(this.edgeLines);
   }
 
   /** The brushes being edited (the selected, visible, unlocked brushes). Keeps picks that still exist. */
@@ -132,6 +138,20 @@ export class VertexTool {
     return c;
   }
 
+  /** Edges whose two corners are both picked, per brush (world positions). */
+  pickedEdges(): Map<string, [V3, V3][]> {
+    const out = new Map<string, [V3, V3][]>();
+    for (const b of this.brushes) {
+      const list = this.picked.get(b.id);
+      if (!list || list.length < 2) continue;
+      const { verts, edges: es } = edges(b.brush);
+      const has = (v: V3) => list.some((p) => same(p, v));
+      const chosen = es.filter(([i, j]) => has(verts[i]!) && has(verts[j]!)).map(([i, j]) => [verts[i]!, verts[j]!] as [V3, V3]);
+      if (chosen.length) out.set(b.id, chosen);
+    }
+    return out;
+  }
+
   /** Picked corners (snap sources) and every other brush corner in the scene except the edited brushes' own. */
   pickedPoints(): V3[] {
     return [...this.picked.values()].flat();
@@ -206,10 +226,16 @@ export class VertexTool {
     set(this.corners, corners);
     set(this.mids, mids);
     set(this.pickedPts, picked);
+    const lines: number[] = [];
+    if (!this.drag) for (const list of this.pickedEdges().values()) for (const [a, b] of list) lines.push(...a, ...b);
+    this.edgeLines.geometry.dispose();
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(lines), 3));
+    this.edgeLines.geometry = g;
   }
 
   dispose(): void {
-    for (const p of [this.corners, this.pickedPts, this.mids]) {
+    for (const p of [this.corners, this.pickedPts, this.mids, this.edgeLines]) {
       p.geometry.dispose();
       (p.material as THREE.Material).dispose();
     }

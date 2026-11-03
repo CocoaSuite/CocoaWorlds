@@ -14,6 +14,8 @@ import { TerrainPanel } from './TerrainPanel';
 import { ClipPanel } from './ClipPanel';
 import { VertexPanel } from './VertexPanel';
 import { LoopCutPanel } from './LoopCutPanel';
+import { BevelPanel } from './BevelPanel';
+import type { BevelInfo } from './engine';
 import type { ClipKeep, ClipState } from './clip-tool';
 import { ViewportEngine, type Hud, type ViewportStats } from './engine';
 
@@ -32,6 +34,7 @@ export function Viewport() {
   const [uiMouse, setUiMouse] = useState(false);
   const [hud, setHud] = useState<Hud | null>(null);
   const [loop, setLoop] = useState<{ cuts: number; fits: boolean | null }>({ cuts: 1, fits: null });
+  const [bevel, setBevel] = useState<BevelInfo | null>(null);
   const [clip, setClip] = useState<{ state: ClipState | null; keep: ClipKeep }>({ state: null, keep: 'both' });
   const brushOptions = useEditor((s) => s.brushOptions);
   const brushRole = useEditor((s) => s.brushRole);
@@ -132,6 +135,16 @@ export function Viewport() {
           st.log('info', 'Brush', `Loop cut ${st.doc?.get(id)?.name ?? id}: ${brush.mesh?.verts.length ?? 0} corners`);
         },
         vertexInfo: setVertexCount,
+        cancelEdit: () => useEditor.getState().cancelEdit(),
+        bevelState: setBevel,
+        rebevel: (changes) => {
+          const st = useEditor.getState();
+          // (Replaces the bevel just made, as one undo step.)
+          if (st.history.undoLabel === 'Bevel') st.history.undo();
+          st.begin('Bevel');
+          st.applyLive(changes);
+          st.commit();
+        },
         clipState: (state, keep) => setClip({ state, keep }),
         clip: (plane, keep) => useEditor.getState().clipSelection(plane, keep),
         message: (text) => {
@@ -383,7 +396,8 @@ export function Viewport() {
       )}
       {!playing && tool === 'terrain' && <TerrainPanel />}
       {!playing && tool === 'loopcut' && <LoopCutPanel cuts={loop.cuts} fits={loop.fits} onCuts={(n) => engine.current?.setLoopCuts(n)} />}
-      {tool === 'vertex' && <VertexPanel count={vertexCount} hasBrushes={sel.some((e) => !!e.components.brush) || selection.length > 0} />}
+      {tool === 'vertex' && bevel && <BevelPanel info={bevel} onAdjust={(p) => engine.current?.adjustBevel(p)} />}
+      {tool === 'vertex' && !bevel && <VertexPanel count={vertexCount} hasBrushes={sel.some((e) => !!e.components.brush) || selection.length > 0} />}
       {tool === 'clip' && (
         <ClipPanel
           state={clip.state}

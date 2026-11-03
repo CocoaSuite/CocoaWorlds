@@ -211,6 +211,8 @@ interface Actions {
   execute(cmd: Command): void;
   begin(label: string): void;
   commit(): void;
+  /** Drop the open edit, undoing what it changed. */
+  cancelEdit(): void;
   undo(): void;
   redo(): void;
   add(kind: AddKind, at?: [number, number, number]): void;
@@ -497,6 +499,9 @@ export const useEditor = create<State & Actions>()((set, get) => ({
   },
   commit() {
     get().history.commit();
+  },
+  cancelEdit() {
+    get().history.cancel();
   },
   undo() {
     const h = get().history;

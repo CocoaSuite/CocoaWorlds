@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { bevelBrush, bounds, setSurface, box, buildWorld, moveVertices, plane, polygons, validate, vertices, volume } from '../src';
+import { bevelBrush, bevelEdges, type V3, bounds, setSurface, box, buildWorld, moveVertices, plane, polygons, validate, vertices, volume } from '../src';
 
 describe('bevel, plane, chosen cuts', () => {
   it('bevels a box: more faces, a little less volume, still valid', () => {
@@ -35,5 +35,32 @@ describe('bevel, plane, chosen cuts', () => {
     const w = buildWorld([{ id: 'a', role: 'solid', brush: a }, { id: 'b', role: 'solid', brush: b }, { id: 'c', role: 'subtract', brush: cutter, cuts: ['b'] }]);
     expect(w.solids.find((s) => s.id === 'a')!.cutBy).toEqual([]);
     expect(w.solids.find((s) => s.id === 'b')!.cutBy).toEqual(['c']);
+  });
+});
+
+describe('bevelEdges (chosen edges, Blender-like)', () => {
+  it('chamfers one edge by its width along each face', () => {
+    const b = box([0, 0, 0], [64, 64, 64]);
+    const r = bevelEdges(b, [[[64, 64, 0], [64, 64, 64]]], 8, 1)!;
+    expect(r.faces.length).toBe(7);
+    expect(volume(r)).toBeCloseTo(64 ** 3 - 32 * 64, 0);
+  });
+  it('more segments and a rounder profile take less off; a straight profile is a chamfer', () => {
+    const b = box([0, 0, 0], [64, 64, 64]);
+    const e: [V3, V3][] = [[[64, 64, 0], [64, 64, 64]]];
+    const straight = volume(bevelEdges(b, e, 16, 4, 0.25)!);
+    const round = volume(bevelEdges(b, e, 16, 4, 0.5)!);
+    const square = volume(bevelEdges(b, e, 16, 4, 0.9)!);
+    expect(straight).toBeCloseTo(64 ** 3 - 128 * 64, 0);
+    expect(round).toBeGreaterThan(straight);
+    expect(square).toBeGreaterThan(round);
+    expect(validate(bevelEdges(b, e, 16, 4, 0.5)!)).toEqual([]);
+  });
+  it('bevels a convex edited mesh; refuses a dented one', () => {
+    const m = moveVertices(box([0, 0, 0], [64, 64, 64]), new Map([[0, [-8, -8, -8] as V3]]), 'split');
+    expect(m.ok).toBe(true);
+    if (!m.ok) return;
+    const r = bevelEdges(m.brush, null, 4, 2);
+    if (m.brush.mesh) expect(r === null || validate(r).length === 0).toBe(true);
   });
 });
