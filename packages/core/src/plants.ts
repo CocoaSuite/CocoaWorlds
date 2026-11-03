@@ -34,6 +34,11 @@ export interface PlantDef {
   foliage: 'cards' | 'lumps';
   leaves: number;
   leafSize: number;
+  /** Lumps: their shape, and how much they're stretched across, up and front to back. */
+  lumpShape?: 'diamond' | 'round' | 'blob' | 'spiky';
+  lumpX?: number;
+  lumpY?: number;
+  lumpZ?: number;
   // ── Colours ──
   colour: string;
   tipColour: string;

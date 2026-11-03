@@ -28,6 +28,14 @@ export function onPlantsChange(fn: () => void): () => void {
 
 // ── Growing ──
 
+/** Lump shapes, as unit triangles (positions, three per corner). */
+const LUMPS: Record<NonNullable<PlantDef['lumpShape']>, ArrayLike<number>> = {
+  diamond: new THREE.OctahedronGeometry(1, 0).getAttribute('position').array,
+  round: new THREE.IcosahedronGeometry(1, 0).getAttribute('position').array,
+  blob: new THREE.DodecahedronGeometry(1, 0).getAttribute('position').array,
+  spiky: new THREE.IcosahedronGeometry(1, 0).getAttribute('position').array,
+};
+
 interface Builder {
   pos: number[];
   nor: number[];
@@ -170,15 +178,26 @@ function grow(d: PlantDef, seed: number): Builder {
       const ids = q.map((o) => vert(b, p.clone().add(o), n, c));
       b.idx.push(ids[0]!, ids[1]!, ids[2]!, ids[0]!, ids[2]!, ids[3]!);
     } else {
-      // A soft lump: a jittered, upward-stretched octahedron.
-      const dirs = [v3(1, 0, 0), v3(-1, 0, 0), v3(0, 1.4, 0), v3(0, -0.7, 0), v3(0, 0, 1), v3(0, 0, -1)];
-      const ids = dirs.map((o) => {
-        const q = p.clone().add(o.clone().multiplyScalar((s / 2) * r(0.75, 1.15)));
+      // A soft lump: the chosen shape, stretched, its corners jittered, turned at random about the up axis.
+      const shape = d.lumpShape ?? 'diamond';
+      const t = LUMPS[shape];
+      const k = v3(d.lumpX ?? 1, d.lumpY ?? 1.2, d.lumpZ ?? 1).multiplyScalar(s / 2);
+      const spin = rnd() * Math.PI * 2, cs = Math.cos(spin), sn = Math.sin(spin);
+      const jit = shape === 'spiky' ? 0.55 : 0.2;
+      const moved = new Map<string, THREE.Vector3>();
+      for (let i = 0; i < t.length; i += 3) {
+        const o = v3(t[i]!, t[i + 1]!, t[i + 2]!);
+        // (The same corner moves the same way in every face it's in: no cracks.)
+        const key = `${o.x.toFixed(3)},${o.y.toFixed(3)},${o.z.toFixed(3)}`;
+        let q = moved.get(key);
+        if (!q) {
+          const j = 1 + (rnd() * 2 - 1) * jit;
+          q = v3(o.x * cs - o.z * sn, o.y, o.x * sn + o.z * cs).multiplyScalar(j).multiply(k);
+          moved.set(key, q);
+        }
         const nn = n.clone().addScaledVector(o.clone().normalize(), 0.5).normalize();
-        return vert(b, q, nn, c);
-      });
-      const F = [[0, 2, 4], [4, 2, 1], [1, 2, 5], [5, 2, 0], [4, 3, 0], [1, 3, 4], [5, 3, 1], [0, 3, 5]];
-      for (const f of F) b.idx.push(ids[f[0]!]!, ids[f[1]!]!, ids[f[2]!]!);
+        b.idx.push(vert(b, p.clone().add(q), nn, c));
+      }
     }
   }
   return b;

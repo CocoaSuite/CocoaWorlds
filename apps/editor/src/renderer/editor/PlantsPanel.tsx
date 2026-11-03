@@ -89,6 +89,22 @@ export function PlantsPanel() {
               </Row>
               {num('leaves', L('Leaves', 'Листьев'), 5, 3000, 5)}
               {num('leafSize', L('Leaf size', 'Размер листа'), 4, 300)}
+              {p.foliage === 'lumps' && (
+                <>
+                  <Row label={L('Lump shape', 'Форма комков')}>
+                    <Segmented label={L('Lump shape', 'Форма комков')} value={p.lumpShape ?? 'diamond'} onChange={(lumpShape) => edit({ lumpShape })} options={[{ value: 'diamond', label: L('Diamond', 'Ромб') }, { value: 'round', label: L('Round', 'Круглые') }, { value: 'blob', label: L('Blob', 'Капля') }, { value: 'spiky', label: L('Spiky', 'Колючие') }]} />
+                  </Row>
+                  <Row label={L('Lump width (X)', 'Ширина комка (X)')}>
+                    <Slider label={L('Lump width (X)', 'Ширина комка (X)')} value={p.lumpX ?? 1} min={0.2} max={3} step={0.05} digits={2} onChange={(lumpX) => edit({ lumpX }, 'lumpX')} />
+                  </Row>
+                  <Row label={L('Lump height (Y)', 'Высота комка (Y)')}>
+                    <Slider label={L('Lump height (Y)', 'Высота комка (Y)')} value={p.lumpY ?? 1.2} min={0.2} max={3} step={0.05} digits={2} onChange={(lumpY) => edit({ lumpY }, 'lumpY')} />
+                  </Row>
+                  <Row label={L('Lump depth (Z)', 'Глубина комка (Z)')}>
+                    <Slider label={L('Lump depth (Z)', 'Глубина комка (Z)')} value={p.lumpZ ?? 1} min={0.2} max={3} step={0.05} digits={2} onChange={(lumpZ) => edit({ lumpZ }, 'lumpZ')} />
+                  </Row>
+                </>
+              )}
             </>
           )}
           <Row label={L('Root colour', 'Цвет у корня')}>
@@ -130,6 +146,7 @@ function PlantPreview({ def }: { def: PlantDef }) {
   const host = useRef<HTMLDivElement>(null);
   const view = useRef<{ r: THREE.WebGLRenderer; scene: THREE.Scene; cam: THREE.PerspectiveCamera; ctl: OrbitControls; mesh: THREE.Mesh; pole: THREE.Line } | null>(null);
   const [h, setH] = useState(0);
+  const [tris, setTris] = useState(0);
   useEffect(() => {
     const el = host.current!;
     const r = new THREE.WebGLRenderer({ antialias: true });
@@ -198,6 +215,8 @@ function PlantPreview({ def }: { def: PlantDef }) {
     const height = Math.max(box.max.y, 1);
     const width = Math.max(box.max.x - box.min.x, box.max.z - box.min.z, 1);
     setH(height);
+    const g = v.mesh.geometry;
+    setTris(Math.round((g.index ? g.index.count : g.getAttribute('position').count) / 3));
     // The height pole beside it, and the person just outside it.
     const x = width / 2 + 40;
     v.pole.geometry.dispose();
@@ -212,7 +231,7 @@ function PlantPreview({ def }: { def: PlantDef }) {
   }, [def]);
   return (
     <div className="cw-plants-preview" ref={host} data-testid="plant-preview">
-      <div className="cw-plants-height">{(h / UNITS_PER_METRE).toFixed(2)} m · {Math.round(h)} u</div>
+      <div className="cw-plants-height">{(h / UNITS_PER_METRE).toFixed(2)} m · {Math.round(h)} u · {tris.toLocaleString()} {L('triangles', 'треугольников')}</div>
     </div>
   );
 }
