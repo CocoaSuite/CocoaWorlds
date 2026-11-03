@@ -8,10 +8,9 @@ import { Button, ColorField, NumberField, Segmented, Switch } from '@cocoaworlds
 import { useEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { brushOf } from '../brush/brushes';
-import { getLang, t } from '../i18n';
+import { t } from '../i18n';
 import { useEditor } from '../store';
 import { projectMaterial, releaseMaterial, tickMaterials } from '../viewport/project-materials';
-import { SMART_MATERIALS } from '@cocoaworlds/materials';
 import type { FaceRef } from '../viewport/world-render';
 import { MaterialSwatch } from './MaterialSwatch';
 import { GraphWorkspace } from './MaterialGraph';
@@ -232,25 +231,6 @@ export function MaterialsPanel() {
         >
           {t('cm.add')}
         </Button>
-        <select
-          className="cw-input cw-mini"
-          aria-label={t('cm.smart')}
-          title={t('cm.smartHint')}
-          value=""
-          onChange={async (e) => {
-            const sm = SMART_MATERIALS.find((s) => s.id === e.currentTarget.value);
-            if (!sm) return;
-            const m = await createGraphMaterial(unique(sm.label[getLang()], list.map((x) => x.name)), sm.id);
-            if (m) add(m, `Add smart material ${m.name}`);
-          }}
-        >
-          <option value="">{t('cm.smart')}</option>
-          {SMART_MATERIALS.map((s) => (
-            <option key={s.id} value={s.id} title={s.hint[getLang()]}>
-              {s.label[getLang()]}
-            </option>
-          ))}
-        </select>
         <input
           ref={fileRef}
           type="file"

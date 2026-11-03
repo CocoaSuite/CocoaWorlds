@@ -172,23 +172,3 @@ Exported games carry the baked images, not the graphs.
   much what's behind is bent, by the surface's normals (a normal map makes it ripple). Colour tints it, roughness
   frosts it. Project materials are physical materials for this (no cost when glass is off).
 - **Glow image** (under Glows): where it glows, tinted by the glow colour.
-
-## Smart materials
-
-Materials tab › **+ Smart material…** makes a graph material from a ready-made graph (`SMART_MATERIALS` in
-`packages/materials/src/smart.ts`), with the settings it wants. It's an ordinary graph material afterwards: open
-its graph to change anything, or set its exposed settings per material (variants).
-
-- **Stylised rock** — hand-painted rock like stylised game art. Projected from the world (Mapping: world), so
-  brushes of any shape, terrain and models all get it without texture coordinates; one repeat covers 384 u;
-  baked at 1024 px. Built on **Rock facets**: broken plates, each a flat facet tilted its own way, cracks
-  between them and smaller chips (creases, not cracks) on top. Colour: blue-grey stone by height with patchy
-  hue variation, light baked in from above (Light from height, overlay), ochre in the cracks, moss in some of
-  them (Dirt × a noise mask), pale highlights on the plates' raised edges (curvature), faint painterly hexagon
-  mottling. Normal from the height (strength 10, material bump 1.8), occlusion from the height. No roughness
-  picture: the material's own Roughness (1) keeps it fully matte, so it doesn't pick up the sky's shine.
-  Exposed: Plates across, Stretch, Seed, Stone colours, Crack colour, Moss colour, Moss.
-
-**Rock facets** (Make): Plates across (1–24), Stretch (plates longer one way: strata), Tilt, Crack width, Edge
-softness, Chips, Wobble, Seed. The cells are Voronoi with exact distances to their borders (straight crack
-lines); each cell's height is a random tilted plane, so Height to normal gives hard facets.

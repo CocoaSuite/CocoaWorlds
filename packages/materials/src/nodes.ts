@@ -781,60 +781,6 @@ float h = d <= 0. ? 0. : smoothstep(0., p_bevel * 0.4 + 1e-3, d);
 outColor = vec4(vec3(h * (1. - p_random * v.z)), 1.);`,
   },
   {
-    type: 'rockFacets',
-    group: 'make',
-    label: l('Rock facets', 'Грани камня'),
-    hint: l(
-      'Chiselled stone (as height): broken plates, each a flat facet tilted its own way, with cracks between and smaller chips on top. Feed it to Height to normal for the hard-edged look.',
-      'Колотый камень (как высота): плиты, каждая — плоская грань со своим наклоном, трещины между ними и мелкие сколы сверху. Подайте в «Высоту в нормали» для резких граней.',
-    ),
-    inputs: [],
-    output: 'grey',
-    params: [
-      { id: 'scale', label: l('Plates across', 'Плит в ряд'), kind: 'int', min: 1, max: 24, default: 4 },
-      { id: 'stretch', label: l('Stretch', 'Вытянутость'), kind: 'number', min: 1, max: 4, default: 1.6 },
-      { id: 'tilt', label: l('Tilt', 'Наклон'), kind: 'number', min: 0, max: 1, default: 0.7 },
-      { id: 'gap', label: l('Crack width', 'Ширина трещин'), kind: 'number', min: 0, max: 0.3, default: 0.025 },
-      { id: 'bevel', label: l('Edge softness', 'Мягкость краёв'), kind: 'number', min: 0, max: 1, default: 0.25 },
-      { id: 'detail', label: l('Chips', 'Сколы'), kind: 'number', min: 0, max: 1, default: 0.6 },
-      { id: 'warp', label: l('Wobble', 'Неровность'), kind: 'number', min: 0, max: 1, default: 0.4 },
-      seed,
-    ],
-    glsl: `vec2 wv = vec2(fbm(uv, 3., 3., 0.5, 0., p_seed + 5.), fbm(uv, 3., 3., 0.5, 0., p_seed + 9.)) - 0.5;
-vec2 q = fract(uv + wv * p_warp * 0.06);
-float hs = 0.; float rim0 = 1.;
-for (int L = 0; L < 2; L++) {
-  float k = L == 0 ? 1. : 2.;
-  vec2 S = vec2(p_scale * k, max(1., floor(p_scale * k * p_stretch + 0.5)));
-  vec2 o = seedv(p_seed + float(L) * 31.);
-  vec2 p = q * S; vec2 ip = floor(p); vec2 fp = p - ip;
-  float md = 8.; vec2 mr = vec2(0.); vec2 mg = vec2(0.); vec2 mc = vec2(0.);
-  for (int y = -1; y <= 1; y++) for (int x = -1; x <= 1; x++) {
-    vec2 g = vec2(float(x), float(y)); vec2 cell = mod(ip + g, S);
-    vec2 r = g + 0.5 + (hash22(cell + o) - 0.5) * 0.9 - fp;
-    float d = dot(r, r);
-    if (d < md) { md = d; mr = r; mg = g; mc = cell; }
-  }
-  float ed = 8.;
-  for (int y = -2; y <= 2; y++) for (int x = -2; x <= 2; x++) {
-    vec2 g = mg + vec2(float(x), float(y)); vec2 cell = mod(ip + g, S);
-    vec2 r = g + 0.5 + (hash22(cell + o) - 0.5) * 0.9 - fp;
-    vec2 dd = r - mr;
-    if (dot(dd, dd) > 1e-5) ed = min(ed, dot(0.5 * (mr + r), normalize(dd)));
-  }
-  vec2 sl = (hash22(mc + o + 3.7) - 0.5) * 2. * p_tilt;
-  float base = hash12(mc + o + 9.1);
-  float plate = mix(0.45, 0.85, base) + dot(-mr, sl) * 0.6;
-  // (Chips meet in creases, not cracks.)
-  float g0 = p_gap * (L == 0 ? 1. : 0.12);
-  float rim = smoothstep(g0, g0 + p_bevel * 0.2 + 1e-3, ed);
-  float layer = mix(L == 0 ? 0.12 : plate - 0.12, plate, rim);
-  if (L == 0) { hs = layer; rim0 = rim; }
-  else hs += (layer - 0.65) * 0.4 * p_detail * rim0;
-}
-outColor = vec4(vec3(clamp(hs, 0., 1.)), 1.);`,
-  },
-  {
     type: 'cracks',
     group: 'make',
     label: l('Cracks', 'Трещины'),

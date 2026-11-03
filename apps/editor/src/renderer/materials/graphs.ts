@@ -7,7 +7,7 @@
  * `assets/textures/generated/` and its map fields pointed at them.
  */
 import { MAP_FIELDS, materialsOf, newMaterial, type MaterialDef } from '@cocoaworlds/core';
-import { GraphEvaluator, SMART_MATERIALS, NODES, OUTPUT_ROLES, withOverrides, newGraph, outputNodes, paramsOf, nodeDef, validateGraph, type MatGraph, type OutputRole } from '@cocoaworlds/materials';
+import { GraphEvaluator, NODES, OUTPUT_ROLES, withOverrides, newGraph, outputNodes, paramsOf, nodeDef, validateGraph, type MatGraph, type OutputRole } from '@cocoaworlds/materials';
 import { create } from 'zustand';
 import { assetUrl, forgetAsset } from '../assets';
 import { useEditor } from '../store';
@@ -123,12 +123,11 @@ export function graphPathFor(name: string): string {
 }
 
 /** Make a new graph material (its graph file is written straight away). */
-export async function createGraphMaterial(name: string, smart?: string): Promise<MaterialDef | null> {
+export async function createGraphMaterial(name: string): Promise<MaterialDef | null> {
   const st = useEditor.getState();
   const dir = st.session?.dir;
   if (!dir) return null;
-  const sm = smart ? SMART_MATERIALS.find((s) => s.id === smart) : undefined;
-  const g = sm ? sm.graph() : newGraph();
+  const g = newGraph();
   const r = await window.cocoa.projects.writeGraph(dir, graphPathFor(name), g, true);
   if (!r.ok) {
     st.notify(r.error);
@@ -136,7 +135,7 @@ export async function createGraphMaterial(name: string, smart?: string): Promise
   }
   useGraphs.setState((s) => ({ graphs: { ...s.graphs, [r.value]: g } }));
   bakeSoon(r.value, 50);
-  return newMaterial(name, { color: '#ffffff', roughness: 1, metalness: 0, graph: r.value, bakeSize: 512, tile: 128, ...(sm?.settings ?? {}) });
+  return newMaterial(name, { color: '#ffffff', roughness: 1, metalness: 0, graph: r.value, bakeSize: 512, tile: 128 });
 }
 
 // ── The graphics card ──
