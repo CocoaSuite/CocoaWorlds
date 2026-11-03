@@ -37,7 +37,46 @@ interface Island {
 
 type Op = { kind: 'grab' | 'rotate' | 'scale'; keys: Set<string>; start: [number, number]; pivot: [number, number]; axis: 'x' | 'y' | null; base: Map<string, FaceSurface>; key: string; moved: boolean };
 
-export function UvPanel() {
+/** The UV editor beside the 3D view (toolbar UV, or View › UV editor beside the view); drag its edge to widen. */
+export function UvPane() {
+  const [w, setW] = useState(() => {
+    try {
+      return Number(localStorage.getItem('cw-uv-pane-w')) || 460;
+    } catch {
+      return 460;
+    }
+  });
+  const drag = useRef<{ x: number; w: number } | null>(null);
+  return (
+    <div className="cw-uv-pane" style={{ width: w }} aria-label={L('UV editor', 'Редактор UV')} role="region">
+      <div
+        className="cw-uv-grip"
+        role="separator"
+        aria-orientation="vertical"
+        aria-label={L('Resize the UV editor', 'Ширина редактора UV')}
+        onPointerDown={(e) => {
+          (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+          drag.current = { x: e.clientX, w };
+        }}
+        onPointerMove={(e) => {
+          if (!drag.current) return;
+          setW(Math.max(300, Math.min(1100, drag.current.w - (e.clientX - drag.current.x))));
+        }}
+        onPointerUp={() => {
+          drag.current = null;
+          try {
+            localStorage.setItem('cw-uv-pane-w', String(w));
+          } catch {
+            /* (Not kept.) */
+          }
+        }}
+      />
+      <UvPanel pane />
+    </div>
+  );
+}
+
+export function UvPanel({ pane = false }: { pane?: boolean }) {
   const doc = useEditor((s) => s.doc);
   useEditor((s) => s.rev);
   const faceSel = useEditor((s) => s.faceSelection);
@@ -423,14 +462,14 @@ export function UvPanel() {
   };
 
   return (
-    <div className="cw-plants cw-uv">
+    <div className={pane ? 'cw-uv-in' : 'cw-plants cw-uv'}>
       <div className="cw-plants-view cw-uv-view" onPointerEnter={() => (hover.current = true)} onPointerLeave={() => (hover.current = false)}>
         <canvas ref={canvas} className="cw-uv-canvas" data-testid="uv-canvas" onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onWheel={onWheel} onContextMenu={(e) => e.preventDefault()} />
         <div className="cw-plants-height">
           {mode === 'uv'
             ? islands.length
               ? `${islands.length} ${L('faces', 'граней')} · ${materialLabel(faceMat, getLang())} · ${L('G move · R turn · S scale · X/Y axis · A all · wheel zoom · middle-drag pan', 'G двигать · R вращать · S масштаб · X/Y ось · A все · колесо — масштаб · средняя кнопка — сдвиг')}`
-              : L('Select faces (Face tool) or brushes in the Scene tab to see their UVs.', 'Выберите грани (инструмент «Грани») или браши во вкладке «Сцена».')
+              : L('Select faces (Face tool) or brushes to see their UVs.', 'Выберите грани (инструмент «Грани») или браши, чтобы увидеть их UV.')
             : `${def ? def.name : L('No project materials yet', 'Пока нет материалов проекта')} · ${L('drag to draw a rectangle · click to select · Delete removes', 'тяните, чтобы нарисовать прямоугольник · щелчок — выбрать · Delete — удалить')}`}
         </div>
       </div>

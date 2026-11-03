@@ -35,6 +35,8 @@ export interface ProjectSettings {
   materials?: MaterialDef[];
   /** Plants made in the Plants workspace, shared by every scene. */
   plants?: import('./plants').PlantDef[];
+  /** Materials starred in the pickers (ids; missing: none). */
+  favouriteMaterials?: string[];
   /** Skies saved from the Sky workspace, for any scene (missing: none). */
   skies?: SavedSky[];
 }

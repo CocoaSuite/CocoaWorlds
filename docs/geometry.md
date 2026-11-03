@@ -167,7 +167,7 @@ navigation finds its surface like any other.
 
 ## UV editor and hotspots
 
-The **UV** workspace shows the selected faces (or every face of the selected brushes) as islands over their
+The **UV** editor (toolbar **UV**, or View › UV editor beside the view; it opens beside the 3D view, drag its edge to resize) shows the selected faces (or every face of the selected brushes) as islands over their
 material's texture, Blender-style: click / Shift-click to pick islands, drag or **G** to move, **R** to turn, **S**
 to scale (X / Y keep to one axis; click or Enter finishes, Esc or right-click cancels; A picks all). Brush faces keep
 Hammer-style offset, scale and turn, so islands change whole; every gesture is one undo step.

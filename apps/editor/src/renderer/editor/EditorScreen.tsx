@@ -1,6 +1,6 @@
 /** The main editor window: CocoaCanvas frame (top bar, scene list, stage, inspector) plus the bottom workspace. Mockup 01. */
 import { SkyPanel } from './SkyPanel';
-import { UvPanel } from './UvPanel';
+import { UvPane } from './UvPanel';
 import { RECIPES, type Recipe } from '@cocoaworlds/scripting';
 import { Button, Dialog } from '@cocoaworlds/ui';
 import { useEffect, useState } from 'react';
@@ -25,6 +25,7 @@ export function EditorScreen() {
   const recovery = useEditor((s) => s.recovery);
   const recover = useEditor((s) => s.recover);
   const workspace = useEditor((s) => s.workspace);
+  const uvPane = useEditor((s) => s.uvPane);
   const [keysOpen, setKeysOpen] = useState(false);
   useShortcuts(() => setKeysOpen(true));
 
@@ -41,14 +42,16 @@ export function EditorScreen() {
       {workspace === 'materials' && <MaterialsPanel />}
       {workspace === 'plants' && <PlantsPanel />}
       {workspace === 'sky' && <SkyPanel />}
-      {workspace === 'uv' && <UvPanel />}
       <div className={`cw-mid${playing ? ' cw-playing' : ''}`} hidden={workspace !== 'scene'}>
         {/* While playing, editing panels are inert: the game runs from a snapshot of the scene. */}
         <div className="cw-inert-wrap" inert={playing}>
           <SceneTree />
         </div>
         <div className="cw-stage">
-          <Viewport />
+          <div className="cw-stage-row">
+            <Viewport />
+            {uvPane && !playing && <UvPane />}
+          </div>
           <div className="cw-inert-wrap" inert={playing}>
             <ToolBar />
           </div>

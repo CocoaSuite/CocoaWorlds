@@ -11,7 +11,6 @@ import { useSelectedEntities, useEditor, type ViewMode } from '../store';
 import type { DraftState } from './brush-draft';
 import { BrushPanel } from './BrushPanel';
 import { TerrainPanel } from './TerrainPanel';
-import { PaintPanel } from './PaintPanel';
 import { ClipPanel } from './ClipPanel';
 import { VertexPanel } from './VertexPanel';
 import { LoopCutPanel } from './LoopCutPanel';
@@ -365,7 +364,6 @@ export function Viewport() {
           onCancel={() => engine.current?.cancelDraft()}
         />
       )}
-      {tool === 'paint' && <PaintPanel />}
       {!playing && tool === 'terrain' && <TerrainPanel />}
       {!playing && tool === 'loopcut' && <LoopCutPanel cuts={loop.cuts} fits={loop.fits} onCuts={(n) => engine.current?.setLoopCuts(n)} />}
       {tool === 'vertex' && <VertexPanel count={vertexCount} hasBrushes={sel.some((e) => !!e.components.brush) || selection.length > 0} />}

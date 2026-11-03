@@ -12,7 +12,7 @@ test('sphere brush', async () => {
   try {
     await newProject(page, 'Ball');
     await page.keyboard.press('2');
-    await page.getByRole('toolbar', { name: 'Tools' }).getByRole('button', { name: 'Sphere brush' }).click();
+    await page.getByRole('toolbar', { name: 'Tools' }).getByRole('button', { name: 'Brush shapes' }).click(); await page.getByRole('toolbar', { name: 'Tools' }).getByRole('button', { name: 'Sphere brush' }).click();
     const panel = page.getByRole('group', { name: 'Brush tool' });
     await panel.getByRole('radio', { name: 'Sphere' }).waitFor();
     const sides = panel.getByLabel('Sides', { exact: true });

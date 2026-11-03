@@ -43,7 +43,7 @@ test('scene lighting, sky and fog', async () => {
 
     // Preview lighting by default; Lighting: Game shows the scene's lights.
     assert.equal((await lightTypes()).visible, false);
-    await page.getByRole('button', { name: /^Lighting/ }).click();
+    await page.getByRole('button', { name: /^Lighting (Game|Preview)/ }).click();
     await until(async () => (await lightTypes()).visible, true);
     assert.deepEqual((await lightTypes()).types, ['DirectionalLight', 'HemisphereLight', 'PointLight']);
     await shot(page, 'l01-game-lighting');
@@ -62,7 +62,7 @@ test('scene lighting, sky and fog', async () => {
     assert.ok(await page.evaluate(() => !!window.__cwViewport.lighting.group.getObjectByName('sky')), 'the sky is on');
 
     // Back to preview lighting, then Play: the scene's lighting always.
-    await page.getByRole('button', { name: /^Lighting/ }).click();
+    await page.getByRole('button', { name: /^Lighting (Game|Preview)/ }).click();
     await until(async () => (await lightTypes()).visible, false);
     await page.getByRole('button', { name: 'Play' }).click();
     await page.getByTestId('play-banner').waitFor();

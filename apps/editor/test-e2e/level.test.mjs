@@ -18,7 +18,7 @@ test('polygon brush and background level builds', async () => {
     await page.keyboard.press('2');
 
     // 1. Polygon brush: five corners clicked in the top view, closed by clicking the first, depth typed.
-    await page.getByRole('button', { name: 'Polygon brush' }).click();
+    await page.getByRole('toolbar', { name: 'Tools' }).getByRole('button', { name: 'Brush shapes' }).click(); await page.getByRole('button', { name: 'Polygon brush' }).click();
     const panel = page.getByRole('group', { name: 'Brush tool' });
     await panel.getByText('Click to place the corners', { exact: false }).waitFor();
     const corners = [[0, 0], [128, 0], [192, 96], [64, 192], [-64, 96]];

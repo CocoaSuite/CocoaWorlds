@@ -80,7 +80,7 @@ export function PlantsPanel() {
     const was = String(dflt![k as keyof typeof dflt] ?? fallback);
     return (
       <PRow label={label} changed={value !== was} onReset={() => edit({ [k]: dflt![k as keyof typeof dflt] } as Partial<PlantDef>)}>
-        {options.length > 4 ? (
+        {options.length > 3 ? (
           <select className="cw-input" aria-label={label} value={value} onChange={(e) => edit({ [k]: e.currentTarget.value } as Partial<PlantDef>)}>
             {options.map((o) => (
               <option key={o.value} value={o.value}>

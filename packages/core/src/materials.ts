@@ -12,6 +12,8 @@ export interface MaterialDef {
   /** What faces store: `mat/` and a 16-character id. */
   id: string;
   name: string;
+  /** Where it's listed in pickers ("Walls", "Walls/Brick"); missing: Materials. */
+  folder?: string;
   /** `#rrggbb`: the colour, or the tint of the image. */
   color: string;
   /** Project image (`assets/textures/…`) drawn on the faces. */

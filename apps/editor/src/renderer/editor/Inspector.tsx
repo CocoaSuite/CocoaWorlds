@@ -1,4 +1,6 @@
 /** Inspector for the selection (CocoaCanvas right panel). Scene settings when nothing is selected. */
+import { PaintPanel } from '../viewport/PaintPanel';
+import { useState } from 'react';
 import { shown, stored, type AxisKind } from '../axes';
 import { PIVOT, aoOf, gameRules, pivotOf, sceneSettings, worldBoundsOf, type EntityData, type SceneSettings as SceneSettingsData, type Transform, type Vec3 } from '@cocoaworlds/core';
 import { brushBounds } from '../brush/brushes';
@@ -17,15 +19,17 @@ export function Inspector() {
   useEditor((s) => s.rev);
   const sel = useSelectedEntities();
   const faceTool = useEditor((s) => s.tool === 'face');
+  const paintTool = useEditor((s) => s.tool === 'paint');
   const kind = sel.length === 1 ? componentLabel(sel[0]!) : sel.length > 1 ? `${sel.length}` : '';
   return (
     <aside className="cw-side cw-right" aria-label={t('insp.title')}>
       <PanelHeader title={t('insp.title')}>{kind && <span className="cw-ph-note">{kind}</span>}</PanelHeader>
       <div className="cw-insp cw-scroll">
+        {paintTool && <PaintPanel />}
         {faceTool && <FaceInspector />}
-        {!faceTool && sel.length === 0 && <SceneSettings />}
-        {!faceTool && sel.length === 1 && (sel[0]!.components.brush ? <BrushEntity e={sel[0]!} /> : isGroupEntity(sel[0]!) ? <GroupEntity e={sel[0]!} /> : <EntityInspector e={sel[0]!} />)}
-        {!faceTool && sel.length > 1 && (
+        {!faceTool && !paintTool && sel.length === 0 && <SceneSettings />}
+        {!faceTool && !paintTool && sel.length === 1 && (sel[0]!.components.brush ? <BrushEntity e={sel[0]!} /> : isGroupEntity(sel[0]!) ? <GroupEntity e={sel[0]!} /> : <EntityInspector e={sel[0]!} />)}
+        {!faceTool && !paintTool && sel.length > 1 && (
           <>
             <p className="cw-empty">
               {sel.length} {t('insp.multi')}
@@ -158,10 +162,15 @@ function SceneSettings() {
       <p className="cw-empty" style={{ padding: 0 }}>
         {t('insp.nothing')}
       </p>
-      <Section title={t('insp.sceneSettings')}>
+      <Fold id="scene" title={t('insp.sceneSettings')}>
         <Field label={t('insp.name')}>
           <span>{doc.name}</span>
         </Field>
+        <Field label={t('insp.gravity')}>
+          {num(t('insp.gravity'), cur.gravity, 50, (v) => set({ gravity: Math.max(0, v) }, 'Gravity', 'scene-gravity'), 'u/s²')}
+        </Field>
+      </Fold>
+      <Fold id="light" title={t('insp.lighting')}>
         <Field label={t('insp.ambient')}>
           <ColorField label={t('insp.ambient')} value={cur.ambientColor} onChange={(v) => set({ ambientColor: v }, 'Ambient colour', 'scene-ambient')} />
         </Field>
@@ -181,42 +190,64 @@ function SceneSettings() {
         <Field label={t('insp.background')}>
           <ColorField label={t('insp.background')} value={cur.backgroundColor} onChange={(v) => set({ backgroundColor: v }, 'Background', 'scene-bg')} />
         </Field>
-        <Field label={t('insp.gravity')}>
-          {num(t('insp.gravity'), cur.gravity, 50, (v) => set({ gravity: Math.max(0, v) }, 'Gravity', 'scene-gravity'), 'u/s²')}
-        </Field>
-      </Section>
-      <Section title={t('insp.sky')}>
+      </Fold>
+      <Fold id="sky" title={t('insp.sky')}>
         <Field label={t('insp.skyOn')}>
           <Switch label={t('insp.skyOn')} checked={sky.enabled} onChange={(v) => set({ sky: { ...sky, enabled: v } }, v ? 'Sky on' : 'Sky off')} />
         </Field>
-        {sky.enabled && (
-          <>
-            <Field label={t('insp.skyTop')}>
-              <ColorField label={t('insp.skyTop')} value={sky.top} onChange={(v) => set({ sky: { ...sky, top: v } }, 'Sky colour', 'scene-sky-top')} />
-            </Field>
-            <Field label={t('insp.skyHorizon')}>
-              <ColorField label={t('insp.skyHorizon')} value={sky.horizon} onChange={(v) => set({ sky: { ...sky, horizon: v } }, 'Sky colour', 'scene-sky-h')} />
-            </Field>
-            <Field label={t('insp.skyGround')}>
-              <ColorField label={t('insp.skyGround')} value={sky.ground} onChange={(v) => set({ sky: { ...sky, ground: v } }, 'Sky colour', 'scene-sky-g')} />
-            </Field>
-          </>
-        )}
+        <Button size="sm" onClick={() => st.setWorkspace('sky')}>
+          {t('insp.openSky')}
+        </Button>
         <Field label={t('insp.fog')}>
           <Switch label={t('insp.fog')} checked={cur.fog.enabled} onChange={(v) => set({ fog: { ...cur.fog, enabled: v } }, v ? 'Fog on' : 'Fog off')} />
         </Field>
         {cur.fog.enabled && (
           <>
-            <Field label={t('insp.fogColor')}>
-              <ColorField label={t('insp.fogColor')} value={cur.fog.color} onChange={(v) => set({ fog: { ...cur.fog, color: v } }, 'Fog colour', 'scene-fog-c')} />
-            </Field>
+            {!(sky.enabled && sky.lightFromSky) && (
+              <Field label={t('insp.fogColor')}>
+                <ColorField label={t('insp.fogColor')} value={cur.fog.color} onChange={(v) => set({ fog: { ...cur.fog, color: v } }, 'Fog colour', 'scene-fog-c')} />
+              </Field>
+            )}
             <Field label={t('insp.fogNear')}>{num(t('insp.fogNear'), cur.fog.near, 64, (v) => set({ fog: { ...cur.fog, near: Math.max(0, v) } }, 'Fog', 'scene-fog-n'), 'u')}</Field>
             <Field label={t('insp.fogFar')}>{num(t('insp.fogFar'), cur.fog.far, 256, (v) => set({ fog: { ...cur.fog, far: Math.max(cur.fog.near + 1, v) } }, 'Fog', 'scene-fog-f'), 'u')}</Field>
           </>
         )}
         <p className="cw-hint">{t('insp.skyHint')}</p>
-      </Section>
+      </Fold>
       <GameRulesSection />
+    </>
+  );
+}
+
+/** A section that folds away (remembered per section). */
+function Fold({ id, title, children }: { id: string; title: string; children: React.ReactNode }) {
+  const key = `cw-fold-${id}`;
+  const [open, setOpen] = useState(() => {
+    try {
+      return localStorage.getItem(key) !== '0';
+    } catch {
+      return true;
+    }
+  });
+  const flip = () => {
+    setOpen(!open);
+    try {
+      localStorage.setItem(key, open ? '0' : '1');
+    } catch {
+      /* (Not kept.) */
+    }
+  };
+  return (
+    <>
+      <button type="button" className="cw-sec cw-fold" aria-expanded={open} onClick={flip}>
+        <span>
+          <span className="cw-fold-a" aria-hidden="true">
+            {open ? '▾' : '▸'}
+          </span>
+          {title}
+        </span>
+      </button>
+      {open && children}
     </>
   );
 }
@@ -229,7 +260,7 @@ function GameRulesSection() {
   if (!project) return null;
   const rules = gameRules(project.settings);
   return (
-    <Section title={t('insp.gameRules')}>
+    <Fold id="rules" title={t('insp.gameRules')}>
       <p className="cw-hint">{t('insp.gameRulesHint')}</p>
       <Field label={t('insp.health')}>
         <Switch checked={rules.health} label={t('insp.health')} onChange={(on) => !playing && void set('health', on)} />
@@ -254,7 +285,7 @@ function GameRulesSection() {
       >
         {t('insp.forgetProgress')}
       </Button>
-    </Section>
+    </Fold>
   );
 }
 

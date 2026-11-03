@@ -1,5 +1,6 @@
 /** Centred tool bar under the viewport (CocoaCanvas #tbar). Tools from later phases are shown disabled with a note. */
 import { Divider, ToolButton, type IconName } from '@cocoaworlds/ui';
+import { useEffect, useRef, useState } from 'react';
 import type { BrushShape } from '../brush/brushes';
 import { t } from '../i18n';
 import { useEditor, type Tool } from '../store';
@@ -16,6 +17,30 @@ export function ToolBar() {
   const setBrushRole = useEditor((s) => s.setBrushRole);
   const role = useEditor((s) => s.brushRole);
   const grid = useEditor((s) => s.session?.project.settings.gridSize ?? 16);
+  const uvPane = useEditor((s) => s.uvPane);
+  const [shapes, setShapes] = useState(false);
+  const fly = useRef<HTMLDivElement>(null);
+  // (The shapes flyout closes on a click elsewhere or Esc.)
+  useEffect(() => {
+    if (!shapes) return;
+    const away = (e: PointerEvent) => !fly.current?.contains(e.target as Node) && setShapes(false);
+    const esc = (e: KeyboardEvent) => e.key === 'Escape' && setShapes(false);
+    window.addEventListener('pointerdown', away, true);
+    window.addEventListener('keydown', esc, true);
+    return () => {
+      window.removeEventListener('pointerdown', away, true);
+      window.removeEventListener('keydown', esc, true);
+    };
+  }, [shapes]);
+  const SHAPES: [BrushShape, IconName, string, string?][] = [
+    ['box', 'block', t('tool.block'), 'B'],
+    ['cylinder', 'cylinder', t('tool.cylinder')],
+    ['sphere', 'sphere', t('tool.sphere')],
+    ['wedge', 'wedge', t('tool.wedge')],
+    ['stairs', 'stairs', t('tool.stairs')],
+    ['polygon', 'polygon', t('tool.polygon')],
+  ];
+  const current = SHAPES.find((x) => x[0] === shape) ?? SHAPES[0]!;
   const T = (id: Tool, icon: IconName, label: string, key: string) => (
     <ToolButton icon={icon} label={label} shortcut={key} active={tool === id} onClick={() => setTool(id)} />
   );
@@ -29,6 +54,7 @@ export function ToolBar() {
         setBrushOptions({ shape: s });
         if (role === 'trigger') setBrushRole('solid');
         setTool('brush');
+        setShapes(false);
       }}
     />
   );
@@ -39,12 +65,20 @@ export function ToolBar() {
       {T('rotate', 'rotate', t('tool.rotate'), 'E')}
       {T('scale', 'scale', t('tool.scale'), 'R')}
       <Divider />
-      {B('box', 'block', t('tool.block'), 'B')}
-      {B('cylinder', 'cylinder', t('tool.cylinder'))}
-      {B('sphere', 'sphere', t('tool.sphere'))}
-      {B('wedge', 'wedge', t('tool.wedge'))}
-      {B('stairs', 'stairs', t('tool.stairs'))}
-      {B('polygon', 'polygon', t('tool.polygon'))}
+      {/* Brushes: the shape last used, with the others in a flyout. */}
+      <div className="cw-tb-group" ref={fly}>
+        {B(current[0], current[1], current[2], 'B')}
+        <button type="button" className="cw-tb-more" aria-label={t('tool.shapes')} aria-expanded={shapes} title={t('tool.shapes')} onClick={() => setShapes(!shapes)}>
+          ▾
+        </button>
+        {shapes && (
+          <div className="cw-tb-fly" role="group" aria-label={t('tool.shapes')}>
+            {SHAPES.map(([s, icon, label, key]) => (
+              <span key={s}>{B(s, icon, label, key)}</span>
+            ))}
+          </div>
+        )}
+      </div>
       <Divider />
       {T('vertex', 'vertex', t('tool.vertex'), 'X')}
       {T('face', 'face', t('tool.face'), 'T')}
@@ -63,6 +97,10 @@ export function ToolBar() {
       />
       {T('paint', 'paint', t('tool.paint'), 'P')}
       {T('terrain', 'terrain', t('tool.terrain'), 'H')}
+      <Divider />
+      <button type="button" className={`cw-snap${uvPane ? ' on' : ''}`} aria-pressed={uvPane} title={t('tool.uvTitle')} onClick={() => toggle('uvPane')}>
+        UV
+      </button>
       <Divider />
       <button type="button" className={`cw-snap${snap ? ' on' : ''}`} aria-pressed={snap} title="Grid snapping (G)" onClick={() => toggle('snap')}>
         {t('grid.snap')} {snap ? `${grid}u` : t('grid.off')}

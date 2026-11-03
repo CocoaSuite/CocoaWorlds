@@ -381,6 +381,23 @@ function MaterialProps({
           onBlur={() => (name.trim() && name.trim() !== m.name ? edit({ name: name.trim() }, 'Rename material') : setName(m.name))}
         />
       </Row>
+      <Row label={t('mat.folder')}>
+        <input
+          className="cw-input"
+          aria-label={t('mat.folder')}
+          key={`folder-${m.id}`}
+          defaultValue={m.folder ?? ''}
+          placeholder={t('mat.folderHint')}
+          onKeyDown={(e) => {
+            e.stopPropagation();
+            if (e.key === 'Enter') e.currentTarget.blur();
+          }}
+          onBlur={(e) => {
+            const v = e.currentTarget.value.trim();
+            if (v !== (m.folder ?? '')) edit({ folder: v || undefined }, 'Material folder');
+          }}
+        />
+      </Row>
       <Row label={t('mat.color')}>
         <ColorField label={t('mat.color')} value={m.color} onChange={(v) => edit({ color: v }, 'Material colour', `mat-color-${m.id}`)} />
       </Row>

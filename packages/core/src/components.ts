@@ -58,6 +58,8 @@ export interface FieldDef {
   default: unknown;
   /** Show only when another field has one of these values. */
   when?: { key: string; is: unknown[] };
+  /** A heading it's listed under (fields with the same heading are shown together, in order of first appearance). */
+  group?: Text;
 }
 
 export interface ComponentDef {
@@ -311,7 +313,7 @@ export const COMPONENTS: ComponentDef[] = [
     conflicts: ['rigidBody', 'collider', 'train', 'pathPoint', 'playerSpawn'],
     fields: [
       {
-        key: 'side',
+        key: 'side', group: e('Behaviour', 'Поведение'),
         label: e('Is', 'Кто'),
         type: {
           kind: 'enum',
@@ -323,11 +325,11 @@ export const COMPONENTS: ComponentDef[] = [
         },
         default: 'hostile',
       },
-      { key: 'health', label: e('Health', 'Здоровье'), type: { kind: 'number', min: 1, step: 10 }, default: 50 },
-      { key: 'speed', label: e('Speed', 'Скорость'), type: { kind: 'number', min: 0, step: 10, unit: 'u/s' }, default: 150 },
-      { key: 'sight', label: e('Sees up to', 'Видит на'), type: { kind: 'number', min: 64, step: 64, unit: 'u' }, default: 1024 },
+      { key: 'health', group: e('Health and movement', 'Здоровье и движение'), label: e('Health', 'Здоровье'), type: { kind: 'number', min: 1, step: 10 }, default: 50 },
+      { key: 'speed', group: e('Health and movement', 'Здоровье и движение'), label: e('Speed', 'Скорость'), type: { kind: 'number', min: 0, step: 10, unit: 'u/s' }, default: 150 },
+      { key: 'sight', group: e('Health and movement', 'Здоровье и движение'), label: e('Sees up to', 'Видит на'), type: { kind: 'number', min: 64, step: 64, unit: 'u' }, default: 1024 },
       {
-        key: 'attack',
+        key: 'attack', group: e('Attack', 'Атака'),
         label: e('Attacks', 'Атакует'),
         type: {
           kind: 'enum',
@@ -339,19 +341,19 @@ export const COMPONENTS: ComponentDef[] = [
         },
         default: 'melee',
       },
-      { key: 'damage', label: e('Damage', 'Урон'), type: { kind: 'number', min: 0, step: 1 }, default: 10, when: { key: 'attack', is: ['melee', 'shoot'] } },
-      { key: 'rate', label: e('Attacks a second', 'Атак в секунду'), type: { kind: 'number', min: 0.1, step: 0.5 }, default: 1, when: { key: 'attack', is: ['melee', 'shoot'] } },
-      { key: 'reach', label: e('Reach', 'Дотягивается'), type: { kind: 'number', min: 16, step: 8, unit: 'u' }, default: 64, when: { key: 'attack', is: ['melee'] } },
-      { key: 'spread', label: e('Aim spread', 'Разброс'), hint: e('Degrees: higher misses more.', 'В градусах: больше — чаще промахивается.'), type: { kind: 'number', min: 0, step: 1, unit: '°' }, default: 4, when: { key: 'attack', is: ['shoot'] } },
+      { key: 'damage', group: e('Attack', 'Атака'), label: e('Damage', 'Урон'), type: { kind: 'number', min: 0, step: 1 }, default: 10, when: { key: 'attack', is: ['melee', 'shoot'] } },
+      { key: 'rate', group: e('Attack', 'Атака'), label: e('Attacks a second', 'Атак в секунду'), type: { kind: 'number', min: 0.1, step: 0.5 }, default: 1, when: { key: 'attack', is: ['melee', 'shoot'] } },
+      { key: 'reach', group: e('Attack', 'Атака'), label: e('Reach', 'Дотягивается'), type: { kind: 'number', min: 16, step: 8, unit: 'u' }, default: 64, when: { key: 'attack', is: ['melee'] } },
+      { key: 'spread', group: e('Attack', 'Атака'), label: e('Aim spread', 'Разброс'), hint: e('Degrees: higher misses more.', 'В градусах: больше — чаще промахивается.'), type: { kind: 'number', min: 0, step: 1, unit: '°' }, default: 4, when: { key: 'attack', is: ['shoot'] } },
       {
-        key: 'wander',
+        key: 'wander', group: e('Behaviour', 'Поведение'),
         label: e('Wanders about', 'Бродит'),
         hint: e('Pottering near where it started, stopping to peck or sniff (its busy animation).', 'Ходит около места, где стоял, останавливаясь клевать или нюхать (анимация «занят»).'),
         type: { kind: 'boolean' },
         default: false,
       },
       {
-        key: 'flee',
+        key: 'flee', group: e('Behaviour', 'Поведение'),
         label: e('Runs away', 'Убегает'),
         type: {
           kind: 'enum',
@@ -363,11 +365,11 @@ export const COMPONENTS: ComponentDef[] = [
         },
         default: 'never',
       },
-      { key: 'clumsy', label: e('Clumsy', 'Неуклюжий'), hint: e('Weaves as it goes and stumbles now and then.', 'Петляет на ходу и иногда спотыкается.'), type: { kind: 'boolean' }, default: false },
-      { key: 'height', label: e('Height', 'Рост'), type: { kind: 'number', min: 8, step: 4, unit: 'u' }, default: 72 },
-      { key: 'radius', label: e('Thickness', 'Толщина'), hint: e('Half its width (for bumping into things).', 'Половина ширины (для столкновений).'), type: { kind: 'number', min: 2, step: 2, unit: 'u' }, default: 16 },
+      { key: 'clumsy', group: e('Behaviour', 'Поведение'), label: e('Clumsy', 'Неуклюжий'), hint: e('Weaves as it goes and stumbles now and then.', 'Петляет на ходу и иногда спотыкается.'), type: { kind: 'boolean' }, default: false },
+      { key: 'height', group: e('Body', 'Тело'), label: e('Height', 'Рост'), type: { kind: 'number', min: 8, step: 4, unit: 'u' }, default: 72 },
+      { key: 'radius', group: e('Body', 'Тело'), label: e('Thickness', 'Толщина'), hint: e('Half its width (for bumping into things).', 'Половина ширины (для столкновений).'), type: { kind: 'number', min: 2, step: 2, unit: 'u' }, default: 16 },
       {
-        key: 'anims',
+        key: 'anims', group: e('Body', 'Тело'),
         label: e('Animations', 'Анимации'),
         hint: e(
           'Names in its model for standing, walking, attacking, dying, running, being busy and being hurt, separated by commas. Leave out what it hasn’t got.',
@@ -592,26 +594,26 @@ export const COMPONENTS: ComponentDef[] = [
     appliesTo: 'any',
     pointNeeds: ['terrain', 'model'],
     fields: [
-      { key: 'spacing', label: e('Spacing', 'Шаг'), hint: e('About how far apart the tufts are.', 'Примерно расстояние между пучками.'), type: { kind: 'number', min: 4, step: 2, unit: 'u' }, default: 10 },
-      { key: 'density', label: e('Density', 'Густота'), hint: e('How many spots get a tuft (1 = all).', 'Сколько мест получают пучок (1 = все).'), type: { kind: 'number', min: 0, max: 1, step: 0.05 }, default: 1 },
-      { key: 'size', label: e('Width', 'Ширина'), hint: e('How wide each tuft spreads.', 'Насколько широко раскидывается пучок.'), type: { kind: 'number', min: 2, step: 2, unit: 'u' }, default: 14 },
-      { key: 'height', label: e('Height', 'Высота'), hint: e('How tall the grass grows.', 'Насколько высока трава.'), type: { kind: 'number', min: 1, step: 2, unit: 'u' }, default: 14 },
-      { key: 'slope', label: e('Steepest', 'Круче'), hint: e('The steepest slope that grows tufts, in degrees.', 'Самый крутой склон, на котором растут пучки, в градусах.'), type: { kind: 'number', min: 0, max: 90, step: 5, unit: '°' }, default: 40 },
-      { key: 'colour', label: e('Colour', 'Цвет'), type: { kind: 'color' }, default: '#4f9a3c' },
-      { key: 'seed', label: e('Seed', 'Seed'), hint: e('Change it for a different pattern.', 'Измените для другого рисунка.'), type: { kind: 'number', min: 0, step: 1 }, default: 1 },
+      { key: 'spacing', group: e('Tufts', 'Пучки'), label: e('Spacing', 'Шаг'), hint: e('About how far apart the tufts are.', 'Примерно расстояние между пучками.'), type: { kind: 'number', min: 4, step: 2, unit: 'u' }, default: 10 },
+      { key: 'density', group: e('Tufts', 'Пучки'), label: e('Density', 'Густота'), hint: e('How many spots get a tuft (1 = all).', 'Сколько мест получают пучок (1 = все).'), type: { kind: 'number', min: 0, max: 1, step: 0.05 }, default: 1 },
+      { key: 'size', group: e('Tufts', 'Пучки'), label: e('Width', 'Ширина'), hint: e('How wide each tuft spreads.', 'Насколько широко раскидывается пучок.'), type: { kind: 'number', min: 2, step: 2, unit: 'u' }, default: 14 },
+      { key: 'height', group: e('Tufts', 'Пучки'), label: e('Height', 'Высота'), hint: e('How tall the grass grows.', 'Насколько высока трава.'), type: { kind: 'number', min: 1, step: 2, unit: 'u' }, default: 14 },
+      { key: 'slope', group: e('Where it grows', 'Где растёт'), label: e('Steepest', 'Круче'), hint: e('The steepest slope that grows tufts, in degrees.', 'Самый крутой склон, на котором растут пучки, в градусах.'), type: { kind: 'number', min: 0, max: 90, step: 5, unit: '°' }, default: 40 },
+      { key: 'colour', group: e('Tufts', 'Пучки'), label: e('Colour', 'Цвет'), type: { kind: 'color' }, default: '#4f9a3c' },
+      { key: 'seed', group: e('Tufts', 'Пучки'), label: e('Seed', 'Seed'), hint: e('Change it for a different pattern.', 'Измените для другого рисунка.'), type: { kind: 'number', min: 0, step: 1 }, default: 1 },
       {
-        key: 'layer',
+        key: 'layer', group: e('Where it grows', 'Где растёт'),
         label: e('Grows on', 'Растёт на'),
         hint: e('On a terrain: only where this layer is painted.', 'На ландшафте: только там, где нарисован этот слой.'),
         type: { kind: 'enum', options: [{ value: 'all', label: e('Everywhere', 'Везде') }, { value: '0', label: e('Layer 1', 'Слой 1') }, { value: '1', label: e('Layer 2', 'Слой 2') }, { value: '2', label: e('Layer 3', 'Слой 3') }, { value: '3', label: e('Layer 4', 'Слой 4') }] },
         default: 'all',
       },
-      { key: 'plant', label: e('Plant', 'Растение'), hint: e('Grow one of your plants instead of plain tufts (its own colours).', 'Растить своё растение вместо простых пучков (со своими цветами).'), type: { kind: 'plant' }, default: '' },
-      { key: 'cover', label: e('Grass on top', 'Трава сверху'), hint: e('Paint a grass layer over the material where it faces up (world up), so no bare ground shows between tufts; tufts grow only where it shows.', 'Рисовать слой травы поверх материала там, где поверхность смотрит вверх; пучки растут только там, где он виден.'), type: { kind: 'boolean' }, default: true },
-      { key: 'coverColour', label: e('Top colour', 'Цвет сверху'), type: { kind: 'color' }, default: '#3f7f2e' },
-      { key: 'edge', label: e('Edge softness', 'Мягкость края'), hint: e('Over how many degrees of slope the layer fades out.', 'На сколько градусов наклона слой сходит на нет.'), type: { kind: 'number', min: 1, max: 60, step: 1, unit: '°' }, default: 14 },
-      { key: 'patches', label: e('Bare patches', 'Проплешины'), hint: e('0: even cover; 1: plenty of bare patches.', '0: ровный покров; 1: много проплешин.'), type: { kind: 'number', min: 0, max: 1, step: 0.05 }, default: 0.25 },
-      { key: 'patchSize', label: e('Patch size', 'Размер пятен'), type: { kind: 'number', min: 20, step: 10, unit: 'u' }, default: 320 },
+      { key: 'plant', group: e('Tufts', 'Пучки'), label: e('Plant', 'Растение'), hint: e('Grow one of your plants instead of plain tufts (its own colours).', 'Растить своё растение вместо простых пучков (со своими цветами).'), type: { kind: 'plant' }, default: '' },
+      { key: 'cover', group: e('Grass on top', 'Трава сверху'), label: e('Grass on top', 'Трава сверху'), hint: e('Paint a grass layer over the material where it faces up (world up), so no bare ground shows between tufts; tufts grow only where it shows.', 'Рисовать слой травы поверх материала там, где поверхность смотрит вверх; пучки растут только там, где он виден.'), type: { kind: 'boolean' }, default: true },
+      { key: 'coverColour', group: e('Grass on top', 'Трава сверху'), when: { key: 'cover', is: [true] }, label: e('Top colour', 'Цвет сверху'), type: { kind: 'color' }, default: '#3f7f2e' },
+      { key: 'edge', group: e('Grass on top', 'Трава сверху'), when: { key: 'cover', is: [true] }, label: e('Edge softness', 'Мягкость края'), hint: e('Over how many degrees of slope the layer fades out.', 'На сколько градусов наклона слой сходит на нет.'), type: { kind: 'number', min: 1, max: 60, step: 1, unit: '°' }, default: 14 },
+      { key: 'patches', group: e('Grass on top', 'Трава сверху'), when: { key: 'cover', is: [true] }, label: e('Bare patches', 'Проплешины'), hint: e('0: even cover; 1: plenty of bare patches.', '0: ровный покров; 1: много проплешин.'), type: { kind: 'number', min: 0, max: 1, step: 0.05 }, default: 0.25 },
+      { key: 'patchSize', group: e('Grass on top', 'Трава сверху'), when: { key: 'cover', is: [true] }, label: e('Patch size', 'Размер пятен'), type: { kind: 'number', min: 20, step: 10, unit: 'u' }, default: 320 },
     ],
   },
   {
@@ -624,13 +626,13 @@ export const COMPONENTS: ComponentDef[] = [
     appliesTo: 'brush',
     conflicts: ['rigidBody', 'trigger', 'conveyor', 'ladder'],
     fields: [
-      { key: 'shallow', label: e('Shallow colour', 'Цвет на мели'), type: { kind: 'color' }, default: '#7fd8e6' },
-      { key: 'deep', label: e('Deep colour', 'Цвет в глубине'), type: { kind: 'color' }, default: '#1f4fb0' },
-      { key: 'depthLook', label: e('Deep from', 'Глубоко с'), hint: e('How deep the water is before it shows its deep colour.', 'С какой глубины вода показывает цвет глубины.'), type: { kind: 'number', min: 8, step: 16, unit: 'u' }, default: 192 },
-      { key: 'foam', label: e('Foam', 'Пена'), hint: e('White foam along the shores and round whatever stands in it, and glints on the water.', 'Белая пена у берегов и вокруг всего, что стоит в воде, и блики.'), type: { kind: 'boolean' }, default: true },
-      { key: 'tint', label: e('Colour under water', 'Цвет под водой'), type: { kind: 'color' }, default: '#28607a' },
-      { key: 'clearness', label: e('Seeing distance', 'Видимость'), hint: e('How far the player sees under water.', 'Насколько далеко видно под водой.'), type: { kind: 'number', min: 32, step: 64, unit: 'u' }, default: 640 },
-      { key: 'drowns', label: e('Can drown', 'Можно утонуть'), hint: e('After 12 s under water the player loses 10 health a second.', 'Через 12 с под водой игрок теряет 10 здоровья в секунду.'), type: { kind: 'boolean' }, default: true },
+      { key: 'shallow', group: e('Look', 'Вид'), label: e('Shallow colour', 'Цвет на мели'), type: { kind: 'color' }, default: '#7fd8e6' },
+      { key: 'deep', group: e('Look', 'Вид'), label: e('Deep colour', 'Цвет в глубине'), type: { kind: 'color' }, default: '#1f4fb0' },
+      { key: 'depthLook', group: e('Look', 'Вид'), label: e('Deep from', 'Глубоко с'), hint: e('How deep the water is before it shows its deep colour.', 'С какой глубины вода показывает цвет глубины.'), type: { kind: 'number', min: 8, step: 16, unit: 'u' }, default: 192 },
+      { key: 'foam', group: e('Look', 'Вид'), label: e('Foam', 'Пена'), hint: e('White foam along the shores and round whatever stands in it, and glints on the water.', 'Белая пена у берегов и вокруг всего, что стоит в воде, и блики.'), type: { kind: 'boolean' }, default: true },
+      { key: 'tint', group: e('Look', 'Вид'), label: e('Colour under water', 'Цвет под водой'), type: { kind: 'color' }, default: '#28607a' },
+      { key: 'clearness', group: e('Look', 'Вид'), label: e('Seeing distance', 'Видимость'), hint: e('How far the player sees under water.', 'Насколько далеко видно под водой.'), type: { kind: 'number', min: 32, step: 64, unit: 'u' }, default: 640 },
+      { key: 'drowns', group: e('Swimming', 'Плавание'), label: e('Can drown', 'Можно утонуть'), hint: e('After 12 s under water the player loses 10 health a second.', 'Через 12 с под водой игрок теряет 10 здоровья в секунду.'), type: { kind: 'boolean' }, default: true },
     ],
   },
   {

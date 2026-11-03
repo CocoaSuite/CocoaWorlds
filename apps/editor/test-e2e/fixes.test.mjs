@@ -17,7 +17,7 @@ test('fixes: sphere selection, brush height, copy and paste, hinged doors, model
     await page.keyboard.press('2');
 
     // 1. A 32-sided sphere: selecting it doesn't stall the editor.
-    await page.getByRole('toolbar', { name: 'Tools' }).getByRole('button', { name: 'Sphere brush' }).click();
+    await page.getByRole('toolbar', { name: 'Tools' }).getByRole('button', { name: 'Brush shapes' }).click(); await page.getByRole('toolbar', { name: 'Tools' }).getByRole('button', { name: 'Sphere brush' }).click();
     const brushPanel = page.getByRole('group', { name: 'Brush tool' });
     const sides = brushPanel.getByLabel('Sides', { exact: true });
     await sides.fill('32');

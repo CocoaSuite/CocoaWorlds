@@ -137,6 +137,8 @@ interface State {
   showGrass: boolean;
   /** Z is up in what the editor shows (as in Blender); the engine stays Y-up. */
   zUp: boolean;
+  /** The UV editor open beside the 3D view. */
+  uvPane: boolean;
   /** Show the scene's own lighting (lights, sky, fog) in the editor instead of the flat preview lights. */
   gameLighting: boolean;
   showStats: boolean;
@@ -156,6 +158,8 @@ interface State {
   faceSelection: FaceRef[];
   /** Material the paint tool applies. */
   paintMaterial: string;
+  /** Materials used lately (paint and face edits), newest first. */
+  recentMaterials: string[];
   /** Snap moves and brush drawing to nearby brush corners. */
   vertexSnap: boolean;
   /** Edit pivot mode: the move gizmo moves the selected object's pivot instead of the object. */
@@ -177,7 +181,7 @@ interface State {
   /** The bottom workspace's open tab. */
   bottomTab: 'script' | 'assets' | 'console' | 'problems';
   /** Which workspace fills the window: the scene (3D view and panels) or the screen UI editor. */
-  workspace: 'scene' | 'screens' | 'materials' | 'plants' | 'sky' | 'uv';
+  workspace: 'scene' | 'screens' | 'materials' | 'plants' | 'sky';
   /** While playing: the blocks each object's script is running (for highlighting). */
   activeBlocks: Map<string, string[]>;
 }
@@ -197,7 +201,7 @@ interface Actions {
   /** A finished terrain stroke, already made: recorded so it can be undone. */
   terrainEdit(cmd: { label: string; apply(): void; revert(): void }): void;
   setView(v: ViewMode): void;
-  toggle(k: 'showGrid' | 'showNav' | 'showGrass' | 'zUp' | 'showStats' | 'showBottom' | 'snap' | 'vertexSnap' | 'pivotEdit' | 'gameLighting'): void;
+  toggle(k: 'showGrid' | 'showNav' | 'showGrass' | 'zUp' | 'uvPane' | 'showStats' | 'showBottom' | 'snap' | 'vertexSnap' | 'pivotEdit' | 'gameLighting'): void;
   /** Put an object's pivot at a world position (null: back to the default, its middle). */
   setPivot(id: string, world: Vec3 | null, mergeKey?: string): void;
   execute(cmd: Command): void;
@@ -243,6 +247,8 @@ interface Actions {
   setFaceSurfaces(changes: { id: string; face: number; patch: SurfacePatch }[], label: string, mergeKey?: string): void;
   justifyFaces(side: Justify): void;
   setPaintMaterial(id: string): void;
+  /** Star or unstar a material in the pickers (saved with the project). */
+  toggleFavouriteMaterial(id: string): void;
   // multi-object editing, groups, clipboard
   applyLive(changes: LiveChange[]): void;
   clickSelect(id: string | null, additive: boolean, deep: boolean): void;
@@ -348,6 +354,7 @@ export const useEditor = create<State & Actions>()((set, get) => ({
   showNav: false,
   showGrass: true,
   zUp: savedZUp(),
+  uvPane: false,
   gameLighting: false,
   assets: { textures: [], sounds: [], models: [] },
   showStats: true,
@@ -364,6 +371,7 @@ export const useEditor = create<State & Actions>()((set, get) => ({
   brushRole: 'solid',
   faceSelection: [],
   paintMaterial: 'dev/wall',
+  recentMaterials: [],
   vertexSnap: true,
   pivotEdit: false,
   enteredGroup: null,
@@ -881,6 +889,7 @@ export const useEditor = create<State & Actions>()((set, get) => ({
   },
 
   setFaces(patch, mergeKey, label = 'Edit faces') {
+    if (patch.material) set({ recentMaterials: [patch.material, ...get().recentMaterials.filter((x) => x !== patch.material)].slice(0, 16) });
     applyToFaces(get, (b, faces) => setSurface(b, patch, faces), label, mergeKey);
   },
 
@@ -914,7 +923,16 @@ export const useEditor = create<State & Actions>()((set, get) => ({
   },
 
   setPaintMaterial(id) {
-    set({ paintMaterial: id });
+    set({ paintMaterial: id, recentMaterials: [id, ...get().recentMaterials.filter((x) => x !== id)].slice(0, 16) });
+  },
+
+  toggleFavouriteMaterial(id) {
+    const s = get().session;
+    if (!s) return;
+    const now = s.project.settings.favouriteMaterials ?? [];
+    const next = now.includes(id) ? now.filter((x) => x !== id) : [...now, id];
+    set({ session: { ...s, project: { ...s.project, settings: { ...s.project.settings, favouriteMaterials: next } } }, rev: get().rev + 1 });
+    saveProjectSoon(get);
   },
 
   setPivot(id, world, mergeKey) {

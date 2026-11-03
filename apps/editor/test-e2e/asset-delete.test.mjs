@@ -23,8 +23,9 @@ test('assets: delete a texture (and undo)', async () => {
     await page.getByTestId('import-textures').setInputFiles(f);
     const tile = page.getByRole('listitem', { name: 'old_brick' }).first();
     await tile.waitFor();
-    await tile.hover();
-    await tile.getByRole('button', { name: 'Delete old_brick' }).click();
+    // Right-click menu: Delete…
+    await tile.click({ button: 'right' });
+    await page.getByRole('menuitem', { name: 'Delete…' }).click();
     const ask = page.getByRole('alertdialog', { name: 'Delete old_brick?' });
     await ask.waitFor();
     await shot(page, 'asset-delete');

@@ -1,4 +1,4 @@
-/** Floating panel for the paint tool: choose a material, then click faces in the view. */
+/** The Paint tool's material library (in the Inspector while painting): choose a material, then click faces. */
 import { materialLabel } from './project-materials';
 import { MaterialPicker } from '../editor/MaterialPicker';
 import { getLang, t } from '../i18n';
@@ -8,11 +8,10 @@ export function PaintPanel() {
   const material = useEditor((s) => s.paintMaterial);
   const setMaterial = useEditor((s) => s.setPaintMaterial);
   return (
-    <div className="cw-brush-panel cw-paint-panel" role="group" aria-label={t('paint.panel')} onPointerDown={(e) => e.stopPropagation()}>
-      <div className="cw-brush-row">
-        <span className="cw-brush-k">{t('face.material')}</span>
-        <span className="mono" data-testid="paint-material">{materialLabel(material, getLang())}</span>
-      </div>
+    <div className="cw-paint-side" role="group" aria-label={t('paint.panel')}>
+      <span className="cw-sr" data-testid="paint-material">
+        {materialLabel(material, getLang())}
+      </span>
       <MaterialPicker label={t('face.material')} value={material} onChange={setMaterial} />
       <div className="cw-brush-hint">{t('paint.hint')}</div>
     </div>

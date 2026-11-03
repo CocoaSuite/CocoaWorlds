@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { drawBrush, launch, newProject, quit, setDraft, shot, tempDirs, until } from './helpers.mjs';
 async function addBrush(page, size, corner, shape) {
   await page.keyboard.press('b');
-  if (shape) await page.getByRole('button', { name: shape }).first().click();
+  if (shape) { await page.getByRole('toolbar', { name: 'Tools' }).getByRole('button', { name: 'Brush shapes' }).click(); await page.getByRole('button', { name: shape }).first().click(); }
   await drawBrush(page);
   await setDraft(page, size, corner);
   await page.getByRole('group', { name: 'Brush tool' }).getByRole('button', { name: 'Create' }).click();

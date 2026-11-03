@@ -1615,6 +1615,7 @@ export class ViewportEngine {
   }
 
   private zUp = true;
+  private gizmoFlipped = false;
 
   /** View › Z is up: the corner axes and the move gizmo's colours show Z up (as in Blender); the engine stays Y-up. */
   setZUp(v: boolean): void {
@@ -1624,6 +1625,13 @@ export class ViewportEngine {
     this.grid.orient(this.rig.kind);
     // (Up is the blue axis, depth the green one.)
     this.gizmo.setColors(0xff0000, v ? 0x0000ff : 0x00ff00, v ? 0x00ff00 : 0x0000ff, 0xffff00);
+    // Shown +Y is the engine's −Z: the move and scale gizmos' Z arrows (and their grab areas) point that way.
+    if (this.gizmoFlipped !== v) {
+      this.gizmoFlipped = v;
+      const g = (this.gizmo as unknown as { _gizmo?: { gizmo: Record<string, THREE.Object3D>; picker: Record<string, THREE.Object3D> } })._gizmo;
+      for (const root of g ? [g.gizmo.translate, g.gizmo.scale, g.picker.translate, g.picker.scale] : [])
+        for (const o of root?.children ?? []) if (o.name === 'Z') (o as THREE.Mesh).geometry?.scale(1, 1, -1);
+    }
     this.invalidate();
   }
 

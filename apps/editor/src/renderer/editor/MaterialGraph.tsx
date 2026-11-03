@@ -755,6 +755,23 @@ function GraphMaterialProps({
           onBlur={() => (name.trim() && name.trim() !== m.name ? edit({ name: name.trim() }, 'Rename material') : setName(m.name))}
         />
       </Row>
+      <Row label={t('mat.folder')}>
+        <input
+          className="cw-input"
+          aria-label={t('mat.folder')}
+          key={`folder-${m.id}`}
+          defaultValue={m.folder ?? ''}
+          placeholder={t('mat.folderHint')}
+          onKeyDown={(e) => {
+            e.stopPropagation();
+            if (e.key === 'Enter') e.currentTarget.blur();
+          }}
+          onBlur={(e) => {
+            const v = e.currentTarget.value.trim();
+            if (v !== (m.folder ?? '')) edit({ folder: v || undefined }, 'Material folder');
+          }}
+        />
+      </Row>
       {exposed.length > 0 && (
         <div className="cm-own" role="group" aria-label={t('cm.ownSettings')}>
           <div className="cw-model-mats-h">{t('cm.ownSettings')}</div>

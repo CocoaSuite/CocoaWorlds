@@ -6,8 +6,8 @@ import { shown, stored, type AxisKind } from '../axes';
 import type { Vec3 } from '@cocoaworlds/core';
 import { TerrainImport } from './TerrainImport';
 import { addableComponents, componentDef, readComponent, type EntityData, type FieldDef } from '@cocoaworlds/core';
-import { Button, ColorField, ContextMenu, IconButton, NumberField, Section, Segmented, Switch } from '@cocoaworlds/ui';
-import { useEffect, useState } from 'react';
+import { Button, ColorField, IconButton, NumberField, Section, Segmented, Switch } from '@cocoaworlds/ui';
+import { Fragment, useEffect, useRef, useState } from 'react';
 import { modelSlots } from '../viewport/models';
 import { getLang, t } from '../i18n';
 import { useEditor } from '../store';
@@ -33,11 +33,14 @@ export function ComponentsSection({ e }: { e: EntityData }) {
             action={<IconButton icon="close" label={`${t('comp.remove')} ${def.label[lang]}`} className="cw-sec-btn" onClick={() => s.removeComponent(e.id, name)} />}
           >
             <div className="cw-comp-fields" role="group" aria-label={def.label[lang]}>
-              {def.fields
-                .filter((f) => !f.when || f.when.is.includes(data[f.when.key]))
-                .map((f) => (
-                  <FieldEditor key={f.key} entity={e.id} component={name} field={f} value={data[f.key]} />
-                ))}
+              {grouped(def.fields.filter((f) => !f.when || f.when.is.includes(data[f.when.key])), lang).map(([head, list]) => (
+                <Fragment key={head || '-'}>
+                  {head && <div className="cw-comp-group">{head}</div>}
+                  {list.map((f) => (
+                    <FieldEditor key={f.key} entity={e.id} component={name} field={f} value={data[f.key]} />
+                  ))}
+                </Fragment>
+              ))}
               {!def.fields.length && <p className="cw-hint">{def.description[lang]}</p>}
               {name === 'model' && typeof data.model === 'string' && data.model && <ModelMaterials entity={e.id} path={data.model} value={(data.materials ?? {}) as Record<string, string>} />}
               {name === 'terrain' && typeof data.file === 'string' && data.file && <TerrainImport file={data.file} />}
@@ -64,15 +67,72 @@ export function ComponentsSection({ e }: { e: EntityData }) {
         </Button>
         <Button onClick={() => s.openDialog('recipes')}>{t('recipe.open')}</Button>
       </div>
-      {menu && (
-        <ContextMenu
-          x={menu.x}
-          y={menu.y}
-          onClose={() => setMenu(null)}
-          items={addable.map((c) => ({ label: `${c.label[lang]} — ${c.description[lang]}`, onSelect: () => s.addComponent(e.id, c.name) }))}
-        />
-      )}
+      {menu && <AddMenu x={menu.x} y={menu.y} onClose={() => setMenu(null)} items={addable.map((c) => ({ name: c.label[lang], about: c.description[lang], pick: () => s.addComponent(e.id, c.name) }))} />}
     </>
+  );
+}
+
+/** Fields under their headings, each heading where its first field is. */
+function grouped(fields: FieldDef[], lang: 'en' | 'ru'): [string, FieldDef[]][] {
+  const out = new Map<string, FieldDef[]>();
+  for (const f of fields) {
+    const h = f.group?.[lang] ?? '';
+    out.set(h, [...(out.get(h) ?? []), f]);
+  }
+  return [...out];
+}
+
+/** Add component: a menu with a search box (type to narrow it, Enter adds the first, Esc closes). */
+function AddMenu({ x, y, items, onClose }: { x: number; y: number; items: { name: string; about: string; pick: () => void }[]; onClose: () => void }) {
+  const [q, setQ] = useState('');
+  const box = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const away = (ev: PointerEvent) => !box.current?.contains(ev.target as Node) && onClose();
+    window.addEventListener('pointerdown', away, true);
+    return () => window.removeEventListener('pointerdown', away, true);
+  }, [onClose]);
+  const needle = q.trim().toLowerCase();
+  const shown = items.filter((i) => !needle || i.name.toLowerCase().includes(needle) || i.about.toLowerCase().includes(needle));
+  const left = Math.max(8, Math.min(x, window.innerWidth - 372));
+  const top = Math.min(y, window.innerHeight - 420);
+  return (
+    <div ref={box} className="cw-add-menu" style={{ left, top }}>
+      <input
+        className="cw-input"
+        type="search"
+        autoFocus
+        placeholder={t('comp.search')}
+        aria-label={t('comp.search')}
+        value={q}
+        onChange={(ev) => setQ(ev.currentTarget.value)}
+        onKeyDown={(ev) => {
+          ev.stopPropagation();
+          if (ev.key === 'Escape') onClose();
+          if (ev.key === 'Enter' && shown[0]) {
+            shown[0].pick();
+            onClose();
+          }
+        }}
+      />
+      <div role="menu" aria-label={t('comp.add')} className="cw-add-list">
+        {shown.map((i) => (
+          <button
+            key={i.name}
+            type="button"
+            role="menuitem"
+            aria-label={`${i.name} — ${i.about}`}
+            onClick={() => {
+              i.pick();
+              onClose();
+            }}
+          >
+            <strong>{i.name}</strong>
+            <span>{i.about}</span>
+          </button>
+        ))}
+        {!shown.length && <span className="cw-muted">{t('comp.none')}</span>}
+      </div>
+    </div>
   );
 }
 

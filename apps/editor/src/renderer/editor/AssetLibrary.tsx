@@ -9,7 +9,7 @@
  *   project, where Sound components can play it.
  */
 import { readComponent, type MaterialDef, type ModelData } from '@cocoaworlds/core';
-import { Button, Icon } from '@cocoaworlds/ui';
+import { Button, ContextMenu, Icon } from '@cocoaworlds/ui';
 import { Fragment, useEffect, useRef, useState } from 'react';
 import type { AssetEntry, AssetKind, LibrarySound } from '../../shared/api';
 import { assetUrl } from '../assets';
@@ -270,6 +270,7 @@ function AssetTile({ tile, showKind }: { tile: Tile; showKind: boolean }) {
     p.startsWith('lib:') ? libraryUrl(p.slice(4)) : assetUrl(p),
   );
   const [confirm, setConfirm] = useState<string[] | null>(null);
+  const [ctx, setCtx] = useState<{ x: number; y: number } | null>(null);
   let extra: React.ReactNode = null;
   let picture: React.ReactNode;
   let action: string;
@@ -357,17 +358,30 @@ function AssetTile({ tile, showKind }: { tile: Tile; showKind: boolean }) {
   }
   // Project textures, sounds and models can be deleted (× on hover, or right-click): first, what still uses it.
   const file = tile.kind === 'textures' || tile.kind === 'sounds' || tile.kind === 'models' ? tile.asset.path : null;
-  const ask = (e?: React.MouseEvent) => {
-    e?.preventDefault();
+  const ask = () => {
     if (file) setConfirm(st.assetUsers(file));
   };
+  // Right-click: what clicking does, copy its path, delete.
+  const menuItems = [
+    { label: action, onSelect: onClick },
+    ...(file
+      ? [
+          { label: t('assets.copyPath'), onSelect: () => void navigator.clipboard?.writeText(file) },
+          { label: `${t('assets.delete')}…`, onSelect: ask },
+        ]
+      : []),
+  ];
   return (
-    <div className={`cw-lib-tile k-${tile.kind}`} role="listitem" aria-label={tile.name} title={title} onContextMenu={file ? ask : undefined}>
+    <div className={`cw-lib-tile k-${tile.kind}`} role="listitem" aria-label={tile.name} title={title} onContextMenu={(e) => {
+        e.preventDefault();
+        setCtx({ x: e.clientX, y: e.clientY });
+      }}>
       <button type="button" className="cw-lib-hit" aria-label={action} onClick={onClick} onDoubleClick={onDouble}>
         {picture}
         <span className="cw-lib-name">{tile.name}</span>
       </button>
       {extra}
+      {ctx && <ContextMenu x={ctx.x} y={ctx.y} onClose={() => setCtx(null)} items={menuItems} />}
       {file && !confirm && (
         <button type="button" className="cw-lib-del" aria-label={`${t('assets.delete')} ${tile.name}`} title={t('assets.delete')} onClick={() => ask()}>
           ×

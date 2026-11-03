@@ -74,7 +74,7 @@ test('face tool and paint tool', async () => {
     // 4. Shift+click takes every face of the brush; Fit stretches the texture across each face.
     await clickCentre(page, ['Shift']);
     await until(() => faceCount(page), '6');
-    await insp().getByRole('button', { name: 'Fit' }).click();
+    await insp().getByRole('button', { name: 'Fit', exact: true }).click();
     faces = await savedFaces();
     // Every unrotated face is 256 units wide along U: one tile of 256 texels means 1 unit per texel.
     for (const f of faces.filter((x) => x.rotation === 0)) assert.equal(f.scale[0], 1);

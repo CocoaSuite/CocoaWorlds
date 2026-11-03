@@ -75,3 +75,18 @@ folders show beneath it. Click a sound to listen (again to stop). **Use** copies
 The same file is never copied twice; a different file of the same name gets a number. Exported games carry only the
 sounds a project uses.
 
+
+
+## Material library, toolbar, sections
+
+- **Material library** (the Paint tool's panel in the Inspector, and the face inspector): the current material with how many
+  faces use it and a star, search, filters (Project, Built-in, Textures, Hotspot), Recent and Starred rows, then
+  everything in folders (a material's **Folder**, e.g. `Walls/Brick`; folders remember being folded). Right-click a
+  swatch to star it; stars are saved with the project.
+- **Toolbar**: transform tools | the brush shape last used with the others in a flyout (▾) | editing tools | trigger,
+  paint, terrain | UV editor | snapping.
+- **Inspector with nothing selected**: folding sections (Scene, Lighting, Sky and fog with a link to the Sky tab, Game
+  rules); the sky's colours live in the Sky tab only.
+- **Components**: fields under headings (Foliage: Tufts, Where it grows, Grass on top; Water; Creature), fields that
+  don't apply hidden; **Add component** has a search box (Enter adds the first match).
+- **Assets**: right-click a tile for its action, Copy path and Delete….

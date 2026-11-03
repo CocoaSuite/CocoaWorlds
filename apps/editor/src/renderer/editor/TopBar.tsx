@@ -67,6 +67,7 @@ export function TopBar({ onShowKeys }: { onShowKeys: () => void }) {
               { label: `${s.showGrid ? '✓ ' : ''}${t('view.grid')}`, onSelect: () => s.toggle('showGrid') },
               { label: `${s.showNav ? '✓ ' : ''}${t('view.nav')}`, onSelect: () => s.toggle('showNav') },
               { label: `${s.showGrass ? '✓ ' : ''}${t('view.grass')}`, onSelect: () => s.toggle('showGrass') },
+              { label: `${s.uvPane ? '✓ ' : ''}${t('view.uv')}`, onSelect: () => s.toggle('uvPane') },
               { label: `${s.zUp ? '✓ ' : ''}${t('view.zUp')}`, onSelect: () => s.toggle('zUp') },
               { label: `${s.gameLighting ? '✓ ' : ''}${t('view.gameLighting')}`, onSelect: () => s.toggle('gameLighting') },
               { label: `${s.showStats ? '✓ ' : ''}${t('view.stats')}`, onSelect: () => s.toggle('showStats') },
@@ -234,13 +235,12 @@ function Workspaces() {
   const ws = useEditor((x) => x.workspace);
   const playing = useEditor((x) => !!x.playing);
   const set = useEditor((x) => x.setWorkspace);
-  const tabs: { id: 'scene' | 'screens' | 'materials' | 'plants' | 'sky' | 'uv'; label: string; soon?: boolean }[] = [
+  const tabs: { id: 'scene' | 'screens' | 'materials' | 'plants' | 'sky'; label: string; soon?: boolean }[] = [
     { id: 'scene', label: t('ws.scene') },
     { id: 'screens', label: t('ws.screens') },
     { id: 'materials', label: t('ws.materials') },
     { id: 'plants', label: t('ws.plants') },
     { id: 'sky', label: t('ws.sky') },
-    { id: 'uv', label: t('ws.uv') },
   ];
   return (
     <div className="cw-ws" role="tablist" aria-label={t('ws.label')}>
