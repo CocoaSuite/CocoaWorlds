@@ -201,3 +201,11 @@ the Sun's height, colour and brightness in one undo step. The shader is `viewpor
 Play, exported games and the workspace's preview.
 
 Plants are backlit by the sun: a soft glow looking into it and a thin rim along their silhouette (`plants.ts`).
+
+## Blend into ground
+
+A material's **Blend into ground (u)** makes everything painted with it fade into whatever it's sunk into (a
+terrain, a floor, another mesh) where they meet: fully the ground's look at the contact, back to its own within
+that distance, with a noisy edge (**Blend edge noise**, **Blend blotch size**). Each frame where such a material
+is shown, the scene is drawn once more at half size without it (no shadow pass, no fog, no editor aids), and its
+shader takes that picture's colour where the surface behind is within reach (`viewport/ground-blend.ts`).

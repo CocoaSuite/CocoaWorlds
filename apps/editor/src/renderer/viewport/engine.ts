@@ -2,6 +2,7 @@
  * The editor viewport: draws the level, grid and gizmos, handles camera navigation, picking, transform dragging
  * and the brush tool. Renders on demand (only after something changes) so an idle editor costs no GPU time.
  */
+import { GroundBlend } from './ground-blend';
 import { SceneDoc, expandRepeats, ownerOf, type EntityData, type Transform, type Vec3 } from '@cocoaworlds/core';
 import { bounds, faceAt, loopCut, nearestEdge, transform as transformBrush, translate, vertices, type Brush, type Plane, type V3 } from '@cocoaworlds/geometry';
 import * as THREE from 'three';
@@ -1565,6 +1566,8 @@ export class ViewportEngine {
   };
 
   /** Draw with ambient occlusion when the scene's lighting is shown and it is on. False: draw plainly. */
+  private groundBlend = new GroundBlend();
+
   private renderAo(cam: THREE.Camera): boolean {
     if (!(this.play || this.gameLighting)) return false;
     return (this.ao ??= new AoRenderer(this.renderer)).render(this.scene, cam, this.doc?.settings);
@@ -1586,6 +1589,7 @@ export class ViewportEngine {
       this.play.updateFoliage(this.fpCam);
       this.plants.update(this.fpCam);
       this.waterDepth.prepare(r, this.scene, this.fpCam);
+      this.groundBlend.prepare(r, this.scene, this.fpCam, [this.grid.object]);
       this.play.applyWater(this.scene, this.fpCam);
       if (!this.renderAo(this.fpCam)) r.render(this.scene, this.fpCam);
       return;
@@ -1595,6 +1599,7 @@ export class ViewportEngine {
     this.play?.updateFoliage(this.rig.camera, this.rig.unitsPerPixel);
     this.plants.update(this.rig.camera);
     this.waterDepth.prepare(r, this.scene, this.rig.camera);
+    this.groundBlend.prepare(r, this.scene, this.rig.camera, [this.grid.object]);
     if (!this.renderAo(this.rig.camera)) r.render(this.scene, this.rig.camera);
     const s = 72;
     this.axisCam.quaternion.copy(this.rig.camera.quaternion);

@@ -8,6 +8,7 @@
  *   faces carry exact distances to their edges and creases (an inset ring, attribute `aWear`); other meshes
  *   (models) use an estimate of how the surface curves. The wear's images are always projected (triplanar).
  */
+import { GROUND_BLEND, GROUND_BLEND_APPLY, GROUND_BLEND_DECL } from './ground-blend';
 import type { WearDef } from '@cocoaworlds/core';
 import * as THREE from 'three';
 
@@ -110,6 +111,7 @@ interface Uniforms {
   wearMetalMap: { value: THREE.Texture };
   wearNoiseMap: { value: THREE.Texture };
   bevelWidth: { value: number };
+  blendParams: { value: THREE.Vector3 };
 }
 
 function uniformsOf(m: THREE.Material): Uniforms {
@@ -124,6 +126,7 @@ function uniformsOf(m: THREE.Material): Uniforms {
     wearMetalMap: { value: blankTexture() },
     wearNoiseMap: { value: blankTexture() },
     bevelWidth: { value: 0 },
+    blendParams: { value: new THREE.Vector3() },
   }) as Uniforms;
 }
 
@@ -152,8 +155,18 @@ export function wearTextures(m: THREE.Material): THREE.Texture[] {
  * Set a material's mapping (face or triplanar), size in the world (`tile`, units per repeat) and wear layer.
  * The shader is rebuilt only when the mapping or whether there is wear changes.
  */
-export function setShading(m: THREE.MeshStandardMaterial, mapping: Mapping, tile: number, wear: WearDef | null, bevel = 0): void {
+/** Blend into ground: fade into what it stands in within `distance` u, with a noisy edge (0…1) of features `size` u. */
+export interface GroundBlendDef {
+  distance: number;
+  noise: number;
+  size: number;
+}
+
+export function setShading(m: THREE.MeshStandardMaterial, mapping: Mapping, tile: number, wear: WearDef | null, bevel = 0, blend: GroundBlendDef | null = null): void {
   const u = uniformsOf(m);
+  const blends = !!blend && blend.distance > 0;
+  if (blends) u.blendParams.value.set(blend!.distance, blend!.noise, blend!.size);
+  m.userData.groundBlend = blends;
   u.bevelWidth.value = Math.min(32, Math.max(0, bevel));
   // (Wear and bevels both need each face's distances to its edges.)
   const edges = !!wear || bevel > 0;
@@ -163,11 +176,11 @@ export function setShading(m: THREE.MeshStandardMaterial, mapping: Mapping, tile
     u.wearParams.value.set(wear.edge, wear.crease, wear.up, Math.min(32, Math.max(0.5, wear.width)));
     u.wearMat.value.set(wear.roughness, wear.metalness, wear.noise);
   }
-  const key = `${mapping}|${wear ? 'wear' : ''}${bevel > 0 ? '|bevel' : ''}`;
+  const key = `${mapping}|${wear ? 'wear' : ''}${bevel > 0 ? '|bevel' : ''}${blends ? '|blend' : ''}`;
   if ((m.userData.shadingKey ?? 'face|') === key) return;
   m.userData.shadingKey = key;
   m.needsUpdate = true;
-  if (mapping === 'face' && !edges) {
+  if (mapping === 'face' && !edges && !blends) {
     m.onBeforeCompile = () => {};
     m.customProgramCacheKey = () => '';
     return;
@@ -177,23 +190,26 @@ export function setShading(m: THREE.MeshStandardMaterial, mapping: Mapping, tile
   m.customProgramCacheKey = () => `shade-${key}`;
   m.onBeforeCompile = (shader) => {
     Object.assign(shader.uniforms, u);
+    if (blends) Object.assign(shader.uniforms, GROUND_BLEND);
     shader.vertexShader = shader.vertexShader
       .replace(
         '#include <common>',
-        `#include <common>\nvarying vec3 vTriPos;\nvarying vec3 vTriNormal;${edges ? '\nattribute vec2 aWear;\nvarying vec2 vWear;\nvarying vec3 vWearPos;\nvarying vec3 vWearN;' : ''}`,
+        `#include <common>\nvarying vec3 vTriPos;\nvarying vec3 vTriNormal;${blends ? '\nvarying vec3 vBlendPos;' : ''}${edges ? '\nattribute vec2 aWear;\nvarying vec2 vWear;\nvarying vec3 vWearPos;\nvarying vec3 vWearN;' : ''}`,
       )
       .replace(
         '#include <project_vertex>',
         (project === 'world'
           ? 'vTriPos = (modelMatrix * vec4(transformed, 1.0)).xyz;\nvTriNormal = normalize(mat3(modelMatrix) * objectNormal);\n'
           : 'vTriPos = transformed;\nvTriNormal = normalize(objectNormal);\n') +
+          (blends ? 'vBlendPos = (modelMatrix * vec4(transformed, 1.0)).xyz;\n' : '') +
           (edges ? 'vWear = aWear;\nvWearPos = (modelMatrix * vec4(transformed, 1.0)).xyz;\nvWearN = normalize(mat3(modelMatrix) * objectNormal);\n' : '') +
           '#include <project_vertex>',
       );
     let f = shader.fragmentShader.replace(
       '#include <common>',
-      `#include <common>\n${project === 'world' ? '#define TRI_WORLD' : ''}\n${HELPERS}\n${wear ? WEAR : edges ? EDGE_VARYINGS : ''}\n${bevel > 0 ? BEVEL : ''}`,
+      `#include <common>\n${project === 'world' ? '#define TRI_WORLD' : ''}\n${HELPERS}\n${wear ? WEAR : edges ? EDGE_VARYINGS : ''}\n${bevel > 0 ? BEVEL : ''}\n${blends ? GROUND_BLEND_DECL : ''}`,
     );
+    if (blends) f = f.replace('#include <opaque_fragment>', `#include <opaque_fragment>\n${GROUND_BLEND_APPLY}`);
     // Each map chunk: projected when triplanar, as it was otherwise; the wear blends in after colour, roughness
     // and metal are read.
     const chunk = (c: string) => (mapping !== 'face' ? projected(c) : THREE.ShaderChunk[c as keyof typeof THREE.ShaderChunk]);

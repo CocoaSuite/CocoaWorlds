@@ -68,6 +68,11 @@ export interface MaterialDef {
   wear?: WearDef;
   /** Bevelled edges (u, up to 32): brush edges look rounded off by this much, by their lighting. Missing: none. */
   bevel?: number;
+  /** Blend into ground: fades into whatever it stands in within this many u (0 / missing: off)… */
+  blend?: number;
+  /** …with a noisy edge (0…1) whose blotches are about this big (u). */
+  blendNoise?: number;
+  blendSize?: number;
   /** The wear layer's images, baked from a graph's Wear outputs. */
   wearMap?: string;
   wearRoughnessMap?: string;

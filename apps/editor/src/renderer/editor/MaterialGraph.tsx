@@ -815,6 +815,19 @@ function GraphMaterialProps({
       <Row label={t('mat.bevel')}>
         <Slider label={t('mat.bevel')} value={m.bevel ?? 0} min={0} max={32} step={1} digits={0} onChange={(v) => edit({ bevel: v > 0 ? v : undefined }, 'Bevel edges', `mat-bevel-${m.id}`)} />
       </Row>
+      <Row label={t('mat.blend')}>
+        <Slider label={t('mat.blend')} value={m.blend ?? 0} min={0} max={64} step={1} digits={0} onChange={(v) => edit({ blend: v > 0 ? v : undefined }, 'Blend into ground', `mat-blend-${m.id}`)} />
+      </Row>
+      {(m.blend ?? 0) > 0 && (
+        <>
+          <Row label={t('mat.blendNoise')}>
+            <Slider label={t('mat.blendNoise')} value={m.blendNoise ?? 0.5} min={0} max={1} step={0.05} onChange={(v) => edit({ blendNoise: v }, 'Blend edge', `mat-blendn-${m.id}`)} />
+          </Row>
+          <Row label={t('mat.blendSize')}>
+            <Slider label={t('mat.blendSize')} value={m.blendSize ?? 24} min={2} max={128} step={1} digits={0} onChange={(v) => edit({ blendSize: v }, 'Blend edge', `mat-blends-${m.id}`)} />
+          </Row>
+        </>
+      )}
       <WearSettings m={m} edit={edit} />
       <label className="cw-screens-sw" title={t('mat.cutoutHint')}>
         <Switch label={t('mat.cutout')} checked={m.cutout !== false} onChange={(v) => edit({ cutout: v ? undefined : false }, v ? 'Cut-out on' : 'Cut-out off')} />

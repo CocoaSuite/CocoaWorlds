@@ -2,6 +2,7 @@
  * An exported game (B4): one scene played full-window, with the same game code, controls, display and screen
  * UI as Play in the editor. Saved progress is kept in this browser's storage (a desktop game has its own).
  */
+import { GroundBlend } from '../viewport/ground-blend';
 import { SceneDoc, expandRepeats, type GameRules, type GameValue, type MaterialDef, type PlantDef, type SceneFile } from '@cocoaworlds/core';
 import { isInvisibleMaterial } from '@cocoaworlds/geometry';
 import * as THREE from 'three';
@@ -53,6 +54,7 @@ export class GameRunner {
   private doc: SceneDoc;
   private play: PlaySession | null = null;
   private ao: AoRenderer | null = null;
+  private groundBlend: GroundBlend | null = null;
   private materials = new Map<string, THREE.Material>();
   private keys = new Set<string>();
   private raf = 0;
@@ -184,6 +186,7 @@ export class GameRunner {
     if (play.travel) return void this.go(play.travel);
     if (play.placeCamera(this.cam)) {
       play.applyWater(this.scene, this.cam);
+      (this.groundBlend ??= new GroundBlend()).prepare(this.renderer, this.scene, this.cam);
       if (!(this.ao ??= new AoRenderer(this.renderer)).render(this.scene, this.cam, this.play?.doc.settings)) this.renderer.render(this.scene, this.cam);
     }
   };
