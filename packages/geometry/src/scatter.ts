@@ -18,6 +18,36 @@ export interface ScatterOptions {
   seed: number;
   /** A cap on tufts per brush, so a huge surface can't freeze the editor. */
   max?: number;
+  /** Grass on top: tufts only where the layer shows (see coverAt). */
+  cover?: boolean;
+  edge?: number;
+  patches?: number;
+  patchSize?: number;
+}
+
+/** Patches for the grass layer, −1…1: wobbly, never-repeating blobs about `size` across. (Mirrored in its shader.) */
+export function coverPatch(x: number, z: number, size: number): number {
+  const f = (Math.PI * 2) / Math.max(1, size);
+  const a = Math.sin(x * f + 1.7 * Math.sin(z * f * 0.73)) * Math.sin(z * f * 1.13 + 1.9 * Math.sin(x * f * 0.61));
+  const b = Math.sin(x * f * 3.1 + z * f * 1.7) * Math.sin(z * f * 2.9 - x * f * 0.8);
+  return (a + 0.35 * b) / 1.35;
+}
+
+/**
+ * How much the grass layer shows (0…1) on a surface facing up by `ny` (the world up part of its normal) at x, z:
+ * fading out round the steepest slope over `edge` degrees, broken into patches. (Mirrored in its shader.)
+ */
+export function coverAt(ny: number, x: number, z: number, o: { slope: number; edge?: number; patches?: number; patchSize?: number }): number {
+  const deg = Math.PI / 180, e = (o.edge ?? 14) / 2;
+  const lo = Math.cos(Math.min(90, o.slope + e) * deg), hi = Math.cos(Math.max(0, o.slope - e) * deg);
+  const v = ny + (o.patches ?? 0) * 0.45 * coverPatch(x, z, o.patchSize ?? 320);
+  const t = Math.min(1, Math.max(0, (v - lo) / Math.max(1e-4, hi - lo)));
+  return t * t * (3 - 2 * t);
+}
+
+/** The lowest up-facing (normal's up part) a surface can have and still show some of the layer. */
+export function coverMinUp(o: { slope: number; edge?: number; patches?: number }): number {
+  return Math.cos((Math.min(90, o.slope + (o.edge ?? 14) / 2) * Math.PI) / 180) - (o.patches ?? 0) * 0.45;
 }
 
 /** One tuft: position (world), turn (radians), size (u) and the floor's normal there. TUFT_STRIDE numbers per tuft. */
@@ -52,7 +82,7 @@ export function scatterTufts(brush: Brush, o: ScatterOptions): Tufts {
  */
 export function scatterOnMesh(mesh: { positions: ArrayLike<number>; normals: ArrayLike<number>; indices: ArrayLike<number> }, o: ScatterOptions, keep?: (t: number) => boolean): Tufts {
   const P = mesh.positions, N = mesh.normals, I = mesh.indices;
-  const minUp = Math.cos((Math.max(0, Math.min(90, o.slope)) * Math.PI) / 180);
+  const minUp = o.cover ? Math.max(0.02, coverMinUp(o)) : Math.cos((Math.max(0, Math.min(90, o.slope)) * Math.PI) / 180);
   // Upward triangles, with their areas for an even spread.
   const tris: number[] = [];
   const cum: number[] = [];
@@ -111,6 +141,8 @@ export function scatterOnMesh(mesh: { positions: ArrayLike<number>; normals: Arr
     nx = (nx / nl) * flip;
     ny = (ny / nl) * flip;
     nz = (nz / nl) * flip;
+    // With grass on top: only where the layer mostly shows.
+    if (o.cover && coverAt(ny, x, z, o) < 0.5) continue;
     out.push(x, y, z, rnd() * Math.PI * 2, o.size * (0.8 + 0.4 * rnd()), nx, ny, nz);
   }
   return { count: out.length / TUFT_STRIDE, data: Float32Array.from(out) };

@@ -67,6 +67,7 @@ export function TopBar({ onShowKeys }: { onShowKeys: () => void }) {
               { label: `${s.showGrid ? '✓ ' : ''}${t('view.grid')}`, onSelect: () => s.toggle('showGrid') },
               { label: `${s.showNav ? '✓ ' : ''}${t('view.nav')}`, onSelect: () => s.toggle('showNav') },
               { label: `${s.showGrass ? '✓ ' : ''}${t('view.grass')}`, onSelect: () => s.toggle('showGrass') },
+              { label: `${s.zUp ? '✓ ' : ''}${t('view.zUp')}`, onSelect: () => s.toggle('zUp') },
               { label: `${s.gameLighting ? '✓ ' : ''}${t('view.gameLighting')}`, onSelect: () => s.toggle('gameLighting') },
               { label: `${s.showStats ? '✓ ' : ''}${t('view.stats')}`, onSelect: () => s.toggle('showStats') },
               { label: `${s.showBottom ? '✓ ' : ''}${t('view.bottom')}`, onSelect: () => s.toggle('showBottom') },

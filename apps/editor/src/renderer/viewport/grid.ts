@@ -67,8 +67,8 @@ const fragment = /* glsl */ `
 `;
 
 const X = new THREE.Color(0xff6b5b);
-const Y = new THREE.Color(0x8fd14f);
-const Z = new THREE.Color(0x4b9cff);
+const Yc = new THREE.Color(0x8fd14f);
+const Zc = new THREE.Color(0x4b9cff);
 
 export class EditorGrid {
   readonly object: THREE.Mesh;
@@ -90,7 +90,7 @@ export class EditorGrid {
         uMinor: { value: new THREE.Color(0x3a3a3a) },
         uMajor: { value: new THREE.Color(0x4f4f4f) },
         uAxisA: { value: X.clone() },
-        uAxisB: { value: Z.clone() },
+        uAxisB: { value: Yc.clone() },
       },
     });
     this.object = new THREE.Mesh(new THREE.PlaneGeometry(SIZE, SIZE), this.mat);
@@ -119,8 +119,13 @@ export class EditorGrid {
   }
 
   /** Lay the grid in the plane the view looks at and colour the axis lines by the world axis they show. */
+  /** Z is up in what the editor shows: the up axis is coloured blue and the depth axis green. */
+  zUp = true;
+
   orient(view: ViewKind): void {
     const u = this.mat.uniforms;
+    // (Colours by the axis as shown: with Z up, the engine's Y shows as Z and its Z as Y.)
+    const Y = this.zUp ? Zc : Yc, Z = this.zUp ? Yc : Zc;
     this.object.rotation.set(0, 0, 0);
     if (view === 'front') {
       u.uPlane!.value = 1;

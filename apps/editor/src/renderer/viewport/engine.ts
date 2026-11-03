@@ -1608,12 +1608,40 @@ export class ViewportEngine {
     r.setViewport(0, 0, size.x, size.y);
   }
 
+  private zUp = true;
+
+  /** View › Z is up: the corner axes and the move gizmo's colours show Z up (as in Blender); the engine stays Y-up. */
+  setZUp(v: boolean): void {
+    this.zUp = v;
+    this.buildAxisGizmo();
+    this.grid.zUp = v;
+    this.grid.orient(this.rig.kind);
+    // (Up is the blue axis, depth the green one.)
+    this.gizmo.setColors(0xff0000, v ? 0x0000ff : 0x00ff00, v ? 0x00ff00 : 0x0000ff, 0xffff00);
+    this.invalidate();
+  }
+
   private buildAxisGizmo(): void {
-    const axes: [THREE.Vector3, number, string][] = [
-      [new THREE.Vector3(1, 0, 0), 0xff6b5b, 'X'],
-      [new THREE.Vector3(0, 1, 0), 0x8fd14f, 'Y'],
-      [new THREE.Vector3(0, 0, 1), 0x4b9cff, 'Z'],
-    ];
+    for (const o of [...this.axisScene.children]) {
+      this.axisScene.remove(o);
+      const m = o as THREE.Line | THREE.Sprite;
+      m.geometry?.dispose();
+      const mat = m.material as THREE.SpriteMaterial;
+      mat.map?.dispose();
+      mat.dispose();
+    }
+    // Z up: shown Y points into the screen's depth (−Z inside), shown Z up.
+    const axes: [THREE.Vector3, number, string][] = this.zUp
+      ? [
+          [new THREE.Vector3(1, 0, 0), 0xff6b5b, 'X'],
+          [new THREE.Vector3(0, 0, -1), 0x8fd14f, 'Y'],
+          [new THREE.Vector3(0, 1, 0), 0x4b9cff, 'Z'],
+        ]
+      : [
+          [new THREE.Vector3(1, 0, 0), 0xff6b5b, 'X'],
+          [new THREE.Vector3(0, 1, 0), 0x8fd14f, 'Y'],
+          [new THREE.Vector3(0, 0, 1), 0x4b9cff, 'Z'],
+        ];
     for (const [dir, color, label] of axes) {
       const g = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), dir]);
       this.axisScene.add(new THREE.Line(g, new THREE.LineBasicMaterial({ color })));

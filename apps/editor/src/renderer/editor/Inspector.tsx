@@ -1,4 +1,5 @@
 /** Inspector for the selection (CocoaCanvas right panel). Scene settings when nothing is selected. */
+import { shown, stored, type AxisKind } from '../axes';
 import { PIVOT, aoOf, gameRules, pivotOf, sceneSettings, worldBoundsOf, type EntityData, type SceneSettings as SceneSettingsData, type Transform, type Vec3 } from '@cocoaworlds/core';
 import { brushBounds } from '../brush/brushes';
 import { Button, ColorField, Field, NumberField, PanelHeader, Section, Switch } from '@cocoaworlds/ui';
@@ -257,8 +258,13 @@ function GameRulesSection() {
   );
 }
 
-function Vec3Row({ label, value, step, onCommit, onLive, onBegin, name }: { label: string; name: string; value: Vec3; step: number; onBegin: () => void; onLive: (v: Vec3) => void; onCommit: (v: Vec3) => void }) {
+function Vec3Row({ label, value: saved, step, onCommit: commitSaved, onLive: liveSaved, onBegin, name, kind }: { label: string; name: string; value: Vec3; step: number; kind: AxisKind; onBegin: () => void; onLive: (v: Vec3) => void; onCommit: (v: Vec3) => void }) {
   const axes = ['x', 'y', 'z'] as const;
+  // (Shown Z-up when set; kept Y-up.)
+  const zUp = useEditor((s) => s.zUp);
+  const value = shown(saved, kind, zUp);
+  const onLive = (v: Vec3) => liveSaved(stored(v, kind, zUp));
+  const onCommit = (v: Vec3) => commitSaved(stored(v, kind, zUp));
   return (
     <div className="cw-f3">
       <span>{label}</span>
@@ -306,9 +312,9 @@ function TransformSection({ e }: { e: EntityData }) {
   const parent = e.parent ? doc?.get(e.parent) : undefined;
   return (
     <Section title={t('insp.transform')}>
-      <Vec3Row label={t('insp.position')} name="Position" value={tr.position} step={grid} onBegin={begin} onLive={(v) => setPart('position', v, true)} onCommit={end('position')} />
-      <Vec3Row label={t('insp.rotation')} name="Rotation" value={tr.rotation} step={1} onBegin={begin} onLive={(v) => setPart('rotation', v, true)} onCommit={end('rotation')} />
-      <Vec3Row label={t('insp.scale')} name="Scale" value={tr.scale} step={0.05} onBegin={begin} onLive={(v) => setPart('scale', v, true)} onCommit={end('scale')} />
+      <Vec3Row label={t('insp.position')} name="Position" kind="point" value={tr.position} step={grid} onBegin={begin} onLive={(v) => setPart('position', v, true)} onCommit={end('position')} />
+      <Vec3Row label={t('insp.rotation')} name="Rotation" kind="turn" value={tr.rotation} step={1} onBegin={begin} onLive={(v) => setPart('rotation', v, true)} onCommit={end('rotation')} />
+      <Vec3Row label={t('insp.scale')} name="Scale" kind="size" value={tr.scale} step={0.05} onBegin={begin} onLive={(v) => setPart('scale', v, true)} onCommit={end('scale')} />
       {parent && <p className="cw-hint">{t('insp.relativeTo').replace('{name}', parent.name)}</p>}
     </Section>
   );
@@ -368,6 +374,7 @@ function PivotSection({ e }: { e: EntityData }) {
       <Vec3Row
         label={t('pivot.at')}
         name="Pivot"
+        kind="point"
         value={p}
         step={grid}
         onBegin={() => s.begin('Move pivot')}

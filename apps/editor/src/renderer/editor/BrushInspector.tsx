@@ -1,4 +1,6 @@
 /** Inspector for a selected brush: kind, exact size and centre, hollow, apply cut, and any problems. */
+import { shown, storedAxis } from '../axes';
+import type { Vec3 } from '@cocoaworlds/core';
 import type { EntityData } from '@cocoaworlds/core';
 import { bounds, buildWorld, center, composeM4, polygons, transform, translate, validate, type V3 } from '@cocoaworlds/geometry';
 import { Button, NumberField, Section, Segmented } from '@cocoaworlds/ui';
@@ -15,6 +17,8 @@ export function BrushInspector({ e }: { e: EntityData }) {
   useEditor((x) => x.rev);
   const grid = useEditor((x) => (x.snap ? (x.session?.project.settings.gridSize ?? 16) : 1));
   const [thickness, setThickness] = useState(16);
+  // (Shown Z-up when set; kept Y-up.)
+  const zUp = useEditor((x) => x.zUp);
   const [hollowDir, setHollowDir] = useState<'inward' | 'outward'>('inward');
   // Sizes and centres are shown and edited in world space.
   const b = worldBrushOf(doc, e);
@@ -70,12 +74,12 @@ export function BrushInspector({ e }: { e: EntityData }) {
               axis={a}
               label={a.toUpperCase()}
               ariaLabel={`${t('insp.size')} ${a.toUpperCase()}`}
-              value={size[i]!}
+              value={shown(size as Vec3, 'size', zUp)[i]!}
               step={grid}
               onBegin={begin}
-              onChange={(v) => resize(i, v, true)}
+              onChange={(v) => resize(storedAxis(i, 'size', zUp).i, v, true)}
               onCommit={(v) => {
-                resize(i, v, true);
+                resize(storedAxis(i, 'size', zUp).i, v, true);
                 done();
               }}
             />
@@ -89,12 +93,12 @@ export function BrushInspector({ e }: { e: EntityData }) {
               axis={a}
               label={a.toUpperCase()}
               ariaLabel={`${t('insp.center')} ${a.toUpperCase()}`}
-              value={c[i]!}
+              value={shown(c as Vec3, 'point', zUp)[i]!}
               step={grid}
               onBegin={begin}
-              onChange={(v) => move(i, v, true)}
+              onChange={(v) => move(storedAxis(i, 'point', zUp).i, v * storedAxis(i, 'point', zUp).sign, true)}
               onCommit={(v) => {
-                move(i, v, true);
+                move(storedAxis(i, 'point', zUp).i, v * storedAxis(i, 'point', zUp).sign, true);
                 done();
               }}
             />

@@ -4,7 +4,7 @@
  * or its settings change. Shared by the editor and play mode.
  */
 import { SceneDoc, readComponent, type ScatterData } from '@cocoaworlds/core';
-import { COLLIDER_MATERIAL, TUFT_STRIDE, bounds as brushBoxOf, isNoGrassBrush, scatterOnMesh, scatterTufts, seededRandom, type Tufts } from '@cocoaworlds/geometry';
+import { COLLIDER_MATERIAL, TUFT_STRIDE, bounds as brushBoxOf, buildMesh, coverMinUp, isNoGrassBrush, scatterOnMesh, seededRandom, type Tufts } from '@cocoaworlds/geometry';
 import { onTerrainChange, terrainChunks, terrainField, terrainVersion } from './terrains';
 import { onPlantsChange, plantById, plantGeometry } from './plants';
 import { applyMat4, type EntityData, type ModelData, type TerrainData } from '@cocoaworlds/core';
@@ -159,6 +159,141 @@ interface Chunk {
 interface Entry {
   key: string;
   chunks: Chunk[];
+  /** The grass layer painted over the surface (Grass on top). */
+  cover?: THREE.Mesh;
+}
+
+/** A surface in world space. */
+interface Surface {
+  positions: ArrayLike<number>;
+  normals: ArrayLike<number>;
+  indices: ArrayLike<number>;
+}
+
+/**
+ * Grass on top: a layer over the surface's material wherever it faces (world) up, fading out with the slope and
+ * broken into patches exactly as the tufts are (coverAt in the geometry package; mirrored here), mottled so it
+ * reads as grass seen from above rather than paint. Drawn just in front of the surface it lies on.
+ */
+const COVER_GLSL = `
+uniform vec4 uCover;
+varying vec3 vCoverPos;
+varying vec3 vCoverN;
+float coverPatch(vec2 p, float size) {
+  float f = 6.2831853 / max(1.0, size);
+  float a = sin(p.x * f + 1.7 * sin(p.y * f * 0.73)) * sin(p.y * f * 1.13 + 1.9 * sin(p.x * f * 0.61));
+  float b = sin(p.x * f * 3.1 + p.y * f * 1.7) * sin(p.y * f * 2.9 - p.x * f * 0.8);
+  return (a + 0.35 * b) / 1.35;
+}
+float coverHash(vec2 p) { return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
+`;
+
+function coverMaterial(sc: ScatterData): THREE.MeshLambertMaterial {
+  const m = new THREE.MeshLambertMaterial({ color: sc.coverColour ?? '#3f7f2e', transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -4 });
+  const deg = Math.PI / 180, e = (sc.edge ?? 14) / 2;
+  const u = { value: new THREE.Vector4(Math.cos(Math.min(90, sc.slope + e) * deg), Math.cos(Math.max(0, sc.slope - e) * deg), (sc.patches ?? 0) * 0.45, sc.patchSize ?? 320) };
+  m.onBeforeCompile = (sh) => {
+    sh.uniforms.uCover = u;
+    sh.vertexShader = sh.vertexShader
+      .replace('#include <common>', '#include <common>\nvarying vec3 vCoverPos;\nvarying vec3 vCoverN;')
+      .replace('#include <project_vertex>', 'vCoverPos = (modelMatrix * vec4(transformed, 1.0)).xyz;\nvCoverN = normalize(mat3(modelMatrix) * objectNormal);\n#include <project_vertex>');
+    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', `#include <common>\n${COVER_GLSL}`).replace(
+      '#include <color_fragment>',
+      `#include <color_fragment>
+      {
+        float v = normalize(vCoverN).y + uCover.z * coverPatch(vCoverPos.xz, uCover.w);
+        float t = clamp((v - uCover.x) / max(1e-4, uCover.y - uCover.x), 0.0, 1.0);
+        diffuseColor.a *= t * t * (3.0 - 2.0 * t);
+        // Mottled: broad lighter and darker drifts, and fine speckle like blades seen from above.
+        float drift = 0.5 + 0.5 * coverPatch(vCoverPos.xz + 517.0, 70.0);
+        float fine = coverHash(floor(vCoverPos.xz * 0.7));
+        diffuseColor.rgb *= (0.86 + 0.24 * drift) * (0.92 + 0.14 * fine);
+      }`,
+    );
+  };
+  m.customProgramCacheKey = () => 'cw-grass-cover';
+  return m;
+}
+
+/** The surface's triangles that can show some of the layer, as their own mesh. */
+function coverMesh(surface: Surface, sc: ScatterData, keep?: (t: number) => boolean): THREE.Mesh | null {
+  const P = surface.positions, N = surface.normals, I = surface.indices;
+  const minUp = Math.max(0.02, coverMinUp(sc));
+  const pos: number[] = [], nor: number[] = [];
+  for (let t = 0; t + 2 < I.length; t += 3) {
+    const a = I[t]! * 3, b = I[t + 1]! * 3, c = I[t + 2]! * 3;
+    const nx = N[a]! + N[b]! + N[c]!, ny = N[a + 1]! + N[b + 1]! + N[c + 1]!, nz = N[a + 2]! + N[b + 2]! + N[c + 2]!;
+    if (ny / (Math.hypot(nx, ny, nz) || 1) < minUp) continue;
+    if (keep && !keep(t)) continue;
+    for (const k of [a, b, c]) {
+      pos.push(P[k]!, P[k + 1]!, P[k + 2]!);
+      nor.push(N[k]!, N[k + 1]!, N[k + 2]!);
+    }
+  }
+  if (!pos.length) return null;
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
+  g.computeBoundingSphere();
+  const mesh = new THREE.Mesh(g, coverMaterial(sc));
+  mesh.name = 'grass-cover';
+  mesh.receiveShadow = true;
+  mesh.userData.noAo = true;
+  return mesh;
+}
+
+/** Models' surfaces in the file's own space, merged (null: still loading, or none). */
+const modelSurfaces = new Map<string, Surface | null>();
+function modelSurface(path: string): Surface | null {
+  if (modelSurfaces.has(path)) return modelSurfaces.get(path)!;
+  modelSurfaces.set(path, null);
+  void loadModel(path)
+    .then((m) => {
+      m.scene.updateMatrixWorld(true);
+      const P: number[] = [], N: number[] = [], I: number[] = [];
+      const v = new THREE.Vector3(), nm = new THREE.Matrix3();
+      m.scene.traverse((o) => {
+        const mesh = o as THREE.Mesh;
+        const g = mesh.isMesh ? (mesh.geometry as THREE.BufferGeometry) : null;
+        const pos = g?.getAttribute('position');
+        if (!g || !pos) return;
+        // Where each corner really is (posed, for rigged models), and normals worked out from that shape.
+        const posed = new THREE.BufferGeometry();
+        const at = new Float32Array(pos.count * 3);
+        for (let i = 0; i < pos.count; i++) mesh.getVertexPosition(i, v).toArray(at, i * 3);
+        posed.setAttribute('position', new THREE.BufferAttribute(at, 3));
+        if (g.getIndex()) posed.setIndex(g.getIndex());
+        posed.computeVertexNormals();
+        const nrm = posed.getAttribute('normal');
+        nm.getNormalMatrix(o.matrixWorld);
+        const base = P.length / 3;
+        for (let i = 0; i < pos.count; i++) {
+          v.fromArray(at, i * 3).applyMatrix4(o.matrixWorld);
+          P.push(v.x, v.y, v.z);
+          v.fromBufferAttribute(nrm, i).applyMatrix3(nm).normalize();
+          N.push(v.x, v.y, v.z);
+        }
+        const idx = g.getIndex();
+        if (idx) for (let i = 0; i < idx.count; i++) I.push(base + idx.getX(i));
+        else for (let i = 0; i < pos.count; i++) I.push(base + i);
+      });
+      if (!I.length) return;
+      modelSurfaces.set(path, { positions: Float32Array.from(P), normals: Float32Array.from(N), indices: Uint32Array.from(I) });
+      for (const w of modelWaiters) w();
+    })
+    .catch(() => undefined);
+  return null;
+}
+
+/** A surface moved into world space by `m`. */
+function placed(s: Surface, m: THREE.Matrix4): Surface {
+  const P = new Float32Array(s.positions.length), N = new Float32Array(s.normals.length);
+  const v = new THREE.Vector3(), nm = new THREE.Matrix3().getNormalMatrix(m);
+  for (let i = 0; i < P.length; i += 3) {
+    v.set(s.positions[i]!, s.positions[i + 1]!, s.positions[i + 2]!).applyMatrix4(m).toArray(P, i);
+    v.set(s.normals[i]!, s.normals[i + 1]!, s.normals[i + 2]!).applyMatrix3(nm).normalize().toArray(N, i);
+  }
+  return { positions: P, normals: N, indices: s.indices };
 }
 
 /** Smooth value noise, 0…1 (for patches). */
@@ -371,21 +506,42 @@ export class FoliageRenderer {
         if (isShown(doc, e) && this.syncTerrain(doc, e)) seen.add(e.id);
         continue;
       }
+      if (!isShown(doc, e)) continue;
+      // The surface it grows on, in world space: a brush's, or a model's (once its file is read).
       const brush = worldBrushOf(doc, e);
-      if (!brush || !isShown(doc, e)) continue;
+      let model: ModelData | null = null;
+      let reach: { min: number[]; max: number[] } | null = null;
+      if (brush) reach = brushBoxOf(brush.brush);
+      else if (e.components.model) {
+        model = readComponent<ModelData>('model', e.components.model);
+        const s = model.model ? modelSurface(model.model) : null;
+        if (!s) {
+          if (model.model) seen.add(e.id);
+          continue;
+        }
+      } else continue;
       seen.add(e.id);
       const sc = readComponent<ScatterData>('scatter', e.components.scatter);
-      // (Only what stands within this brush's reach can clear its grass.)
-      const reach = brushBoxOf(brush.brush);
+      const key0 = JSON.stringify([sc, sc.plant ? plantById(sc.plant) : null, e.components.brush ?? model, doc.worldMatrix(e.id)]);
+      let surface: Surface | null = null;
+      if (model) {
+        const u = model.units === 'units' ? 1 : UNITS_PER_METRE;
+        surface = placed(modelSurface(model.model)!, new THREE.Matrix4().fromArray(doc.worldMatrix(e.id)).multiply(new THREE.Matrix4().makeScale(u, u, u)));
+        const box = new THREE.Box3().setFromArray(surface.positions as Float32Array);
+        reach = { min: box.min.toArray(), max: box.max.toArray() };
+      }
+      // (Only what stands within its reach can clear its grass.)
       const blockers = reach
         ? blockersOf(doc, e.id, sc.size * 0.45, (sc.height ?? sc.size) * 1.25).filter((b) => b.max[0]! >= reach.min[0]! && b.min[0]! <= reach.max[0]! && b.max[2]! >= reach.min[2]! && b.min[2]! <= reach.max[2]! && b.max[1]! >= reach.min[1]! && b.min[1]! <= reach.max[1]! + 8)
         : [];
-      const key = JSON.stringify([sc, sc.plant ? plantById(sc.plant) : null, e.components.brush, doc.worldMatrix(e.id), blockers.map((b) => b.key)]);
+      const key = JSON.stringify([key0, blockers.map((b) => b.key)]);
       if (this.entries.get(e.id)?.key === key) continue;
       this.remove(e.id);
       const entry: Entry = { key, chunks: [] };
       this.entries.set(e.id, entry);
-      const tufts = withoutCleared(scatterTufts(brush.brush, sc), blockers);
+      surface ??= buildMesh([brush!.brush]);
+      this.addCover(entry, surface, sc);
+      const tufts = withoutCleared(scatterOnMesh(surface, sc), blockers);
       if (!tufts.count) continue;
       this.add(e.id, entry, sc, tufts);
     }
@@ -437,6 +593,7 @@ export class FoliageRenderer {
     const layer = sc.layer && sc.layer !== 'all' ? Number(sc.layer) : -1;
     // (A triangle grows grass where its corners are mostly the chosen layer.)
     const keep = layer < 0 ? undefined : (t: number) => W[I[t]! * 4 + layer]! + W[I[t + 1]! * 4 + layer]! + W[I[t + 2]! * 4 + layer]! >= 1.5;
+    this.addCover(entry, { positions: P, normals: N, indices: I }, sc, keep);
     const tufts = withoutCleared(scatterOnMesh({ positions: P, normals: N, indices: I }, { ...sc, max: TERRAIN_TUFT_MAX }, keep), blockers);
     if (tufts.count) this.add(e.id, entry, sc, tufts);
     return true;
@@ -535,9 +692,23 @@ export class FoliageRenderer {
     }
   }
 
+  private addCover(entry: Entry, surface: Surface, sc: ScatterData, keep?: (t: number) => boolean): void {
+    if (sc.cover === false) return;
+    const m = coverMesh(surface, sc, keep);
+    if (!m) return;
+    entry.cover = m;
+    this.group.add(m);
+    this.onUpdate();
+  }
+
   private remove(id: string): void {
     const e = this.entries.get(id);
     if (!e) return;
+    if (e.cover) {
+      this.group.remove(e.cover);
+      e.cover.geometry.dispose();
+      (e.cover.material as THREE.Material).dispose();
+    }
     for (const c of e.chunks) {
       for (const m of c.meshes) {
         this.group.remove(m);

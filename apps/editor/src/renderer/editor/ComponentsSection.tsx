@@ -2,6 +2,8 @@
  * The Inspector's components: one section per component with fields drawn from its definition, a remove
  * button, and an "Add component" menu listing only what fits this object.
  */
+import { shown, stored, type AxisKind } from '../axes';
+import type { Vec3 } from '@cocoaworlds/core';
 import { TerrainImport } from './TerrainImport';
 import { addableComponents, componentDef, readComponent, type EntityData, type FieldDef } from '@cocoaworlds/core';
 import { Button, ColorField, ContextMenu, IconButton, NumberField, Section, Segmented, Switch } from '@cocoaworlds/ui';
@@ -124,8 +126,13 @@ function FieldEditor({ entity, component, field, value }: { entity: string; comp
   } else if (ty.kind === 'color') {
     input = <ColorField label={label} value={String(value)} onChange={(v) => set(v, true)} />;
   } else if (ty.kind === 'vec3') {
-    const v = (Array.isArray(value) ? value : [0, 0, 0]) as number[];
+    const raw = (Array.isArray(value) ? value : [0, 0, 0]) as Vec3;
     const min = ty.min ?? -Infinity;
+    // (Shown Z-up when set; kept Y-up. A field with a lower limit is a size: its axes swap without a sign.)
+    const kind: AxisKind = ty.min !== undefined && ty.min >= 0 ? 'size' : 'point';
+    const zUp = useEditor.getState().zUp;
+    const v = shown(raw, kind, zUp) as number[];
+    const set3 = (n: number[], live: boolean) => set(stored(n as Vec3, kind, zUp), live);
     return (
       <>
         <div className="cw-f3">
@@ -139,9 +146,9 @@ function FieldEditor({ entity, component, field, value }: { entity: string; comp
               value={v[i]!}
               step={ty.step ?? 1}
               onBegin={begin}
-              onChange={(n) => set(v.map((x, j) => (j === i ? Math.max(min, n) : x)), true)}
+              onChange={(n) => set3(v.map((x, j) => (j === i ? Math.max(min, n) : x)), true)}
               onCommit={(n) => {
-                set(v.map((x, j) => (j === i ? Math.max(min, n) : x)), true);
+                set3(v.map((x, j) => (j === i ? Math.max(min, n) : x)), true);
                 done();
               }}
             />

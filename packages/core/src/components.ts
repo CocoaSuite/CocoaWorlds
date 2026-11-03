@@ -74,7 +74,7 @@ export interface ComponentDef {
   /** Shown in the Inspector but not offered in Add component (made by its own Add menu item). */
   madeBy?: 'add-menu';
   /** On a point object, only alongside this component (Foliage goes on brushes, or on terrains). */
-  pointNeeds?: string;
+  pointNeeds?: string | string[];
 }
 
 const e = (en: string, ru: string): Text => ({ en, ru });
@@ -586,11 +586,11 @@ export const COMPONENTS: ComponentDef[] = [
     name: 'scatter',
     label: e('Foliage', 'Растительность'),
     description: e(
-      'Covers this brush’s upward-facing surfaces with grass (except under objects standing on it, unless they let grass grow under them). Purely visual: nothing collides with them. The same seed always gives the same pattern; the tufts are made when the scene is shown or played.',
-      'Разбрасывает пучки травы по верхним поверхностям этого браша. Только для вида: с ними ничего не сталкивается. Один и тот же seed всегда даёт один и тот же рисунок; пучки делаются при показе и игре.',
+      'Covers the upward-facing surfaces of this brush, model or terrain with grass (except under objects standing on it, unless they let grass grow under them), and with Grass on top, paints a grass layer over its material there (fading out with the slope, in patches). Purely visual: nothing collides with them. The same seed always gives the same pattern.',
+      'Покрывает травой верхние поверхности этого браша, модели или ландшафта, а с «Травой сверху» — рисует слой травы поверх его материала (сходит на нет по склону, пятнами). Только для вида: с ними ничего не сталкивается. Один и тот же seed всегда даёт один и тот же рисунок.',
     ),
     appliesTo: 'any',
-    pointNeeds: 'terrain',
+    pointNeeds: ['terrain', 'model'],
     fields: [
       { key: 'spacing', label: e('Spacing', 'Шаг'), hint: e('About how far apart the tufts are.', 'Примерно расстояние между пучками.'), type: { kind: 'number', min: 4, step: 2, unit: 'u' }, default: 10 },
       { key: 'density', label: e('Density', 'Густота'), hint: e('How many spots get a tuft (1 = all).', 'Сколько мест получают пучок (1 = все).'), type: { kind: 'number', min: 0, max: 1, step: 0.05 }, default: 1 },
@@ -607,6 +607,11 @@ export const COMPONENTS: ComponentDef[] = [
         default: 'all',
       },
       { key: 'plant', label: e('Plant', 'Растение'), hint: e('Grow one of your plants instead of plain tufts (its own colours).', 'Растить своё растение вместо простых пучков (со своими цветами).'), type: { kind: 'plant' }, default: '' },
+      { key: 'cover', label: e('Grass on top', 'Трава сверху'), hint: e('Paint a grass layer over the material where it faces up (world up), so no bare ground shows between tufts; tufts grow only where it shows.', 'Рисовать слой травы поверх материала там, где поверхность смотрит вверх; пучки растут только там, где он виден.'), type: { kind: 'boolean' }, default: true },
+      { key: 'coverColour', label: e('Top colour', 'Цвет сверху'), type: { kind: 'color' }, default: '#3f7f2e' },
+      { key: 'edge', label: e('Edge softness', 'Мягкость края'), hint: e('Over how many degrees of slope the layer fades out.', 'На сколько градусов наклона слой сходит на нет.'), type: { kind: 'number', min: 1, max: 60, step: 1, unit: '°' }, default: 14 },
+      { key: 'patches', label: e('Bare patches', 'Проплешины'), hint: e('0: even cover; 1: plenty of bare patches.', '0: ровный покров; 1: много проплешин.'), type: { kind: 'number', min: 0, max: 1, step: 0.05 }, default: 0.25 },
+      { key: 'patchSize', label: e('Patch size', 'Размер пятен'), type: { kind: 'number', min: 20, step: 10, unit: 'u' }, default: 320 },
     ],
   },
   {
@@ -672,7 +677,7 @@ export function addableComponents(components: Record<string, unknown>, isBrush: 
     if (c.internal || c.madeBy || components[c.name] !== undefined) return false;
     if (c.appliesTo === 'brush' && !isBrush) return false;
     if (c.appliesTo === 'point' && isBrush) return false;
-    if (c.pointNeeds && !isBrush && components[c.pointNeeds] === undefined) return false;
+    if (c.pointNeeds && !isBrush && ![c.pointNeeds].flat().some((n) => components[n] !== undefined)) return false;
     if (c.conflicts?.some((x) => components[x] !== undefined)) return false;
     if (COMPONENTS.some((o) => components[o.name] !== undefined && o.conflicts?.includes(c.name))) return false;
     return true;
@@ -730,6 +735,14 @@ export interface ScatterData {
   layer: string;
   /** A project plant instead of tufts ('' for tufts). */
   plant?: string;
+  /** A grass layer painted over the material where it faces up; tufts only where it shows. */
+  cover?: boolean;
+  coverColour?: string;
+  /** Degrees of slope over which the layer fades out. */
+  edge?: number;
+  /** 0…1: how much of it breaks into bare patches. */
+  patches?: number;
+  patchSize?: number;
   [k: string]: unknown;
 }
 

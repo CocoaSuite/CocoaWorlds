@@ -2,6 +2,7 @@
  * Editor state. Scene data lives in a SceneDoc and changes only through History commands;
  * this store holds everything around it (session, selection, tools, view, logs) and exposes actions.
  */
+import { saveZUp, savedZUp } from './axes';
 import {
   History,
   SceneDoc,
@@ -132,6 +133,8 @@ interface State {
   showNav: boolean;
   /** View › Show grass (the editor only; the game always shows it). */
   showGrass: boolean;
+  /** Z is up in what the editor shows (as in Blender); the engine stays Y-up. */
+  zUp: boolean;
   /** Show the scene's own lighting (lights, sky, fog) in the editor instead of the flat preview lights. */
   gameLighting: boolean;
   showStats: boolean;
@@ -192,7 +195,7 @@ interface Actions {
   /** A finished terrain stroke, already made: recorded so it can be undone. */
   terrainEdit(cmd: { label: string; apply(): void; revert(): void }): void;
   setView(v: ViewMode): void;
-  toggle(k: 'showGrid' | 'showNav' | 'showGrass' | 'showStats' | 'showBottom' | 'snap' | 'vertexSnap' | 'pivotEdit' | 'gameLighting'): void;
+  toggle(k: 'showGrid' | 'showNav' | 'showGrass' | 'zUp' | 'showStats' | 'showBottom' | 'snap' | 'vertexSnap' | 'pivotEdit' | 'gameLighting'): void;
   /** Put an object's pivot at a world position (null: back to the default, its middle). */
   setPivot(id: string, world: Vec3 | null, mergeKey?: string): void;
   execute(cmd: Command): void;
@@ -332,6 +335,7 @@ export const useEditor = create<State & Actions>()((set, get) => ({
   showGrid: true,
   showNav: false,
   showGrass: true,
+  zUp: savedZUp(),
   gameLighting: false,
   assets: { textures: [], sounds: [], models: [] },
   showStats: true,
@@ -451,7 +455,10 @@ export const useEditor = create<State & Actions>()((set, get) => ({
   },
   setTool: (tool) => set((s) => (tool === 'face' || s.tool !== 'face' ? { tool } : { tool, faceSelection: [] })),
   setView: (view) => set({ view }),
-  toggle: (k) => set((s) => ({ [k]: !s[k] }) as Partial<State>),
+  toggle: (k) => {
+    set((s) => ({ [k]: !s[k] }) as Partial<State>);
+    if (k === 'zUp') saveZUp(get().zUp);
+  },
 
   execute(cmd) {
     get().history.execute(cmd);

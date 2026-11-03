@@ -176,3 +176,17 @@ brushes have no wear ring.
 A material's **Bevel edges** (u, up to 32) makes brush edges look rounded off: within that distance of an edge
 the lighting leans out over it (from each face's distance to its edges, the same data wear uses).
 
+
+## Grass on top
+
+A Foliage component's **Grass on top** (on by default) paints a grass layer over the surface's own material wherever
+it faces world up: fading out over **Edge softness** degrees round **Steepest**, broken into **Bare patches** about
+**Patch size** across, mottled like blades seen from above. Tufts grow only where the layer mostly shows (the same
+`coverAt` mask in `packages/geometry/src/scatter.ts`, mirrored in the layer's shader in `foliage.ts`). Foliage now
+works on models as well as brushes and terrains (the model's posed shape, placed once: it doesn't follow animation).
+
+## Z is up (editor only)
+
+View › **Z is up** (on by default) shows axes as Blender does: shown X = X, shown Y = −Z, shown Z = Y, scale swapping
+Y and Z. Only what the editor shows changes (Inspector, brush size/centre, component vectors, the corner axes, the
+move gizmo's and grid's colours, the selection readout); the engine and saved files stay Y-up (`renderer/axes.ts`).

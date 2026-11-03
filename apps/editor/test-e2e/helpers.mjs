@@ -14,13 +14,19 @@ export async function tempDirs() {
   return { tmp, userData: path.join(tmp, 'userdata'), projectsDir: path.join(tmp, 'projects') };
 }
 
-export async function launch(userData, projectsDir) {
+export async function launch(userData, projectsDir, { zUp = false } = {}) {
   const app = await electron.launch({
     args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--no-sandbox', '.'],
     cwd: appDir,
     env: { ...process.env, CW_USER_DATA: userData, CW_PROJECTS_DIR: projectsDir },
   });
   const page = await app.firstWindow();
+  // (Tests are written Y-up, as the engine is; View › Z is up only changes what the editor shows.)
+  if (!zUp) {
+    await page.waitForLoadState('domcontentloaded');
+    await page.evaluate(() => localStorage.setItem('cw-z-up', '0'));
+    await page.reload();
+  }
   page.on('pageerror', (e) => console.error('[page error]', e.stack));
   if (process.env.CW_DEBUG) page.on('console', (m) => m.type() === 'error' && console.error('[console]', m.text().slice(0, 6000)));
   page.setDefaultTimeout(15000);

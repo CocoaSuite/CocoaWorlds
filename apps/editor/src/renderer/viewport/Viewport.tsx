@@ -1,4 +1,5 @@
 /** React wrapper around ViewportEngine plus the viewport overlays (view switcher, grid/snap pill, stats, selection readout). */
+import { shown } from '../axes';
 import { uiOf, type SceneFile, type Vec3 } from '@cocoaworlds/core';
 import { UiLayer } from '../ui/UiLayer';
 import { HudView } from '../ui/Hud';
@@ -232,6 +233,10 @@ export function Viewport() {
   useEffect(() => {
     engine.current?.setGrassVisible(showGrass);
   }, [showGrass]);
+  const zUp = useEditor((s) => s.zUp);
+  useEffect(() => {
+    engine.current?.setZUp(zUp);
+  }, [zUp]);
   useEffect(() => {
     engine.current?.setTerrainTool(tool === 'terrain' && !playing ? terrainBrush : null);
   }, [tool, terrainBrush, playing]);
@@ -271,6 +276,8 @@ export function Viewport() {
       ];
 
   const one = sel.length === 1 ? sel[0]! : null;
+  // (As shown: Z up when set.)
+  const readout = one ? shown(one.transform.position, 'point', zUp) : [0, 0, 0];
 
   return (
     <div className="cw-view" ref={host} data-testid="viewport">
@@ -320,8 +327,8 @@ export function Viewport() {
       {one && !asPlayer && (
         <div className="cw-ov cw-ov-bl mono" data-testid="selection-readout">
           <span>
-            <span className="ax-x">X</span> {one.transform.position[0]} <span className="ax-y">Y</span> {one.transform.position[1]}{' '}
-            <span className="ax-z">Z</span> {one.transform.position[2]}
+            <span className="ax-x">X</span> {readout[0]} <span className="ax-y">Y</span> {readout[1]}{' '}
+            <span className="ax-z">Z</span> {readout[2]}
           </span>
           <span>{one.name}</span>
         </div>
