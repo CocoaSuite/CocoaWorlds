@@ -41,6 +41,8 @@ export function setSurface(b: Brush, patch: SurfacePatch, faces?: number[]): Bru
       if (patch.scale) s.scale = [nonZero(patch.scale[0] ?? s.scale[0]), nonZero(patch.scale[1] ?? s.scale[1])];
       return { plane: f.plane, surface: s };
     }),
+    // (An edited mesh or a plane keeps its corners: only the paint changes.)
+    ...(b.mesh ? { mesh: { verts: b.mesh.verts.map((v) => [...v] as typeof v), polys: b.mesh.polys.map((p) => [...p]) } } : {}),
   };
 }
 
