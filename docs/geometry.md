@@ -177,3 +177,12 @@ snapped to a grid, or from quick sheets), each optionally allowed to turn 90°. 
 painted with that material are fitted into the rectangle that best matches their shape, then size (at 0.25 u per
 texel), equally good ones picked between by face (`hotspotSurface` in `surface.ts`). **Hotspot fit** (UV workspace
 and the Face inspector) refits faces already painted.
+
+## Planes, bevels, chosen cuts
+
+- **Plane** (brush shapes flyout): one flat face across the drawn box's two widest sides, at its top along the
+  thinnest, facing that way (an edited mesh with a single polygon; seen from its front only).
+- **Bevel edges** (Brush section): rounds every edge of a convex brush with N flat segments of the given radius
+  (1 segment: a chamfer); corners come out faceted. `bevelBrush` in `ops.ts`. Undoable.
+- **Cuts** (a subtract brush's Brush section): Everything it touches, or Only chosen brushes (the internal `cuts`
+  component, `WorldBrush.cuts`), in the editor and the game.

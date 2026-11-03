@@ -165,3 +165,10 @@ Each graph material's graph is its own file, `materials/<name>.cwmat` (versioned
 settings; settings left at their defaults aren't written), so big graphs stay out of the project file and
 diff cleanly. The file is named when the material is made and keeps that name when the material is renamed.
 Exported games carry the baked images, not the graphs.
+
+## Glass and glow images
+
+- **Glass (see-through)**: how much light passes through; **Bending** (index of refraction) and **Thickness** set how
+  much what's behind is bent, by the surface's normals (a normal map makes it ripple). Colour tints it, roughness
+  frosts it. Project materials are physical materials for this (no cost when glass is off).
+- **Glow image** (under Glows): where it glows, tinted by the glow colour.

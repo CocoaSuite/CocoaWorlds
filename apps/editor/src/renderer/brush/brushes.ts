@@ -24,6 +24,7 @@ import {
   brushToLocal,
   brushToWorld,
   wedge,
+  plane,
   type Brush,
   type BrushData,
   type BrushRole,
@@ -38,7 +39,7 @@ export interface BrushComponent {
   mesh?: BrushData['mesh'];
 }
 
-export type BrushShape = 'box' | 'cylinder' | 'sphere' | 'wedge' | 'stairs' | 'polygon';
+export type BrushShape = 'box' | 'cylinder' | 'sphere' | 'wedge' | 'stairs' | 'polygon' | 'plane';
 
 /** A polygon brush's outline: corners on axes `a`/`b` of the view it was drawn in; depth runs along `e`. */
 export interface Outline {
@@ -141,7 +142,8 @@ export function worldBrushes(doc: SceneDoc): WorldBrush[] {
     if (!e.components.brush || !isShown(doc, e)) continue;
     const b = worldBrushOf(doc, e, mats.get(e.id));
     // Trigger zones are brushes too, but they never become level geometry.
-    if (b) out.push({ id: e.id, role: e.components.water ? 'water' : e.components.ladder ? 'ladder' : e.components.trigger || e.components.levelChange ? 'trigger' : b.role, brush: b.brush, smooth: Number((e.components.smooth as { angle?: number } | undefined)?.angle ?? 0) });
+    const only = (e.components.cuts as { only?: string } | undefined)?.only;
+    if (b) out.push({ id: e.id, role: e.components.water ? 'water' : e.components.ladder ? 'ladder' : e.components.trigger || e.components.levelChange ? 'trigger' : b.role, brush: b.brush, smooth: Number((e.components.smooth as { angle?: number } | undefined)?.angle ?? 0), ...(only !== undefined ? { cuts: only ? only.split(',') : [] } : {}) });
   }
   return out;
 }
@@ -166,12 +168,14 @@ export function shapeBrushes(o: ShapeOptions, min: V3, max: V3, role: DrawRole, 
       return [wedge(min, max, o.facing, surface)];
     case 'stairs':
       return stairs(min, max, o.steps, o.facing, surface);
+    case 'plane':
+      return [plane(min, max, surface)];
     default:
       return [box(min, max, surface)];
   }
 }
 
-export const shapeName: Record<BrushShape, string> = { box: 'block', cylinder: 'cylinder', sphere: 'sphere', wedge: 'wedge', stairs: 'stairs', polygon: 'prism' };
+export const shapeName: Record<BrushShape, string> = { box: 'block', cylinder: 'cylinder', sphere: 'sphere', wedge: 'wedge', stairs: 'stairs', polygon: 'prism', plane: 'plane' };
 
 /** Bounds of a brush entity in its own space (for pivots), null for other objects. */
 export const brushBounds = (e: EntityData) => {

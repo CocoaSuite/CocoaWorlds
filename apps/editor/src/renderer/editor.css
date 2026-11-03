@@ -627,3 +627,8 @@ button.cw-sec.cw-fold { width: 100%; border: 0; border-top: 1px solid var(--line
 .cw-paint-side .cw-brush-hint { color: var(--mute); font-size: 12px; line-height: 1.4; }
 .cw-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 .cw-pill-select { background: transparent; border: 0; color: inherit; font: inherit; padding: 0 2px; cursor: pointer; }
+.cw-cuts { display: flex; flex-direction: column; gap: 6px; margin: 6px 0; }
+.cw-cuts-list { display: flex; flex-wrap: wrap; gap: 4px; }
+.cw-cuts-chip { display: inline-flex; align-items: center; gap: 4px; padding: 2px 4px 2px 8px; border-radius: 999px; border: 1px solid var(--line); font-size: 12px; }
+.cw-cuts-chip button { border: 0; background: transparent; color: var(--mute); cursor: pointer; padding: 0 2px; }
+.cw-brush-actions { flex-wrap: wrap; row-gap: 6px; }

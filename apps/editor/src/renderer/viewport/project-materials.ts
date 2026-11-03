@@ -64,7 +64,8 @@ export function materialLabel(id: string, lang: Lang): string {
 
 /** A new Three.js material showing project material `id` (it follows later edits of it). */
 export function projectMaterial(id: string, onUpdate: () => void, opts: { modelUv?: boolean } = {}): THREE.MeshStandardMaterial {
-  const m = new THREE.MeshStandardMaterial();
+  // (Physical: so a material can be glass. Without refraction it draws as a standard one.)
+  const m = new THREE.MeshPhysicalMaterial();
   m.name = id;
   const l: Live = { id, m, onUpdate, version: 0, repeat: [1, 1], modelUv: !!opts.modelUv };
   live.set(m, l);
@@ -243,6 +244,13 @@ function restyle(l: Live): void {
   const glowMap = has('glow');
   m.emissive.set(d.emissive ?? (glowMap ? '#ffffff' : '#000000'));
   m.emissiveIntensity = d.emissive || glowMap ? (d.emissiveStrength ?? 1) : 0;
+  // Glass: what's behind shows through, bent by the surface's normals (its normal map too), tinted by its colour.
+  if ((m as THREE.MeshPhysicalMaterial).isMeshPhysicalMaterial) {
+    const pm = m as THREE.MeshPhysicalMaterial;
+    pm.transmission = Math.max(0, Math.min(1, d.refraction ?? 0));
+    pm.ior = d.ior ?? 1.5;
+    pm.thickness = d.refraction ? (d.thickness ?? 8) : 0;
+  }
   m.aoMapIntensity = 1;
   const k = d.normalStrength ?? 1;
   m.normalScale.set(k, k);

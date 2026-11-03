@@ -694,7 +694,8 @@ export const useEditor = create<State & Actions>()((set, get) => ({
       return;
     }
     if (!brushes.length) return;
-    const problems = brushes.flatMap((b) => validate(b));
+    // (A plane is one face, with no inside: nothing to check.)
+    const problems = brushOptions.shape === 'plane' ? [] : brushes.flatMap((b) => validate(b));
     if (problems.length) {
       get().notify(`The brush is too small to build (${problems[0]}).`);
       return;

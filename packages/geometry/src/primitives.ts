@@ -226,3 +226,24 @@ export function extrudePolygon(
   }
   return { faces };
 }
+
+/**
+ * A plane: one flat face across the box's two widest sides, at its top along the thinnest (facing that way).
+ * Kept as an edited mesh with a single polygon (it has no inside), so it draws and collides as one face.
+ */
+export function plane(min: V3, max: V3, surface: FaceSurface = defaultSurface()): Brush {
+  const size = [max[0] - min[0], max[1] - min[1], max[2] - min[2]];
+  const a = size.indexOf(Math.min(...size)) as 0 | 1 | 2;
+  const u = ((a + 1) % 3) as 0 | 1 | 2, v = ((a + 2) % 3) as 0 | 1 | 2;
+  const at = (pu: number, pv: number): V3 => {
+    const p: V3 = [0, 0, 0];
+    p[a] = max[a];
+    p[u] = pu;
+    p[v] = pv;
+    return p;
+  };
+  const verts = [at(min[u], min[v]), at(max[u], min[v]), at(max[u], max[v]), at(min[u], max[v])];
+  const n: V3 = [0, 0, 0];
+  n[a] = 1;
+  return { faces: [{ plane: { n, d: max[a] }, surface: { ...surface } }], mesh: { verts, polys: [[0, 1, 2, 3]] } };
+}

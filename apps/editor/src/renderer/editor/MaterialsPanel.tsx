@@ -451,12 +451,29 @@ function MaterialProps({
       </label>
       {glows && (
         <>
+          <Row label={t('mat.glowMap')}>
+            <ImagePick label={t('mat.glowMap')} value={m.glowMap} textures={textures} onChange={(v) => edit({ glowMap: v }, 'Glow image')} />
+          </Row>
           <Row label={t('mat.glowColor')}>
             <ColorField label={t('mat.glowColor')} value={m.emissive!} onChange={(v) => edit({ emissive: v }, 'Glow colour', `mat-glow-${m.id}`)} />
           </Row>
           <Row label={t('mat.glowStrength')}>
             <Slider label={t('mat.glowStrength')} value={m.emissiveStrength ?? 1} max={10} step={0.1} onChange={(v) => edit({ emissiveStrength: v }, 'Glow strength', `mat-glow-i-${m.id}`)} />
           </Row>
+        </>
+      )}
+      <Row label={t('mat.refraction')}>
+        <Slider label={t('mat.refraction')} value={m.refraction ?? 0} onChange={(v) => edit({ refraction: v > 0 ? v : undefined }, 'Glass', `mat-glass-${m.id}`)} />
+      </Row>
+      {(m.refraction ?? 0) > 0 && (
+        <>
+          <Row label={t('mat.ior')}>
+            <NumberField label="#" ariaLabel={t('mat.ior')} value={m.ior ?? 1.5} step={0.05} onCommit={(v) => edit({ ior: Math.max(1, Math.min(2.4, v)) }, 'Glass bending')} />
+          </Row>
+          <Row label={t('mat.thickness')}>
+            <NumberField label="u" ariaLabel={t('mat.thickness')} value={m.thickness ?? 8} step={1} onCommit={(v) => edit({ thickness: Math.max(0, v) }, 'Glass thickness')} />
+          </Row>
+          <p className="cw-muted cw-screens-note">{t('mat.glassHint')}</p>
         </>
       )}
       <Row label={t('mat.bevel')}>

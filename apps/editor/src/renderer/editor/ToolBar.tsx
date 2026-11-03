@@ -39,6 +39,7 @@ export function ToolBar() {
     ['wedge', 'wedge', t('tool.wedge')],
     ['stairs', 'stairs', t('tool.stairs')],
     ['polygon', 'polygon', t('tool.polygon')],
+    ['plane', 'face', t('tool.plane')],
   ];
   const current = SHAPES.find((x) => x[0] === shape) ?? SHAPES[0]!;
   const T = (id: Tool, icon: IconName, label: string, key: string) => (

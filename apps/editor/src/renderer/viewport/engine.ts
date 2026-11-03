@@ -375,7 +375,7 @@ export class ViewportEngine {
     const wb = doc ? worldBrushes(doc) : [];
     // Faces and where each brush sits (a moved group moves its brushes without touching their faces).
     // (A water body's look counts too: it's drawn with it.)
-    const key = wb.map((b) => `${b.id}:${b.role}:${faceKey(doc!.get(b.id)!)}:${mat4Key(this.mats.get(b.id) ?? [])}${b.role === 'water' ? JSON.stringify(doc!.get(b.id)!.components.water ?? '') : ''}:${b.smooth ?? 0}`).join('|');
+    const key = wb.map((b) => `${b.id}:${b.role}:${faceKey(doc!.get(b.id)!)}:${mat4Key(this.mats.get(b.id) ?? [])}${b.role === 'water' ? JSON.stringify(doc!.get(b.id)!.components.water ?? '') : ''}:${b.smooth ?? 0}:${b.cuts?.join(',') ?? '*'}`).join('|');
     if (key !== this.worldKey) {
       this.worldKey = key;
       this.world.waterLookOf = (id) => waterLookOf(doc, id);

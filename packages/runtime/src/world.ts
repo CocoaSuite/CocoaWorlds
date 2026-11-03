@@ -541,7 +541,10 @@ export class GameWorld {
         else if (e.components.rigidBody) this.addBrushBody(e, brush);
         else if (unitOf.has(e.id) && brushData.role !== 'subtract') unitBrushes.get(unitOf.get(e.id)!)!.push(brush);
         // (NOGRASS brushes only clear grass: nothing to collide with.)
-        else if (!isNoGrassBrush(brush)) level.push({ id: e.id, role: brushData.role === 'subtract' ? 'subtract' : 'solid', brush });
+        else if (!isNoGrassBrush(brush)) {
+          const only = (e.components.cuts as { only?: string } | undefined)?.only;
+          level.push({ id: e.id, role: brushData.role === 'subtract' ? 'subtract' : 'solid', brush, ...(only !== undefined ? { cuts: only ? only.split(',') : [] } : {}) });
+        }
         if (e.components.conveyor && !unitOf.has(e.id)) conveyors.set(e.id, readComponent<ConveyorData>('conveyor', e.components.conveyor));
       } else if (e.components.terrain) {
         this.addTerrain(e.id, doc.worldMatrix(e.id));

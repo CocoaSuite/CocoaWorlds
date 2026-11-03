@@ -22,6 +22,8 @@ export interface WorldBrush {
   brush: Brush;
   /** Smooth shading: the steepest angle (degrees) still shaded as one surface; 0 or missing: flat. */
   smooth?: number;
+  /** A subtract brush: cuts only these solids (ids); missing: every solid it touches. */
+  cuts?: string[];
 }
 
 export interface BuiltSolid {
@@ -60,6 +62,7 @@ export function buildWorld(brushes: WorldBrush[]): BuiltWorld {
     for (const ci of near) {
       const c = subtracts[ci]!;
       if (!sb || !c.bb || !boxesTouch(sb, c.bb)) continue;
+      if (c.cuts && !c.cuts.includes(s.id)) continue;
       const next: Brush[] = [];
       let cut = false;
       for (const p of pieces) {

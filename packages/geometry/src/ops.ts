@@ -21,7 +21,7 @@ import {
 } from './brush';
 import { EPS, flip, planeFromPoints, samePlane, signedDist, type Plane } from './plane';
 import { lockedOffset } from './uv';
-import { add, applyM4, cross, dot, scale, sub, type M4, type V3 } from './vec';
+import { add, applyM4, cross, dot, normalize, scale, sub, type M4, type V3 } from './vec';
 
 /** Smallest volume (cubic units) for a piece to count as real; smaller slivers are dropped. */
 export const MIN_PIECE_VOLUME = 0.01;
@@ -289,4 +289,43 @@ export function clipBrush(b: Brush, p: Plane): { front: Brush | null; back: Brus
   const front = split(b, p, matchSurface(b, scale(p.n, -1))).front;
   const back = split(b, p, matchSurface(b, p.n)).back;
   return { front, back, cut: true };
+}
+
+/**
+ * Round (or chamfer) a convex brush's edges: each edge is replaced by `segments` flat strips following a quarter
+ * round of `radius` (1 segment: a plain chamfer). Corners where three edges meet come out faceted. Edited meshes
+ * are left as they are. The strips take the surface of the face they lean towards.
+ */
+export function bevelBrush(b: Brush, radius: number, segments: number): Brush {
+  if (b.mesh || radius <= 0 || segments < 1) return b;
+  const polys = polygons(b);
+  const box = bounds(b);
+  if (!box) return b;
+  // (No rounder than half the brush's thinnest side.)
+  const r = Math.min(radius, 0.5 * Math.min(box.max[0] - box.min[0], box.max[1] - box.min[1], box.max[2] - box.min[2]) - 1e-3);
+  if (r <= 0) return b;
+  const near = (p: V3, q: V3) => Math.abs(p[0] - q[0]) + Math.abs(p[1] - q[1]) + Math.abs(p[2] - q[2]) < 0.01;
+  const extra: BrushFace[] = [];
+  for (let i = 0; i < polys.length; i++)
+    for (let j = i + 1; j < polys.length; j++) {
+      const A = polys[i]!, B = polys[j]!;
+      const shared = A.points.filter((p) => B.points.some((q) => near(p, q)));
+      if (shared.length < 2) continue;
+      const n1 = A.plane.n, n2 = B.plane.n;
+      const c = dot(n1, n2);
+      if (c > 0.999) continue;
+      const theta = Math.acos(Math.max(-1, Math.min(1, c)));
+      // The round's axis: the edge moved in by the radius from both faces.
+      const k = r / (1 + c);
+      const axis = sub(shared[0]!, scale(add(n1, n2), k));
+      for (let s = 1; s <= segments; s++) {
+        const t = s / (segments + 1);
+        const n = normalize(add(scale(n1, Math.sin((1 - t) * theta)), scale(n2, Math.sin(t * theta))));
+        extra.push({ plane: { n, d: dot(n, axis) + r }, surface: cloneSurface((t < 0.5 ? A : B).surface) });
+      }
+    }
+  const out: Brush = { faces: [...b.faces.map((f) => ({ plane: f.plane, surface: cloneSurface(f.surface) })), ...extra] };
+  // Drop faces that ended up with nothing left of them.
+  const kept = new Set(polygons(out).map((p) => p.face));
+  return { faces: out.faces.filter((_, i) => kept.has(i)) };
 }

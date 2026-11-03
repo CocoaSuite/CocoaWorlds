@@ -2,7 +2,7 @@
 import { shown, storedAxis } from '../axes';
 import type { Vec3 } from '@cocoaworlds/core';
 import type { EntityData } from '@cocoaworlds/core';
-import { bounds, buildWorld, center, composeM4, polygons, transform, translate, validate, type V3 } from '@cocoaworlds/geometry';
+import { bevelBrush, bounds, buildWorld, center, composeM4, polygons, transform, translate, validate, type V3 } from '@cocoaworlds/geometry';
 import { Button, NumberField, Section, Segmented } from '@cocoaworlds/ui';
 import { useState } from 'react';
 import { worldBrushOf, worldBrushes } from '../brush/brushes';
@@ -20,6 +20,8 @@ export function BrushInspector({ e }: { e: EntityData }) {
   // (Shown Z-up when set; kept Y-up.)
   const zUp = useEditor((x) => x.zUp);
   const [hollowDir, setHollowDir] = useState<'inward' | 'outward'>('inward');
+  const [bevel, setBevel] = useState(8);
+  const [segments, setSegments] = useState(3);
   // Sizes and centres are shown and edited in world space.
   const b = worldBrushOf(doc, e);
   const trigger = !!e.components.trigger;
@@ -149,10 +151,28 @@ export function BrushInspector({ e }: { e: EntityData }) {
             <Button onClick={() => s.makeHollow(e.id, thickness, hollowDir)}>{t('insp.hollow')}</Button>
           </div>
           <p className="cw-hint">{t(hollowDir === 'inward' ? 'insp.inwardHint' : 'insp.outwardHint')}</p>
+          {!b.brush.mesh && (
+            <div className="cw-row cw-brush-actions">
+              <label className="cw-brush-opt">
+                {t('insp.bevelRadius')}
+                <span className="cw-brush-num">
+                  <NumberField label="u" ariaLabel={t('insp.bevelRadius')} value={bevel} step={1} onCommit={(v) => setBevel(Math.max(0.5, v))} />
+                </span>
+              </label>
+              <label className="cw-brush-opt">
+                {t('insp.bevelSegments')}
+                <span className="cw-brush-num">
+                  <NumberField label="#" ariaLabel={t('insp.bevelSegments')} value={segments} step={1} onCommit={(v) => setSegments(Math.max(1, Math.min(12, Math.round(v))))} />
+                </span>
+              </label>
+              <Button onClick={() => s.setBrush(e.id, bevelBrush(b.brush, bevel, segments), undefined, 'Bevel edges')}>{t('insp.bevel')}</Button>
+            </div>
+          )}
         </>
       ) : (
         <>
           <p className="cw-hint">{t('insp.subtractHint')}</p>
+          <CutsOnly id={e.id} />
           <Button onClick={() => s.applySubtract([e.id])}>{t('insp.applyCut')}</Button>
           <p className="cw-hint">{t('insp.applyCutHint')}</p>
         </>
@@ -175,4 +195,58 @@ export function BrushInspector({ e }: { e: EntityData }) {
 export function MultiBrushActions({ count }: { count: number }) {
   const s = useEditor.getState();
   return count >= 2 ? <Button onClick={s.mergeSelection}>{t('insp.merge')}</Button> : null;
+}
+
+/** A subtract brush: cut everything it touches, or only the brushes chosen here. */
+function CutsOnly({ id }: { id: string }) {
+  const doc = useEditor((x) => x.doc);
+  useEditor((x) => x.rev);
+  const s = useEditor.getState();
+  const e = doc?.get(id);
+  if (!doc || !e) return null;
+  const only = (e.components.cuts as { only?: string } | undefined)?.only;
+  const chosen = only ? only.split(',').filter(Boolean) : [];
+  const solids = doc.entities.filter((x) => x.id !== id && (x.components.brush as { role?: string } | undefined)?.role === 'solid');
+  const set = (ids: string[]) => s.setComponentField(id, 'cuts', 'only', ids.join(','));
+  return (
+    <div className="cw-cuts" role="group" aria-label={t('insp.cuts')}>
+      <div className="cw-f">
+        <span>{t('insp.cuts')}</span>
+        <Segmented<'all' | 'only'>
+          label={t('insp.cuts')}
+          value={only === undefined ? 'all' : 'only'}
+          onChange={(v) => (v === 'all' ? s.removeComponent(id, 'cuts') : s.addComponent(id, 'cuts'))}
+          options={[
+            { value: 'all', label: t('insp.cutsAll') },
+            { value: 'only', label: t('insp.cutsOnly') },
+          ]}
+        />
+      </div>
+      {only !== undefined && (
+        <>
+          <div className="cw-cuts-list">
+            {chosen.map((c) => (
+              <span key={c} className="cw-cuts-chip">
+                {doc.get(c)?.name ?? c}
+                <button type="button" aria-label={`${t('insp.cutsRemove')} ${doc.get(c)?.name ?? c}`} onClick={() => set(chosen.filter((x) => x !== c))}>
+                  ×
+                </button>
+              </span>
+            ))}
+            {!chosen.length && <span className="cw-hint">{t('insp.cutsNone')}</span>}
+          </div>
+          <select className="cw-input" aria-label={t('insp.cutsAdd')} value="" onChange={(ev) => ev.currentTarget.value && set([...chosen, ev.currentTarget.value])}>
+            <option value="">{t('insp.cutsAdd')}</option>
+            {solids
+              .filter((x) => !chosen.includes(x.id))
+              .map((x) => (
+                <option key={x.id} value={x.id}>
+                  {x.name}
+                </option>
+              ))}
+          </select>
+        </>
+      )}
+    </div>
+  );
 }

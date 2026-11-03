@@ -74,6 +74,11 @@ export interface MaterialDef {
   hotspots?: { x: number; y: number; w: number; h: number; rotate?: boolean }[];
   /** …automatically, whenever it's painted onto faces. */
   hotspotAuto?: boolean;
+  /** Glass: how much light passes through, bent by its normals (0 / missing: off)… */
+  refraction?: number;
+  /** …how strongly it bends (index of refraction: 1 none, 1.5 glass, 2.4 diamond) and how thick it is (u). */
+  ior?: number;
+  thickness?: number;
   /** Blend into ground: fades into whatever it stands in within this many u (0 / missing: off)… */
   blend?: number;
   /** …with a noisy edge (0…1) whose blotches are about this big (u). */
