@@ -2,6 +2,7 @@
  * The Inspector's components: one section per component with fields drawn from its definition, a remove
  * button, and an "Add component" menu listing only what fits this object.
  */
+import { TerrainImport } from './TerrainImport';
 import { addableComponents, componentDef, readComponent, type EntityData, type FieldDef } from '@cocoaworlds/core';
 import { Button, ColorField, ContextMenu, IconButton, NumberField, Section, Segmented, Switch } from '@cocoaworlds/ui';
 import { useEffect, useState } from 'react';
@@ -37,6 +38,7 @@ export function ComponentsSection({ e }: { e: EntityData }) {
                 ))}
               {!def.fields.length && <p className="cw-hint">{def.description[lang]}</p>}
               {name === 'model' && typeof data.model === 'string' && data.model && <ModelMaterials entity={e.id} path={data.model} value={(data.materials ?? {}) as Record<string, string>} />}
+              {name === 'terrain' && typeof data.file === 'string' && data.file && <TerrainImport file={data.file} />}
               {name === 'script' && (
                 <div className="cw-row">
                   <span className="cw-muted">{t('script.stacks').replace('{n}', String(((e.components.script as { handlers?: unknown[] }).handlers ?? []).length))}</span>

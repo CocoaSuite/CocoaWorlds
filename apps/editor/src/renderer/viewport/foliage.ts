@@ -4,8 +4,9 @@
  * or its settings change. Shared by the editor and play mode.
  */
 import { SceneDoc, readComponent, type ScatterData } from '@cocoaworlds/core';
-import { COLLIDER_MATERIAL, TUFT_STRIDE, bounds as brushBoxOf, isNoGrassBrush, scatterTufts, seededRandom, type Tufts } from '@cocoaworlds/geometry';
-import { applyMat4, type EntityData, type ModelData } from '@cocoaworlds/core';
+import { COLLIDER_MATERIAL, TUFT_STRIDE, bounds as brushBoxOf, isNoGrassBrush, scatterOnMesh, scatterTufts, seededRandom, type Tufts } from '@cocoaworlds/geometry';
+import { onTerrainChange, terrainChunks, terrainField, terrainVersion } from './terrains';
+import { applyMat4, type EntityData, type ModelData, type TerrainData } from '@cocoaworlds/core';
 import { UNITS_PER_METRE, loadModel } from './models';
 import { ConvexHull } from 'three/examples/jsm/math/ConvexHull.js';
 import { brushOf } from '../brush/brushes';
@@ -23,6 +24,9 @@ const LEVELS = [
 ];
 /** How far (u, from the camera to a chunk's edge) each level is drawn (the last, however far). */
 export const FOLIAGE_LOD_DISTANCES = [320, 960, Infinity];
+/** At most this many tufts on one terrain (a brush gets TUFT_MAX). */
+const TERRAIN_TUFT_MAX = 80000;
+
 /** Objects narrower than this (u, their widest side across the ground) leave the grass alone. */
 export const GRASS_CLEAR_MIN = 24;
 /** The last part of each level's range where it blends into the next (a share of that distance). */
@@ -330,11 +334,22 @@ export class FoliageRenderer {
 
   private lastDoc: SceneDoc | null = null;
   private resync = () => this.lastDoc && this.sync(this.lastDoc);
+  private terrainTimer: ReturnType<typeof setTimeout> | null = null;
+  private offTerrain: () => void;
 
-  constructor() {
+  constructor(private onUpdate: () => void = () => {}) {
     this.group.name = 'foliage';
     // A model's shape arrives once its file is read: then the grass under it is cleared.
     modelWaiters.add(this.resync);
+    // A terrain changed: its grass is placed again once the brush rests a moment (not on every dab).
+    this.offTerrain = onTerrainChange(() => {
+      if (this.terrainTimer) clearTimeout(this.terrainTimer);
+      this.terrainTimer = setTimeout(() => {
+        this.terrainTimer = null;
+        this.resync();
+        this.onUpdate();
+      }, 350);
+    });
   }
 
   /** Bring the tufts up to date with the scene (only the brushes that changed are placed again). */
@@ -343,6 +358,10 @@ export class FoliageRenderer {
     const seen = new Set<string>();
     for (const e of doc?.entities ?? []) {
       if (!e.components.scatter || !doc) continue;
+      if (e.components.terrain) {
+        if (isShown(doc, e) && this.syncTerrain(doc, e)) seen.add(e.id);
+        continue;
+      }
       const brush = worldBrushOf(doc, e);
       if (!brush || !isShown(doc, e)) continue;
       seen.add(e.id);
@@ -362,6 +381,55 @@ export class FoliageRenderer {
       this.add(e.id, entry, sc, tufts);
     }
     for (const id of [...this.entries.keys()]) if (!seen.has(id)) this.remove(id);
+  }
+
+  /**
+   * Grass on a terrain: over its upward-facing ground, only where the chosen layer is painted (if one is), cleared
+   * under objects standing on it. Placed again (a moment after) whenever the terrain changes. False while the
+   * terrain isn't loaded.
+   */
+  private syncTerrain(doc: SceneDoc, e: EntityData): boolean {
+    const file = readComponent<TerrainData>('terrain', e.components.terrain).file;
+    const field = file ? terrainField(file) : null;
+    if (!field) return false;
+    const sc = readComponent<ScatterData>('scatter', e.components.scatter);
+    const m = new THREE.Matrix4().fromArray(doc.worldMatrix(e.id));
+    // The whole surface in world space (with each corner's layer weights).
+    const parts = terrainChunks(file, field);
+    let count = 0, tris = 0;
+    for (const { mesh } of parts) {
+      count += mesh.positions.length / 3;
+      tris += mesh.indices.length;
+    }
+    const P = new Float32Array(count * 3), N = new Float32Array(count * 3), W = new Float32Array(count * 4), I = new Uint32Array(tris);
+    let vo = 0, io = 0;
+    const v = new THREE.Vector3(), nm = new THREE.Matrix3().getNormalMatrix(m);
+    for (const { mesh } of parts) {
+      const base = vo / 3;
+      for (let i = 0; i < mesh.positions.length; i += 3) {
+        v.set(mesh.positions[i]!, mesh.positions[i + 1]!, mesh.positions[i + 2]!).applyMatrix4(m).toArray(P, vo + i);
+        v.set(mesh.normals[i]!, mesh.normals[i + 1]!, mesh.normals[i + 2]!).applyMatrix3(nm).normalize().toArray(N, vo + i);
+      }
+      W.set(mesh.weights, (vo / 3) * 4);
+      for (let i = 0; i < mesh.indices.length; i++) I[io + i] = mesh.indices[i]! + base;
+      vo += mesh.positions.length;
+      io += mesh.indices.length;
+    }
+    const box = new THREE.Box3().setFromArray(P);
+    const blockers = blockersOf(doc, e.id, sc.size * 0.45, (sc.height ?? sc.size) * 1.25).filter(
+      (b) => b.max[0]! >= box.min.x && b.min[0]! <= box.max.x && b.max[2]! >= box.min.z && b.min[2]! <= box.max.z && b.max[1]! >= box.min.y && b.min[1]! <= box.max.y + 8,
+    );
+    const key = JSON.stringify([sc, file, terrainVersion(file), doc.worldMatrix(e.id), blockers.map((b) => b.key)]);
+    if (this.entries.get(e.id)?.key === key) return true;
+    this.remove(e.id);
+    const entry: Entry = { key, chunks: [] };
+    this.entries.set(e.id, entry);
+    const layer = sc.layer && sc.layer !== 'all' ? Number(sc.layer) : -1;
+    // (A triangle grows grass where its corners are mostly the chosen layer.)
+    const keep = layer < 0 ? undefined : (t: number) => W[I[t]! * 4 + layer]! + W[I[t + 1]! * 4 + layer]! + W[I[t + 2]! * 4 + layer]! >= 1.5;
+    const tufts = withoutCleared(scatterOnMesh({ positions: P, normals: N, indices: I }, { ...sc, max: TERRAIN_TUFT_MAX }, keep), blockers);
+    if (tufts.count) this.add(e.id, entry, sc, tufts);
+    return true;
   }
 
   /**
@@ -510,5 +578,7 @@ export class FoliageRenderer {
     for (const id of [...this.entries.keys()]) this.remove(id);
     for (const g of this.geometries) g.dispose();
     modelWaiters.delete(this.resync);
+    this.offTerrain();
+    if (this.terrainTimer) clearTimeout(this.terrainTimer);
   }
 }

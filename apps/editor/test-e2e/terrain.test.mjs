@@ -64,6 +64,43 @@ test('terrain: drawn, picked, saved, stood on', async () => {
     await stroke(600);
     await until(async () => (await heights()).painted > 10, true, 6000);
     await page.keyboard.press('v');
+    // Grass on the terrain, only where layer 3 is painted.
+    await page.getByRole('tree').getByRole('treeitem', { name: 'terrain' }).click();
+    await insp.getByRole('button', { name: 'Add component' }).click();
+    await page.getByRole('menuitem', { name: /^Foliage/ }).click();
+    const tufts = () => page.evaluate(() => window.__cwViewport.foliage.count);
+    await until(async () => (await tufts()) > 1000, true, 15000);
+    const everywhere = await tufts();
+    await insp.getByLabel('Grows on').selectOption({ label: 'Layer 3' });
+    await until(async () => { const n = await tufts(); return n > 0 && n < everywhere / 4; }, true, 15000);
+    await shot(page, 'terrain-grass');
+    // A heightmap: a picture from black (left) to white (right) makes a slope.
+    const png = await page.evaluate(async () => {
+      const c = new OffscreenCanvas(64, 64);
+      const g = c.getContext('2d');
+      const grad = g.createLinearGradient(0, 0, 64, 0);
+      grad.addColorStop(0, '#000');
+      grad.addColorStop(1, '#fff');
+      g.fillStyle = grad;
+      g.fillRect(0, 0, 64, 64);
+      const b = await c.convertToBlob({ type: 'image/png' });
+      return [...new Uint8Array(await b.arrayBuffer())];
+    });
+    await insp.getByTestId('import-heightmap').setInputFiles({ name: 'slope.png', mimeType: 'image/png', buffer: Buffer.from(png) });
+    const slope = () =>
+      page.evaluate(() => {
+        let west = -Infinity, east = -Infinity;
+        for (const m of window.__cwViewport.terrains.meshes) {
+          const p = m.geometry.getAttribute('position'), n = m.geometry.getAttribute('normal');
+          for (let i = 0; i < p.count; i++) {
+            if (n.getY(i) < 0.2) continue;
+            if (p.getX(i) < 200) west = Math.max(west, p.getY(i));
+            if (p.getX(i) > 1848) east = Math.max(east, p.getY(i));
+          }
+        }
+        return east - west;
+      });
+    await until(async () => (await slope()) > 250, true, 10000);
     // Saved: the scene, and the terrain's shape in its own file.
     await page.keyboard.press('Control+s');
     const dir = path.join(projectsDir, 'hills', 'assets', 'terrain');

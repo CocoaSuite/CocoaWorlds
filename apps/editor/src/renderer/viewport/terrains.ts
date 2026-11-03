@@ -34,6 +34,8 @@ export function loadTerrain(file: string): Promise<VoxelField | null> {
         const raw = new Uint8Array(await new Response(res.body!.pipeThrough(new DecompressionStream('gzip'))).arrayBuffer());
         const f = VoxelField.fromBytes(raw);
         fields.set(file, f);
+        // (Loaded: whatever is built on it, such as its grass, can be now.)
+        for (const fn of listeners) fn(file, null);
         return f;
       } catch {
         return null;
@@ -79,9 +81,16 @@ export function terrainChunks(file: string, f: VoxelField): { c: V3; mesh: Voxel
   return out;
 }
 
+const versions = new Map<string, number>();
+/** Goes up each time a terrain changes (so what's built on it knows it's out of date). */
+export function terrainVersion(file: string): number {
+  return versions.get(file) ?? 0;
+}
+
 /** Tell the views a terrain changed (`chunks`: only these; null: all of it). */
 export function changed(file: string, chunks: V3[] | null): void {
   unsavedTerrains.add(file);
+  versions.set(file, terrainVersion(file) + 1);
   const byChunk = meshCache.get(file);
   if (byChunk) {
     if (chunks) for (const c of chunks) byChunk.delete(c.join(','));

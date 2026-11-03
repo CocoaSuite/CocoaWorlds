@@ -43,7 +43,14 @@ export function seededRandom(seed: number): () => number {
 
 /** Tufts on the upward-facing surfaces of a brush given in world space. */
 export function scatterTufts(brush: Brush, o: ScatterOptions): Tufts {
-  const mesh = buildMesh([brush]);
+  return scatterOnMesh(buildMesh([brush]), o);
+}
+
+/**
+ * Tufts on the upward-facing triangles of any mesh in world space (a brush's, a terrain's). `keep` can leave
+ * triangles out (by their first index's position in `indices`), e.g. a terrain's where a layer isn't painted.
+ */
+export function scatterOnMesh(mesh: { positions: ArrayLike<number>; normals: ArrayLike<number>; indices: ArrayLike<number> }, o: ScatterOptions, keep?: (t: number) => boolean): Tufts {
   const P = mesh.positions, N = mesh.normals, I = mesh.indices;
   const minUp = Math.cos((Math.max(0, Math.min(90, o.slope)) * Math.PI) / 180);
   // Upward triangles, with their areas for an even spread.
@@ -61,6 +68,7 @@ export function scatterTufts(brush: Brush, o: ScatterOptions): Tufts {
     const ny = N[a + 1]! + N[b + 1]! + N[c + 1]!;
     const nl = Math.hypot(N[a]! + N[b]! + N[c]!, N[a + 1]! + N[b + 1]! + N[c + 1]!, N[a + 2]! + N[b + 2]! + N[c + 2]!) || 1;
     if (ny / nl < minUp) continue;
+    if (keep && !keep(t)) continue;
     total += area;
     tris.push(t);
     cum.push(total);
@@ -69,7 +77,7 @@ export function scatterTufts(brush: Brush, o: ScatterOptions): Tufts {
 
   const rnd = seededRandom(o.seed);
   const want = Math.round((total / (o.spacing * o.spacing)) * Math.max(0, Math.min(1, o.density)));
-  const max = Math.min(o.max ?? TUFT_MAX, TUFT_MAX);
+  const max = o.max ?? TUFT_MAX;
   // (Plenty of tries: most land in a cell already taken once a patch fills up.)
   const tries = Math.min(want, max) * 8;
   const taken = new Set<string>();

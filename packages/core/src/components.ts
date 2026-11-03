@@ -69,6 +69,8 @@ export interface ComponentDef {
   internal?: boolean;
   /** Shown in the Inspector but not offered in Add component (made by its own Add menu item). */
   madeBy?: 'add-menu';
+  /** On a point object, only alongside this component (Foliage goes on brushes, or on terrains). */
+  pointNeeds?: string;
 }
 
 const e = (en: string, ru: string): Text => ({ en, ru });
@@ -568,7 +570,8 @@ export const COMPONENTS: ComponentDef[] = [
       'Covers this brush’s upward-facing surfaces with grass (except under objects standing on it, unless they let grass grow under them). Purely visual: nothing collides with them. The same seed always gives the same pattern; the tufts are made when the scene is shown or played.',
       'Разбрасывает пучки травы по верхним поверхностям этого браша. Только для вида: с ними ничего не сталкивается. Один и тот же seed всегда даёт один и тот же рисунок; пучки делаются при показе и игре.',
     ),
-    appliesTo: 'brush',
+    appliesTo: 'any',
+    pointNeeds: 'terrain',
     fields: [
       { key: 'spacing', label: e('Spacing', 'Шаг'), hint: e('About how far apart the tufts are.', 'Примерно расстояние между пучками.'), type: { kind: 'number', min: 4, step: 2, unit: 'u' }, default: 10 },
       { key: 'density', label: e('Density', 'Густота'), hint: e('How many spots get a tuft (1 = all).', 'Сколько мест получают пучок (1 = все).'), type: { kind: 'number', min: 0, max: 1, step: 0.05 }, default: 1 },
@@ -577,6 +580,13 @@ export const COMPONENTS: ComponentDef[] = [
       { key: 'slope', label: e('Steepest', 'Круче'), hint: e('The steepest slope that grows tufts, in degrees.', 'Самый крутой склон, на котором растут пучки, в градусах.'), type: { kind: 'number', min: 0, max: 90, step: 5, unit: '°' }, default: 40 },
       { key: 'colour', label: e('Colour', 'Цвет'), type: { kind: 'color' }, default: '#4f9a3c' },
       { key: 'seed', label: e('Seed', 'Seed'), hint: e('Change it for a different pattern.', 'Измените для другого рисунка.'), type: { kind: 'number', min: 0, step: 1 }, default: 1 },
+      {
+        key: 'layer',
+        label: e('Grows on', 'Растёт на'),
+        hint: e('On a terrain: only where this layer is painted.', 'На ландшафте: только там, где нарисован этот слой.'),
+        type: { kind: 'enum', options: [{ value: 'all', label: e('Everywhere', 'Везде') }, { value: '0', label: e('Layer 1', 'Слой 1') }, { value: '1', label: e('Layer 2', 'Слой 2') }, { value: '2', label: e('Layer 3', 'Слой 3') }, { value: '3', label: e('Layer 4', 'Слой 4') }] },
+        default: 'all',
+      },
     ],
   },
   {
@@ -630,6 +640,7 @@ export function addableComponents(components: Record<string, unknown>, isBrush: 
     if (c.internal || c.madeBy || components[c.name] !== undefined) return false;
     if (c.appliesTo === 'brush' && !isBrush) return false;
     if (c.appliesTo === 'point' && isBrush) return false;
+    if (c.pointNeeds && !isBrush && components[c.pointNeeds] === undefined) return false;
     if (c.conflicts?.some((x) => components[x] !== undefined)) return false;
     if (COMPONENTS.some((o) => components[o.name] !== undefined && o.conflicts?.includes(c.name))) return false;
     return true;
@@ -677,6 +688,8 @@ export interface ScatterData {
   slope: number;
   colour: string;
   seed: number;
+  /** On terrains: 'all', or the layer ('0'…'3') it grows on. */
+  layer: string;
   [k: string]: unknown;
 }
 

@@ -793,7 +793,7 @@ export class ViewportEngine {
   private navTimer: ReturnType<typeof setTimeout> | null = null;
   private navDraw: THREE.Group | null = null;
   /** Grass tufts (Foliage component). */
-  private foliage = new FoliageRenderer();
+  private foliage = new FoliageRenderer(() => this.invalidate());
   /** Voxel terrains (T1). */
   readonly terrains = new TerrainRenderer(() => this.invalidate());
 
