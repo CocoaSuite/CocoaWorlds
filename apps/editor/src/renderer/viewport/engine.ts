@@ -26,6 +26,7 @@ import { hudOf, type Hud } from '../ui/Hud';
 import { loadProgress, storeProgress } from '../game/progress';
 import { SceneLighting } from './scene-lighting';
 import { FOLIAGE_TIME, FoliageRenderer } from './foliage';
+import { WaterDepth, waterLookOf } from './water-look';
 import { TerrainRenderer, changed as terrainChanged, terrainField } from './terrains';
 import type { VoxelBox, VoxelField } from '@cocoaworlds/geometry';
 
@@ -367,9 +368,11 @@ export class ViewportEngine {
     // Rebuild level geometry only when brushes actually changed.
     const wb = doc ? worldBrushes(doc) : [];
     // Faces and where each brush sits (a moved group moves its brushes without touching their faces).
-    const key = wb.map((b) => `${b.id}:${b.role}:${faceKey(doc!.get(b.id)!)}:${mat4Key(this.mats.get(b.id) ?? [])}`).join('|');
+    // (A water body's look counts too: it's drawn with it.)
+    const key = wb.map((b) => `${b.id}:${b.role}:${faceKey(doc!.get(b.id)!)}:${mat4Key(this.mats.get(b.id) ?? [])}${b.role === 'water' ? JSON.stringify(doc!.get(b.id)!.components.water ?? '') : ''}`).join('|');
     if (key !== this.worldKey) {
       this.worldKey = key;
+      this.world.waterLookOf = (id) => waterLookOf(doc, id);
       this.world.rebuild(wb);
     }
     this.applySelection();
@@ -796,6 +799,8 @@ export class ViewportEngine {
   private foliage = new FoliageRenderer(() => this.invalidate());
   /** Voxel terrains (T1). */
   readonly terrains = new TerrainRenderer(() => this.invalidate());
+  /** The scene's depth without water, for the water's look. */
+  private waterDepth = new WaterDepth();
 
   /** View › Navigation: draw where creatures can walk (worked out again a moment after each change). */
   setNavVisible(on: boolean): void {
@@ -1053,6 +1058,7 @@ export class ViewportEngine {
     this.disposed = true;
     this.foliage.dispose();
     this.terrains.dispose();
+    this.waterDepth.dispose();
     cancelAnimationFrame(this.raf);
     this.resizeObs.disconnect();
     this.unbindInput();
@@ -1564,6 +1570,7 @@ export class ViewportEngine {
     this.updateLighting();
     if (this.play?.placeCamera(this.fpCam)) {
       this.play.updateFoliage(this.fpCam);
+      this.waterDepth.prepare(r, this.scene, this.fpCam);
       this.play.applyWater(this.scene, this.fpCam);
       if (!this.renderAo(this.fpCam)) r.render(this.scene, this.fpCam);
       return;
@@ -1571,6 +1578,7 @@ export class ViewportEngine {
     this.grid.setCamera(this.rig.camera.position);
     this.foliage.update(this.rig.camera, this.rig.unitsPerPixel);
     this.play?.updateFoliage(this.rig.camera, this.rig.unitsPerPixel);
+    this.waterDepth.prepare(r, this.scene, this.rig.camera);
     if (!this.renderAo(this.rig.camera)) r.render(this.scene, this.rig.camera);
     const s = 72;
     this.axisCam.quaternion.copy(this.rig.camera.quaternion);

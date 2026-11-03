@@ -12,6 +12,7 @@ import type { Problem, ScriptError } from '@cocoaworlds/scripting';
 import * as THREE from 'three';
 import { brushBounds, worldBrushes } from '../brush/brushes';
 import { FoliageRenderer } from './foliage';
+import { waterLookOf, waterMaterialFor } from './water-look';
 import { TerrainRenderer, loadTerrain, terrainChunks } from './terrains';
 import { BATCH_MIN, ModelBatches, batchKey } from './model-batches';
 import { WEAR_RING, buildLevel } from './world-build';
@@ -123,7 +124,7 @@ export class PlaySession {
     for (const b of worldBrushes(doc)) {
       if (b.role !== 'water') continue;
       const m = buildMesh([b.brush]);
-      const water = new THREE.Mesh(toGeometry(m), m.groups.map((g) => material(g.material)));
+      const water = new THREE.Mesh(toGeometry(m), waterMaterialFor(waterLookOf(doc, b.id)));
       water.name = 'water';
       water.receiveShadow = true;
       this.group.add(water);

@@ -147,3 +147,19 @@ whole. A copy counts as still when it has no animation or bones, and no physics 
 can't break and that no script names (scripts can hide or show objects). Anything else is drawn by itself so it
 can move, animate, break or vanish. 256 crates take 7 draw calls instead of 259. (`viewport/model-batches.ts`.)
 
+## Water look
+
+Water brushes are drawn in a painted style, in the editor and in the game alike. Before the scene is drawn, it's
+drawn once more without water (and without anything see-through) into a depth picture; the water compares its own
+depth with what's behind each pixel, and everything follows from how much water that is:
+
+- **Colour**: the Water component's **Shallow colour**, blending to its **Deep colour** by **Deep from** (u). Shallow
+  water is see-through, so the bottom shows; deep water is nearly solid.
+- **Foam**: a solid, blobby band right where the water meets anything (shores, rocks, legs, piers), then lace (white
+  with round holes) a little further out, bands rolling in towards the shore in pieces, and glints twinkling on open
+  water. **Foam** switches it all off.
+- **Light below**: soft lighter patches between slowly drifting cells, where it's shallow.
+
+The water is lit like any surface (shadows fall on it) with a little light of its own, so it stays bright in shade.
+Everything moves with a shared clock; in the editor the picture moves when the view is redrawn. (`viewport/water-look.ts`.)
+

@@ -606,6 +606,10 @@ export const COMPONENTS: ComponentDef[] = [
     appliesTo: 'brush',
     conflicts: ['rigidBody', 'trigger', 'conveyor', 'ladder'],
     fields: [
+      { key: 'shallow', label: e('Shallow colour', 'Цвет на мели'), type: { kind: 'color' }, default: '#8fdcea' },
+      { key: 'deep', label: e('Deep colour', 'Цвет в глубине'), type: { kind: 'color' }, default: '#3360c8' },
+      { key: 'depthLook', label: e('Deep from', 'Глубоко с'), hint: e('How deep the water is before it shows its deep colour.', 'С какой глубины вода показывает цвет глубины.'), type: { kind: 'number', min: 8, step: 16, unit: 'u' }, default: 192 },
+      { key: 'foam', label: e('Foam', 'Пена'), hint: e('White foam along the shores and round whatever stands in it, and glints on the water.', 'Белая пена у берегов и вокруг всего, что стоит в воде, и блики.'), type: { kind: 'boolean' }, default: true },
       { key: 'tint', label: e('Colour under water', 'Цвет под водой'), type: { kind: 'color' }, default: '#28607a' },
       { key: 'clearness', label: e('Seeing distance', 'Видимость'), hint: e('How far the player sees under water.', 'Насколько далеко видно под водой.'), type: { kind: 'number', min: 32, step: 64, unit: 'u' }, default: 640 },
       { key: 'drowns', label: e('Can drown', 'Можно утонуть'), hint: e('After 12 s under water the player loses 10 health a second.', 'Через 12 с под водой игрок теряет 10 здоровья в секунду.'), type: { kind: 'boolean' }, default: true },
@@ -716,6 +720,10 @@ export interface WaterData {
   clearness: number;
   drowns: boolean;
   [k: string]: unknown;
+  shallow?: string;
+  deep?: string;
+  depthLook?: number;
+  foam?: boolean;
 }
 
 export interface ChargerData {

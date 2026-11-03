@@ -111,7 +111,7 @@ Order may shift where dependencies require it (for example, the project format f
 
 ## Next
 
-M1 (hosting and joining games) once approved; until then, polish on what's there. Installers and signing for exported games come with packaging the editor itself (Phase 9).
+Visuals first (multiplayer, M1, is postponed): a VFX editor, then a foliage creator. Installers and signing for exported games come with packaging the editor itself (Phase 9).
 
 ## Pinned
 

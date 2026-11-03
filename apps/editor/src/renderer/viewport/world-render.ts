@@ -6,6 +6,7 @@ import { buildMesh, edges, polygons, samePlane, type Brush, type BrushMesh, type
 import { buildLevel, type WorldResult } from './world-build';
 import WorldWorker from './world-worker?worker&inline';
 import * as THREE from 'three';
+import { DEFAULT_WATER_LOOK, waterMaterialFor, type WaterLook } from './water-look';
 import { DEV_TEXTURE_SIZE, devMaterial, paintDevTexture, paintToolTexture } from '../brush/materials';
 import { assetUrl, isTexture } from '../assets';
 import { isMaterialId } from '@cocoaworlds/core';
@@ -190,13 +191,16 @@ export class WorldRenderer {
     this.setFaceSelection(this.faceRefs);
   }
 
+  /** A water body's look (set by the view from the scene). */
+  waterLookOf: (id: string) => WaterLook = () => DEFAULT_WATER_LOOK;
+
   private rebuildSubtracts(brushes: WorldBrush[]): void {
     clear(this.subtractGroup);
     for (const b of brushes) {
       if (b.role === 'solid') continue;
       const m = buildMesh([b.brush]);
       // Water is drawn with its own materials (like in the game), with a blue outline; ladders are green zones.
-      const fill = b.role === 'water' ? m.groups.map((g) => this.material(g.material)) : b.role === 'ladder' ? this.ladderMat : b.role === 'trigger' ? this.triggerMat : this.subtractMat;
+      const fill = b.role === 'water' ? waterMaterialFor(this.waterLookOf(b.id)) : b.role === 'ladder' ? this.ladderMat : b.role === 'trigger' ? this.triggerMat : this.subtractMat;
       const edge = b.role === 'water' ? this.waterEdgeMat : b.role === 'ladder' ? this.ladderEdgeMat : b.role === 'trigger' ? this.triggerEdgeMat : this.subtractEdgeMat;
       const mesh = new THREE.Mesh(toGeometry(m), fill);
       mesh.userData.entityId = b.id;
