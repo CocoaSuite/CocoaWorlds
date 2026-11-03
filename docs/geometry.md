@@ -186,3 +186,9 @@ and the Face inspector) refits faces already painted.
   (1 segment: a chamfer); corners come out faceted. `bevelBrush` in `ops.ts`. Undoable.
 - **Cuts** (a subtract brush's Brush section): Everything it touches, or Only chosen brushes (the internal `cuts`
   component, `WorldBrush.cuts`), in the editor and the game.
+
+## COL covers
+
+In the game, a level brush or a model that stays put and lies wholly inside a COL brush (convex, not moved by
+Physics or scripts) gets no collider of its own: the COL is its collision (cheap, smooth collision for detailed
+props and trim). Brushes with Physics, models with Physics or a Collision shape component keep theirs.

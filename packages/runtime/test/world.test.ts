@@ -1,6 +1,6 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import { applyMat4, newEntity, newScene, type EntityData, type SceneFile, type Vec3 } from '@cocoaworlds/core';
-import { box, toData } from '@cocoaworlds/geometry';
+import { COLLIDER_MATERIAL, box, defaultSurface, toData } from '@cocoaworlds/geometry';
 import { GameWorld, initPhysics } from '../src';
 
 beforeAll(async () => {
@@ -16,12 +16,26 @@ function scene(...entities: EntityData[]): SceneFile {
   return s;
 }
 
+const colBrush = (name: string, min: Vec3, max: Vec3): EntityData =>
+  newEntity(name, { brush: { role: 'solid', faces: toData(box(min, max, { ...defaultSurface(), material: COLLIDER_MATERIAL })).faces } as never });
+
 const floor = () => brush('floor', [-512, -16, -512], [512, 0, 512]);
 const run = (w: GameWorld, seconds: number) => {
   for (let t = 0; t < seconds; t += 1 / 60) w.step(1 / 60);
 };
 
 describe('GameWorld', () => {
+  it('a brush wholly inside a COL brush has no collider of its own (the COL does it)', () => {
+    const detail = brush('detail', [0, 0, 0], [32, 32, 32]);
+    const outside = brush('outside', [200, 0, 0], [232, 32, 32]);
+    const col = colBrush('col', [-8, -8, -8], [40, 40, 40]);
+    const w = GameWorld.create(scene(detail, outside, col));
+    // The COL and the brush outside it; not the one inside.
+    expect(w.stats.staticPieces).toBe(2);
+    w.dispose();
+  });
+
+
   it('a crate brush falls and comes to rest on the floor', () => {
     const crate = brush('crate', [-16, 200, -16], [16, 232, 16], { rigidBody: { motion: 'dynamic' } });
     const w = GameWorld.create(scene(floor(), crate));

@@ -47,7 +47,7 @@ import { PLAYER, Player, fallDamage, type PlayerInput } from './player';
 import { Weapons, type V3 } from './weapons';
 import { ANIM_ROLES, Npc, type AnimRole } from './npc';
 import { NavGrid } from './navgrid';
-import { bounds, brushToWorld, isNoGrassBrush, buildMesh, buildWorld, fromData, hullPoints, vertices, type Brush, type BrushData, type WorldBrush } from '@cocoaworlds/geometry';
+import { COLLIDER_MATERIAL, signedDist, type Plane, bounds, brushToWorld, isNoGrassBrush, buildMesh, buildWorld, fromData, hullPoints, vertices, type Brush, type BrushData, type WorldBrush } from '@cocoaworlds/geometry';
 
 /** Units per metre (an inch-based world). */
 export const UNITS_PER_METRE = 39.37;
@@ -530,6 +530,16 @@ export class GameWorld {
 
     const level: WorldBrush[] = [];
     const conveyors = new Map<string, ConveyorData>();
+    // COL brushes that stay put (convex, no Physics, not moved by scripts): what lies wholly inside one of them
+    // collides as the COL only (no collider of its own).
+    this.colVolumes = [];
+    for (const e of doc.entities) {
+      const d = e.components.brush as unknown as BrushData | undefined;
+      if (!shown(e) || !d?.faces || d.mesh || e.components.rigidBody || unitOf.has(e.id) || e.components.trigger || e.components.water || e.components.ladder || e.components.levelChange) continue;
+      const b = brushToWorld(fromData({ faces: d.faces }), doc.worldMatrix(e.id));
+      if (b.faces.length && b.faces.every((f) => f.surface.material === COLLIDER_MATERIAL)) this.colVolumes.push(b.faces.map((f) => f.plane));
+    }
+    this.covered = new Set();
     for (const e of doc.entities) {
       if (!shown(e)) continue;
       const brushData = e.components.brush as unknown as (BrushData & { role?: string }) | undefined;
@@ -542,6 +552,7 @@ export class GameWorld {
         else if (unitOf.has(e.id) && brushData.role !== 'subtract') unitBrushes.get(unitOf.get(e.id)!)!.push(brush);
         // (NOGRASS brushes only clear grass: nothing to collide with.)
         else if (!isNoGrassBrush(brush)) {
+          if (brushData.role !== 'subtract' && !brush.faces.every((f) => f.surface.material === COLLIDER_MATERIAL) && this.insideCol(vertices(brush))) this.covered.add(e.id);
           const only = (e.components.cuts as { only?: string } | undefined)?.only;
           level.push({ id: e.id, role: brushData.role === 'subtract' ? 'subtract' : 'solid', brush, ...(only !== undefined ? { cuts: only ? only.split(',') : [] } : {}) });
         }
@@ -717,6 +728,8 @@ export class GameWorld {
   private addLevel(brushes: WorldBrush[], conveyors: Map<string, ConveyorData> = new Map()): void {
     const body = this.world.createRigidBody(RAPIER.RigidBodyDesc.fixed());
     for (const s of buildWorld(brushes).solids) {
+      // (Inside a COL brush: the COL does its colliding.)
+      if (this.covered.has(s.id)) continue;
       for (const piece of s.pieces) {
         // Edited meshes (G4) may have dents: collide with their actual triangles.
         const desc = piece.mesh ? trimesh(piece) : hull(hullPoints(piece));
@@ -837,6 +850,17 @@ export class GameWorld {
     return this.nav;
   }
 
+  /** Convex COL brushes that stay put (their planes, in world space). */
+  private colVolumes: Plane[][] = [];
+  /** Brushes inside one of them: no colliders of their own. */
+  private covered = new Set<string>();
+
+  /** Whether every one of these points is inside one and the same COL brush. */
+  private insideCol(points: readonly (readonly number[])[]): boolean {
+    if (!points.length || !this.colVolumes.length) return false;
+    return this.colVolumes.some((planes) => points.every((p) => planes.every((pl) => signedDist(pl, p as [number, number, number]) <= 0.5)));
+  }
+
   private addPointBody(e: EntityData, world: number[]): void {
     const rb = e.components.rigidBody ? readComponent<RigidBodyData>('rigidBody', e.components.rigidBody) : { ...readComponent<RigidBodyData>('rigidBody', {}), motion: 'fixed' as const };
     const t = decomposeMat4(world);
@@ -847,7 +871,9 @@ export class GameWorld {
       this.grow({ min: [world[12]! - r, world[13]! - r, world[14]! - r], max: [world[12]! + r, world[13]! + r, world[14]! + r] });
     }
     const shape = model ? null : readComponent<ColliderData>('collider', e.components.collider);
-    const descs = model ? modelColliders(model.data, model.mesh, scale, rb.motion === 'dynamic') : [pointCollider(shape!, scale)];
+    // A model that stays put wholly inside a COL brush: the COL does its colliding.
+    const covered = !!model && !e.components.rigidBody && !e.components.collider && this.insideCol(sampled(model.mesh.positions, world));
+    const descs = covered ? [] : model ? modelColliders(model.data, model.mesh, scale, rb.motion === 'dynamic') : [pointCollider(shape!, scale)];
     // Body placement: position and rotation only (scale went into the shape).
     const placement = composeTransform({ position: t.position, rotation: t.rotation, scale: [1, 1, 1] });
     const q = quatFromMatrix(placement);
@@ -2234,4 +2260,12 @@ function trimesh(b: Brush): RAPIER.ColliderDesc | null {
 function boundsOfEntity(x: EntityData) {
   const d = x.components.brush as unknown as BrushData | undefined;
   return d?.faces ? bounds(fromData({ faces: d.faces, mesh: d.mesh })) : null;
+}
+
+/** Up to ~500 of a model's corners, placed in the world. */
+function sampled(positions: ArrayLike<number>, m: number[]): number[][] {
+  const out: number[][] = [];
+  const n = positions.length / 3, step = Math.max(1, Math.floor(n / 500));
+  for (let i = 0; i < n; i += step) out.push(applyMat4(m, [positions[i * 3]!, positions[i * 3 + 1]!, positions[i * 3 + 2]!]));
+  return out;
 }
