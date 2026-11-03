@@ -106,18 +106,24 @@ export type Op =
   | { op: 'count'; name: string }
   /** Pushes the item in the picked hotbar slot. */
   | { op: 'selitem' }
+  /** Pops an object (or yes: anything); pushes whether the player holds it (or a copy of it). */
+  | { op: 'holds' }
   | { op: 'halt' };
+
+/** How far (units) “When the player uses this” reaches unless it says otherwise. */
+export const USE_REACH = 96;
 
 export type GameAction = 'hurt' | 'heal' | 'addScore' | 'giveArmour';
 export type GameValue = 'health' | 'score' | 'armour';
 
-export type ActionName = 'move' | 'turn' | 'turnTo' | 'return' | 'show' | 'hide' | 'turnOn' | 'turnOff' | 'startTrain' | 'stopTrain' | 'walkTo' | 'runAway' | 'wander' | 'setSide' | 'freeze' | 'unfreeze' | 'viewFrom' | 'remove' | 'scale' | 'physical' | 'push' | 'moveTo' | 'teleport' | 'damage';
+export type ActionName = 'move' | 'turn' | 'turnTo' | 'return' | 'show' | 'hide' | 'turnOn' | 'turnOff' | 'startTrain' | 'stopTrain' | 'walkTo' | 'runAway' | 'wander' | 'setSide' | 'freeze' | 'unfreeze' | 'viewFrom' | 'remove' | 'scale' | 'physical' | 'push' | 'moveTo' | 'teleport' | 'damage' | 'place' | 'pickUp' | 'drop';
 
 export type CompiledEvent =
   | { kind: 'start' }
   | { kind: 'enter' | 'leave'; zone: string }
   | { kind: 'message' | 'messageStop'; message: string }
-  | { kind: 'use'; prompt: string }
+  | { kind: 'use'; prompt: string; reach: number }
+  | { kind: 'useHolding'; item: string | null; reach: number }
   | { kind: 'die' }
   | { kind: 'breaks' }
   | { kind: 'hit' }
@@ -225,7 +231,15 @@ class HandlerCompiler {
     let event: CompiledEvent | null = null;
     this.stmt = ev.id;
     if (ev.kind === 'start') event = { kind: 'start' };
-    else if (ev.kind === 'use') event = { kind: 'use', prompt: (ev.prompt ?? '').trim() };
+    else if (ev.kind === 'use') {
+      const reach = ev.reach ? this.reachOf(ev.reach) : USE_REACH;
+      if (reach !== null) event = { kind: 'use', prompt: (ev.prompt ?? '').trim(), reach };
+    } else if (ev.kind === 'useHolding') {
+      const reach = this.reachOf(ev.reach);
+      const item = ev.item ? this.resolveRef(ev.item, ev.id) : null;
+      if (item === 'player' || item === 'other' || item === 'held') this.problem(ev.id, 'Pick an object the player could hold (or “anything”).');
+      else if (reach !== null && (!ev.item || item)) event = { kind: 'useHolding', item: item === 'self' ? this.owner : item, reach };
+    }
     else if (ev.kind === 'breaks') event = { kind: 'breaks' };
     else if (ev.kind === 'hit') event = { kind: 'hit' };
     else if (ev.kind === 'dies') event = { kind: 'dies' };
@@ -276,6 +290,13 @@ class HandlerCompiler {
         return null;
       }
       return this.owner;
+    }
+    if ('held' in ref) {
+      if (mustBeZone) {
+        this.problem(block, 'Pick a trigger zone here.');
+        return null;
+      }
+      return 'held';
     }
     if ('other' in ref) {
       if (mustBeZone) {
@@ -337,7 +358,16 @@ class HandlerCompiler {
   }
 
   private otherAllowed(): boolean {
-    return this.h.event.kind === 'enter' || this.h.event.kind === 'leave' || this.h.event.kind === 'use';
+    return this.h.event.kind === 'enter' || this.h.event.kind === 'leave' || this.h.event.kind === 'use' || this.h.event.kind === 'useHolding';
+  }
+
+  /** A reach (units): a plain number above 0. */
+  private reachOf(e: Expr): number | null {
+    if (e.kind !== 'number' || !(e.value > 0)) {
+      this.problem(e.id, 'The reach needs to be a number above 0.');
+      return null;
+    }
+    return e.value;
   }
 
   private pushRef(ref: Ref, block: string): void {
@@ -587,6 +617,20 @@ class HandlerCompiler {
         this.emit({ op: 'act', name: 'moveTo', argc: 3 });
         this.waits = true;
         break;
+      case 'place':
+        this.actTarget(s.target, s.id);
+        this.pushRef(s.spot, s.id);
+        this.emit({ op: 'push', v: s.still });
+        this.emit({ op: 'act', name: 'place', argc: 2 });
+        break;
+      case 'pickUp':
+        this.actTarget(s.target, s.id);
+        this.emit({ op: 'act', name: 'pickUp', argc: 0 });
+        break;
+      case 'drop':
+        this.emit({ op: 'ref', ref: { player: true } });
+        this.emit({ op: 'act', name: 'drop', argc: 0 });
+        break;
       case 'freezePlayer':
       case 'unfreezePlayer':
         this.emit({ op: 'ref', ref: { player: true } });
@@ -758,6 +802,11 @@ class HandlerCompiler {
         }
         this.emit({ op: 'dist' });
         return 'number';
+      case 'holds':
+        if (e.what) this.pushRef(e.what, e.id);
+        else this.emit({ op: 'push', v: true });
+        this.emit({ op: 'holds' });
+        return 'boolean';
       case 'pickedRow':
         if (this.h.event.kind !== 'listPick') this.problem(e.id, '“The picked row” only works inside “When the player picks a row”.');
         this.emit({ op: 'picked' });

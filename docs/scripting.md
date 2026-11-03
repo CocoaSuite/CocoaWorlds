@@ -150,6 +150,29 @@ the player, comes closer when a wall is in the way, and the player is drawn as a
 screen shows **E** and the word under the crosshair (“E Open”); with no word it shows “Use”. The door recipe
 uses “Open”, the button “Press”.
 
+## Holding things and putting them in spots
+
+Blocks for puzzles where the player carries things to where they belong (a fuse to its box, a skull to its
+plinth). See also *Picking things up* in movement.md.
+
+- **When the player uses this (E or click) while holding [X / anything], within [z] u** — on the object looked
+  at (or what it's inside). It runs instead of dropping (E) or throwing (click) what's held. X matches copies of
+  X made while playing too. Default reach 128 u.
+- **When the player uses this** now has **within [z] u** (default 96, the player's own reach). Further than 96 u
+  it only reaches stacks that say so. It runs while the player holds nothing (Use with something held drops it).
+- **what the player holds** — an object choice in every object slot (nothing held: the block does nothing).
+- **The player holds [X / anything]** — a yes-or-no value (X or a copy of it). “Holds nothing”: *not* it.
+- **Put [object] at the spot [object] and keep it there / let it fall** — straight there, out of the player's
+  hands, turned as the spot is turned (an unturned spot: as it was placed). A brush with Physics goes there by its
+  middle, a point object by its origin. *Keep it there*: it stays put (it no longer falls, so plain Use won't
+  pick it up; a script can). *Let it fall*: physics again, from there.
+- **The player picks up [object]** — into their hands, whatever it weighs or however it moves (it's made to fall
+  and tumble); what they held is dropped. **The player drops what they hold**.
+
+“Is it in its spot” is *Distance between [it] and [spot] < 4*. Picked up by a script, an object with a Use stack
+isn't picked up by plain Use (the stack comes first), so its stack does it: *When the player uses this → if
+(not the player holds anything) and … → The player picks up this object*.
+
 ## Sound blocks
 
 | Block | What it does |

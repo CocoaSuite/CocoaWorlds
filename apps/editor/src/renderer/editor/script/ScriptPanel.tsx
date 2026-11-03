@@ -151,7 +151,7 @@ export function ScriptPanel({ screens = false }: { screens?: boolean } = {}) {
       ev.clientX,
       ev.clientY,
       [
-        ...(['start', 'enter', 'leave', 'use', 'message', 'messageStop', 'every', 'die', 'breaks', 'hit', 'dies', 'near', 'far', 'uiClick', 'useItem', 'listPick', 'key'] as EventKind[]).map((k) => ({
+        ...(['start', 'enter', 'leave', 'use', 'useHolding', 'message', 'messageStop', 'every', 'die', 'breaks', 'hit', 'dies', 'near', 'far', 'uiClick', 'useItem', 'listPick', 'key'] as EventKind[]).map((k) => ({
           label: eventName(k),
           onSelect: () => {
             const zone: Ref = objects.find((o) => o.id === owner.id)?.isZone ? { self: true } : objects.find((o) => o.isZone) ? { entity: objects.find((o) => o.isZone)!.id } : { self: true };
@@ -426,7 +426,15 @@ function EventRow({ ev, onRemove, onCopy, pick }: { ev: EventBlock; onRemove: ()
     content = (
       <>
         {w('use')}, {w('usePrompt')} <kbd className="cw-key">E</kbd>{' '}
-        <TextSlot value={ev.prompt ?? ''} label={w('usePrompt')} onChange={(prompt) => set({ prompt } as Partial<EventBlock>)} />
+        <TextSlot value={ev.prompt ?? ''} label={w('usePrompt')} onChange={(prompt) => set({ prompt } as Partial<EventBlock>)} />, {w('within')}{' '}
+        <ReachSlot value={ev.reach} fallback={96} label={`${w('use')} ${w('within')}`} onChange={(reach) => set({ reach } as Partial<EventBlock>)} /> {w('units')}
+      </>
+    );
+  else if (ev.kind === 'useHolding')
+    content = (
+      <>
+        {w('useHolding')} <RefSlot value={ev.item} allowNone noHeld noneLabel={w('anything')} onChange={(item) => set({ item } as Partial<EventBlock>)} label={w('useHolding')} />, {w('within')}{' '}
+        <ReachSlot value={ev.reach} fallback={128} label={`${w('useHolding')} ${w('within')}`} onChange={(reach) => set({ reach } as Partial<EventBlock>)} /> {w('units')}
       </>
     );
   else if (ev.kind === 'die') content = w('die');
@@ -782,7 +790,25 @@ function statementWords(s: Statement, set: (patch: Record<string, unknown>, merg
       );
     case 'freezePlayer':
     case 'unfreezePlayer':
+    case 'drop':
       return w(s.kind);
+    case 'place':
+      return (
+        <>
+          {w('put')} <RefSlot value={s.target} onChange={(target) => set({ target })} label={w('put')} /> {w('atSpot')}{' '}
+          <RefSlot value={s.spot} noHeld onChange={(spot) => set({ spot })} label={`${w('put')} ${w('atSpot')}`} />
+          <select className="cw-input cw-mini" aria-label={`${w('put')} ${w('staysThere')}`} value={s.still ? 'still' : 'fall'} onChange={(e) => set({ still: e.target.value === 'still' })}>
+            <option value="still">{w('staysThere')}</option>
+            <option value="fall">{w('fallsThere')}</option>
+          </select>
+        </>
+      );
+    case 'pickUp':
+      return (
+        <>
+          {w('pickUp')} <RefSlot value={s.target} onChange={(target) => set({ target })} label={w('pickUp')} />
+        </>
+      );
     case 'viewFrom':
       return (
         <>
@@ -971,6 +997,7 @@ function RefSlot<T extends Ref | Place | null>({
   allowPlayer,
   allowAim,
   noneLabel,
+  noHeld,
 }: {
   value: T;
   onChange: (r: T) => void;
@@ -984,10 +1011,12 @@ function RefSlot<T extends Ref | Place | null>({
   allowAim?: boolean;
   /** What “none” is called (default: everyone). */
   noneLabel?: string;
+  /** Leave out “what the player holds”. */
+  noHeld?: boolean;
 }) {
   const c = useC();
   const enc = (r: Ref | Place | null) =>
-    r === null ? 'none' : 'self' in r ? 'self' : 'other' in r ? 'other' : 'player' in r ? 'player' : 'aim' in r ? 'aim' : `e:${r.entity}`;
+    r === null ? 'none' : 'self' in r ? 'self' : 'other' in r ? 'other' : 'player' in r ? 'player' : 'aim' in r ? 'aim' : 'held' in r ? 'held' : `e:${r.entity}`;
   const dec = (v: string) =>
     (v === 'none'
       ? null
@@ -999,7 +1028,9 @@ function RefSlot<T extends Ref | Place | null>({
             ? { player: true }
             : v === 'aim'
               ? { aim: true }
-              : { entity: v.slice(2) }) as T;
+              : v === 'held'
+                ? { held: true }
+                : { entity: v.slice(2) }) as T;
   const objs = c.objects.filter((o) => o.id !== c.owner && (!zonesOnly || o.isZone) && (!signsOnly || o.isSign));
   const current = enc(value);
   const missing = current.startsWith('e:') && !c.objects.some((o) => o.id === current.slice(2));
@@ -1009,6 +1040,7 @@ function RefSlot<T extends Ref | Place | null>({
       <option value="self">{w('self')}</option>
       {(allowPlayer || current === 'player') && <option value="player">{w('player')}</option>}
       {(allowAim || current === 'aim') && <option value="aim">{w('aim')}</option>}
+      {((!zonesOnly && !signsOnly && !noHeld) || current === 'held') && <option value="held">{w('held')}</option>}
       {!zonesOnly && (c.otherAllowed || current === 'other') && <option value="other">{c.otherIsPlayer ? w('player') : w('other')}</option>}
       {missing && <option value={current}>?</option>}
       {objs.map((o) => (
@@ -1017,6 +1049,27 @@ function RefSlot<T extends Ref | Place | null>({
         </option>
       ))}
     </select>
+  );
+}
+
+/** How far Use reaches (units): a plain number. */
+function ReachSlot({ value, fallback, label, onChange }: { value: Expr | undefined; fallback: number; label: string; onChange: (e: Expr) => void }) {
+  const v = value?.kind === 'number' ? value.value : fallback;
+  return (
+    <input
+      className="cw-input cw-mini"
+      style={{ width: 72 }}
+      type="number"
+      min={1}
+      step={16}
+      aria-label={label}
+      value={v}
+      onKeyDown={(e) => e.stopPropagation()}
+      onChange={(e) => {
+        const n = Number(e.target.value);
+        if (n > 0) onChange({ id: value?.id ?? blockId(), kind: 'number', value: n });
+      }}
+    />
   );
 }
 
@@ -1218,6 +1271,13 @@ function ExprSlot({ expr, type, label }: { expr: Expr; type: 'number' | 'boolean
         <>
           {w('distanceFrom')} <RefSlot value={expr.from} allowPlayer onChange={(from) => set({ from })} label={`${label} ${w('distanceFrom')}`} /> {w('toWord')}{' '}
           <RefSlot value={expr.to} allowPlayer onChange={(to) => set({ to })} label={`${label} ${w('distanceFrom')} ${w('toWord')}`} />
+        </>
+      );
+      break;
+    case 'holds':
+      body = (
+        <>
+          {w('holdsWord')} <RefSlot value={expr.what} allowNone noHeld noneLabel={w('anything')} onChange={(what) => set({ what })} label={`${label} ${w('holdsWord')}`} />
         </>
       );
       break;

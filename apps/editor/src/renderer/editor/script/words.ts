@@ -149,6 +149,18 @@ const W = {
   self: ['this object', 'этот объект'],
   other: ['the thing that entered', 'то, что вошло'],
   player: ['the player', 'игрок'],
+  held: ['what the player holds', 'то, что держит игрок'],
+  useHolding: ['When the player uses this (E or click) while holding', 'Когда игрок использует это (E или щелчок), держа'],
+  anything: ['anything', 'что угодно'],
+  within: ['within', 'не дальше'],
+  units: ['u', 'ед.'],
+  put: ['Put', 'Поставить'],
+  atSpot: ['at the spot', 'на место'],
+  staysThere: ['and keep it there', 'и оставить там'],
+  fallsThere: ['and let it fall', 'и дать упасть'],
+  pickUp: ['The player picks up', 'Игрок берёт'],
+  drop: ['The player drops what they hold', 'Игрок отпускает то, что держит'],
+  holdsWord: ['the player holds', 'игрок держит'],
   random: ['random from', 'случайное от'],
   toWord: ['to', 'до'],
   join: ['join', 'соединить'],
@@ -195,6 +207,7 @@ const PALETTE_EVENT: Record<EventKind, Pair> = {
   dies: ['When this creature dies', 'Когда это существо погибает'],
   near: ['When the player comes near this', 'Когда игрок подходит к этому'],
   far: ['When the player goes away from this', 'Когда игрок уходит от этого'],
+  useHolding: ['When the player uses this while holding something', 'Когда игрок использует это, держа что-то'],
 };
 export const eventName = (k: EventKind) => pick(PALETTE_EVENT[k]);
 
@@ -256,12 +269,15 @@ const PALETTE_STMT: Record<StatementKind, Pair> = {
   setUiText: ['Set the text on a screen', 'Задать текст на экране'],
   giveItem: ['Give the player an item', 'Дать игроку предмет'],
   takeItem: ['Take an item from the player', 'Забрать предмет у игрока'],
+  place: ['Put an object at a spot', 'Поставить объект на место'],
+  pickUp: ['The player picks up an object', 'Игрок берёт объект'],
+  drop: ['The player drops what they hold', 'Игрок отпускает то, что держит'],
 };
 export const statementName = (k: StatementKind) => pick(PALETTE_STMT[k]);
 
 export const STATEMENT_GROUPS: { title: Pair; kinds: StatementKind[] }[] = [
   { title: ['Do', 'Действия'], kinds: ['move', 'turn', 'turnTo', 'return', 'show', 'hide', 'turnOn', 'turnOff', 'startTrain', 'stopTrain', 'send', 'log'] },
-  { title: ['Objects', 'Объекты'], kinds: ['spawn', 'remove', 'moveTo', 'scale', 'physical', 'push', 'damage'] },
+  { title: ['Objects', 'Объекты'], kinds: ['spawn', 'remove', 'moveTo', 'scale', 'physical', 'push', 'damage', 'place', 'pickUp', 'drop'] },
   { title: ['Creatures', 'Существа'], kinds: ['walkTo', 'setSide', 'runAway', 'wander'] },
   { title: ['Player and score', 'Игрок и счёт'], kinds: ['teleport', 'hurt', 'heal', 'giveArmour', 'addScore', 'freezePlayer', 'unfreezePlayer', 'viewFrom', 'changeScene'] },
   { title: ['Screen and signs', 'Экран и таблички'], kinds: ['say', 'showScreen', 'hideScreen', 'toggleScreen', 'showUi', 'hideUi', 'setUiText', 'addRow', 'removeRow', 'clearList', 'setText'] },
@@ -297,13 +313,14 @@ const VALUE: Record<ExprKind, Pair> = {
   pickedRow: ['The picked row (of a list)', 'Выбранная строка (списка)'],
   clock: ['The time now (real clock)', 'Текущее время (настоящие часы)'],
   distance: ['Distance between two things', 'Расстояние между двумя объектами'],
+  holds: ['The player holds …', 'Игрок держит …'],
 };
 export const valueName = (k: ExprKind) => pick(VALUE[k]);
 
 /** Which value blocks fit a slot of a given type. */
 export const VALUES_FOR: Record<'number' | 'boolean' | 'text' | 'any', ExprKind[]> = {
   number: ['number', 'variable', 'varOf', 'maths', 'random', 'distance', 'time', 'clock', 'health', 'armour', 'score', 'itemCount'],
-  boolean: ['boolean', 'inside', 'variable', 'varOf', 'compare', 'logic', 'not'],
+  boolean: ['boolean', 'inside', 'holds', 'variable', 'varOf', 'compare', 'logic', 'not'],
   text: ['text', 'variable', 'varOf', 'join', 'number', 'object', 'score', 'itemCount', 'selectedItem', 'pickedRow'],
-  any: ['number', 'text', 'boolean', 'variable', 'varOf', 'maths', 'compare', 'logic', 'not', 'inside', 'random', 'distance', 'join', 'time', 'clock', 'health', 'armour', 'score', 'itemCount', 'selectedItem', 'pickedRow', 'object', 'copy'],
+  any: ['number', 'text', 'boolean', 'variable', 'varOf', 'maths', 'compare', 'logic', 'not', 'inside', 'holds', 'random', 'distance', 'join', 'time', 'clock', 'health', 'armour', 'score', 'itemCount', 'selectedItem', 'pickedRow', 'object', 'copy'],
 };

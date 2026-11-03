@@ -70,3 +70,60 @@ describe('carrying', () => {
     }
   });
 });
+
+describe('placing what is held with scripts', () => {
+  it('holding the crate, Use on the pedestal puts it on the spot; Use on it there picks it up again', async () => {
+    const { blockId, newEvent, newExpr, newStatement, num } = await import('@cocoaworlds/scripting');
+    const s = newScene('place');
+    const crate = brush('crate', [-16, 0, -96], [16, 32, -64], { rigidBody: { motion: 'dynamic', mass: 10 } });
+    const spot = newEntity('spot', {}, { position: [-80, 48, 0] });
+    const pedestal = brush('pedestal', [-100, 0, -20], [-60, 32, 20]);
+    const h = (event: unknown, ...body: unknown[]) => ({ id: blockId(), event, body });
+    pedestal.components.script = {
+      version: 1,
+      variables: [],
+      handlers: [h({ ...newEvent('useHolding'), item: { entity: crate.id }, reach: num(160) }, { ...newStatement('place'), target: { held: true }, spot: { entity: spot.id }, still: true })],
+    } as never;
+    // The crate: picked up by its own script (the player holds nothing), saying so when it was on the spot.
+    const near = { ...newExpr('compare'), op: '<', a: { ...newExpr('distance'), from: { self: true }, to: { entity: spot.id } }, b: num(4) };
+    const free = { ...newExpr('not'), a: newExpr('holds') };
+    crate.components.script = {
+      version: 1,
+      variables: [],
+      handlers: [
+        h(newEvent('use'), {
+          ...newStatement('if'),
+          condition: { ...newExpr('logic'), op: 'and', a: free, b: near },
+          then: [{ ...newStatement('say'), text: { ...newExpr('text'), value: 'Off the spot' } }],
+        }, { ...newStatement('pickUp'), target: { self: true } }),
+      ],
+    } as never;
+    s.entities = [brush('floor', [-2048, -16, -2048], [2048, 0, 2048]), newEntity('start', { playerSpawn: {} }), crate, spot, pedestal];
+    const w = GameWorld.create(s);
+    expect(w.scriptProblems).toEqual([]);
+    w.setPlayerInput({ pitch: -0.45 });
+    run(w, 0.2);
+    w.use();
+    run(w, 0.3);
+    expect(w.holding).toBe(crate.id);
+    // Look at the pedestal and use it.
+    w.setPlayerInput({ yaw: Math.PI / 2, pitch: -0.45 });
+    run(w, 0.4);
+    expect(w.usePrompt()).toBe('');
+    w.use();
+    run(w, 0.5);
+    expect(w.holding).toBe(null);
+    expect(w.positionOf(crate.id)!.map((v) => Math.round(v))).toEqual([-80, 48, 0]);
+    // Still there a second later (it stays put).
+    run(w, 1);
+    expect(w.positionOf(crate.id)![1]).toBeCloseTo(48, 0);
+    // Use on it: picked up again, and the script saw it was on the spot.
+    w.setPlayerInput({ yaw: Math.PI / 2, pitch: -0.2 });
+    run(w, 0.1);
+    w.use();
+    run(w, 0.3);
+    expect(w.holding).toBe(crate.id);
+    expect(w.screenMessages()).toEqual(['Off the spot']);
+    w.dispose();
+  });
+});

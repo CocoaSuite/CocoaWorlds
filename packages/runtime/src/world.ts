@@ -260,6 +260,8 @@ export class GameWorld {
   /** The player, when the scene has a Player start. */
   readonly player: Player | null = null;
   private parentOf = new Map<string, string | null>();
+  /** Copies made while playing → what they were copied from. */
+  private copyOf = new Map<string, string>();
   private useQueued = false;
   /** Below this the player has fallen out of the world and starts again. */
   private killY = -Infinity;
@@ -677,6 +679,8 @@ export class GameWorld {
       stopSound: (target) => this.bus.emit({ type: 'sound.stop', source: target, time: this.time }),
       playAnimation: (target, name, loop) => this.bus.emit({ type: 'anim', target, name, loop, time: this.time }),
       spawn: (template, place) => this.spawn(template, place),
+      held: () => this.held?.id ?? null,
+      holds: (what) => !!this.held && (what === null || this.heldIds().includes(what)),
       isInside: (zone, what) => this.isInside(zone, what),
       distance: (a, b) => {
         const p = this.placePoint({ ref: a }), q = this.placePoint({ ref: b });
@@ -1096,16 +1100,47 @@ export class GameWorld {
    * no word), or null when there's nothing to use.
    */
   usePrompt(): string | null {
-    const hit = this.player?.aim();
-    const id = hit ? this.owner.get(hit.handle) : undefined;
-    if (!id || id === 'player') return null;
-    const targets: string[] = [];
-    for (let x: string | null | undefined = id; x; x = this.parentOf.get(x)) targets.push(x);
-    const prompt = this.runner.usePrompt(targets);
+    const hit = this.useAim();
+    if (!hit) return null;
+    const { id, targets, distance } = hit;
+    if (this.held) return this.runner.usesHolding(targets, this.heldIds(), distance) ? '' : null;
+    const prompt = this.runner.usePrompt(targets, distance);
     if (prompt !== null) return prompt;
+    if (distance > PLAYER.useReach) return null;
     if (targets.some((t) => this.npcs.get(t)?.alive && this.npcs.get(t)!.data.side === 'friendly')) return '';
     if (targets.some((t) => (this.chargers.get(t)?.left ?? 0) > 0)) return '';
     return this.carryable(id) ? '' : null;
+  }
+
+  /**
+   * What Use would reach: the object looked at (past what's held), what it's inside, and how far away, within the
+   * player's reach or the furthest a “When the player uses” stack reaches.
+   */
+  private useAim(): { id: string; targets: string[]; distance: number } | null {
+    const hit = this.player?.aimAt(Math.max(PLAYER.useReach, this.runner.useReach()), (c) => this.isHeld(c));
+    const id = hit ? this.owner.get(hit.collider.handle) : undefined;
+    if (!hit || !id || id === 'player') return null;
+    const targets: string[] = [];
+    for (let x: string | null | undefined = id; x; x = this.parentOf.get(x)) targets.push(x);
+    return { id, targets, distance: hit.distance };
+  }
+
+  /** What's held and the objects it is a copy of (it first). */
+  private heldIds(): string[] {
+    const out: string[] = [];
+    for (let x: string | undefined = this.held?.id; x && !out.includes(x); x = this.copyOf.get(x)) out.push(x);
+    return out;
+  }
+
+  /** Use or Fire while holding something: a “While holding” stack of what's looked at takes it (true), if any. */
+  private useHolding(): boolean {
+    const hit = this.useAim();
+    if (!hit || !this.held) return false;
+    const held = this.heldIds();
+    if (!this.runner.usesHolding(hit.targets, held, hit.distance)) return false;
+    this.runner.dispatch({ type: 'useHolding', targets: hit.targets, held, distance: hit.distance });
+    this.bus.emit({ type: 'use', target: hit.id, by: 'player', time: this.time });
+    return true;
   }
 
   /** The weapon in hand (its item's name and settings), or null. */
@@ -1131,7 +1166,7 @@ export class GameWorld {
     this.fireHeld = !!p.input.fire;
     // (Something in the hands: Fire throws it instead.)
     if (this.held) {
-      if (fresh) this.throwHeld();
+      if (fresh && !this.useHolding()) this.throwHeld();
       return;
     }
     const w = this.weaponInHand();
@@ -1332,16 +1367,19 @@ export class GameWorld {
   }
 
   private doUse(): void {
-    if (this.held) return this.dropHeld();
-    const hit = this.player!.aim();
-    const id = hit ? this.owner.get(hit.handle) : undefined;
-    if (!id || id === 'player') return;
-    if (this.grab(id)) return;
-    // Friends follow (or stay) when used.
-    this.npcs.get(id)?.use();
-    const targets: string[] = [];
-    for (let x: string | null | undefined = id; x; x = this.parentOf.get(x)) targets.push(x);
-    this.runner.dispatch({ type: 'use', targets, by: 'player' });
+    if (this.held) {
+      if (!this.useHolding()) this.dropHeld();
+      return;
+    }
+    const hit = this.useAim();
+    if (!hit) return;
+    const { id, targets, distance } = hit;
+    if (distance <= PLAYER.useReach) {
+      if (this.grab(id)) return;
+      // Friends follow (or stay) when used.
+      this.npcs.get(id)?.use();
+    } else if (this.runner.usePrompt(targets, distance) === null) return;
+    this.runner.dispatch({ type: 'use', targets, by: 'player', distance });
     this.bus.emit({ type: 'use', target: id, by: 'player', time: this.time });
   }
 
@@ -1378,13 +1416,17 @@ export class GameWorld {
   private grab(id: string): boolean {
     const t = this.carryable(id);
     if (!t) return false;
-    const b = this.bodies.get(t)!;
-    const [x, y, z] = this.player!.eye();
-    const at = b.body.translation();
-    this.held = { id: t, body: b.body, distance: Math.max(56, Math.min(96, Math.hypot(at.x - x, at.y - y, at.z - z))), stuck: 0 };
-    b.body.wakeUp();
-    this.bus.emit({ type: 'pickup', target: t, by: 'player', time: this.time });
+    this.hold(t, this.bodies.get(t)!.body);
     return true;
+  }
+
+  /** Into the player's hands, as far in front of their eyes as it is now (56–96 u). */
+  private hold(id: string, body: RAPIER.RigidBody): void {
+    const [x, y, z] = this.player!.eye();
+    const at = body.translation();
+    this.held = { id, body, distance: Math.max(56, Math.min(96, Math.hypot(at.x - x, at.y - y, at.z - z))), stuck: 0 };
+    body.wakeUp();
+    this.bus.emit({ type: 'pickup', target: id, by: 'player', time: this.time });
   }
 
   /** Let go of what's held (it keeps the speed it has). */
@@ -1593,6 +1635,45 @@ export class GameWorld {
       case 'physical':
         this.makePhysical(b);
         return null;
+      case 'place': {
+        const spot = args[0] ?? null;
+        const at = this.placePoint(spot);
+        if (!at || !spot || typeof spot !== 'object') throw new Error('Pick a spot (an object) to put it at.');
+        if (spot.ref === target) return null;
+        if (this.held?.id === target) this.dropHeld();
+        this.tweens.delete(target);
+        // Turned as the spot is turned (an unturned spot: as it was placed in the editor).
+        const sb = this.bodies.get(spot.ref);
+        const sq = sb && sb.info.id === spot.ref ? sb.body.rotation() : this.doc.get(spot.ref) ? quatFromMatrix(this.doc.worldMatrix(spot.ref)) : { x: 0, y: 0, z: 0, w: 1 };
+        const ql = Math.hypot(sq.x, sq.y, sq.z, sq.w) || 1;
+        const q = qmul({ x: sq.x / ql, y: sq.y / ql, z: sq.z / ql, w: sq.w / ql }, b.start.q);
+        const still = args[1] !== false;
+        b.body.setBodyType(still ? RAPIER.RigidBodyType.KinematicPositionBased : RAPIER.RigidBodyType.Dynamic, true);
+        b.info.motion = still ? 'kinematic' : 'dynamic';
+        b.body.setTranslation({ x: at[0], y: at[1], z: at[2] }, true);
+        b.body.setRotation(q, true);
+        if (still) {
+          b.body.setNextKinematicTranslation({ x: at[0], y: at[1], z: at[2] });
+          b.body.setNextKinematicRotation(q);
+        } else {
+          b.body.setLinvel({ x: 0, y: 0, z: 0 }, true);
+          b.body.setAngvel({ x: 0, y: 0, z: 0 }, true);
+        }
+        return null;
+      }
+      case 'pickUp': {
+        if (this.held?.id === target || !this.player) return null;
+        this.dropHeld();
+        this.tweens.delete(target);
+        if (!b.body.isDynamic()) {
+          if (b.rb) {
+            b.body.setBodyType(RAPIER.RigidBodyType.Dynamic, true);
+            b.info.motion = 'dynamic';
+          } else this.makePhysical(b);
+        }
+        this.hold(target, b.body);
+        return null;
+      }
       case 'push': {
         const [dx, dy, dz, strength] = args.map(n) as [number, number, number, number];
         if (!b.body.isDynamic()) throw new Error(`${label} doesn't move by physics, so it can't be pushed. Use “Make it fall” first, or give it Physics.`);
@@ -1627,6 +1708,7 @@ export class GameWorld {
       this.frozen = name === 'freeze';
       return null;
     }
+    if (name === 'drop') return this.dropHeld(), null;
     if (name === 'push') {
       const [dx, dy, dz, strength] = args.map(n) as [number, number, number, number];
       p.push(dx * strength, dy * strength, dz * strength);
@@ -1745,6 +1827,7 @@ export class GameWorld {
       const r = compileScript(ids.get(e.id)!, remap(script), info);
       this.runner.addProgram(r.program);
     }
+    for (const [from, to] of ids) this.copyOf.set(to, from);
     this.bus.emit({ type: 'spawn', template, copy: copyId, time: this.time });
     for (const [id, s, w] of sounds) this.startSound(id, s, this.bodyOf(id) ? null : [w[12]!, w[13]!, w[14]!]);
     return copyId;

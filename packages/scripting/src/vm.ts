@@ -71,6 +71,10 @@ export interface ScriptHost {
   isInside?(zone: string, what: string): boolean;
   /** Make a copy of `template` at a place (an object, or 'aim'); returns the copy's id, or null if it couldn't. */
   spawn?(template: string, place: Value, owner: string): string | null;
+  /** What the player holds (an object id), or null. */
+  held?(): string | null;
+  /** Whether the player holds `what` or a copy of it (null: anything). */
+  holds?(what: string | null): boolean;
 }
 
 export interface ScriptError {
@@ -112,7 +116,12 @@ export type RunnerEvent =
   | { type: 'enter' | 'leave'; zone: string; other: string }
   | { type: 'message'; message: string; to: string | null; from: string | null }
   /** The player used `targets` (the object looked at and everything it is inside). */
-  | { type: 'use'; targets: string[]; by: string }
+  | { type: 'use'; targets: string[]; by: string; distance?: number }
+  /**
+   * The player used `targets` while holding something: `held` is it and the objects it is a copy of (it first);
+   * `distance` is how far away the object looked at is.
+   */
+  | { type: 'useHolding'; targets: string[]; held: string[]; distance: number }
   /** The player's health reached 0. */
   | { type: 'die' }
   /** A breakable object's health reached 0. */
@@ -174,13 +183,33 @@ export class ScriptRunner {
    * What the player would do by pressing Use at `targets` (the object looked at and what it is inside): the
    * first “When the player uses this” prompt found, '' for one without a word, or null if nothing listens.
    */
-  usePrompt(targets: string[]): string | null {
+  usePrompt(targets: string[], distance = 0): string | null {
     for (const id of targets)
       for (const inst of this.instances) {
         if (inst.program.owner !== id) continue;
-        for (const h of inst.program.handlers) if (h.event.kind === 'use') return h.event.prompt;
+        for (const h of inst.program.handlers) if (h.event.kind === 'use' && distance <= h.event.reach) return h.event.prompt;
       }
     return null;
+  }
+
+  /** The furthest any “When the player uses” stack reaches (0 when there are none). */
+  useReach(): number {
+    let r = 0;
+    for (const inst of this.instances) for (const h of inst.program.handlers) if (h.event.kind === 'use' || h.event.kind === 'useHolding') r = Math.max(r, h.event.reach);
+    return r;
+  }
+
+  /** Whether some “When the player uses this while holding” stack listens for this (see the `useHolding` event). */
+  usesHolding(targets: string[], held: string[], distance: number): boolean {
+    for (const inst of this.instances) {
+      if (!targets.includes(inst.program.owner)) continue;
+      for (const h of inst.program.handlers) if (this.holdingMatch(h.event, held, distance)) return true;
+    }
+    return false;
+  }
+
+  private holdingMatch(ev: CompiledHandler['event'], held: string[], distance: number): boolean {
+    return ev.kind === 'useHolding' && distance <= ev.reach && (ev.item === null || held.includes(ev.item));
   }
 
   /** Run every "When the game starts" stack. */
@@ -214,7 +243,9 @@ export class ScriptRunner {
         } else if (e.type === 'die') {
           if (ev.kind === 'die') this.spawn(inst, h, null);
         } else if (e.type === 'use') {
-          if (ev.kind === 'use' && e.targets.includes(inst.program.owner)) this.spawn(inst, h, e.by);
+          if (ev.kind === 'use' && e.targets.includes(inst.program.owner) && (e.distance ?? 0) <= ev.reach) this.spawn(inst, h, e.by);
+        } else if (e.type === 'useHolding') {
+          if (e.targets.includes(inst.program.owner) && this.holdingMatch(ev, e.held, e.distance)) this.spawn(inst, h, e.held[0] ?? null);
         } else if ((ev.kind === 'enter' || ev.kind === 'leave') && ev.kind === e.type && ev.zone === e.zone) {
           this.spawn(inst, h, e.other);
         }
@@ -338,6 +369,10 @@ export class ScriptRunner {
     if ('player' in ref) return { ref: 'player' };
     if ('self' in ref) return { ref: t.inst.program.owner };
     if ('other' in ref) return t.other ? { ref: t.other } : null;
+    if ('held' in ref) {
+      const h = this.host.held?.() ?? null;
+      return h ? { ref: h } : null;
+    }
     return { ref: ref.entity };
   }
 
@@ -542,6 +577,11 @@ export class ScriptRunner {
         case 'count':
           s.push(this.host.itemCount?.(op.name) ?? 0);
           break;
+        case 'holds': {
+          const v = s.pop() ?? null;
+          s.push(v === true ? !!this.host.holds?.(null) : v && typeof v === 'object' ? !!this.host.holds?.(v.ref) : false);
+          break;
+        }
         case 'selitem':
           s.push(this.host.selectedItem?.() ?? '');
           break;

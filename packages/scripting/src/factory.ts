@@ -18,6 +18,8 @@ export type ExprKind = Expr['kind'];
 
 export function newEvent(kind: EventKind, zone: Ref = self): EventBlock {
   switch (kind) {
+    case 'useHolding':
+      return { id: id(), kind, item: null, reach: num(128) };
     case 'start':
     case 'use':
     case 'die':
@@ -152,6 +154,12 @@ export function newStatement(kind: StatementKind, opts: { target?: Ref; variable
     case 'giveItem':
     case 'takeItem':
       return { id: id(), kind, item: opts.item ?? '', amount: num(1) };
+    case 'place':
+      return { id: id(), kind, target: { held: true }, spot: target, still: true };
+    case 'pickUp':
+      return { id: id(), kind, target };
+    case 'drop':
+      return { id: id(), kind };
   }
 }
 
@@ -191,6 +199,8 @@ export function newExpr(kind: ExprKind, opts: { variable?: string } = {}): Expr 
       return { id: id(), kind, what: player, zone: self };
     case 'distance':
       return { id: id(), kind, from: player, to: self };
+    case 'holds':
+      return { id: id(), kind, what: null };
     case 'itemCount':
       return { id: id(), kind, item: '' };
     case 'selectedItem':

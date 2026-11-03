@@ -7,8 +7,8 @@
 
 export type ValueType = 'number' | 'boolean' | 'text' | 'object';
 
-/** A reference to an object in the scene (or the player). */
-export type Ref = { self: true } | { entity: string } | { other: true } | { player: true };
+/** A reference to an object in the scene (or the player, or what the player holds). */
+export type Ref = { self: true } | { entity: string } | { other: true } | { player: true } | { held: true };
 
 /** A place in the world: where an object (or the player) is, or the spot the player is looking at. */
 export type Place = Ref | { aim: true };
@@ -49,7 +49,9 @@ export type Expr =
   /** The real time now, in seconds since 1970 (for things that grow while the game is closed). */
   | { id: string; kind: 'clock' }
   /** How far apart two things are (objects, creatures, the player), in units. */
-  | { id: string; kind: 'distance'; from: Ref; to: Ref };
+  | { id: string; kind: 'distance'; from: Ref; to: Ref }
+  /** Whether the player holds this object (or a copy of it); null: holds anything at all. */
+  | { id: string; kind: 'holds'; what: Ref | null };
 
 export type Direction = 'up' | 'down' | 'north' | 'south' | 'east' | 'west';
 export type Axis = 'up' | 'north' | 'east';
@@ -139,7 +141,16 @@ export type Statement =
   /** Change what a text or button says. */
   | { id: string; kind: 'setUiText'; element: string; text: Expr }
   /** Give the player some of an item, or take some away (never below 0). */
-  | { id: string; kind: 'giveItem' | 'takeItem'; item: string; amount: Expr };
+  | { id: string; kind: 'giveItem' | 'takeItem'; item: string; amount: Expr }
+  /**
+   * Put an object exactly at a spot (where that object is, turned as it is turned), out of the player's hands.
+   * `still`: it stays there (until a script moves it or the player picks it up); otherwise it falls from there.
+   */
+  | { id: string; kind: 'place'; target: Ref; spot: Ref; still: boolean }
+  /** Put an object in the player's hands (whatever it weighs); what they held before is dropped. */
+  | { id: string; kind: 'pickUp'; target: Ref }
+  /** The player lets go of what they hold. */
+  | { id: string; kind: 'drop' };
 
 export type EventBlock =
   | { id: string; kind: 'start' }
@@ -155,7 +166,12 @@ export type EventBlock =
    * The player pressed Use (E) while looking at this object (or anything inside it). `prompt` is the word shown
    * under the crosshair when the player looks at it (“E  Open”); empty shows “Use”.
    */
-  | { id: string; kind: 'use'; prompt?: string }
+  | { id: string; kind: 'use'; prompt?: string; reach?: Expr }
+  /**
+   * The player pressed Use (E) or Fire (click) at this object while holding `item` (or a copy of it; null:
+   * anything), within `reach` units. “The thing that entered” is what they hold. Instead of dropping or throwing it.
+   */
+  | { id: string; kind: 'useHolding'; item: Ref | null; reach: Expr }
   | { id: string; kind: 'every'; seconds: Expr }
   /** The player's health reached 0 (they start again at the Player start). */
   | { id: string; kind: 'die' }
@@ -242,6 +258,7 @@ export function* walk(script: Script): Generator<{ id: string; kind: string }> {
     yield h.event;
     if (h.event.kind === 'every') yield* expr(h.event.seconds);
     if (h.event.kind === 'near' || h.event.kind === 'far') yield* expr(h.event.distance);
+    if ((h.event.kind === 'use' || h.event.kind === 'useHolding') && h.event.reach) yield* expr(h.event.reach);
     yield* stmts(h.body);
   }
 }
