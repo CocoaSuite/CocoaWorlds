@@ -13,3 +13,4 @@ export * from './pivot';
 export * from './ui';
 export * from './materials';
 export * from './repeat';
+export * from './plants';

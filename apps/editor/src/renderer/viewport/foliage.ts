@@ -6,6 +6,7 @@
 import { SceneDoc, readComponent, type ScatterData } from '@cocoaworlds/core';
 import { COLLIDER_MATERIAL, TUFT_STRIDE, bounds as brushBoxOf, isNoGrassBrush, scatterOnMesh, scatterTufts, seededRandom, type Tufts } from '@cocoaworlds/geometry';
 import { onTerrainChange, terrainChunks, terrainField, terrainVersion } from './terrains';
+import { onPlantsChange, plantById, plantGeometry } from './plants';
 import { applyMat4, type EntityData, type ModelData, type TerrainData } from '@cocoaworlds/core';
 import { UNITS_PER_METRE, loadModel } from './models';
 import { ConvexHull } from 'three/examples/jsm/math/ConvexHull.js';
@@ -336,11 +337,16 @@ export class FoliageRenderer {
   private resync = () => this.lastDoc && this.sync(this.lastDoc);
   private terrainTimer: ReturnType<typeof setTimeout> | null = null;
   private offTerrain: () => void;
+  private offPlants: () => void;
 
   constructor(private onUpdate: () => void = () => {}) {
     this.group.name = 'foliage';
     // A model's shape arrives once its file is read: then the grass under it is cleared.
     modelWaiters.add(this.resync);
+    this.offPlants = onPlantsChange(() => {
+      this.resync();
+      this.onUpdate();
+    });
     // A terrain changed: its grass is placed again once the brush rests a moment (not on every dab).
     this.offTerrain = onTerrainChange(() => {
       if (this.terrainTimer) clearTimeout(this.terrainTimer);
@@ -371,7 +377,7 @@ export class FoliageRenderer {
       const blockers = reach
         ? blockersOf(doc, e.id, sc.size * 0.45, (sc.height ?? sc.size) * 1.25).filter((b) => b.max[0]! >= reach.min[0]! && b.min[0]! <= reach.max[0]! && b.max[2]! >= reach.min[2]! && b.min[2]! <= reach.max[2]! && b.max[1]! >= reach.min[1]! && b.min[1]! <= reach.max[1]! + 8)
         : [];
-      const key = JSON.stringify([sc, e.components.brush, doc.worldMatrix(e.id), blockers.map((b) => b.key)]);
+      const key = JSON.stringify([sc, sc.plant ? plantById(sc.plant) : null, e.components.brush, doc.worldMatrix(e.id), blockers.map((b) => b.key)]);
       if (this.entries.get(e.id)?.key === key) continue;
       this.remove(e.id);
       const entry: Entry = { key, chunks: [] };
@@ -399,7 +405,7 @@ export class FoliageRenderer {
     const blockers = blockersOf(doc, e.id, sc.size * 0.45, (sc.height ?? sc.size) * 1.25).filter(
       (b) => b.max[0]! >= box.min.x && b.min[0]! <= box.max.x && b.max[2]! >= box.min.z && b.min[2]! <= box.max.z && b.max[1]! >= box.min.y && b.min[1]! <= box.max.y + 8,
     );
-    const key = JSON.stringify([sc, file, terrainVersion(file), doc.worldMatrix(e.id), blockers.map((b) => b.key)]);
+    const key = JSON.stringify([sc, sc.plant ? plantById(sc.plant) : null, file, terrainVersion(file), doc.worldMatrix(e.id), blockers.map((b) => b.key)]);
     if (this.entries.get(e.id)?.key === key) return true;
     // The whole surface in world space (with each corner's layer weights).
     const parts = terrainChunks(file, field);
@@ -467,6 +473,8 @@ export class FoliageRenderer {
   }
 
   private add(id: string, entry: Entry, sc: ScatterData, t: Tufts): void {
+    const def = sc.plant ? plantById(sc.plant) : null;
+    const plant = def ? unitPlant(def) : null;
     const tint = new THREE.Color();
     const rnd = seededRandom(Math.round(sc.seed) + 99);
     // Tufts by chunk.
@@ -488,7 +496,9 @@ export class FoliageRenderer {
         const yaw = t.data[o + 3]!;
         this.dummy.position.set(t.data[o]!, t.data[o + 1]!, t.data[o + 2]!);
         this.dummy.rotation.set(0, yaw, 0);
-        const w = t.data[o + 4]!, tall = (w * (sc.height ?? sc.size)) / sc.size;
+        const tall = (t.data[o + 4]! * (sc.height ?? sc.size)) / sc.size;
+        // (A plant keeps its own shape: scaled to the height alone.)
+        const w = plant ? tall : t.data[o + 4]!;
         this.dummy.scale.set(w, tall, w);
         this.dummy.updateMatrix();
         this.dummy.matrix.toArray(matrices.array, k * 16);
@@ -501,10 +511,10 @@ export class FoliageRenderer {
         patchTint(t.data[o]!, t.data[o + 2]!, sc.seed, tint).multiplyScalar(0.97 + rnd() * 0.06);
         colours.setXYZ(k, tint.r, tint.g, tint.b);
       });
-      const meshes = this.geometries.map((g, l) => {
+      const meshes = (plant ? [plant, plant, plant] : this.geometries).map((g, l) => {
         const geo = g.clone();
         geo.setAttribute('aFloor', floor);
-        const mesh = new THREE.InstancedMesh(geo, this.material(sc.colour), count);
+        const mesh = new THREE.InstancedMesh(geo, this.material(plant ? '#ffffff' : sc.colour), count);
         mesh.name = `foliage:${id}:lod${l}`;
         mesh.instanceMatrix = matrices;
         mesh.instanceColor = colours;
@@ -580,6 +590,23 @@ export class FoliageRenderer {
     for (const g of this.geometries) g.dispose();
     modelWaiters.delete(this.resync);
     this.offTerrain();
+    this.offPlants();
     if (this.terrainTimer) clearTimeout(this.terrainTimer);
   }
 }
+
+const units = new Map<string, THREE.BufferGeometry>();
+/** A plant's mesh one unit tall (its root at the origin), for growing it as foliage. */
+function unitPlant(def: import('@cocoaworlds/core').PlantDef): THREE.BufferGeometry {
+  const key = JSON.stringify(def);
+  let g = units.get(key);
+  if (!g) {
+    g = plantGeometry(def).clone();
+    const h = Math.max(1, g.boundingBox?.max.y ?? 1);
+    g.scale(1 / h, 1 / h, 1 / h);
+    if (units.size > 50) units.clear();
+    units.set(key, g);
+  }
+  return g;
+}
+

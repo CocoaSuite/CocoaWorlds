@@ -2,7 +2,7 @@
  * An exported game (B4): one scene played full-window, with the same game code, controls, display and screen
  * UI as Play in the editor. Saved progress is kept in this browser's storage (a desktop game has its own).
  */
-import { SceneDoc, expandRepeats, type GameRules, type GameValue, type MaterialDef, type SceneFile } from '@cocoaworlds/core';
+import { SceneDoc, expandRepeats, type GameRules, type GameValue, type MaterialDef, type PlantDef, type SceneFile } from '@cocoaworlds/core';
 import { isInvisibleMaterial } from '@cocoaworlds/geometry';
 import * as THREE from 'three';
 import { brushBounds } from '../brush/brushes';
@@ -11,6 +11,7 @@ import { AoRenderer } from '../viewport/ao';
 import type { Travel } from '@cocoaworlds/runtime';
 import { SceneLighting } from '../viewport/scene-lighting';
 import { setProjectMaterials, tickMaterials } from '../viewport/project-materials';
+import { setProjectPlants } from '../viewport/plants';
 import { sceneMaterial } from '../viewport/world-render';
 import { hudOf, type Hud } from '../ui/Hud';
 import { GAME_KEYS, inputFromKeys, isScriptKey, lookFromMouse } from './controls';
@@ -27,6 +28,8 @@ export interface GameData {
   values: GameValue[];
   /** The project's materials (older exports have none). */
   materials?: MaterialDef[];
+  /** The project's plants the game uses. */
+  plants?: PlantDef[];
   /** Every scene by name, for level changes (older exports have only `scene`), and the start scene's name. */
   scenes?: Record<string, SceneFile>;
   start?: string;
@@ -99,6 +102,7 @@ export class GameRunner {
   /** Load the game (physics, models) and start it. */
   async start(): Promise<void> {
     setProjectMaterials(this.data.materials ?? []);
+    setProjectPlants(this.data.plants ?? []);
     const play = await PlaySession.start(this.data.scene, this.materialFor, this.data.rules, this.data.values, loadProgress(this.data.id));
     if (this.disposed) return play.dispose();
     this.play = play;

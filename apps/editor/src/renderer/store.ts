@@ -48,6 +48,8 @@ import {
   type GameValue,
   type MaterialDef,
   materialsOf,
+  plantsOf,
+  type PlantDef,
   type SceneSettings,
   setSceneSettingsCmd,
 } from '@cocoaworlds/core';
@@ -78,6 +80,7 @@ import { brushBounds, brushComponent, brushOf, isLocked, isShown, newBrushEntity
 import { useShallow } from 'zustand/react/shallow';
 import type { AssetEntry, AssetKind, OpenedProject, PrefabEntry } from '../shared/api';
 import { setAssetProject } from './assets';
+import { setProjectPlants } from './viewport/plants';
 import { addTerrainField, forgetTerrains, saveTerrains } from './viewport/terrains';
 import { setProjectMaterials } from './viewport/project-materials';
 import { blockId, emptyScript, newEvent, newStatement, num, recipe as findRecipe, type EventBlock, type Script, type Statement } from '@cocoaworlds/scripting';
@@ -169,7 +172,7 @@ interface State {
   /** The bottom workspace's open tab. */
   bottomTab: 'script' | 'assets' | 'console' | 'problems';
   /** Which workspace fills the window: the scene (3D view and panels) or the screen UI editor. */
-  workspace: 'scene' | 'screens' | 'materials';
+  workspace: 'scene' | 'screens' | 'materials' | 'plants';
   /** While playing: the blocks each object's script is running (for highlighting). */
   activeBlocks: Map<string, string[]>;
 }
@@ -279,6 +282,10 @@ interface Actions {
   setStartScene(scenePath: string): Promise<void>;
   /** Replace the project's materials, with undo (saved to the project file a moment later). */
   setMaterials(materials: MaterialDef[], label: string, mergeKey?: string): void;
+  /** The project's plants (Plants workspace), as one undo step. */
+  setPlants(plants: PlantDef[], label: string, mergeKey?: string): void;
+  /** A plant object where the view is looking. */
+  placePlant(id: string): void;
   /** Change a material without an undo step (baked map paths: they follow the graph, not the user). */
   patchMaterialQuietly(id: string, patch: Partial<MaterialDef>): void;
   setBottomTab(tab: State['bottomTab']): void;
@@ -1264,6 +1271,19 @@ export const useEditor = create<State & Actions>()((set, get) => ({
     get().execute({ label, mergeKey, apply: () => put(materials), revert: () => put(before) });
   },
 
+  setPlants(list, label, mergeKey) {
+    const dir = get().session?.dir;
+    if (!dir) return;
+    const before = plantsOf(get().session!.project.settings);
+    const put = (next: PlantDef[]) => {
+      const s = get().session;
+      if (s?.dir !== dir) return;
+      set({ session: { ...s, project: { ...s.project, settings: { ...s.project.settings, plants: next } } }, rev: get().rev + 1 });
+      saveProjectSoon(get);
+    };
+    get().execute({ label, mergeKey, apply: () => put(list), revert: () => put(before) });
+  },
+
   patchMaterialQuietly(id, patch) {
     const s = get().session;
     if (!s) return;
@@ -1380,6 +1400,16 @@ export const useEditor = create<State & Actions>()((set, get) => ({
     get().log('info', 'Prefabs', `Made prefab ${prefab.name} (${r.value.path}) from ${tree.length} object(s)`);
     get().notify(t('prefab.made').replace('{name}', prefab.name));
     return true;
+  },
+
+  placePlant(id) {
+    const { doc } = get();
+    const def = plantsOf(get().session?.project.settings).find((p) => p.id === id);
+    if (!doc || !def) return;
+    const at = get().placementPoint() ?? [0, 0, 0];
+    const e = newEntity(uniqueName(doc, def.name.toLowerCase().replace(/\W+/g, '_')), { plant: { plant: id, seed: def.seed } }, { position: [at[0], at[1], at[2]] });
+    get().execute(addEntitiesCmd(doc, [e], `Place ${def.name}`));
+    set({ selection: [e.id], workspace: 'scene' });
   },
 
   placeModel(path) {
@@ -1597,6 +1627,13 @@ useEditor.subscribe((s) => {
   if (list === shownMaterials) return;
   shownMaterials = list;
   setProjectMaterials(list ?? []);
+});
+let shownPlants: PlantDef[] | undefined;
+useEditor.subscribe((s) => {
+  const list = s.session?.project.settings.plants;
+  if (list === shownPlants) return;
+  shownPlants = list;
+  setProjectPlants(list ?? []);
 });
 
 /**

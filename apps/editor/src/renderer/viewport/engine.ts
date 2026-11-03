@@ -27,6 +27,7 @@ import { loadProgress, storeProgress } from '../game/progress';
 import { SceneLighting } from './scene-lighting';
 import { FOLIAGE_TIME, FoliageRenderer } from './foliage';
 import { WaterDepth, waterLookOf } from './water-look';
+import { PlantRenderer } from './plants';
 import { TerrainRenderer, changed as terrainChanged, terrainField } from './terrains';
 import type { VoxelBox, VoxelField } from '@cocoaworlds/geometry';
 
@@ -255,6 +256,7 @@ export class ViewportEngine {
     this.scene.add(this.pivotMarker);
     this.scene.add(this.foliage.group);
     this.scene.add(this.terrains.group);
+    this.scene.add(this.plants.group);
     this.repeatHandle.renderOrder = 21;
     this.repeatHandle.visible = false;
     this.repeatHandle.name = 'repeat-handle';
@@ -347,6 +349,7 @@ export class ViewportEngine {
     // (Grass follows once a drag ends: placing it again on every step of a drag would hold the drag up.)
     if (!this.dragSet && !this.stroke) this.foliage.sync(doc);
     this.terrains.sync(doc);
+    this.plants.sync(doc);
     if (this.navOn) this.queueNav();
     this.mats = doc ? worldMatrices(doc) : new Map();
     const seen = new Set<string>();
@@ -800,6 +803,8 @@ export class ViewportEngine {
   private foliage = new FoliageRenderer(() => this.invalidate());
   /** Voxel terrains (T1). */
   readonly terrains = new TerrainRenderer(() => this.invalidate());
+  /** Plant objects. */
+  readonly plants = new PlantRenderer(() => this.invalidate());
   /** The scene's depth without water, for the water's look. */
   private waterDepth = new WaterDepth();
 
@@ -1065,6 +1070,7 @@ export class ViewportEngine {
     this.disposed = true;
     this.foliage.dispose();
     this.terrains.dispose();
+    this.plants.dispose();
     this.waterDepth.dispose();
     cancelAnimationFrame(this.raf);
     this.resizeObs.disconnect();
@@ -1686,6 +1692,10 @@ export class ViewportEngine {
     const ground = this.raycaster.intersectObjects(this.terrains.meshes, false)[0];
     const groundId = ground?.object.userData.terrain as string | undefined;
     if (ground && groundId && !locked(groundId) && (!w || ground.distance < w.distance)) w = { entityId: groundId, distance: ground.distance } as typeof w;
+    // Plants pick their object too.
+    const plant = this.raycaster.intersectObjects(this.plants.meshes, false)[0];
+    const plantId = plant?.object.userData.entityId as string | undefined;
+    if (plant && plantId && !locked(plantId) && (!w || plant.distance < w.distance)) w = { entityId: plantId, distance: plant.distance } as typeof w;
     // (A Repeat group's copies pick the group.)
     if (markerHit && (!w || markerHit.distance <= w.distance)) return markerHit.object.userData.entityId ? ownerOf(markerHit.object.userData.entityId as string) : null;
     return w ? ownerOf(w.entityId) : null;

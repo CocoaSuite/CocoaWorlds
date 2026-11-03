@@ -7,7 +7,7 @@
  */
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
-import { gameRules, materialsOf, validateProject, validateScene, type ProjectFile, type SceneFile } from '@cocoaworlds/core';
+import { gameRules, materialsOf, plantsOf, validateProject, validateScene, type ProjectFile, type SceneFile } from '@cocoaworlds/core';
 
 export type ExportTarget = 'web' | 'win32' | 'darwin' | 'linux';
 
@@ -55,10 +55,11 @@ export async function gameData(projectDir: string): Promise<{ project: ProjectFi
   // Only the materials the scenes use (and so only their images).
   const sceneJson = JSON.stringify(scenes);
   const materials = materialsOf(project.settings).filter((m) => sceneJson.includes(`"${m.id}"`));
+  const plants = plantsOf(project.settings).filter((p) => sceneJson.includes(`"${p.id}"`));
   return {
     project,
     scene,
-    data: { format: 'cocoaworlds.game', name: project.name, id: project.id, scene, start: stem(scenePath), scenes, rules: gameRules(project.settings), values: project.settings.values ?? [], materials },
+    data: { format: 'cocoaworlds.game', name: project.name, id: project.id, scene, start: stem(scenePath), scenes, rules: gameRules(project.settings), values: project.settings.values ?? [], materials, plants },
   };
 }
 

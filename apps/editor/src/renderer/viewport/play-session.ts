@@ -13,6 +13,7 @@ import * as THREE from 'three';
 import { brushBounds, worldBrushes } from '../brush/brushes';
 import { FoliageRenderer } from './foliage';
 import { waterLookOf, waterMaterialFor } from './water-look';
+import { PlantRenderer } from './plants';
 import { TerrainRenderer, loadTerrain, terrainChunks } from './terrains';
 import { BATCH_MIN, ModelBatches, batchKey } from './model-batches';
 import { WEAR_RING, buildLevel } from './world-build';
@@ -48,6 +49,7 @@ export class PlaySession {
   private world: GameWorld;
   private foliage = new FoliageRenderer();
   private terrains = new TerrainRenderer();
+  private plants = new PlantRenderer();
   /** Still models drawn many at a time (A2c). */
   readonly batches = new ModelBatches();
   /** Grass detail by distance from the camera. */
@@ -114,6 +116,9 @@ export class PlaySession {
       for (const mat of levelMesh.material as THREE.Material[]) mat.shadowSide = THREE.DoubleSide;
       this.group.add(levelMesh);
     }
+    // Plants.
+    this.plants.sync(doc);
+    this.group.add(this.plants.group);
     // Terrains, as the editor shows them.
     this.terrains.sync(doc);
     this.group.add(this.terrains.group);
@@ -648,6 +653,7 @@ export class PlaySession {
     this.effects.dispose();
     this.foliage.dispose();
     this.terrains.dispose();
+    this.plants.dispose();
     this.batches.dispose();
     for (const m of this.models.values()) m.dispose();
     for (const s of [...this.sounds]) {

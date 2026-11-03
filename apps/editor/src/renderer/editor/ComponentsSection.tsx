@@ -102,6 +102,8 @@ function FieldEditor({ entity, component, field, value }: { entity: string; comp
     );
   } else if (ty.kind === 'boolean') {
     input = <Switch label={label} checked={!!value} onChange={(v) => set(v)} />;
+  } else if (ty.kind === 'plant') {
+    input = <PlantSelect label={label} value={String(value ?? '')} onChange={(v) => set(v)} />;
   } else if (ty.kind === 'material') {
     input = <MaterialSelect label={label} value={String(value ?? '')} onChange={(v) => set(v)} />;
   } else if (ty.kind === 'enum') {
@@ -306,6 +308,21 @@ function MaterialSelect({ label, value, onChange }: { label: string; value: stri
           ))}
         </optgroup>
       )}
+    </select>
+  );
+}
+
+/** A project plant, or none. */
+function PlantSelect({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
+  const plants = useEditor((s) => s.session?.project.settings.plants) ?? [];
+  return (
+    <select className="cw-input cw-select" aria-label={label} value={value} onChange={(ev) => onChange(ev.target.value)}>
+      <option value="">{t('field.none')}</option>
+      {plants.map((p) => (
+        <option key={p.id} value={p.id}>
+          {p.name}
+        </option>
+      ))}
     </select>
   );
 }

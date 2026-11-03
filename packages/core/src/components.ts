@@ -39,6 +39,8 @@ export type FieldType =
   | { kind: 'color' }
   /** A project material or texture ('' for none). */
   | { kind: 'material' }
+  /** A project plant ('' for none). */
+  | { kind: 'plant' }
   | { kind: 'vec3'; step?: number; min?: number }
   | { kind: 'text' }
   /** A project asset of one kind, by its project path (empty: none). */
@@ -571,6 +573,16 @@ export const COMPONENTS: ComponentDef[] = [
     ],
   },
   {
+    name: 'plant',
+    label: e('Plant', 'Растение'),
+    description: e('Grows one of the project’s plants (made in the Plants workspace) here.', 'Выращивает здесь растение проекта (из раздела «Растения»).'),
+    appliesTo: 'point',
+    fields: [
+      { key: 'plant', label: e('Plant', 'Растение'), type: { kind: 'plant' }, default: '' },
+      { key: 'seed', label: e('Seed', 'Seed'), hint: e('Change it for a different one of the same kind.', 'Измените, чтобы получить другое растение того же вида.'), type: { kind: 'number', min: 0, step: 1 }, default: 1 },
+    ],
+  },
+  {
     name: 'scatter',
     label: e('Foliage', 'Растительность'),
     description: e(
@@ -594,6 +606,7 @@ export const COMPONENTS: ComponentDef[] = [
         type: { kind: 'enum', options: [{ value: 'all', label: e('Everywhere', 'Везде') }, { value: '0', label: e('Layer 1', 'Слой 1') }, { value: '1', label: e('Layer 2', 'Слой 2') }, { value: '2', label: e('Layer 3', 'Слой 3') }, { value: '3', label: e('Layer 4', 'Слой 4') }] },
         default: 'all',
       },
+      { key: 'plant', label: e('Plant', 'Растение'), hint: e('Grow one of your plants instead of plain tufts (its own colours).', 'Растить своё растение вместо простых пучков (со своими цветами).'), type: { kind: 'plant' }, default: '' },
     ],
   },
   {
@@ -715,6 +728,8 @@ export interface ScatterData {
   seed: number;
   /** On terrains: 'all', or the layer ('0'…'3') it grows on. */
   layer: string;
+  /** A project plant instead of tufts ('' for tufts). */
+  plant?: string;
   [k: string]: unknown;
 }
 

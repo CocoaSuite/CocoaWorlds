@@ -33,6 +33,8 @@ export interface ProjectSettings {
   values?: GameValue[];
   /** Materials made in the Materials workspace, shared by every scene. */
   materials?: MaterialDef[];
+  /** Plants made in the Plants workspace, shared by every scene. */
+  plants?: import('./plants').PlantDef[];
 }
 
 /** A value every script in the game shares, defined once for the project. */
