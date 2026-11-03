@@ -254,6 +254,14 @@ export const COMPONENTS: ComponentDef[] = [
       { key: 'bounciness', label: e('Bounce', 'Упругость'), hint: e('0 = no bounce, 1 = bounces back fully.', '0 — не отскакивает, 1 — полностью.'), type: { kind: 'number', min: 0, max: 1, step: 0.05 }, default: 0 },
       { key: 'gravityScale', label: e('Gravity', 'Гравитация'), type: { kind: 'number', step: 0.1, unit: '×' }, default: 1, when: { key: 'motion', is: ['dynamic'] } },
       { key: 'lockRotation', label: e('Stay upright', 'Не вращаться'), type: { kind: 'boolean' }, default: false, when: { key: 'motion', is: ['dynamic'] } },
+      {
+        key: 'pickUp',
+        label: e('Can be picked up', 'Можно поднять'),
+        hint: e('The player picks it up with Use, drops it with Use again and throws it with Fire. Only things of 50 kg or less; a Use script on it takes priority.', 'Игрок поднимает его клавишей «Использовать», отпускает ею же и бросает выстрелом. Только до 50 кг; скрипт на использование важнее.'),
+        type: { kind: 'boolean' },
+        default: true,
+        when: { key: 'motion', is: ['dynamic'] },
+      },
     ],
   },
   {
@@ -711,6 +719,8 @@ export interface RigidBodyData {
   bounciness: number;
   gravityScale: number;
   lockRotation: boolean;
+  /** The player can pick it up with Use (and throw it with Fire) when it weighs 50 kg or less. */
+  pickUp: boolean;
   [k: string]: unknown;
 }
 

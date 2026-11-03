@@ -138,6 +138,13 @@ interface Tween {
 type Q3 = [number, number, number];
 type Quat = { x: number; y: number; z: number; w: number };
 
+/** The heaviest thing the player can pick up (kg). */
+const MAX_CARRY = 50;
+/** How far (u) what's held may be pushed from its place before it's dropped. */
+const CARRY_SLIP = 128;
+/** The fastest (u/s) what's held moves to its place. */
+const CARRY_SPEED = 1500;
+
 interface Body {
   info: BodyInfo;
   body: RAPIER.RigidBody;
@@ -614,7 +621,8 @@ export class GameWorld {
       p.beltOf = (h) => this.belts.get(h) ?? null;
       p.surroundings = {
         // (Plain lookups only: this runs inside the physics engine's own query.)
-        blocks: (c) => this.standInOf.has(c.handle) || (!this.triggers.has(c.handle) && !this.standIns.has(c.handle) && !this.volumes.has(c.handle)),
+        // (What's in the player's hands never blocks them.)
+        blocks: (c) => !this.isHeld(this.standInOf.get(c.handle) ?? c) && (this.standInOf.has(c.handle) || (!this.triggers.has(c.handle) && !this.standIns.has(c.handle) && !this.volumes.has(c.handle))),
         carry: (h, at) => this.carry(h, at),
         waterTop: (at) => this.waterAt(at)?.top ?? null,
         ladder: (shape, at) => this.ladderAt(shape, at),
@@ -1020,6 +1028,7 @@ export class GameWorld {
           else this.player.respawn();
         }
         if (this.useQueued) this.doUse();
+        this.carryHeld();
         this.checkLevelZones();
         if (this.player.input.use) this.charge();
         this.fireWeapon();
@@ -1095,7 +1104,8 @@ export class GameWorld {
     const prompt = this.runner.usePrompt(targets);
     if (prompt !== null) return prompt;
     if (targets.some((t) => this.npcs.get(t)?.alive && this.npcs.get(t)!.data.side === 'friendly')) return '';
-    return targets.some((t) => (this.chargers.get(t)?.left ?? 0) > 0) ? '' : null;
+    if (targets.some((t) => (this.chargers.get(t)?.left ?? 0) > 0)) return '';
+    return this.carryable(id) ? '' : null;
   }
 
   /** The weapon in hand (its item's name and settings), or null. */
@@ -1119,6 +1129,11 @@ export class GameWorld {
     const held = !!p.input.fire || queued;
     const fresh = (held && !this.fireHeld) || (queued && !p.input.fire);
     this.fireHeld = !!p.input.fire;
+    // (Something in the hands: Fire throws it instead.)
+    if (this.held) {
+      if (fresh) this.throwHeld();
+      return;
+    }
     const w = this.weaponInHand();
     if (!w || !held || (!w.weapon.automatic && !fresh) || this.time < this.nextShotAt) return;
     const { weapon, name } = w;
@@ -1317,15 +1332,98 @@ export class GameWorld {
   }
 
   private doUse(): void {
+    if (this.held) return this.dropHeld();
     const hit = this.player!.aim();
     const id = hit ? this.owner.get(hit.handle) : undefined;
     if (!id || id === 'player') return;
+    if (this.grab(id)) return;
     // Friends follow (or stay) when used.
     this.npcs.get(id)?.use();
     const targets: string[] = [];
     for (let x: string | null | undefined = id; x; x = this.parentOf.get(x)) targets.push(x);
     this.runner.dispatch({ type: 'use', targets, by: 'player' });
     this.bus.emit({ type: 'use', target: id, by: 'player', time: this.time });
+  }
+
+  // ── Carrying ──
+
+  /** What the player holds: its body, and how far in front of their eyes it's held. */
+  private held: { id: string; body: RAPIER.RigidBody; distance: number; stuck: number } | null = null;
+
+  /** What the player holds (its object id), or null. */
+  get holding(): string | null {
+    return this.held?.id ?? null;
+  }
+
+  private isHeld(c: RAPIER.Collider): boolean {
+    return !!this.held && c.parent()?.handle === this.held.body.handle;
+  }
+
+  /** What could be picked up from this object (it, or what it's part of), when Use has nothing else to do. */
+  private carryable(id: string): string | null {
+    const targets: string[] = [];
+    for (let x: string | null | undefined = id; x; x = this.parentOf.get(x)) targets.push(x);
+    // (A Use script, a friend or a charger comes first.)
+    if (this.runner.usePrompt(targets) !== null || targets.some((t) => this.npcs.has(t) || this.chargers.has(t))) return null;
+    for (const t of targets) {
+      const b = this.bodies.get(t);
+      if (!b) continue;
+      if (b.info.motion !== 'dynamic' || b.rb?.pickUp === false || b.body.mass() > MAX_CARRY) return null;
+      return t;
+    }
+    return null;
+  }
+
+  /** Pick an object up (true if it was). */
+  private grab(id: string): boolean {
+    const t = this.carryable(id);
+    if (!t) return false;
+    const b = this.bodies.get(t)!;
+    const [x, y, z] = this.player!.eye();
+    const at = b.body.translation();
+    this.held = { id: t, body: b.body, distance: Math.max(56, Math.min(96, Math.hypot(at.x - x, at.y - y, at.z - z))), stuck: 0 };
+    b.body.wakeUp();
+    this.bus.emit({ type: 'pickup', target: t, by: 'player', time: this.time });
+    return true;
+  }
+
+  /** Let go of what's held (it keeps the speed it has). */
+  dropHeld(): void {
+    if (!this.held) return;
+    const id = this.held.id;
+    this.held = null;
+    this.bus.emit({ type: 'drop', target: id, by: 'player', time: this.time });
+  }
+
+  /** Throw what's held where the player looks: lighter things fly faster. */
+  private throwHeld(): void {
+    const h = this.held;
+    if (!h) return;
+    const d = this.player!.lookDirection();
+    const speed = Math.min(1000, 2400 / Math.sqrt(Math.max(1, h.body.mass())));
+    h.body.setLinvel({ x: d[0] * speed, y: d[1] * speed, z: d[2] * speed }, true);
+    this.dropHeld();
+  }
+
+  /** Each step: steer what's held to its place in front of the player; it's dropped if it stays stuck far off. */
+  private carryHeld(): void {
+    const h = this.held;
+    if (!h) return;
+    const p = this.player!;
+    if (!this.world.getRigidBody(h.body.handle) || !h.body.isDynamic() || !h.body.isEnabled() || this.frozen) return this.dropHeld();
+    const [x, y, z] = p.eye();
+    const d = p.lookDirection();
+    const at = h.body.translation();
+    const off = { x: x + d[0] * h.distance - at.x, y: y + d[1] * h.distance - at.y, z: z + d[2] * h.distance - at.z };
+    const far = Math.hypot(off.x, off.y, off.z);
+    // (Kept far off for a while: it's caught on something.)
+    h.stuck = far > CARRY_SLIP ? h.stuck + STEP : 0;
+    if (h.stuck > 0.4) return this.dropHeld();
+    // Speed to get there in a tenth of a second (capped), so it bumps into walls rather than going through.
+    const k = Math.min(10, CARRY_SPEED / Math.max(1e-3, far));
+    h.body.setLinvel({ x: off.x * k, y: off.y * k, z: off.z * k }, true);
+    const w = h.body.angvel();
+    h.body.setAngvel({ x: w.x * 0.8, y: w.y * 0.8, z: w.z * 0.8 }, true);
   }
 
   // ── Health and score ──
@@ -1377,6 +1475,7 @@ export class GameWorld {
 
   /** The player dies: “When the player dies” runs, and they start again at the Player start with full health. */
   private die(cause: string): void {
+    this.dropHeld();
     if (!this.player) return;
     this.deaths++;
     this.health = PLAYER.maxHealth;

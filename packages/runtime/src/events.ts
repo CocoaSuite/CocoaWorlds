@@ -9,6 +9,8 @@ export type GameEvent =
   | { type: 'trigger.enter'; trigger: string; other: string; time: number }
   | { type: 'trigger.exit'; trigger: string; other: string; time: number }
   | { type: 'use'; target: string; by: string; time: number }
+  | { type: 'pickup'; target: string; by: string; time: number }
+  | { type: 'drop'; target: string; by: string; time: number }
   | { type: 'player.hurt'; amount: number; health: number; cause: string; time: number }
   | { type: 'player.die'; cause: string; time: number }
   | { type: 'score'; score: number; by: number; time: number }

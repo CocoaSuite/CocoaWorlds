@@ -52,3 +52,18 @@ A **Charger** component turns any object into a wall charger. While the player l
 it gives **Health** or **Armour** at **Per second** (10 by default), until the player is full or the charger
 has given all it **Holds** (50 by default, Half-Life's health charger). The use prompt shows while it has some
 left.
+
+# Picking things up
+
+Use on a physics object (Physics › Moves: Falls and tumbles) of 50 kg or less picks it up: it's held in front
+of the eyes, 56–96 u away (as far as it was when picked up), and follows the view. It's steered there by speed
+(at most 1500 u/s, reaching its place in about a tenth of a second), so it bumps into walls instead of passing
+through them, and its spin dies down. Use again drops it with the speed it has; Fire throws it where the player
+looks (2400 / √kg u/s, at most 1000), in place of the weapon in hand. It's dropped by itself when kept more than
+128 u from its place for 0.4 s (caught on something), when the player dies, and during scripted scenes that hold
+the player still. What's held never blocks the player's movement. The use prompt shows on things that can be
+picked up.
+
+A Use script, a friend or a charger on the object (or what it's part of) comes first: those are used instead.
+Physics › **Can be picked up** (on by default) turns it off for one object. The game reports `pickup` and `drop`
+events. `GameWorld.holding` is what's held. `runtime/world.ts` (Carrying).
