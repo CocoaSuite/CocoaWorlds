@@ -32,18 +32,35 @@ if (THREE.ShaderChunk.lights_fragment_begin.includes(SUN_LINE))
       bool cwOn = directLight.visible && receiveShadow;
       vec4 cwSc = vDirectionalShadowCoord[ i ];
       float cwSh = cwOn ? getShadow( directionalShadowMap[ i ], directionalLightShadow.shadowMapSize, directionalLightShadow.shadowIntensity, directionalLightShadow.shadowBias, directionalLightShadow.shadowRadius, cwSc ) : 1.0;
-      // A wider view of the shadow's edge (four looks a few texels out), so the band has room.
-      vec2 cwT = 7.0 / directionalLightShadow.shadowMapSize;
-      float cwW = cwOn ? 0.25 * (
-        getShadow( directionalShadowMap[ i ], directionalLightShadow.shadowMapSize, directionalLightShadow.shadowIntensity, directionalLightShadow.shadowBias, directionalLightShadow.shadowRadius, cwSc + vec4( cwT.x, cwT.y, 0.0, 0.0 ) ) +
-        getShadow( directionalShadowMap[ i ], directionalLightShadow.shadowMapSize, directionalLightShadow.shadowIntensity, directionalLightShadow.shadowBias, directionalLightShadow.shadowRadius, cwSc + vec4( -cwT.x, -cwT.y, 0.0, 0.0 ) ) +
-        getShadow( directionalShadowMap[ i ], directionalLightShadow.shadowMapSize, directionalLightShadow.shadowIntensity, directionalLightShadow.shadowBias, directionalLightShadow.shadowRadius, cwSc + vec4( cwT.x, -cwT.y, 0.0, 0.0 ) ) +
-        getShadow( directionalShadowMap[ i ], directionalLightShadow.shadowMapSize, directionalLightShadow.shadowIntensity, directionalLightShadow.shadowBias, directionalLightShadow.shadowRadius, cwSc + vec4( -cwT.x, cwT.y, 0.0, 0.0 ) ) ) : 1.0;
+      // A much wider, softer view of the shadow's edge (two rings of looks around this point), so the band
+      // spreads well into the shadow.
+      vec2 cwT = 1.0 / directionalLightShadow.shadowMapSize;
+      float cwW = cwOn ? ( getShadow( directionalShadowMap[ i ], directionalLightShadow.shadowMapSize, directionalLightShadow.shadowIntensity, directionalLightShadow.shadowBias, directionalLightShadow.shadowRadius, cwSc + vec4( cwT * vec2( 8.000, 0.000 ), 0.0, 0.0 ) ) +
+        getShadow( directionalShadowMap[ i ], directionalLightShadow.shadowMapSize, directionalLightShadow.shadowIntensity, directionalLightShadow.shadowBias, directionalLightShadow.shadowRadius, cwSc + vec4( cwT * vec2( 4.000, 6.928 ), 0.0, 0.0 ) ) +
+        getShadow( directionalShadowMap[ i ], directionalLightShadow.shadowMapSize, directionalLightShadow.shadowIntensity, directionalLightShadow.shadowBias, directionalLightShadow.shadowRadius, cwSc + vec4( cwT * vec2( -4.000, 6.928 ), 0.0, 0.0 ) ) +
+        getShadow( directionalShadowMap[ i ], directionalLightShadow.shadowMapSize, directionalLightShadow.shadowIntensity, directionalLightShadow.shadowBias, directionalLightShadow.shadowRadius, cwSc + vec4( cwT * vec2( -8.000, 0.000 ), 0.0, 0.0 ) ) +
+        getShadow( directionalShadowMap[ i ], directionalLightShadow.shadowMapSize, directionalLightShadow.shadowIntensity, directionalLightShadow.shadowBias, directionalLightShadow.shadowRadius, cwSc + vec4( cwT * vec2( -4.000, -6.928 ), 0.0, 0.0 ) ) +
+        getShadow( directionalShadowMap[ i ], directionalLightShadow.shadowMapSize, directionalLightShadow.shadowIntensity, directionalLightShadow.shadowBias, directionalLightShadow.shadowRadius, cwSc + vec4( cwT * vec2( 4.000, -6.928 ), 0.0, 0.0 ) ) +
+        getShadow( directionalShadowMap[ i ], directionalLightShadow.shadowMapSize, directionalLightShadow.shadowIntensity, directionalLightShadow.shadowBias, directionalLightShadow.shadowRadius, cwSc + vec4( cwT * vec2( 16.579, 7.010 ), 0.0, 0.0 ) ) +
+        getShadow( directionalShadowMap[ i ], directionalLightShadow.shadowMapSize, directionalLightShadow.shadowIntensity, directionalLightShadow.shadowBias, directionalLightShadow.shadowRadius, cwSc + vec4( cwT * vec2( 6.767, 16.680 ), 0.0, 0.0 ) ) +
+        getShadow( directionalShadowMap[ i ], directionalLightShadow.shadowMapSize, directionalLightShadow.shadowIntensity, directionalLightShadow.shadowBias, directionalLightShadow.shadowRadius, cwSc + vec4( cwT * vec2( -7.010, 16.579 ), 0.0, 0.0 ) ) +
+        getShadow( directionalShadowMap[ i ], directionalLightShadow.shadowMapSize, directionalLightShadow.shadowIntensity, directionalLightShadow.shadowBias, directionalLightShadow.shadowRadius, cwSc + vec4( cwT * vec2( -16.680, 6.767 ), 0.0, 0.0 ) ) +
+        getShadow( directionalShadowMap[ i ], directionalLightShadow.shadowMapSize, directionalLightShadow.shadowIntensity, directionalLightShadow.shadowBias, directionalLightShadow.shadowRadius, cwSc + vec4( cwT * vec2( -16.579, -7.010 ), 0.0, 0.0 ) ) +
+        getShadow( directionalShadowMap[ i ], directionalLightShadow.shadowMapSize, directionalLightShadow.shadowIntensity, directionalLightShadow.shadowBias, directionalLightShadow.shadowRadius, cwSc + vec4( cwT * vec2( -6.767, -16.680 ), 0.0, 0.0 ) ) +
+        getShadow( directionalShadowMap[ i ], directionalLightShadow.shadowMapSize, directionalLightShadow.shadowIntensity, directionalLightShadow.shadowBias, directionalLightShadow.shadowRadius, cwSc + vec4( cwT * vec2( 7.010, -16.579 ), 0.0, 0.0 ) ) +
+        getShadow( directionalShadowMap[ i ], directionalLightShadow.shadowMapSize, directionalLightShadow.shadowIntensity, directionalLightShadow.shadowBias, directionalLightShadow.shadowRadius, cwSc + vec4( cwT * vec2( 16.680, -6.767 ), 0.0, 0.0 ) ) ) / 14.0 : 1.0;
       // Strongest just inside the shadow, fading softly deeper in.
-      float cwBand = clamp( cwW * ( 1.0 - cwW ) * 4.0, 0.0, 1.0 ) * ( 1.0 - 0.75 * cwSh );
+      float cwBand = clamp( cwW * ( 1.0 - cwW ) * 4.0, 0.0, 1.0 ) * ( 1.0 - 0.8 * cwSh );
       vec3 cwC = directLight.color;
-      vec3 cwVivid = max( mix( vec3( dot( cwC, vec3( 0.2126, 0.7152, 0.0722 ) ) ), cwC, 2.4 ), 0.0 ) * vec3( 1.15, 0.8, 0.45 );
-      directLight.color = cwC * cwSh + cwVivid * cwBand * 0.45;
+      float cwL = dot( cwC, vec3( 0.2126, 0.7152, 0.0722 ) );
+      // Its colour: the sky's (the sky-tinted ambient light), made more saturated, as bright as the sun allows.
+      vec3 cwSky = vec3( 1.0, 0.75, 0.45 );
+      #if NUM_HEMI_LIGHTS > 0
+        cwSky = hemisphereLights[ 0 ].skyColor;
+      #endif
+      cwSky /= max( max( cwSky.r, max( cwSky.g, cwSky.b ) ), 1e-3 );
+      vec3 cwVivid = max( mix( vec3( dot( cwSky, vec3( 0.2126, 0.7152, 0.0722 ) ) ), cwSky, 2.2 ), 0.0 ) * cwL;
+      directLight.color = cwC * cwSh + cwVivid * cwBand * 0.5;
     }`,
   );
 
