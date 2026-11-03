@@ -133,3 +133,34 @@ moves out as the ladder grows. Only the parts are saved: `expandRepeats` (core) 
 everything else (materials, ladder and trigger zones, colliders) but not scripts or nested repeats. Selecting a
 Repeat group shows a blue knob at its far end; dragging it sets the length (in grid steps while snapping), as
 one undo step. **Add › Ladder** makes one ready to climb.
+
+## Terrain (T1)
+
+**Add › Terrain** makes smooth voxel ground: a grid of density values 16 u apart (129 × 49 × 129 points, so
+2048 × 768 × 2048 u), solid where positive, its surface where the density crosses zero. Surface nets mesh it
+(one vertex per cell the surface passes through, at the average of its edge crossings), so hills, cliffs, caves
+and overhangs come out rounded. It's meshed in 16-point chunks, and an edit re-meshes only the chunks it touched.
+Each grid point also has four layer weights (0–255, always adding up to 255) that blend the layers.
+
+The **Terrain tool** (H) works on whatever terrain is under the cursor; a ring shows the brush:
+
+| Brush | Does |
+|---|---|
+| Raise / Lower | Push the ground out or in, softly towards the edge of the brush |
+| Smooth | Even out bumps |
+| Flatten | Level towards the height where the stroke began |
+| Dig / Fill | Cut away or add the whole sphere (caves, tunnels, lumps) |
+| Paint | Paint one of the four layers |
+
+Hold the brush still to keep working. Each stroke is one undo step (only the region it touched is kept).
+
+**Import heightmap…** (in the Terrain component) shapes the whole terrain from a greyscale picture: black lowest,
+white highest, over the **Height range**. Each layer is a colour, or a project material or picture (its colour
+picture, seen from three sides in world space so cliffs don't stretch; **Texture size** sets one repeat).
+A **Foliage** component on a terrain grows grass over its upward-facing ground; **Grows on** limits it to where a
+layer is painted.
+
+The shape is saved with the scene as `assets/terrain/<name>.cwvox` (gzip: a small header, density as 16-bit
+numbers, then the weights). In the game the terrain is fixed ground, one triangle collider per chunk, and
+navigation finds its surface like any other.
+

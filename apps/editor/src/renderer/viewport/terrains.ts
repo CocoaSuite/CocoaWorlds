@@ -8,6 +8,7 @@ import { VOXEL_CHUNK, VoxelField, type V3, type VoxelMesh } from '@cocoaworlds/g
 import * as THREE from 'three';
 import { assetUrl } from '../assets';
 import { isShown } from '../brush/brushes';
+import { sceneMaterial } from './world-render';
 
 // ── The grids ──
 
@@ -132,24 +133,81 @@ export async function saveTerrains(dir: string): Promise<string | null> {
 
 // ── Drawing ──
 
-/** The four layer colours, blended by each vertex's weights; lit like any ground. */
-function terrainMaterial(colours: string[]): THREE.MeshStandardMaterial {
+const WHITE = (() => {
+  const t = new THREE.DataTexture(new Uint8Array([255, 255, 255, 255]), 1, 1);
+  t.needsUpdate = true;
+  return t;
+})();
+
+/**
+ * The four layers blended by each vertex's weights; lit like any ground. A layer is its colour, or its texture
+ * (a project material's picture, or an image) seen from three sides in world space so cliffs don't stretch.
+ */
+function terrainMaterial(colours: string[], textures: string[], tile: number, onDraw: () => void): THREE.MeshStandardMaterial {
   const m = new THREE.MeshStandardMaterial({ roughness: 0.9, metalness: 0 });
   const layers = colours.map((c) => new THREE.Color(c).convertSRGBToLinear());
+  const maps = { value: [WHITE, WHITE, WHITE, WHITE] as THREE.Texture[] };
+  const has = { value: new THREE.Vector4(0, 0, 0, 0) };
+  const sources: THREE.Material[] = [];
+  textures.forEach((name, i) => {
+    if (!name) return;
+    // (The project's own material, as the level uses it; its picture arrives when loaded.)
+    const look = (): void => {
+      const src = sources[i] as THREE.MeshStandardMaterial | undefined;
+      const map = src?.map;
+      if (map) {
+        map.wrapS = map.wrapT = THREE.RepeatWrapping;
+        map.needsUpdate = true;
+        maps.value[i] = map;
+        has.value.setComponent(i, 1);
+        layers[i]!.copy(src.color ?? new THREE.Color(1, 1, 1));
+      }
+      onDraw();
+    };
+    sources[i] = sceneMaterial(name, look);
+    look();
+  });
   m.onBeforeCompile = (sh) => {
     sh.uniforms.uLayers = { value: layers };
+    sh.uniforms.uMaps = maps;
+    sh.uniforms.uHas = has;
+    sh.uniforms.uTile = { value: tile };
     sh.vertexShader = sh.vertexShader
-      .replace('#include <common>', '#include <common>\nattribute vec4 aWeights;\nvarying vec4 vWeights;')
-      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvWeights = aWeights;');
+      .replace('#include <common>', '#include <common>\nattribute vec4 aWeights;\nvarying vec4 vWeights;\nvarying vec3 vCwPos;\nvarying vec3 vCwNormal;')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvWeights = aWeights;\nvCwPos = (modelMatrix * vec4(transformed, 1.0)).xyz;\nvCwNormal = normalize(mat3(modelMatrix) * objectNormal);');
     sh.fragmentShader = sh.fragmentShader
-      .replace('#include <common>', '#include <common>\nuniform vec3 uLayers[4];\nvarying vec4 vWeights;')
+      .replace(
+        '#include <common>',
+        `#include <common>
+uniform vec3 uLayers[4];
+uniform sampler2D uMaps[4];
+uniform vec4 uHas;
+uniform float uTile;
+varying vec4 vWeights;
+varying vec3 vCwPos;
+varying vec3 vCwNormal;
+vec3 cwTri(sampler2D t, vec3 p, vec3 n) {
+  vec3 w = pow(abs(n), vec3(4.0));
+  w /= (w.x + w.y + w.z);
+  return texture2D(t, p.zy).rgb * w.x + texture2D(t, p.xz).rgb * w.y + texture2D(t, p.xy).rgb * w.z;
+}`,
+      )
       .replace(
         '#include <color_fragment>',
-        '#include <color_fragment>\nvec4 cwW = vWeights / max(0.001, vWeights.x + vWeights.y + vWeights.z + vWeights.w);\ndiffuseColor.rgb *= uLayers[0] * cwW.x + uLayers[1] * cwW.y + uLayers[2] * cwW.z + uLayers[3] * cwW.w;',
+        `#include <color_fragment>
+vec4 cwW = vWeights / max(0.001, vWeights.x + vWeights.y + vWeights.z + vWeights.w);
+vec3 cwP = vCwPos / uTile;
+vec3 cwN = normalize(vCwNormal);
+vec3 cwC = vec3(0.0);
+cwC += cwW.x * uLayers[0] * (uHas.x > 0.5 ? cwTri(uMaps[0], cwP, cwN) : vec3(1.0));
+cwC += cwW.y * uLayers[1] * (uHas.y > 0.5 ? cwTri(uMaps[1], cwP, cwN) : vec3(1.0));
+cwC += cwW.z * uLayers[2] * (uHas.z > 0.5 ? cwTri(uMaps[2], cwP, cwN) : vec3(1.0));
+cwC += cwW.w * uLayers[3] * (uHas.w > 0.5 ? cwTri(uMaps[3], cwP, cwN) : vec3(1.0));
+diffuseColor.rgb *= cwC;`,
       );
   };
-  m.customProgramCacheKey = () => 'cw-terrain';
-  m.userData.layers = layers;
+  m.customProgramCacheKey = () => 'cw-terrain-2';
+  m.userData.sources = sources;
   return m;
 }
 
@@ -194,8 +252,10 @@ export class TerrainRenderer {
       if (!t.file) continue;
       seen.add(e.id);
       const colours = [t.layer0, t.layer1, t.layer2, t.layer3];
+      const textures = [t.texture0, t.texture1, t.texture2, t.texture3].map((x) => x ?? '');
+      const look = JSON.stringify([colours, textures, t.tile]);
       let s = this.shown.get(e.id);
-      if (s && (s.file !== t.file || s.colours !== colours.join())) {
+      if (s && (s.file !== t.file || s.colours !== look)) {
         this.drop(e.id);
         s = undefined;
       }
@@ -205,7 +265,7 @@ export class TerrainRenderer {
         holder.userData.terrain = e.id;
         holder.matrixAutoUpdate = false;
         this.group.add(holder);
-        s = { file: t.file, holder, material: terrainMaterial(colours), chunks: new Map(), colours: colours.join() };
+        s = { file: t.file, holder, material: terrainMaterial(colours, textures, t.tile ?? 128, this.onDraw), chunks: new Map(), colours: look };
         this.shown.set(e.id, s);
         const made = s;
         void loadTerrain(t.file).then((f) => {
@@ -253,6 +313,7 @@ export class TerrainRenderer {
     const s = this.shown.get(id);
     if (!s) return;
     for (const m of s.chunks.values()) m.geometry.dispose();
+    for (const src of (s.material.userData.sources as THREE.Material[] | undefined) ?? []) src?.dispose();
     s.material.dispose();
     this.group.remove(s.holder);
     this.shown.delete(id);

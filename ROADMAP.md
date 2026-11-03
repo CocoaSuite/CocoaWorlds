@@ -32,7 +32,7 @@ From here the order follows the benchmark: [BENCHMARK.md](BENCHMARK.md) — can 
 | A2a ✅ | Navigation: where creatures can walk, measured from the level; paths round walls, through doors and between floors; shown in the editor | Half-Life NPCs, Slime Rancher creatures | 7, 10 |
 | A2b ✅ | Scattering foliage: grass tufts over a brush’s upward-facing surfaces (Foliage component: spacing, density, size, slope, colour, seed); drawn in the editor and in Play | Slime Rancher, outdoor maps | 7 |
 | A2c ✅ | Many-objects performance: still models drawn as instanced batches by area (culled as a whole) in Play and exported games; grass in culled chunks with levels of detail | Slime Rancher, Roblox builds | 7 |
-| T1 | Voxel terrain with heightmap import: sculpt, dig and paint | Slime Rancher, outdoor maps | 7 |
+| T1 ✅ | Voxel terrain: smooth ground (surface nets) to sculpt, dig and paint in the editor (Terrain tool), heightmap import, four layers (colours or triplanar textures), grass on a painted layer, solid in the game | Slime Rancher, outdoor maps | 7 |
 | M1 | Hosting and joining games (single-player until then) | Roblox-style online play | after 9 |
 
 Order may shift where dependencies require it (for example, the project format from Phase 8 is started in Phase 2 because saving is needed from day one). Significant changes are explained in [DECISIONS.md](DECISIONS.md).
@@ -111,7 +111,7 @@ Order may shift where dependencies require it (for example, the project format f
 
 ## Next
 
-T1 (voxel terrain). Installers and signing for exported games come with packaging the editor itself (Phase 9).
+M1 (hosting and joining games) once approved; until then, polish on what's there. Installers and signing for exported games come with packaging the editor itself (Phase 9).
 
 ## Pinned
 

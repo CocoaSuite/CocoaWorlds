@@ -102,6 +102,8 @@ function FieldEditor({ entity, component, field, value }: { entity: string; comp
     );
   } else if (ty.kind === 'boolean') {
     input = <Switch label={label} checked={!!value} onChange={(v) => set(v)} />;
+  } else if (ty.kind === 'material') {
+    input = <MaterialSelect label={label} value={String(value ?? '')} onChange={(v) => set(v)} />;
   } else if (ty.kind === 'enum') {
     const options = ty.options.map((o) => ({ value: o.value, label: o.label[lang] }));
     // Short choices fit as segmented buttons; longer ones become a dropdown so the Inspector never overflows.
@@ -278,3 +280,33 @@ function ModelMaterials({ entity, path, value }: { entity: string; path: string;
     </div>
   );
 }
+
+/** A project material or texture, or none: a compact dropdown (the full picker is in the Paint tool). */
+function MaterialSelect({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
+  const materials = useEditor((s) => s.session?.project.settings.materials) ?? [];
+  const textures = useEditor((s) => s.assets.textures);
+  return (
+    <select className="cw-input cw-select" aria-label={label} value={value} onChange={(ev) => onChange(ev.target.value)}>
+      <option value="">{t('field.none')}</option>
+      {materials.length > 0 && (
+        <optgroup label={t('assets.materials')}>
+          {materials.map((m) => (
+            <option key={m.id} value={m.id}>
+              {m.name}
+            </option>
+          ))}
+        </optgroup>
+      )}
+      {textures.length > 0 && (
+        <optgroup label={t('assets.textures')}>
+          {textures.map((x) => (
+            <option key={x.path} value={x.path}>
+              {x.name}
+            </option>
+          ))}
+        </optgroup>
+      )}
+    </select>
+  );
+}
+

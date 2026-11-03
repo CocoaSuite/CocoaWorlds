@@ -101,6 +101,26 @@ test('terrain: drawn, picked, saved, stood on', async () => {
         return east - west;
       });
     await until(async () => (await slope()) > 250, true, 10000);
+    // A textured layer: a picture as layer 1, seen from three sides.
+    const checker = await page.evaluate(async () => {
+      const c = new OffscreenCanvas(64, 64);
+      const g = c.getContext('2d');
+      for (let y = 0; y < 8; y++) for (let x = 0; x < 8; x++) {
+        g.fillStyle = (x + y) % 2 ? '#3f7a2a' : '#9fd36a';
+        g.fillRect(x * 8, y * 8, 8, 8);
+      }
+      const b = await c.convertToBlob({ type: 'image/png' });
+      return [...new Uint8Array(await b.arrayBuffer())];
+    });
+    await page.getByRole('tab', { name: 'Assets' }).click();
+    await page.getByTestId('import-textures').setInputFiles({ name: 'checker.png', mimeType: 'image/png', buffer: Buffer.from(checker) });
+    await until(() => page.evaluate(() => window.__cwStore.getState().assets.textures.length), 1, 6000);
+    await insp.getByLabel('Layer 1 texture').selectOption({ label: 'checker' });
+    await until(
+      () => page.evaluate(() => !!window.__cwViewport.terrains.meshes[0]?.material.userData.sources?.[0]?.map?.image),
+      true,
+      10000,
+    );
     // Saved: the scene, and the terrain's shape in its own file.
     await page.keyboard.press('Control+s');
     const dir = path.join(projectsDir, 'hills', 'assets', 'terrain');

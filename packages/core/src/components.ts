@@ -37,6 +37,8 @@ export type FieldType =
   | { kind: 'boolean' }
   | { kind: 'enum'; options: { value: string; label: Text }[] }
   | { kind: 'color' }
+  /** A project material or texture ('' for none). */
+  | { kind: 'material' }
   | { kind: 'vec3'; step?: number; min?: number }
   | { kind: 'text' }
   /** A project asset of one kind, by its project path (empty: none). */
@@ -561,6 +563,11 @@ export const COMPONENTS: ComponentDef[] = [
       { key: 'layer1', label: e('Layer 2', 'Слой 2'), type: { kind: 'color' }, default: '#8a6a45' },
       { key: 'layer2', label: e('Layer 3', 'Слой 3'), type: { kind: 'color' }, default: '#8c8c8c' },
       { key: 'layer3', label: e('Layer 4', 'Слой 4'), type: { kind: 'color' }, default: '#d9c58a' },
+      { key: 'texture0', label: e('Layer 1 texture', 'Текстура слоя 1'), hint: e('A material or picture for the layer (its colour then tints nothing). None: plain colour.', 'Материал или картинка для слоя (цвет тогда не нужен). Нет — просто цвет.'), type: { kind: 'material' }, default: '' },
+      { key: 'texture1', label: e('Layer 2 texture', 'Текстура слоя 2'), type: { kind: 'material' }, default: '' },
+      { key: 'texture2', label: e('Layer 3 texture', 'Текстура слоя 3'), type: { kind: 'material' }, default: '' },
+      { key: 'texture3', label: e('Layer 4 texture', 'Текстура слоя 4'), type: { kind: 'material' }, default: '' },
+      { key: 'tile', label: e('Texture size', 'Размер текстуры'), hint: e('How big one repeat of a layer texture is on the ground.', 'Размер одного повтора текстуры слоя на земле.'), type: { kind: 'number', min: 8, step: 16, unit: 'u' }, default: 128 },
     ],
   },
   {
@@ -677,6 +684,12 @@ export interface TerrainData {
   layer1: string;
   layer2: string;
   layer3: string;
+  texture0: string;
+  texture1: string;
+  texture2: string;
+  texture3: string;
+  /** Size of one repeat of a layer texture (u). */
+  tile: number;
   [k: string]: unknown;
 }
 
