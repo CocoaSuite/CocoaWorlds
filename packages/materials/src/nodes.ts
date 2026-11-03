@@ -389,6 +389,53 @@ else for (int k = 0; k < 12; k++) q += dir * (inG_by(q) - bias) * p_amount / 12.
 outColor = vec4(inC_in(q).rgb, 1.);`,
   },
   {
+    type: 'floodFill',
+    group: 'change',
+    label: l('Flood fill', 'Заливка областей'),
+    hint: l('Give each separate white shape of a mask (each brick, tile, plank) its own value: a random grey or colour, a gradient across it, or where it is. Exact for rectangular shapes.', 'Дать каждой отдельной белой фигуре маски (кирпичу, плитке, доске) своё значение: случайный серый или цвет, градиент по ней или её положение. Точно для прямоугольных фигур.'),
+    inputs: [IN_GREY('in', l('Mask', 'Маска'), [1, 1, 1])],
+    output: 'color',
+    params: [
+      {
+        id: 'gives',
+        label: l('Gives', 'Выдаёт'),
+        kind: 'choice',
+        options: [opt('grey', 'Random grey', 'Случайный серый'), opt('colour', 'Random colour', 'Случайный цвет'), opt('gradient', 'Gradient', 'Градиент'), opt('position', 'Position', 'Положение'), opt('size', 'Size', 'Размер')],
+        default: 'grey',
+      },
+      { id: 'direction', label: l('Gradient', 'Градиент'), kind: 'choice', options: [opt('across', 'Across', 'Поперёк'), opt('down', 'Down', 'Вниз'), opt('random', 'Random way', 'Случайно')], default: 'random' },
+      { id: 'threshold', label: l('White from', 'Белое от'), kind: 'number', min: 0.01, max: 0.99, default: 0.5 },
+      seed,
+    ],
+    glsl: `if (inG_in(uv) < p_threshold) { outColor = vec4(0., 0., 0., 1.); return; }
+// The shape's extent: step out each way until the mask goes dark (2 pixels a step).
+float st = u_px * 2.; float l = 0., r = 0., u = 0., d = 0.;
+for (int k = 1; k <= 160; k++) { if (inG_in(uv - vec2(float(k) * st, 0.)) < p_threshold) break; l = float(k) * st; }
+for (int k = 1; k <= 160; k++) { if (inG_in(uv + vec2(float(k) * st, 0.)) < p_threshold) break; r = float(k) * st; }
+for (int k = 1; k <= 160; k++) { if (inG_in(uv - vec2(0., float(k) * st)) < p_threshold) break; u = float(k) * st; }
+for (int k = 1; k <= 160; k++) { if (inG_in(uv + vec2(0., float(k) * st)) < p_threshold) break; d = float(k) * st; }
+vec2 lo = uv - vec2(l, u), hi = uv + vec2(r, d);
+vec2 ctr = fract((lo + hi) * 0.5);
+// One id per shape: its centre, rounded to a few pixels so every pixel of it agrees (wrapped whole, so a shape
+// crossing the square's edge gets one id on both sides).
+float cell = st * 4.; float n = floor(1. / cell + 0.5);
+vec2 id = mod(floor((lo + hi) * 0.5 / cell + 0.5), n);
+float h = hash12(id + seedv(p_seed));
+int g = int(p_gives + 0.5); vec3 c;
+if (g == 0) c = vec3(h);
+else if (g == 1) c = hsv2rgb(vec3(h, 0.55 + 0.4 * hash12(id + seedv(p_seed) + 3.3), 0.6 + 0.4 * hash12(id + seedv(p_seed) + 7.1)));
+else if (g == 2) {
+  vec2 t = (uv - lo) / max(hi - lo, vec2(1e-4));
+  float a = p_direction < 0.5 ? 0. : p_direction < 1.5 ? 1.5707963 : h * 6.2831853;
+  vec2 dv = vec2(cos(a), sin(a));
+  float v = dot(t - 0.5, dv) / (abs(dv.x) * 0.5 + abs(dv.y) * 0.5 + 1e-4) * 0.5 + 0.5;
+  c = vec3(clamp(v, 0., 1.));
+}
+else if (g == 3) c = vec3(ctr, 0.);
+else c = vec3(clamp((hi - lo) * 1., 0., 1.), 0.);
+outColor = vec4(c, 1.);`,
+  },
+  {
     type: 'transform',
     group: 'change',
     label: l('Transform', 'Трансформация'),
