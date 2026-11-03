@@ -580,6 +580,628 @@ float lap = 4. * h - inG_in(uv + vec2(r, 0.)) - inG_in(uv - vec2(r, 0.)) - inG_i
 outColor = vec4(vec3(clamp(0.5 + lap * p_strength, 0., 1.)), 1.);`,
   },
 
+  // ── More: make ──
+  {
+    type: 'waves',
+    group: 'make',
+    label: l('Waves and stripes', 'Волны и полосы'),
+    hint: l('Repeating bands: soft waves, hard stripes, saw or zigzag-like ramps, optionally wobbly.', 'Повторяющиеся полосы: мягкие волны, чёткие полосы, пила или треугольник, можно с волнистостью.'),
+    inputs: [],
+    output: 'grey',
+    params: [
+      { id: 'kind', label: l('Kind', 'Вид'), kind: 'choice', options: [opt('sine', 'Waves', 'Волны'), opt('stripes', 'Stripes', 'Полосы'), opt('saw', 'Saw', 'Пила'), opt('triangle', 'Triangle', 'Треугольник')], default: 'sine' },
+      { id: 'count', label: l('Count', 'Количество'), kind: 'int', min: 1, max: 64, default: 8 },
+      { id: 'direction', label: l('Direction', 'Направление'), kind: 'choice', options: [opt('across', 'Across', 'Поперёк'), opt('down', 'Down', 'Вниз'), opt('diagonal', 'Diagonal', 'По диагонали')], default: 'down' },
+      { id: 'sharpness', label: l('Sharpness', 'Чёткость'), kind: 'number', min: 0, max: 1, default: 0.5 },
+      { id: 'wobble', label: l('Wobble', 'Волнистость'), kind: 'number', min: 0, max: 1, default: 0 },
+      { id: 'wobbleScale', label: l('Wobble size', 'Размер волнистости'), kind: 'int', min: 1, max: 16, default: 3 },
+      seed,
+    ],
+    glsl: `float t = p_direction < 0.5 ? uv.x : p_direction < 1.5 ? uv.y : uv.x + uv.y;
+t += (fbm(uv, p_wobbleScale, 4., 0.5, 0., p_seed) - 0.5) * p_wobble * 2. / max(p_count, 1.);
+float x = fract(t * p_count); int k = int(p_kind + 0.5); float v;
+if (k == 0) v = 0.5 + 0.5 * sin(x * 6.2831853);
+else if (k == 1) v = 0.5 + 0.5 * sin(x * 6.2831853);
+else if (k == 2) v = x;
+else v = 1. - abs(x * 2. - 1.);
+float e = k == 1 ? (1. - p_sharpness) * 0.45 + 0.01 : (1. - p_sharpness) * 0.5 + 0.02;
+if (k == 1 || p_sharpness > 0.) v = mix(v, smoothstep(0.5 - e, 0.5 + e, v), k == 1 ? 1. : p_sharpness);
+outColor = vec4(vec3(v), 1.);`,
+  },
+  {
+    type: 'hexagons',
+    group: 'make',
+    label: l('Hexagons', 'Шестиугольники'),
+    hint: l('Hexagonal tiles with gaps between them (white tile, black gap).', 'Шестиугольная плитка со швами (белое — плитка, чёрное — шов).'),
+    inputs: [],
+    output: 'grey',
+    params: [
+      { id: 'scale', label: l('Across', 'В ряд'), kind: 'int', min: 2, max: 48, default: 6 },
+      { id: 'gap', label: l('Gap', 'Шов'), kind: 'number', min: 0, max: 0.4, default: 0.06 },
+      { id: 'bevel', label: l('Bevel', 'Скос'), kind: 'number', min: 0, max: 0.5, default: 0.15 },
+      { id: 'random', label: l('Random brightness', 'Разная яркость'), kind: 'number', min: 0, max: 1, default: 0.3 },
+      seed,
+    ],
+    glsl: `float N = p_scale; float M = max(1., floor(N / 1.7320508 + 0.5));
+vec2 p = vec2(uv.x * N, uv.y * M * 1.7320508);
+vec2 r = vec2(1., 1.7320508); vec2 hh = r * 0.5;
+vec2 a = mod(p, r) - hh; vec2 b = mod(p - hh, r) - hh;
+vec2 g = dot(a, a) < dot(b, b) ? a : b;
+vec2 cid = p - g;
+vec2 q = abs(g); float d = max(q.x, dot(q, vec2(0.5, 0.8660254)));
+float edge = 0.5 - d - p_gap * 0.5;
+float rnd = hash12(floor(mod(cid + 0.01, vec2(N, M * 1.7320508)) * 4.) + seedv(p_seed));
+float v = edge <= 0. ? 0. : (p_bevel > 0. ? smoothstep(0., p_bevel * 0.5, edge) : 1.) * (1. - p_random * rnd);
+outColor = vec4(vec3(v), 1.);`,
+  },
+  {
+    type: 'weave',
+    group: 'make',
+    label: l('Weave', 'Плетение'),
+    hint: l('Threads woven over and under each other: cloth, baskets, wicker (as height).', 'Нити, переплетённые сверху и снизу: ткань, корзины (как высота).'),
+    inputs: [],
+    output: 'grey',
+    params: [
+      { id: 'threads', label: l('Threads', 'Нитей'), kind: 'int', min: 2, max: 64, default: 8 },
+      { id: 'width', label: l('Thread width', 'Толщина нити'), kind: 'number', min: 0.3, max: 1, default: 0.8 },
+    ],
+    glsl: `vec2 p = uv * p_threads; vec2 c = floor(p); vec2 f = fract(p) - 0.5;
+float over = mod(c.x + c.y, 2.); float w = p_width * 0.5;
+float hT = 1. - smoothstep(w - 0.08, w, abs(f.y)); float vT = 1. - smoothstep(w - 0.08, w, abs(f.x));
+float hH = hT * (0.65 + 0.35 * cos(f.x * 3.14159)); float vH = vT * (0.65 + 0.35 * cos(f.y * 3.14159));
+float v = over > 0.5 ? max(hH, vH * 0.55) : max(vH, hH * 0.55);
+outColor = vec4(vec3(v), 1.);`,
+  },
+  {
+    type: 'planks',
+    group: 'make',
+    label: l('Planks', 'Доски'),
+    hint: l('Rows of boards of staggered lengths with gaps, each a little different, with grain.', 'Ряды досок разной длины со щелями, каждая чуть другая, с волокнами.'),
+    inputs: [],
+    output: 'grey',
+    params: [
+      { id: 'rows', label: l('Rows', 'Рядов'), kind: 'int', min: 1, max: 32, default: 6 },
+      { id: 'lengths', label: l('Boards per row', 'Досок в ряду'), kind: 'int', min: 1, max: 8, default: 2 },
+      { id: 'gap', label: l('Gap', 'Щель'), kind: 'number', min: 0, max: 0.2, default: 0.03 },
+      { id: 'random', label: l('Random brightness', 'Разная яркость'), kind: 'number', min: 0, max: 1, default: 0.35 },
+      { id: 'grain', label: l('Grain', 'Волокна'), kind: 'number', min: 0, max: 1, default: 0.5 },
+      seed,
+    ],
+    glsl: `float y = uv.y * p_rows; float row = floor(y); float fy = fract(y);
+float sh = hash12(vec2(mod(row, p_rows), 3.) + seedv(p_seed));
+float x = uv.x * p_lengths + sh; float col = floor(x); float fx = fract(x);
+float dGap = min(min(fy, 1. - fy), min(fx, 1. - fx) * p_rows / p_lengths);
+float board = smoothstep(p_gap * 0.5, p_gap * 0.5 + 0.03, dGap);
+float r = hash12(vec2(mod(col, p_lengths), mod(row, p_rows)) + seedv(p_seed) + 5.);
+float g = 0.5 + 0.5 * sin((fy * 7. + fbm(uv, 8., 4., 0.5, 0., p_seed + r * 7.) * 3.) * 6.2831853);
+outColor = vec4(vec3(board * (1. - p_random * r) * mix(1., 0.72 + 0.28 * g, p_grain)), 1.);`,
+  },
+  {
+    type: 'woodGrain',
+    group: 'make',
+    label: l('Wood grain', 'Древесина'),
+    hint: l('Growth rings bent by noise, like sawn wood.', 'Годовые кольца, изогнутые шумом, как у распиленного дерева.'),
+    inputs: [],
+    output: 'grey',
+    params: [
+      { id: 'rings', label: l('Rings', 'Колец'), kind: 'int', min: 1, max: 48, default: 8 },
+      { id: 'distortion', label: l('Distortion', 'Искривление'), kind: 'number', min: 0, max: 1, default: 0.5 },
+      { id: 'scale', label: l('Noise size', 'Размер шума'), kind: 'int', min: 1, max: 16, default: 3 },
+      seed,
+    ],
+    glsl: `float n = fbm(uv, p_scale, 5., 0.55, 0., p_seed);
+float t = uv.y * p_rings + n * p_distortion * 4.;
+float v = pow(0.5 + 0.5 * sin(t * 6.2831853), 3.);
+outColor = vec4(vec3(1. - v * 0.8), 1.);`,
+  },
+  {
+    type: 'cobblestones',
+    group: 'make',
+    label: l('Cobblestones', 'Булыжник'),
+    hint: l('Rounded stones packed together with gaps (as height).', 'Округлые камни вплотную со швами (как высота).'),
+    inputs: [],
+    output: 'grey',
+    params: [
+      { id: 'scale', label: l('Scale', 'Масштаб'), kind: 'int', min: 2, max: 48, default: 7 },
+      { id: 'gap', label: l('Gap', 'Шов'), kind: 'number', min: 0, max: 0.3, default: 0.05 },
+      { id: 'bevel', label: l('Roundness', 'Округлость'), kind: 'number', min: 0, max: 1, default: 0.6 },
+      { id: 'random', label: l('Random brightness', 'Разная яркость'), kind: 'number', min: 0, max: 1, default: 0.3 },
+      seed,
+    ],
+    glsl: `vec3 v = voronoi(uv, p_scale, 0.9, p_seed);
+float d = (v.y - v.x) * 0.5 - p_gap * 0.5;
+float h = d <= 0. ? 0. : smoothstep(0., p_bevel * 0.4 + 1e-3, d);
+outColor = vec4(vec3(h * (1. - p_random * v.z)), 1.);`,
+  },
+  {
+    type: 'cracks',
+    group: 'make',
+    label: l('Cracks', 'Трещины'),
+    hint: l('A network of thin wandering cracks (white): dry mud, old paint, broken stone.', 'Сеть тонких извилистых трещин (белое): сухая грязь, старая краска, камень.'),
+    inputs: [],
+    output: 'grey',
+    params: [
+      { id: 'scale', label: l('Scale', 'Масштаб'), kind: 'int', min: 2, max: 48, default: 6 },
+      { id: 'width', label: l('Width', 'Ширина'), kind: 'number', min: 0.01, max: 1, default: 0.25 },
+      { id: 'distortion', label: l('Wander', 'Извилистость'), kind: 'number', min: 0, max: 1, default: 0.5 },
+      seed,
+    ],
+    glsl: `vec2 w = vec2(fbm(uv, 4., 4., 0.5, 0., p_seed + 11.), fbm(uv, 4., 4., 0.5, 0., p_seed + 23.)) - 0.5;
+vec3 v = voronoi(fract(uv + w * p_distortion * 0.25), p_scale, 1., p_seed);
+outColor = vec4(vec3(1. - smoothstep(0., p_width * 0.1 + 1e-3, v.y - v.x)), 1.);`,
+  },
+  {
+    type: 'marble',
+    group: 'make',
+    label: l('Marble', 'Мрамор'),
+    hint: l('Veins swirled through stone.', 'Прожилки, закрученные в камне.'),
+    inputs: [],
+    output: 'grey',
+    params: [
+      { id: 'veins', label: l('Veins', 'Прожилок'), kind: 'int', min: 1, max: 16, default: 3 },
+      { id: 'turbulence', label: l('Turbulence', 'Завихрения'), kind: 'number', min: 0, max: 1, default: 0.6 },
+      { id: 'scale', label: l('Noise size', 'Размер шума'), kind: 'int', min: 1, max: 16, default: 3 },
+      { id: 'sharpness', label: l('Thin veins', 'Тонкие прожилки'), kind: 'number', min: 0, max: 1, default: 0.6 },
+      seed,
+    ],
+    glsl: `float n = fbm(uv, p_scale, 6., 0.55, 0., p_seed);
+float t = (uv.x + uv.y) * p_veins + (n - 0.5) * p_turbulence * 3.;
+float v = pow(1. - abs(sin(t * 3.14159265)), mix(1., 6., p_sharpness));
+outColor = vec4(vec3(v), 1.);`,
+  },
+  {
+    type: 'blobs',
+    group: 'make',
+    label: l('Blobs', 'Пятна'),
+    hint: l('Soft or sharp random patches covering as much as you say: rust spots, puddles, moss.', 'Мягкие или чёткие случайные пятна нужной площади: ржавчина, лужи, мох.'),
+    inputs: [],
+    output: 'grey',
+    params: [
+      { id: 'scale', label: l('Scale', 'Масштаб'), kind: 'int', min: 1, max: 32, default: 4 },
+      { id: 'coverage', label: l('Coverage', 'Покрытие'), kind: 'number', min: 0, max: 1, default: 0.4 },
+      { id: 'softness', label: l('Softness', 'Мягкость'), kind: 'number', min: 0, max: 1, default: 0.2 },
+      seed,
+    ],
+    glsl: `float n = fbm(uv, p_scale, 5., 0.5, 0., p_seed);
+float e = 1. - p_coverage; float s = p_softness * 0.2 + 0.005;
+outColor = vec4(vec3(smoothstep(e - s, e + s, n)), 1.);`,
+  },
+  {
+    type: 'speckles',
+    group: 'make',
+    label: l('Speckles', 'Крапинки'),
+    hint: l('Small random dots: gravel, terrazzo, stars, dust.', 'Мелкие случайные точки: гравий, терраццо, звёзды, пыль.'),
+    inputs: [],
+    output: 'grey',
+    params: [
+      { id: 'density', label: l('Grid', 'Сетка'), kind: 'int', min: 4, max: 256, default: 24 },
+      { id: 'amount', label: l('Amount', 'Сколько'), kind: 'number', min: 0, max: 1, default: 0.35 },
+      { id: 'size', label: l('Size', 'Размер'), kind: 'number', min: 0.05, max: 1, default: 0.7 },
+      seed,
+    ],
+    glsl: `vec2 p = uv * p_density; vec2 c = floor(p); vec2 f = fract(p);
+vec2 o = seedv(p_seed); vec2 cm = mod(c, p_density);
+float has = step(1. - p_amount, hash12(cm + o));
+vec2 at = 0.25 + 0.5 * hash22(cm + o + 3.1);
+float r = p_size * 0.3 * (0.5 + hash12(cm + o + 9.2));
+float v = has * (1. - smoothstep(r * 0.6, r, length(f - at)));
+outColor = vec4(vec3(v), 1.);`,
+  },
+  {
+    type: 'scatter',
+    group: 'make',
+    label: l('Scatter', 'Разброс'),
+    hint: l('Copies of a picture scattered over the square, each a different size, turn and brightness: leaves, pebbles, bolts.', 'Копии картинки, разбросанные по квадрату, разного размера, поворота и яркости: листья, камешки, болты.'),
+    inputs: [IN_COLOR('in', l('Picture', 'Картинка'), [1, 1, 1])],
+    output: 'color',
+    params: [
+      { id: 'count', label: l('Per row', 'В ряду'), kind: 'int', min: 1, max: 32, default: 6 },
+      { id: 'size', label: l('Size', 'Размер'), kind: 'number', min: 0.05, max: 2, default: 0.6 },
+      { id: 'sizeRandom', label: l('Size varies', 'Разный размер'), kind: 'number', min: 0, max: 1, default: 0.4 },
+      { id: 'turn', label: l('Turn varies', 'Разный поворот'), kind: 'number', min: 0, max: 1, default: 1 },
+      { id: 'brightRandom', label: l('Brightness varies', 'Разная яркость'), kind: 'number', min: 0, max: 1, default: 0.3 },
+      seed,
+    ],
+    glsl: `vec2 p = uv * p_count; vec2 c = floor(p); float best = 0.; vec3 col = vec3(0.); vec2 o = seedv(p_seed);
+for (int y = -1; y <= 1; y++) for (int x = -1; x <= 1; x++) {
+  vec2 cc = c + vec2(float(x), float(y)); vec2 cm = mod(cc, p_count);
+  vec2 ctr = cc + 0.5 + (hash22(cm + o) - 0.5) * 0.8;
+  float s = p_size * (1. - p_sizeRandom * hash12(cm + o + 1.7));
+  float a = hash12(cm + o + 4.4) * 6.2831853 * p_turn;
+  vec2 d = mat2(cos(a), -sin(a), sin(a), cos(a)) * ((p - ctr) / max(s, 1e-3));
+  if (abs(d.x) < 0.5 && abs(d.y) < 0.5) {
+    vec3 t = inC_in(d + 0.5).rgb * (1. - p_brightRandom * hash12(cm + o + 8.8));
+    float g = dot(t, vec3(0.3333));
+    if (g > best) { best = g; col = t; }
+  }
+}
+outColor = vec4(col, 1.);`,
+  },
+  {
+    type: 'zigzag',
+    group: 'make',
+    label: l('Zigzag', 'Зигзаг'),
+    hint: l('Chevron stripes (herringbone-like bands).', 'Полосы-ёлочки (шевроны).'),
+    inputs: [],
+    output: 'grey',
+    params: [
+      { id: 'count', label: l('Count', 'Количество'), kind: 'int', min: 1, max: 32, default: 6 },
+      { id: 'amount', label: l('Zig size', 'Размах'), kind: 'number', min: 0, max: 2, default: 0.5 },
+      { id: 'direction', label: l('Direction', 'Направление'), kind: 'choice', options: [opt('down', 'Down', 'Вниз'), opt('across', 'Across', 'Поперёк')], default: 'down' },
+      { id: 'sharpness', label: l('Sharpness', 'Чёткость'), kind: 'number', min: 0, max: 1, default: 0.8 },
+    ],
+    glsl: `vec2 q = p_direction < 0.5 ? uv : uv.yx;
+float t = q.y * p_count + p_amount * (1. - abs(fract(q.x * p_count) * 2. - 1.));
+float s = 0.5 + 0.5 * sin(t * 6.2831853); float e = (1. - p_sharpness) * 0.5 + 0.01;
+outColor = vec4(vec3(smoothstep(0.5 - e, 0.5 + e, s)), 1.);`,
+  },
+
+  // ── More: change ──
+  {
+    type: 'sharpen',
+    group: 'change',
+    label: l('Sharpen', 'Резкость'),
+    hint: l('Crisper details: edges pushed apart.', 'Чётче детали: края усилены.'),
+    inputs: [IN_COLOR()],
+    output: 'color',
+    params: [
+      { id: 'amount', label: l('Amount', 'Сила'), kind: 'number', min: 0, max: 4, default: 1 },
+      { id: 'radius', label: l('Radius', 'Радиус'), kind: 'number', min: 0.001, max: 0.02, step: 0.001, default: 0.004 },
+    ],
+    glsl: `vec3 c = inC_in(uv).rgb; float r = p_radius;
+vec3 b = (inC_in(uv + vec2(r, 0.)).rgb + inC_in(uv - vec2(r, 0.)).rgb + inC_in(uv + vec2(0., r)).rgb + inC_in(uv - vec2(0., r)).rgb) * 0.25;
+outColor = vec4(clamp(c + (c - b) * p_amount, 0., 1.), 1.);`,
+  },
+  {
+    type: 'posterize',
+    group: 'change',
+    label: l('Posterize', 'Постеризация'),
+    hint: l('Fewer shades: hard steps instead of smooth changes (good for stylized looks).', 'Меньше оттенков: ступеньки вместо плавных переходов (для стилизации).'),
+    inputs: [IN_COLOR()],
+    output: 'color',
+    params: [{ id: 'steps', label: l('Steps', 'Ступеней'), kind: 'int', min: 2, max: 32, default: 4 }],
+    glsl: 'outColor = vec4(min(floor(inC_in(uv).rgb * p_steps), vec3(p_steps - 1.)) / max(p_steps - 1., 1.), 1.);',
+  },
+  {
+    type: 'threshold',
+    group: 'change',
+    label: l('Threshold', 'Порог'),
+    hint: l('Black below a level, white above, with a soft or hard step between: turn any grey into a mask.', 'Чёрное ниже уровня, белое выше, с мягким или резким переходом: сделать маску из любого серого.'),
+    inputs: [IN_GREY()],
+    output: 'grey',
+    params: [
+      { id: 'position', label: l('Level', 'Уровень'), kind: 'number', min: 0, max: 1, default: 0.5 },
+      { id: 'contrast', label: l('Hardness', 'Резкость'), kind: 'number', min: 0, max: 1, default: 0.8 },
+    ],
+    glsl: `float w = (1. - p_contrast) * 0.5 + 0.002;
+outColor = vec4(vec3(smoothstep(p_position - w, p_position + w, inG_in(uv))), 1.);`,
+  },
+  {
+    type: 'brightness',
+    group: 'change',
+    label: l('Brightness and contrast', 'Яркость и контраст'),
+    hint: l('Lighter or darker, more or less contrast, and gamma (mid-tones).', 'Светлее или темнее, больше или меньше контраста, и гамма (средние тона).'),
+    inputs: [IN_COLOR()],
+    output: 'color',
+    params: [
+      { id: 'brightness', label: l('Brightness', 'Яркость'), kind: 'number', min: -1, max: 1, default: 0 },
+      { id: 'contrast', label: l('Contrast', 'Контраст'), kind: 'number', min: 0, max: 3, default: 1 },
+      { id: 'gamma', label: l('Gamma', 'Гамма'), kind: 'number', min: 0.2, max: 5, default: 1 },
+    ],
+    glsl: `vec3 c = (inC_in(uv).rgb - 0.5) * p_contrast + 0.5 + p_brightness;
+outColor = vec4(pow(clamp(c, 0., 1.), vec3(1. / p_gamma)), 1.);`,
+  },
+  {
+    type: 'mirror',
+    group: 'change',
+    label: l('Mirror', 'Зеркало'),
+    hint: l('Make the picture symmetric: left matches right, top matches bottom, or both.', 'Сделать картинку симметричной: слева как справа, сверху как снизу, или оба.'),
+    inputs: [IN_COLOR()],
+    output: 'color',
+    params: [{ id: 'mode', label: l('Mirror', 'Отразить'), kind: 'choice', options: [opt('across', 'Left–right', 'Слева–справа'), opt('down', 'Top–bottom', 'Сверху–снизу'), opt('both', 'Both', 'Оба')], default: 'across' }],
+    glsl: `vec2 q = uv;
+if (p_mode < 0.5 || p_mode > 1.5) q.x = 0.5 - abs(uv.x - 0.5);
+if (p_mode > 0.5) q.y = 0.5 - abs(uv.y - 0.5);
+outColor = vec4(inC_in(q).rgb, 1.);`,
+  },
+  {
+    type: 'pixelate',
+    group: 'change',
+    label: l('Pixelate', 'Пикселизация'),
+    hint: l('Big square pixels (retro look).', 'Крупные квадратные пиксели (ретро).'),
+    inputs: [IN_COLOR()],
+    output: 'color',
+    params: [{ id: 'cells', label: l('Pixels across', 'Пикселей в ряд'), kind: 'int', min: 2, max: 256, default: 32 }],
+    glsl: 'outColor = vec4(inC_in((floor(uv * p_cells) + 0.5) / p_cells).rgb, 1.);',
+  },
+  {
+    type: 'swirl',
+    group: 'change',
+    label: l('Swirl', 'Завихрение'),
+    hint: l('Twist the middle of the picture round (the edges stay put, so it still tiles).', 'Закрутить середину картинки (края на месте, так что плитка стыкуется).'),
+    inputs: [IN_COLOR()],
+    output: 'color',
+    params: [
+      { id: 'amount', label: l('Twist', 'Закрутка'), kind: 'number', min: -10, max: 10, default: 3 },
+      { id: 'radius', label: l('Radius', 'Радиус'), kind: 'number', min: 0.05, max: 0.5, default: 0.45 },
+    ],
+    glsl: `vec2 d = uv - 0.5; float t = clamp(1. - length(d) / p_radius, 0., 1.); float a = p_amount * t * t;
+outColor = vec4(inC_in(0.5 + mat2(cos(a), -sin(a), sin(a), cos(a)) * d).rgb, 1.);`,
+  },
+  {
+    type: 'outline',
+    group: 'change',
+    label: l('Outline', 'Контур'),
+    hint: l('White where brightness changes quickly: the edges of shapes.', 'Белое там, где яркость резко меняется: края фигур.'),
+    inputs: [IN_GREY()],
+    output: 'grey',
+    params: [
+      { id: 'strength', label: l('Strength', 'Сила'), kind: 'number', min: 0, max: 10, default: 2 },
+      { id: 'radius', label: l('Radius', 'Радиус'), kind: 'number', min: 0.001, max: 0.02, step: 0.001, default: 0.003 },
+    ],
+    glsl: `float r = p_radius;
+float tl = inG_in(uv + vec2(-r, -r)), tc = inG_in(uv + vec2(0., -r)), tr = inG_in(uv + vec2(r, -r));
+float ml = inG_in(uv + vec2(-r, 0.)), mr = inG_in(uv + vec2(r, 0.));
+float bl = inG_in(uv + vec2(-r, r)), bc = inG_in(uv + vec2(0., r)), br = inG_in(uv + vec2(r, r));
+float gx = tr + 2. * mr + br - tl - 2. * ml - bl; float gy = bl + 2. * bc + br - tl - 2. * tc - tr;
+outColor = vec4(vec3(clamp(length(vec2(gx, gy)) * p_strength, 0., 1.)), 1.);`,
+  },
+  {
+    type: 'motionBlur',
+    group: 'change',
+    label: l('Directional blur', 'Размытие в движении'),
+    hint: l('Smear the picture one way: streaks, brushed metal, rain.', 'Смазать картинку в одну сторону: потёки, шлифованный металл, дождь.'),
+    inputs: [IN_COLOR()],
+    output: 'color',
+    params: [
+      { id: 'angle', label: l('Direction', 'Направление'), kind: 'number', min: 0, max: 360, step: 1, default: 90 },
+      { id: 'length', label: l('Length', 'Длина'), kind: 'number', min: 0, max: 0.25, step: 0.002, default: 0.04 },
+    ],
+    glsl: `vec2 dir = vec2(cos(radians(p_angle)), sin(radians(p_angle))) * p_length;
+vec3 s = vec3(0.); for (int k = -8; k <= 8; k++) s += inC_in(uv + dir * float(k) / 8.).rgb;
+outColor = vec4(s / 17., 1.);`,
+  },
+  {
+    type: 'emboss',
+    group: 'change',
+    label: l('Light from height', 'Свет по высоте'),
+    hint: l('Light a height picture from one side: bright slopes face the light (a quick preview or stylized shading).', 'Осветить карту высот с одной стороны: склоны к свету светлее (быстрый просмотр или стилизованные тени).'),
+    inputs: [IN_GREY('in', l('Height', 'Высота'))],
+    output: 'grey',
+    params: [
+      { id: 'angle', label: l('Light from', 'Свет с'), kind: 'number', min: 0, max: 360, step: 1, default: 225 },
+      { id: 'elevation', label: l('Light height', 'Высота света'), kind: 'number', min: 5, max: 85, step: 1, default: 40 },
+      { id: 'strength', label: l('Strength', 'Сила'), kind: 'number', min: 0, max: 4, default: 1 },
+    ],
+    glsl: `float e = 1. / 256.;
+vec2 g = vec2(inG_in(uv + vec2(e, 0.)) - inG_in(uv - vec2(e, 0.)), inG_in(uv + vec2(0., e)) - inG_in(uv - vec2(0., e))) * p_strength * 32.;
+vec3 n = normalize(vec3(-g, 1.)); float el = radians(p_elevation), az = radians(p_angle);
+vec3 L = vec3(cos(az) * cos(el), sin(az) * cos(el), sin(el));
+outColor = vec4(vec3(clamp(dot(n, L), 0., 1.)), 1.);`,
+  },
+
+  // ── More: combine ──
+  {
+    type: 'math',
+    group: 'combine',
+    label: l('Math', 'Математика'),
+    hint: l('Combine two greys with a sum: add, subtract, multiply, divide, min, max, power … (B is the number when not linked).', 'Совместить два серых: сложить, вычесть, умножить, разделить, мин, макс, степень … (Б — число, если не подключено).'),
+    inputs: [IN_GREY('a', l('A', 'А'), [0.5, 0.5, 0.5]), IN_GREY('b', l('B', 'Б'), [0.5, 0.5, 0.5])],
+    output: 'grey',
+    params: [
+      {
+        id: 'op',
+        label: l('Sum', 'Действие'),
+        kind: 'choice',
+        options: [opt('add', 'A + B', 'А + Б'), opt('sub', 'A − B', 'А − Б'), opt('mul', 'A × B', 'А × Б'), opt('div', 'A ÷ B', 'А ÷ Б'), opt('min', 'Smaller', 'Меньшее'), opt('max', 'Larger', 'Большее'), opt('pow', 'A to the power B', 'А в степени Б'), opt('diff', 'Difference', 'Разница'), opt('avg', 'Average', 'Среднее')],
+        default: 'mul',
+      },
+      { id: 'value', label: l('B (when not linked)', 'Б (без связи)'), kind: 'number', min: -1, max: 4, default: 1 },
+    ],
+    glsl: `float a = inG_a(uv); float b = h_b > 0.5 ? inG_b(uv) : p_value; int m = int(p_op + 0.5); float r;
+if (m == 0) r = a + b; else if (m == 1) r = a - b; else if (m == 2) r = a * b; else if (m == 3) r = a / max(abs(b), 1e-4) * sign(b + 1e-9);
+else if (m == 4) r = min(a, b); else if (m == 5) r = max(a, b); else if (m == 6) r = pow(max(a, 0.), b); else if (m == 7) r = abs(a - b); else r = (a + b) * 0.5;
+outColor = vec4(vec3(clamp(r, 0., 1.)), 1.);`,
+  },
+  {
+    type: 'heightBlend',
+    group: 'combine',
+    label: l('Height blend', 'Смешать по высоте'),
+    hint: l('Two materials meet by height: the higher one shows (sand between stones, moss in cracks, paint chipping off).', 'Два материала встречаются по высоте: видно более высокий (песок между камнями, мох в трещинах, облупившаяся краска).'),
+    inputs: [IN_COLOR('top', l('Top colour', 'Верхний цвет'), [1, 1, 1]), IN_GREY('heightTop', l('Top height', 'Верхняя высота'), [0.5, 0.5, 0.5]), IN_COLOR('bottom', l('Bottom colour', 'Нижний цвет'), [0, 0, 0]), IN_GREY('heightBottom', l('Bottom height', 'Нижняя высота'), [0.5, 0.5, 0.5])],
+    output: 'color',
+    params: [
+      { id: 'offset', label: l('Top raised by', 'Поднять верхний на'), kind: 'number', min: -1, max: 1, default: 0 },
+      { id: 'contrast', label: l('Hardness', 'Резкость'), kind: 'number', min: 0, max: 1, default: 0.85 },
+      { id: 'out', label: l('Gives', 'Выдаёт'), kind: 'choice', options: [opt('colour', 'Colour', 'Цвет'), opt('height', 'Height', 'Высоту'), opt('mask', 'Mask', 'Маску')], default: 'colour' },
+    ],
+    glsl: `float ha = inG_heightTop(uv) + p_offset, hb = inG_heightBottom(uv); float w = (1. - p_contrast) * 0.5 + 0.005;
+float m = smoothstep(-w, w, ha - hb);
+vec3 r = p_out < 0.5 ? mix(inC_bottom(uv).rgb, inC_top(uv).rgb, m) : p_out < 1.5 ? vec3(clamp(mix(hb, ha, m), 0., 1.)) : vec3(m);
+outColor = vec4(r, 1.);`,
+  },
+  {
+    type: 'combineChannels',
+    group: 'combine',
+    label: l('Combine channels', 'Собрать каналы'),
+    hint: l('Make a colour from three greys as its red, green and blue.', 'Собрать цвет из трёх серых как красный, зелёный и синий.'),
+    inputs: [IN_GREY('r', l('Red', 'Красный')), IN_GREY('g', l('Green', 'Зелёный')), IN_GREY('b', l('Blue', 'Синий'))],
+    output: 'color',
+    params: [],
+    glsl: 'outColor = vec4(inG_r(uv), inG_g(uv), inG_b(uv), 1.);',
+  },
+  {
+    type: 'splitChannel',
+    group: 'combine',
+    label: l('Pick channel', 'Взять канал'),
+    hint: l('One channel of a colour as grey: red, green, blue, or brightness.', 'Один канал цвета как серое: красный, зелёный, синий или яркость.'),
+    inputs: [IN_COLOR()],
+    output: 'grey',
+    params: [{ id: 'channel', label: l('Channel', 'Канал'), kind: 'choice', options: [opt('r', 'Red', 'Красный'), opt('g', 'Green', 'Зелёный'), opt('b', 'Blue', 'Синий'), opt('l', 'Brightness', 'Яркость')], default: 'r' }],
+    glsl: `vec3 c = inC_in(uv).rgb; int k = int(p_channel + 0.5);
+float v = k == 0 ? c.r : k == 1 ? c.g : k == 2 ? c.b : dot(c, vec3(0.2126, 0.7152, 0.0722));
+outColor = vec4(vec3(v), 1.);`,
+  },
+  {
+    type: 'colorSelect',
+    group: 'combine',
+    label: l('Colour to mask', 'Цвет в маску'),
+    hint: l('White where the picture is close to a colour: pick out one part to treat differently.', 'Белое там, где картинка близка к цвету: выделить часть, чтобы обработать отдельно.'),
+    inputs: [IN_COLOR()],
+    output: 'grey',
+    params: [
+      { id: 'color', label: l('Colour', 'Цвет'), kind: 'color', default: '#808080' },
+      { id: 'tolerance', label: l('Tolerance', 'Допуск'), kind: 'number', min: 0, max: 1, default: 0.2 },
+      { id: 'softness', label: l('Softness', 'Мягкость'), kind: 'number', min: 0, max: 1, default: 0.2 },
+    ],
+    glsl: `float d = distance(inC_in(uv).rgb, p_color);
+outColor = vec4(vec3(1. - smoothstep(p_tolerance, p_tolerance + p_softness * 0.3 + 1e-3, d)), 1.);`,
+  },
+
+  // ── More: colour ──
+  {
+    type: 'replaceColor',
+    group: 'colour',
+    label: l('Replace colour', 'Заменить цвет'),
+    hint: l('Swap one colour for another (and its near shades).', 'Заменить один цвет другим (и близкие оттенки).'),
+    inputs: [IN_COLOR()],
+    output: 'color',
+    params: [
+      { id: 'from', label: l('From', 'Какой'), kind: 'color', default: '#808080' },
+      { id: 'to', label: l('To', 'На какой'), kind: 'color', default: '#c05040' },
+      { id: 'tolerance', label: l('Tolerance', 'Допуск'), kind: 'number', min: 0, max: 1, default: 0.25 },
+      { id: 'softness', label: l('Softness', 'Мягкость'), kind: 'number', min: 0, max: 1, default: 0.3 },
+    ],
+    glsl: `vec3 c = inC_in(uv).rgb;
+float m = 1. - smoothstep(p_tolerance, p_tolerance + p_softness * 0.3 + 1e-3, distance(c, p_from));
+outColor = vec4(mix(c, clamp(c + (p_to - p_from), 0., 1.), m), 1.);`,
+  },
+  {
+    type: 'desaturate',
+    group: 'colour',
+    label: l('Desaturate', 'Обесцветить'),
+    hint: l('Take the colour out, partly or fully.', 'Убрать цвет, частично или полностью.'),
+    inputs: [IN_COLOR()],
+    output: 'color',
+    params: [{ id: 'amount', label: l('Amount', 'Сила'), kind: 'number', min: 0, max: 1, default: 1 }],
+    glsl: 'vec3 c = inC_in(uv).rgb; outColor = vec4(mix(c, vec3(dot(c, vec3(0.2126, 0.7152, 0.0722))), p_amount), 1.);',
+  },
+  {
+    type: 'colorVariation',
+    group: 'colour',
+    label: l('Colour variation', 'Разнообразие цвета'),
+    hint: l('Break up a flat colour with large, soft shifts in brightness and hue.', 'Оживить ровный цвет крупными мягкими сдвигами яркости и тона.'),
+    inputs: [IN_COLOR('in', l('In', 'Вход'), [0.6, 0.6, 0.6])],
+    output: 'color',
+    params: [
+      { id: 'amount', label: l('Brightness', 'Яркость'), kind: 'number', min: 0, max: 1, default: 0.3 },
+      { id: 'hue', label: l('Hue', 'Тон'), kind: 'number', min: 0, max: 0.5, default: 0.05 },
+      { id: 'scale', label: l('Size', 'Размер'), kind: 'int', min: 1, max: 32, default: 4 },
+      seed,
+    ],
+    glsl: `float n = fbm(uv, p_scale, 4., 0.5, 0., p_seed) - 0.5; float n2 = fbm(uv, p_scale, 4., 0.5, 0., p_seed + 9.) - 0.5;
+vec3 h = rgb2hsv(inC_in(uv).rgb); h.x = fract(h.x + n2 * p_hue * 2.); h.z = clamp(h.z * (1. + n * p_amount * 2.), 0., 1.);
+outColor = vec4(hsv2rgb(h), 1.);`,
+  },
+  {
+    type: 'temperature',
+    group: 'colour',
+    label: l('Warm or cool', 'Теплее или холоднее'),
+    hint: l('Shift the colours warmer (orange) or cooler (blue), and greener or pinker.', 'Сдвинуть цвета теплее (оранжевее) или холоднее (синее), и зеленее или розовее.'),
+    inputs: [IN_COLOR()],
+    output: 'color',
+    params: [
+      { id: 'warmth', label: l('Warmth', 'Теплота'), kind: 'number', min: -1, max: 1, default: 0.2 },
+      { id: 'tint', label: l('Green–pink', 'Зелёный–розовый'), kind: 'number', min: -1, max: 1, default: 0 },
+    ],
+    glsl: `vec3 c = inC_in(uv).rgb; c.r += p_warmth * 0.12; c.b -= p_warmth * 0.12; c.g -= p_tint * 0.1; c.rb += p_tint * 0.04;
+outColor = vec4(clamp(c, 0., 1.), 1.);`,
+  },
+
+  // ── More: surface ──
+  {
+    type: 'normalBlend',
+    group: 'surface',
+    label: l('Combine normals', 'Совместить нормали'),
+    hint: l('Lay fine detail bumps over a base normal map (both from Height to normal).', 'Наложить мелкий рельеф на основную карту нормалей (обе из «Высота в нормали»).'),
+    inputs: [IN_COLOR('base', l('Base', 'Основа'), [0.5, 0.5, 1]), IN_COLOR('detail', l('Detail', 'Детали'), [0.5, 0.5, 1])],
+    output: 'color',
+    params: [{ id: 'strength', label: l('Detail strength', 'Сила деталей'), kind: 'number', min: 0, max: 2, default: 1 }],
+    glsl: `vec3 a = inC_base(uv).rgb * 2. - 1.; vec3 b = inC_detail(uv).rgb * 2. - 1.; b.xy *= p_strength;
+outColor = vec4(normalize(vec3(a.xy + b.xy, max(a.z * b.z, 1e-3))) * 0.5 + 0.5, 1.);`,
+  },
+  {
+    type: 'normalAdjust',
+    group: 'surface',
+    label: l('Adjust normals', 'Настроить нормали'),
+    hint: l('Make bumps stronger or flatter, or flip them (for maps made the other way up).', 'Сделать рельеф сильнее или площе, или перевернуть (для карт, сделанных наоборот).'),
+    inputs: [IN_COLOR('in', l('Normal', 'Нормали'), [0.5, 0.5, 1])],
+    output: 'color',
+    params: [
+      { id: 'strength', label: l('Strength', 'Сила'), kind: 'number', min: 0, max: 4, default: 1 },
+      { id: 'flip', label: l('Flip green', 'Перевернуть зелёный'), kind: 'bool', default: false },
+    ],
+    glsl: `vec3 n = inC_in(uv).rgb * 2. - 1.; n.xy *= p_strength; if (p_flip > 0.5) n.y = -n.y;
+outColor = vec4(normalize(vec3(n.xy, max(n.z, 1e-3))) * 0.5 + 0.5, 1.);`,
+  },
+  {
+    type: 'edgeWear',
+    group: 'surface',
+    label: l('Edge wear', 'Износ краёв'),
+    hint: l('A mask of worn edges from a height picture, broken up with noise: paint chipped off corners.', 'Маска стёртых краёв по карте высот, разбитая шумом: краска, стёртая на углах.'),
+    inputs: [IN_GREY('in', l('Height', 'Высота'))],
+    output: 'grey',
+    params: [
+      { id: 'amount', label: l('Amount', 'Сколько'), kind: 'number', min: 0, max: 1, default: 0.5 },
+      { id: 'breakup', label: l('Breakup', 'Разрывы'), kind: 'number', min: 0, max: 1, default: 0.5 },
+      { id: 'scale', label: l('Noise size', 'Размер шума'), kind: 'int', min: 1, max: 64, default: 12 },
+      seed,
+    ],
+    glsl: `float h = inG_in(uv); float r = 0.004;
+float lap = 4. * h - inG_in(uv + vec2(r, 0.)) - inG_in(uv - vec2(r, 0.)) - inG_in(uv + vec2(0., r)) - inG_in(uv - vec2(0., r));
+float edge = clamp(lap * 40., 0., 1.); float n = fbm(uv, p_scale, 5., 0.6, 0., p_seed);
+float v = edge * mix(1., n * 1.6, p_breakup);
+outColor = vec4(vec3(smoothstep(1. - p_amount, 1. - p_amount + 0.15, v)), 1.);`,
+  },
+  {
+    type: 'dirt',
+    group: 'surface',
+    label: l('Dirt', 'Грязь'),
+    hint: l('A mask of dirt gathering in the dips of a height picture, spread a little with noise.', 'Маска грязи, собирающейся во впадинах карты высот, немного разбросанной шумом.'),
+    inputs: [IN_GREY('in', l('Height', 'Высота'))],
+    output: 'grey',
+    params: [
+      { id: 'amount', label: l('Amount', 'Сколько'), kind: 'number', min: 0, max: 1, default: 0.4 },
+      { id: 'scale', label: l('Noise size', 'Размер шума'), kind: 'int', min: 1, max: 32, default: 6 },
+      seed,
+    ],
+    glsl: `float h = inG_in(uv); float s = 0., w = 0.;
+for (int y = -2; y <= 2; y++) for (int x = -2; x <= 2; x++) { vec2 o = vec2(x, y) / 2.; float k = exp(-dot(o, o)); s += inG_in(uv + o * 0.03) * k; w += k; }
+float cav = clamp((s / w - h) * 8., 0., 1.); float n = fbm(uv, p_scale, 5., 0.55, 0., p_seed);
+outColor = vec4(vec3(clamp(cav * 1.5 + (n - 1. + p_amount) * 1.5, 0., 1.)), 1.);`,
+  },
+  {
+    type: 'drips',
+    group: 'surface',
+    label: l('Drips and streaks', 'Потёки'),
+    hint: l('Thin streaks running down, thinning as they go: rain stains, rust runs, leaks.', 'Тонкие потёки вниз, сужающиеся к концу: следы дождя, ржавчины, протечки.'),
+    inputs: [],
+    output: 'grey',
+    params: [
+      { id: 'count', label: l('Lanes', 'Дорожек'), kind: 'int', min: 4, max: 128, default: 32 },
+      { id: 'amount', label: l('Amount', 'Сколько'), kind: 'number', min: 0, max: 1, default: 0.5 },
+      { id: 'length', label: l('Length', 'Длина'), kind: 'number', min: 0.05, max: 1, default: 0.5 },
+      seed,
+    ],
+    glsl: `float col = floor(uv.x * p_count); vec2 o = seedv(p_seed); float cm = mod(col, p_count);
+float has = step(1. - p_amount, hash12(vec2(cm, 1.) + o));
+float start = hash12(vec2(cm, 2.) + o); float len = p_length * (0.3 + 0.7 * hash12(vec2(cm, 3.) + o));
+float y = fract(uv.y - start); float t = clamp(y / max(len, 1e-3), 0., 1.);
+float fx = fract(uv.x * p_count) - 0.5; float wd = 0.35 * (1. - t) + 0.02;
+float v = has * step(y, len) * (1. - smoothstep(wd * 0.6, wd, abs(fx))) * (1. - t);
+outColor = vec4(vec3(v), 1.);`,
+  },
+
   // ── Outputs ──
   output('outColor', 'color', 'color', 'Colour', 'Цвет', 'The material’s colour.', 'Цвет материала.', [0.7, 0.7, 0.7]),
   output('outHeight', 'height', 'grey', 'Height', 'Высота', 'How high each spot is (white high): bumps when there is no normal map.', 'Высота каждой точки (белое — выше): рельеф, если нет карты нормалей.', [0.5, 0.5, 0.5]),
