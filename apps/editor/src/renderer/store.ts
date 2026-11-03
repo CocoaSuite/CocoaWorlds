@@ -590,8 +590,8 @@ export const useEditor = create<State & Actions>()((set, get) => ({
   duplicateSelection() {
     const { doc, selection } = get();
     if (!doc || !selection.length) return;
-    const g = get().session?.project.settings.gridSize ?? 16;
-    const { copies, roots } = cloneSnapshot(doc, snapshotSubtrees(doc, rootsOf(doc, selection)), [g, 0, g]);
+    // Exactly where the originals are (move the copies after), and selected instead of them.
+    const { copies, roots } = cloneSnapshot(doc, snapshotSubtrees(doc, rootsOf(doc, selection)), [0, 0, 0]);
     get().execute(addEntitiesCmd(doc, copies, 'Duplicate'));
     set({ selection: roots });
   },
