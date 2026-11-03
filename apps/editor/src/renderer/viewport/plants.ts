@@ -352,10 +352,47 @@ void main() {
   if (uFadeSide < 0.5 ? cwDither >= uFade : cwDither < 1.0 - uFade) discard;`,
       )
       .replace('#include <normal_fragment_begin>', THREE.ShaderChunk.normal_fragment_begin.replace('normal *= faceDirection;', ''));
+    // Backlight: looking towards the sun through a plant, light shines through its leaves, brightest round the
+    // crown's edge (where the rounded normals turn side-on). Tinted by the leaf's own colour.
+    if (!(m as unknown as THREE.SpriteMaterial).isSpriteMaterial) {
+      sh.uniforms.uRimDir = PLANT_RIM.dir;
+      sh.uniforms.uRimColour = PLANT_RIM.colour;
+      sh.fragmentShader = sh.fragmentShader
+        .replace('void main() {', 'uniform vec3 uRimDir;\nuniform vec3 uRimColour;\nvoid main() {')
+        .replace(
+          '#include <opaque_fragment>',
+          `{
+            vec3 toEye = normalize(vViewPosition);
+            float towardSun = pow(max(0.0, dot(-toEye, uRimDir)), 3.0);
+            float edge = pow(1.0 - abs(dot(normalize(normal), toEye)), 2.0);
+            outgoingLight += diffuseColor.rgb * uRimColour * towardSun * (0.25 + 1.4 * edge);
+          }
+          #include <opaque_fragment>`,
+        );
+    }
   };
   m.customProgramCacheKey = () => `cw-plant-fade-${m.type}`;
   m.userData.fade = fade;
   return m;
+}
+
+/** The sun as plants' backlight sees it: its direction (towards the sun, in view space) and colour × strength. */
+export const PLANT_RIM = { dir: { value: new THREE.Vector3(0, 1, 0) }, colour: { value: new THREE.Color(0, 0, 0) } };
+
+/** Point the backlight at the scene's sun for this camera (none: no backlight). */
+export function aimRim(root: THREE.Object3D, cam: THREE.Camera): void {
+  let sun: THREE.DirectionalLight | null = null;
+  root.traverseVisible((o) => {
+    if (!sun && (o as THREE.DirectionalLight).isDirectionalLight && o.visible) sun = o as THREE.DirectionalLight;
+  });
+  const s = sun as THREE.DirectionalLight | null;
+  if (!s) {
+    PLANT_RIM.colour.value.setRGB(0, 0, 0);
+    return;
+  }
+  const at = s.getWorldPosition(new THREE.Vector3()).sub(s.target.getWorldPosition(new THREE.Vector3())).normalize();
+  PLANT_RIM.dir.value.copy(at).transformDirection(cam.matrixWorldInverse);
+  PLANT_RIM.colour.value.copy(s.color).multiplyScalar(Math.min(3, s.intensity) * 0.35);
 }
 
 /** The wind clock plants sway by (seconds). */
@@ -463,6 +500,9 @@ export class PlantRenderer {
   /** Show each plant at its level for this camera, dissolving into the next near the end of each range. */
   update(cam: THREE.Camera): void {
     PLANT_TIME.value = performance.now() / 1000;
+    let root: THREE.Object3D = this.group;
+    while (root.parent) root = root.parent;
+    aimRim(root, cam);
     const eye = cam.getWorldPosition(new THREE.Vector3());
     for (const s of this.shown.values()) {
       const d = eye.distanceTo(s.at);

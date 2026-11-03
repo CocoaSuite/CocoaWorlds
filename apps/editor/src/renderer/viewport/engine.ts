@@ -338,7 +338,8 @@ export class ViewportEngine {
 
   setDoc(doc: SceneDoc | null): void {
     this.doc = doc;
-    this.worldKey = '';
+    // (Never the key of any scene, an empty one included: a new doc always rebuilds the level.)
+    this.worldKey = '\u0000new';
     this.syncAll();
   }
 

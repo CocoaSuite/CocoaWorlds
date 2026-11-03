@@ -9,7 +9,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { getLang } from '../i18n';
 import { useEditor } from '../store';
-import { PLANT_TIME, plantGeometry, plantImpostor, plantMaterial, setPlantWind } from '../viewport/plants';
+import { PLANT_TIME, aimRim, plantGeometry, plantImpostor, plantMaterial, setPlantWind } from '../viewport/plants';
 import { UNITS_PER_METRE } from '../viewport/models';
 
 const L = (en: string, ru: string) => (getLang() === 'ru' ? ru : en);
@@ -342,6 +342,7 @@ function PlantPreview({ def }: { def: PlantDef }) {
       }
       ctl.update();
       PLANT_TIME.value = performance.now() / 1000;
+      aimRim(scene, cam);
       r.render(scene, cam);
       raf = requestAnimationFrame(loop);
     };
