@@ -32,9 +32,18 @@ export interface VoxelMesh {
 
 export type SculptMode = 'raise' | 'lower' | 'smooth' | 'flatten' | 'dig' | 'fill';
 
+/**
+ * Terrain tiles (T2): grids of the same size laid side by side, sharing their edge points (a tile's last column
+ * along x is its +x neighbour's first). Given its neighbours (`dx`, `dz` each -1, 0 or 1), a grid reads past its
+ * edges into them instead of closing them with air, so the ground runs on across the seam without a wall.
+ */
+export type VoxelNeighbours = (dx: -1 | 0 | 1, dz: -1 | 0 | 1) => VoxelField | null;
+
 export class VoxelField {
   readonly density: Float32Array;
   readonly weights: Uint8Array;
+  /** Its neighbouring tiles, if it is one of a set (see VoxelNeighbours). */
+  neighbours: VoxelNeighbours | null = null;
 
   /** `n`: grid points along x, y, z; `cell`: spacing (u). Starts empty (all air), layer 0 everywhere. */
   constructor(
@@ -51,10 +60,37 @@ export class VoxelField {
     return (z * this.n[1] + y) * this.n[0] + x;
   }
 
-  /** Density at a grid point (air outside the grid, so the edges are closed). */
+  /** Density at a grid point (outside the grid: in the neighbouring tile there, else air, so the edges are closed). */
   at(x: number, y: number, z: number): number {
-    if (x < 0 || y < 0 || z < 0 || x >= this.n[0] || y >= this.n[1] || z >= this.n[2]) return -LIMIT;
-    return this.density[this.index(x, y, z)]!;
+    const p = this.locate(x, y, z);
+    return p ? p.f.density[p.i]! : -LIMIT;
+  }
+
+  /** Which grid holds a grid point (this one or a neighbouring tile), and its index there; null: none (air). */
+  locate(x: number, y: number, z: number): { f: VoxelField; i: number } | null {
+    const [nx, ny, nz] = this.n;
+    if (y < 0 || y >= ny) return null;
+    if (x >= 0 && z >= 0 && x < nx && z < nz) return { f: this, i: this.index(x, y, z) };
+    if (!this.neighbours) return null;
+    const dx = x < 0 ? -1 : x >= nx ? 1 : 0, dz = z < 0 ? -1 : z >= nz ? 1 : 0;
+    const t = this.neighbours(dx, dz);
+    if (!t) return null;
+    // (Shared edges: one step past this grid's last point is the neighbour's second.)
+    const lx = x - dx * (nx - 1), lz = z - dz * (nz - 1);
+    if (lx < 0 || lz < 0 || lx >= nx || lz >= nz) return null;
+    return { f: t, i: t.index(lx, y, lz) };
+  }
+
+  /**
+   * Whether this grid makes the faces at a grid point. A point on a shared edge is in two or more tiles; only one
+   * of them makes its faces, so the seam has no doubled faces: the tile furthest along +x, then +z.
+   */
+  owns(x: number, z: number): boolean {
+    if (!this.neighbours) return true;
+    const ox = x === this.n[0] - 1 ? [0, 1] : x === 0 ? [0, -1] : [0];
+    const oz = z === this.n[2] - 1 ? [0, 1] : z === 0 ? [0, -1] : [0];
+    for (const dx of ox) for (const dz of oz) if ((dx > 0 || (dx === 0 && dz > 0)) && this.neighbours(dx as 1 | 0, dz as -1 | 0 | 1)) return false;
+    return true;
   }
 
   /** Flat ground at height `h` (u, from the bottom of the grid). */
@@ -255,6 +291,104 @@ export class VoxelField {
 
 const clamp = (v: number) => Math.max(-LIMIT, Math.min(LIMIT, v));
 
+// ── Tiles (T2) ──
+
+/** One tile of a set: its grid and where it is in the set (tile steps along x and z). */
+export interface VoxelTile {
+  field: VoxelField;
+  i: number;
+  j: number;
+}
+
+export type TileSide = '+x' | '-x' | '+z' | '-z';
+export const TILE_STEP: Record<TileSide, [number, number]> = { '+x': [1, 0], '-x': [-1, 0], '+z': [0, 1], '-z': [0, -1] };
+
+/**
+ * A new tile beside `f` on `side`: the same size, its ground carried straight on from `f`'s edge (each row across
+ * the new tile a copy of the shared edge's points), so the two meet exactly and the new one can be shaped from there.
+ */
+export function tileBeside(f: VoxelField, side: TileSide): VoxelField {
+  const t = new VoxelField([...f.n], f.cell);
+  const [nx, ny, nz] = f.n;
+  const [dx, dz] = TILE_STEP[side];
+  for (let z = 0; z < nz; z++)
+    for (let y = 0; y < ny; y++)
+      for (let x = 0; x < nx; x++) {
+        // The edge point of `f` this one carries on from.
+        const sx = dx > 0 ? nx - 1 : dx < 0 ? 0 : x;
+        const sz = dz > 0 ? nz - 1 : dz < 0 ? 0 : z;
+        const from = f.index(sx, y, sz), to = t.index(x, y, z);
+        t.density[to] = f.density[from]!;
+        for (let k = 0; k < 4; k++) t.weights[to * 4 + k] = f.weights[from * 4 + k]!;
+      }
+  return t;
+}
+
+/**
+ * Make the tiles agree on their shared edge points again after edits (`edited`: each edited tile's changed range).
+ * Each shared point becomes the average of its copies (a smooth stroke can leave them a little apart). Returns each
+ * tile's changed range, now including the points it was given here.
+ */
+export function stitchTiles(tiles: VoxelTile[], edited: Map<VoxelTile, VoxelBox>): Map<VoxelTile, VoxelBox> {
+  const out = new Map<VoxelTile, VoxelBox>([...edited].map(([t, b]) => [t, { min: [...b.min] as V3, max: [...b.max] as V3 }]));
+  if (tiles.length < 2) return out;
+  const at = new Map(tiles.map((t) => [`${t.i},${t.j}`, t]));
+  const done = new Set<string>();
+  const grow = (t: VoxelTile, p: V3) => {
+    const b = out.get(t);
+    if (!b) return void out.set(t, { min: [...p] as V3, max: [...p] as V3 });
+    for (let k = 0; k < 3; k++) {
+      b.min[k] = Math.min(b.min[k]!, p[k]!);
+      b.max[k] = Math.max(b.max[k]!, p[k]!);
+    }
+  };
+  for (const [t, box] of edited) {
+    const [nx, , nz] = t.field.n;
+    const sx = nx - 1, sz = nz - 1;
+    for (let z = box.min[2]; z <= box.max[2]; z++)
+      for (let x = box.min[0]; x <= box.max[0]; x++) {
+        if (x !== 0 && x !== sx && z !== 0 && z !== sz) continue;
+        const gx = t.i * sx + x, gz = t.j * sz + z;
+        if (done.has(`${gx},${gz}`)) continue;
+        done.add(`${gx},${gz}`);
+        // Every tile holding this column.
+        const copies: { t: VoxelTile; x: number; z: number }[] = [];
+        for (const di of x === 0 ? [0, -1] : x === sx ? [0, 1] : [0])
+          for (const dj of z === 0 ? [0, -1] : z === sz ? [0, 1] : [0]) {
+            const o = at.get(`${t.i + di},${t.j + dj}`);
+            if (o && o.field.n[0] === nx && o.field.n[2] === nz && o.field.n[1] === t.field.n[1]) copies.push({ t: o, x: x - di * sx, z: z - dj * sz });
+          }
+        if (copies.length < 2) continue;
+        for (let y = box.min[1]; y <= box.max[1]; y++) {
+          let d = 0;
+          const w = [0, 0, 0, 0];
+          for (const c of copies) {
+            const i = c.t.field.index(c.x, y, c.z);
+            d += c.t.field.density[i]!;
+            for (let k = 0; k < 4; k++) w[k]! += c.t.field.weights[i * 4 + k]!;
+          }
+          d /= copies.length;
+          // (Weights still add up to 255.)
+          const sum = w.reduce((a, b) => a + b, 0) || 1;
+          const ws: number[] = [];
+          let given = 0;
+          for (let k = 0; k < 4; k++) {
+            const v = k === 3 ? 255 - given : Math.round((w[k]! / sum) * 255);
+            ws.push(Math.max(0, Math.min(255, v)));
+            given += ws[k]!;
+          }
+          for (const c of copies) {
+            const i = c.t.field.index(c.x, y, c.z);
+            c.t.field.density[i] = d;
+            for (let k = 0; k < 4; k++) c.t.field.weights[i * 4 + k] = ws[k]!;
+            grow(c.t, [c.x, y, c.z]);
+          }
+        }
+      }
+  }
+  return out;
+}
+
 /**
  * Surface nets over the cells starting at `o` (grid points), `size` cells along each axis. A vertex goes in each
  * cell the surface crosses (including one cell before the range, which the faces on the range's near side need);
@@ -276,9 +410,12 @@ function surfaceNets(f: VoxelField, o: V3, size: V3): VoxelMesh {
   const cornerAt = (k: number): V3 => [k & 1, (k >> 1) & 1, (k >> 2) & 1];
   const vi = (x: number, y: number, z: number) => ((z - lo[2]) * dims[1] + (y - lo[1])) * dims[0] + (x - lo[0]);
 
-  // Weight at a grid point (outside the grid: the nearest one inside).
+  // Weight at a grid point (outside the grid: in the neighbouring tile there, else the nearest one inside).
   const weightAt = (x: number, y: number, z: number, k: number) => {
-    const cx = Math.max(0, Math.min(f.n[0] - 1, x)), cy = Math.max(0, Math.min(f.n[1] - 1, y)), cz = Math.max(0, Math.min(f.n[2] - 1, z));
+    const cy = Math.max(0, Math.min(f.n[1] - 1, y));
+    const p = f.locate(x, cy, z);
+    if (p) return p.f.weights[p.i * 4 + k]! / 255;
+    const cx = Math.max(0, Math.min(f.n[0] - 1, x)), cz = Math.max(0, Math.min(f.n[2] - 1, z));
     return f.weights[f.index(cx, cy, cz) * 4 + k]! / 255;
   };
 
@@ -330,6 +467,8 @@ function surfaceNets(f: VoxelField, o: V3, size: V3): VoxelMesh {
     for (let y = o[1]; y < o[1] + size[1]; y++) {
       for (let x = o[0]; x < o[0] + size[0]; x++) {
         if (x >= f.n[0] || y >= f.n[1] || z >= f.n[2]) continue;
+        // (A point on a seam: its faces are the neighbouring tile's.)
+        if (!f.owns(x, z)) continue;
         const here = f.at(x, y, z) > 0;
         // Edge along +x from (x,y,z): cells around it are (x, y-1..y, z-1..z).
         const edge = (dx: number, dy: number, dz: number, u: V3, v: V3) => {

@@ -6,7 +6,7 @@
  * preview watched with the free camera.
  */
 import { SceneDoc, expandRepeats, readComponent, type ParticlesData, type ColliderData, type GameRules, type GameValue, type ModelData, type SceneFile, type SignData, type TerrainData } from '@cocoaworlds/core';
-import { buildMesh, isInvisibleMaterial, type Brush, type WorldBrush } from '@cocoaworlds/geometry';
+import { buildMesh, isInvisibleMaterial, type Brush, type VoxelField, type WorldBrush } from '@cocoaworlds/geometry';
 import { GameWorld, initPhysics, type NavGrid, type BodyInfo, type ModelMesh, type SavedProgress, type Travel, type UiState, type PlayerInput, type PlayerStatus, type ScriptLog, type TriggerEvent } from '@cocoaworlds/runtime';
 import type { Problem, ScriptError } from '@cocoaworlds/scripting';
 import * as THREE from 'three';
@@ -15,6 +15,7 @@ import { FoliageRenderer } from './foliage';
 import { waterLookOf, waterMaterialFor } from './water-look';
 import { PlantRenderer, plantById } from './plants';
 import { TerrainRenderer, loadTerrain, terrainChunks } from './terrains';
+import { linkTerrainTiles } from './terrain-tiles';
 import { BATCH_MIN, ModelBatches, batchKey } from './model-batches';
 import { WEAR_RING, buildLevel } from './world-build';
 import { toGeometry } from './world-render';
@@ -90,13 +91,17 @@ export class PlaySession {
       ),
     );
     // Terrains: their surfaces, chunk by chunk, to collide with (the same meshes are drawn).
+    // (All loaded first, so tiles side by side are joined before they're meshed: the seams collide as one ground.)
     const terrains = new Map<string, ModelMesh[]>();
+    const loaded: [string, string, VoxelField][] = [];
     for (const e of scene.entities) {
       const file = (e.components.terrain as Partial<TerrainData> | undefined)?.file;
       if (!file) continue;
       const f = await loadTerrain(file);
-      if (f) terrains.set(e.id, terrainChunks(file, f).map(({ mesh }) => ({ positions: mesh.positions, indices: mesh.indices })));
+      if (f) loaded.push([e.id, file, f]);
     }
+    linkTerrainTiles(new SceneDoc(scene));
+    for (const [id, file, f] of loaded) terrains.set(id, terrainChunks(file, f).map(({ mesh }) => ({ positions: mesh.positions, indices: mesh.indices })));
     // Trees' trunks collide (their crowns don't).
     const trunks = new Map<string, { width: number; height: number }>();
     for (const e of scene.entities) {

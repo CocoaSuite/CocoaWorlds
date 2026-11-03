@@ -9,6 +9,7 @@ import * as THREE from 'three';
 import { assetUrl } from '../assets';
 import { isShown } from '../brush/brushes';
 import { sceneMaterial } from './world-render';
+import { forgetTerrainTiles, linkTerrainTiles } from './terrain-tiles';
 
 // ── The grids ──
 
@@ -91,6 +92,11 @@ export function terrainVersion(file: string): number {
 /** Tell the views a terrain changed (`chunks`: only these; null: all of it). */
 export function changed(file: string, chunks: V3[] | null): void {
   unsavedTerrains.add(file);
+  remeshTerrain(file, chunks);
+}
+
+/** Mesh a terrain again without it having changed (a neighbouring tile did, or tiles were joined or parted). */
+export function remeshTerrain(file: string, chunks: V3[] | null): void {
   versions.set(file, terrainVersion(file) + 1);
   const byChunk = meshCache.get(file);
   if (byChunk) {
@@ -107,6 +113,7 @@ export function onTerrainChange(fn: (file: string, chunks: V3[] | null) => void)
 
 /** Forget every terrain (another project was opened). */
 export function forgetTerrains(): void {
+  forgetTerrainTiles();
   fields.clear();
   meshCache.clear();
   unsavedTerrains.clear();
@@ -234,6 +241,7 @@ export class TerrainRenderer {
   readonly group = new THREE.Group();
   private shown = new Map<string, Shown>();
   private off: () => void;
+  private doc: SceneDoc | null = null;
 
   constructor(private onDraw: () => void = () => {}) {
     this.group.name = 'terrains';
@@ -245,6 +253,9 @@ export class TerrainRenderer {
 
   /** Bring the drawn terrains up to date with the scene (placement, colours; loading any not loaded yet). */
   sync(doc: SceneDoc | null): void {
+    this.doc = doc;
+    // (Tiles side by side are joined first, so their seams are meshed as one ground.)
+    linkTerrainTiles(doc);
     const seen = new Set<string>();
     for (const e of doc?.entities ?? []) {
       if (!e.components.terrain || !doc || !isShown(doc, e)) continue;
@@ -270,6 +281,8 @@ export class TerrainRenderer {
         const made = s;
         void loadTerrain(t.file).then((f) => {
           if (f && this.shown.get(e.id) === made) {
+            // (Now it's loaded it can join the tiles beside it.)
+            linkTerrainTiles(this.doc);
             this.remesh(made, null);
             this.onDraw();
           }

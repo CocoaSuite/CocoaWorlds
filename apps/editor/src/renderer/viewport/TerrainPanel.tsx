@@ -1,14 +1,16 @@
 /**
  * The Terrain tool's options (T1): what the brush does, its size and strength, and the layer it paints with.
- * Drag on a terrain to shape it; each stroke is one undo step.
+ * Drag on a terrain to shape it; each stroke is one undo step. Tiles can be added beside the selected terrain (T2).
  */
 import { readComponent, type TerrainData } from '@cocoaworlds/core';
-import { Segmented } from '@cocoaworlds/ui';
+import type { TileSide } from '@cocoaworlds/geometry';
+import { Button, Segmented } from '@cocoaworlds/ui';
 import { Slider } from '../editor/MaterialsPanel';
 import { t } from '../i18n';
 import { useEditor, type TerrainBrush } from '../store';
 
 const MODES: TerrainBrush['mode'][] = ['raise', 'lower', 'smooth', 'flatten', 'dig', 'fill', 'paint'];
+const SIDES: TileSide[] = ['-x', '+x', '-z', '+z'];
 
 export function TerrainPanel() {
   const b = useEditor((s) => s.terrainBrush);
@@ -21,6 +23,9 @@ export function TerrainPanel() {
     const d = readComponent<TerrainData>('terrain', e.components.terrain);
     return `${d.layer0},${d.layer1},${d.layer2},${d.layer3}`;
   });
+  // The selected terrain, to add tiles beside.
+  const selected = useEditor((s) => s.doc?.entities.find((x) => s.selection.includes(x.id) && x.components.terrain)?.id ?? null);
+  const addTile = useEditor((s) => s.addTerrainTile);
   return (
     <div className="cw-brush-panel cw-terrain-panel" role="group" aria-label={t('terrain.panel')} onPointerDown={(e) => e.stopPropagation()}>
       <div className="cw-brush-row">
@@ -46,6 +51,16 @@ export function TerrainPanel() {
               style={{ background: c }}
               onClick={() => set({ layer: i })}
             />
+          ))}
+        </div>
+      )}
+      {selected && (
+        <div className="cw-brush-row" role="group" aria-label={t('terrain.tiles')} title={t('terrain.tilesHint')}>
+          <span className="cw-brush-k">{t('terrain.tiles')}</span>
+          {SIDES.map((side) => (
+            <Button key={side} size="sm" aria-label={t(`terrain.tile${side}`)} onClick={() => addTile(selected, side)}>
+              {side.replace('-', '−').toUpperCase()}
+            </Button>
           ))}
         </div>
       )}

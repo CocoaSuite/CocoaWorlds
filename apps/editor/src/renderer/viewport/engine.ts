@@ -31,8 +31,9 @@ import { SceneLighting } from './scene-lighting';
 import { FOLIAGE_TIME, FoliageRenderer } from './foliage';
 import { WaterDepth, waterLookOf } from './water-look';
 import { PlantRenderer } from './plants';
-import { TerrainRenderer, changed as terrainChanged, terrainField } from './terrains';
-import type { VoxelBox, VoxelField } from '@cocoaworlds/geometry';
+import { TerrainRenderer, changed as terrainChanged, remeshTerrain, terrainField } from './terrains';
+import { editTiles, tileOf } from './terrain-tiles';
+import type { VoxelBox, VoxelTile } from '@cocoaworlds/geometry';
 
 
 export type { Hud } from '../ui/Hud';
@@ -915,12 +916,10 @@ export class ViewportEngine {
   })();
   private stroke: {
     id: string;
-    file: string;
-    field: VoxelField;
-    holder: THREE.Object3D;
-    density: Float32Array;
-    weights: Uint8Array;
-    box: VoxelBox | null;
+    /** The terrains it shapes: the one under the brush, or every tile of its set (a stroke runs across seams). */
+    parts: { id: string; file: string; tile: VoxelTile; origin: V3; density: Float32Array; weights: Uint8Array; box: VoxelBox | null }[];
+    /** Not a tile: the terrain's own placement (it may be turned). */
+    holder: THREE.Object3D | null;
     level: number;
     at: THREE.Vector3 | null;
     timer: ReturnType<typeof setInterval>;
@@ -965,17 +964,17 @@ export class ViewportEngine {
     const file = (this.doc.get(h.id)?.components.terrain as { file?: string } | undefined)?.file;
     const field = file ? terrainField(file) : null;
     if (!file || !field) return false;
+    const tile = tileOf(h.id);
     const holder = h.mesh.parent!;
-    const local = holder.worldToLocal(h.point.clone());
+    const snap = (t: VoxelTile) => ({ density: t.field.density.slice(), weights: t.field.weights.slice(), box: null });
+    const parts = tile
+      ? [...tile.set.values()].map((t) => ({ id: t.id, file: t.file, tile: t, origin: t.origin, ...snap(t) }))
+      : [{ id: h.id, file, tile: { field, i: 0, j: 0 }, origin: [0, 0, 0] as V3, ...snap({ field, i: 0, j: 0 }) }];
     this.stroke = {
       id: h.id,
-      file,
-      field,
-      holder,
-      density: field.density.slice(),
-      weights: field.weights.slice(),
-      box: null,
-      level: local.y,
+      parts,
+      holder: tile ? null : holder,
+      level: holder.worldToLocal(h.point.clone()).y,
       at: h.point,
       // (Held still, the brush keeps working.)
       timer: setInterval(() => this.stroke?.at && this.dab(this.stroke.at), 50),
@@ -990,7 +989,7 @@ export class ViewportEngine {
     this.showTerrainCursor(e);
     const h = this.terrainHit(e);
     // (Digging moves the ground away from under the cursor: keep to where the stroke was if nothing's hit.)
-    if (h && h.id === s.id) s.at = h.point;
+    if (h && s.parts.some((p) => p.id === h.id)) s.at = h.point;
     if (s.at) this.dab(s.at);
   }
 
@@ -998,41 +997,42 @@ export class ViewportEngine {
   private dab(at: THREE.Vector3): void {
     const s = this.stroke, b = this.terrainBrush;
     if (!s || !b) return;
-    const c = s.holder.worldToLocal(at.clone());
-    const p: [number, number, number] = [c.x, c.y, c.z];
+    const c = s.holder ? s.holder.worldToLocal(at.clone()) : at;
     const k = b.strength;
-    const box =
-      b.mode === 'paint'
-        ? s.field.paint(b.layer, p, b.radius, k * 0.3)
-        : s.field.sculpt(b.mode, p, b.radius, b.mode === 'raise' || b.mode === 'lower' ? k * 0.25 : k * 0.5, s.level);
-    if (!box) return;
-    s.box = s.box ? { min: s.box.min.map((v, i) => Math.min(v, box.min[i]!)) as typeof box.min, max: s.box.max.map((v, i) => Math.max(v, box.max[i]!)) as typeof box.max } : box;
-    terrainChanged(s.file, s.field.chunksIn(box));
+    const boxes = editTiles(
+      s.parts,
+      [c.x, c.y, c.z],
+      (f, p) => (b.mode === 'paint' ? f.paint(b.layer, p, b.radius, k * 0.3) : f.sculpt(b.mode, p, b.radius, b.mode === 'raise' || b.mode === 'lower' ? k * 0.25 : k * 0.5, s.level)),
+      (file, f, box) => terrainChanged(file, f.chunksIn(box)),
+    );
+    for (const p of s.parts) {
+      const box = boxes.get(p.tile);
+      if (box) p.box = p.box ? { min: p.box.min.map((v, i) => Math.min(v, box.min[i]!)) as V3, max: p.box.max.map((v, i) => Math.max(v, box.max[i]!)) as V3 } : box;
+    }
   }
 
-  /** The stroke is done: one undo step for all of it. */
+  /** The stroke is done: one undo step for all of it (every tile it shaped). */
   private endStroke(): void {
     const s = this.stroke;
     this.stroke = null;
     if (!s) return;
     clearInterval(s.timer);
-    if (!s.box) return;
-    const before = s.field.saveFrom(s.density, s.weights, s.box);
-    const after = s.field.save(s.box);
-    const chunks = s.field.chunksIn(s.box);
-    const { field, file } = s;
-    const mode = this.terrainBrush?.mode ?? 'raise';
-    this.cb.terrainEdit?.({
-      label: `Terrain: ${mode}`,
-      apply: () => {
-        field.restore(after);
-        terrainChanged(file, chunks);
-      },
-      revert: () => {
-        field.restore(before);
-        terrainChanged(file, chunks);
-      },
+    const done = s.parts.flatMap((p) => {
+      if (!p.box) return [];
+      const f = p.tile.field;
+      // (A cell's width more: the neighbouring tiles draw these points too.)
+      const wide = { min: p.box.min.map((v) => Math.max(0, v - 1)) as V3, max: p.box.max.map((v, i) => Math.min(f.n[i]! - 1, v + 1)) as V3 };
+      return [{ f, tile: p.tile, file: p.file, before: f.saveFrom(p.density, p.weights, p.box), after: f.save(p.box), chunks: f.chunksIn(wide) }];
     });
+    if (!done.length) return;
+    const mode = this.terrainBrush?.mode ?? 'raise';
+    const put = (which: 'before' | 'after') => {
+      for (const d of done) d.f.restore(d[which]);
+      for (const d of done) terrainChanged(d.file, d.chunks);
+      // (Tiles beside the ones changed draw a cell's width of them: mesh those again whole.)
+      for (const p of s.parts) if (done.some((d) => d.tile !== p.tile && Math.abs(d.tile.i - p.tile.i) <= 1 && Math.abs(d.tile.j - p.tile.j) <= 1)) remeshTerrain(p.file, null);
+    };
+    this.cb.terrainEdit?.({ label: `Terrain: ${mode}`, apply: () => put('after'), revert: () => put('before') });
   }
 
   /** View › Show grass: hides the editor's grass (Play still shows it). */

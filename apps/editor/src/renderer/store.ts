@@ -76,6 +76,7 @@ import {
   type BrushRole,
   type V3,
   VoxelField,
+  type TileSide,
 } from '@cocoaworlds/geometry';
 import { create } from 'zustand';
 import { modelSlots } from './viewport/models';
@@ -84,7 +85,8 @@ import { useShallow } from 'zustand/react/shallow';
 import type { AssetEntry, AssetKind, OpenedProject, PrefabEntry } from '../shared/api';
 import { setAssetProject } from './assets';
 import { setProjectPlants } from './viewport/plants';
-import { addTerrainField, forgetTerrains, saveTerrains } from './viewport/terrains';
+import { addTerrainField, forgetTerrains, saveTerrains, terrainField } from './viewport/terrains';
+import { besideTile, newTileBeside } from './viewport/terrain-tiles';
 import { materialSheet, projectMaterialDef, setProjectMaterials } from './viewport/project-materials';
 import { blockId, emptyScript, newEvent, newStatement, num, recipe as findRecipe, type EventBlock, type Script, type Statement } from '@cocoaworlds/scripting';
 import { copyRootOf, recordAllChanges, repivot, syncCommands, unlinked } from './prefabs';
@@ -222,6 +224,8 @@ interface Actions {
   addLadder(at?: [number, number, number]): void;
   /** A new terrain: flat ground 2048 u square, 768 u deep, its surface at `at` (T1). */
   addTerrain(at?: [number, number, number]): void;
+  /** A new terrain tile beside this one on `side`, its ground carried on from the shared edge (T2). */
+  addTerrainTile(id: string, side: TileSide): void;
   deleteSelection(): void;
   duplicateSelection(): void;
   rename(id: string, name: string): void;
@@ -546,6 +550,25 @@ export const useEditor = create<State & Actions>()((set, get) => ({
     get().execute(addEntitiesCmd(doc, [e], `Add ${name}`));
     set({ selection: [e.id] });
     get().log('info', 'Scene', 'Added a terrain: shape it with the Terrain tool (H)');
+  },
+
+  addTerrainTile(id, side) {
+    const doc = get().doc;
+    const src = doc?.get(id);
+    const file = (src?.components.terrain as { file?: string } | undefined)?.file;
+    const field = file ? terrainField(file) : null;
+    const spot = doc && field ? besideTile(id, doc, side) : null;
+    if (!doc || !src || !field || !spot) return;
+    if (spot.taken) return get().notify(t('terrain.tileTaken'));
+    const name = uniqueName(doc, src.name.replace(/_\d+$/, ''));
+    const next = `assets/terrain/${name}_${Date.now().toString(36)}.cwvox`;
+    addTerrainField(next, newTileBeside(field, side));
+    // (Everything else carries on too: layers, textures, grass.)
+    const e = newEntity(name, { ...structuredClone(src.components), terrain: { ...structuredClone(src.components.terrain), file: next } }, { position: spot.position, rotation: [...src.transform.rotation], scale: [...src.transform.scale] });
+    e.parent = src.parent;
+    get().execute(addEntitiesCmd(doc, [e], `Add ${name}`));
+    set({ selection: [e.id] });
+    get().log('info', 'Scene', `Added a terrain tile beside ${src.name} (${side})`);
   },
 
   addLadder(at = [0, 0, 0]) {

@@ -13,15 +13,12 @@ glass after load, and Play. Tests: `test/glass-shadows.test.ts`, e2e `test-e2e/g
 
 ### 2. Blending multiple terrain instances to create open world maps
 
-Status: not started. No design written yet.
+Status: first working case done. Chosen: tiles on a grid that share their edge points (seamless, no blend falloff),
+authored with the Terrain tool's *Add a tile* buttons, whole map loaded in Play. Design and what's left:
+`docs/terrain-blend.md`. Code: `packages/geometry/src/voxels.ts` (neighbours, seam ownership, `tileBeside`,
+`stitchTiles`), `viewport/terrain-tiles.ts` (joining, strokes across seams), `viewport/engine.ts` (stroke),
+`viewport/play-session.ts`. Tests: `packages/geometry/test/voxel-tiles.test.ts`, e2e `test-e2e/terrain-tiles.test.mjs`.
 
-What is known:
-- Terrains live in `viewport/terrains.ts`, with a panel in `viewport/TerrainPanel.tsx`, import in `editor/TerrainImport.tsx`, and ground blending in `viewport/ground-blend.ts`.
-- Foliage is in `viewport/foliage.ts`.
+Next, if wanted: streaming tiles around the player in Play; a heightmap import cut across several tiles.
 
-Open questions to settle before building:
-- How do terrain instances overlap? Options: (a) tiles that meet at seams with matching heights, (b) overlapping instances with a blend falloff at the edges, (c) a single heightfield split into streamed chunks.
-- Which should be authored in the editor (a tile grid, or placing instances freely)?
-- Does play mode need to load tiles around the player, or is the whole map loaded at once?
-
-Suggested first step: write a short design note (`docs/terrain-blend.md`) with the chosen option, then build the smallest working case: two adjacent tiles with matching edges, and a blended seam.
+Note: `packages/core/test/components.test.ts` ("offers only what fits") already fails on main, unrelated to this work.
