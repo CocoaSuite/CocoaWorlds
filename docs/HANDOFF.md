@@ -6,16 +6,10 @@ Read this first in a new session. Commit rules: see the notes in the last sessio
 
 ### 1. Glass should not cast shadow
 
-Status: not started.
-
-What is known:
-- Glass is a `MeshPhysicalMaterial` with `transmission > 0`. Reflection capture already hides glass (`viewport/reflections.ts`, `capture()`), so the same test can identify it.
-- Shadow casting is set per mesh in several places: `viewport/models.ts` (`o.castShadow = data.castShadows`), `viewport/terrains.ts`, `viewport/world-render.ts` (solid mesh), `viewport/scene-lighting.ts`.
-
-Suggested approach:
-- Find where project meshes get `castShadow`. For any mesh whose material is glass (transmission > 0), set `castShadow = false` after the material is applied. Check the materials path in `viewport/project-materials.ts` too, since materials can be swapped after load.
-- Check the play-mode path (`viewport/play-session.ts`, `game/runner.ts`) so glass does not cast shadows in Play either.
-- Verify with an e2e screenshot: a glass pane in front of the sun should leave no shadow.
+Status: done. `viewport/glass-shadows.ts` hides glass materials (transmission > 0) for the shadow pass only, hooked
+on both renderers (`viewport/engine.ts`, `game/runner.ts`), so it covers models, level faces (glass is one material
+group of the level mesh, so per-mesh `castShadow` would have removed the whole level's shadows), materials made
+glass after load, and Play. Tests: `test/glass-shadows.test.ts`, e2e `test-e2e/glass-shadow.test.mjs`.
 
 ### 2. Blending multiple terrain instances to create open world maps
 

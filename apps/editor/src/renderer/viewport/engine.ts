@@ -8,6 +8,7 @@ import { SceneDoc, expandRepeats, ownerOf, type EntityData, type Transform, type
 import { bevelEdges, bounds, faceAt, loopCut, nearestEdge, transform as transformBrush, translate, vertices, type Brush, type Plane, type V3 } from '@cocoaworlds/geometry';
 import * as THREE from 'three';
 import { AoRenderer } from './ao';
+import { glassCastsNoShadow } from './glass-shadows';
 import { TransformControls } from 'three/addons/controls/TransformControls.js';
 import { brushBounds, brushOf, isLocked, isShown, worldBrushOf, worldBrushes, worldMatrices, type DrawRole, type Outline, type ShapeOptions } from '../brush/brushes';
 import { rootsOf } from '../scene-ops';
@@ -245,6 +246,7 @@ export class ViewportEngine {
     this.renderer.setClearColor(0x1f1f1f);
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    glassCastsNoShadow(this.renderer);
     // (Glass draws what's behind it once more each frame: at half size, which the blur hides.)
     this.renderer.transmissionResolutionScale = 0.5;
     this.renderer.autoClear = false;

@@ -170,5 +170,6 @@ Exported games carry the baked images, not the graphs.
 
 - **Glass (see-through)**: how much light passes through; **Bending** (index of refraction) and **Thickness** set how
   much what's behind is bent, by the surface's normals (a normal map makes it ripple). Colour tints it, roughness
-  frosts it. Project materials are physical materials for this (no cost when glass is off).
+  frosts it. Project materials are physical materials for this (no cost when glass is off). Glass casts no shadow,
+  in the editor and in Play: light goes through it (`viewport/glass-shadows.ts` leaves it out of the shadow pass).
 - **Glow image** (under Glows): where it glows, tinted by the glow colour.

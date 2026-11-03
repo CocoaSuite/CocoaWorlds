@@ -10,6 +10,7 @@ import * as THREE from 'three';
 import { brushBounds } from '../brush/brushes';
 import { PlaySession } from '../viewport/play-session';
 import { AoRenderer } from '../viewport/ao';
+import { glassCastsNoShadow } from '../viewport/glass-shadows';
 import type { Travel } from '@cocoaworlds/runtime';
 import { SceneLighting } from '../viewport/scene-lighting';
 import { setProjectMaterials, tickMaterials } from '../viewport/project-materials';
@@ -81,6 +82,7 @@ export class GameRunner {
     r.setClearColor(0x1f1f1f);
     r.shadowMap.enabled = true;
     r.shadowMap.type = THREE.PCFSoftShadowMap;
+    glassCastsNoShadow(r);
     r.transmissionResolutionScale = 0.5;
     r.domElement.className = 'cw-canvas';
     r.domElement.tabIndex = 0;
