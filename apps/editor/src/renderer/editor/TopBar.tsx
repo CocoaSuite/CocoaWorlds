@@ -233,10 +233,11 @@ function Workspaces() {
   const ws = useEditor((x) => x.workspace);
   const playing = useEditor((x) => !!x.playing);
   const set = useEditor((x) => x.setWorkspace);
-  const tabs: { id: 'scene' | 'screens' | 'materials'; label: string; soon?: boolean }[] = [
+  const tabs: { id: 'scene' | 'screens' | 'materials' | 'plants'; label: string; soon?: boolean }[] = [
     { id: 'scene', label: t('ws.scene') },
     { id: 'screens', label: t('ws.screens') },
     { id: 'materials', label: t('ws.materials') },
+    { id: 'plants', label: t('ws.plants') },
   ];
   return (
     <div className="cw-ws" role="tablist" aria-label={t('ws.label')}>
