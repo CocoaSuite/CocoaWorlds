@@ -363,19 +363,9 @@ void main() {
           '#include <opaque_fragment>',
           `{
             vec3 toEye = normalize(vViewPosition);
-            vec3 n = normalize(normal);
-            // Rim: a thin pale outline right at the silhouette, on the edges that face the sun (above and towards
-            // it), stronger with the sun behind. No glow over the rest of the plant.
-            float side = 1.0 - abs(dot(n, toEye));
-            // (The crown's rounded normals say where its outline is; the face's own slant keeps it to the faces that
-            // actually turn away at the outline, so lumps in front don't get outlined too.)
-            vec3 g = normalize(cross(dFdx(vViewPosition), dFdy(vViewPosition)));
-            float slant = 1.0 - abs(dot(g, toEye));
-            float band = smoothstep(0.72, 0.94, side) * smoothstep(0.25, 0.65, slant);
-            float lit = smoothstep(-0.1, 0.5, dot(n, uRimDir));
-            float behind = 0.65 + 0.35 * smoothstep(-0.3, 0.7, dot(-toEye, uRimDir));
-            vec3 pale = mix(diffuseColor.rgb, vec3(0.86, 1.0, 0.72), 0.55) * 1.25;
-            outgoingLight = mix(outgoingLight, pale * uRimColour, clamp(band * lit * behind, 0.0, 1.0) * step(0.001, dot(uRimColour, uRimColour)));
+            float towardSun = pow(max(0.0, dot(-toEye, uRimDir)), 3.0);
+            float edge = pow(1.0 - abs(dot(normalize(normal), toEye)), 2.0);
+            outgoingLight += diffuseColor.rgb * uRimColour * towardSun * (0.1 + 1.0 * edge);
           }
           #include <opaque_fragment>`,
         );
@@ -402,7 +392,7 @@ export function aimRim(root: THREE.Object3D, cam: THREE.Camera): void {
   }
   const at = s.getWorldPosition(new THREE.Vector3()).sub(s.target.getWorldPosition(new THREE.Vector3())).normalize();
   PLANT_RIM.dir.value.copy(at).transformDirection(cam.matrixWorldInverse);
-  PLANT_RIM.colour.value.copy(s.color).multiplyScalar(Math.min(1.3, 0.45 + s.intensity * 0.3));
+  PLANT_RIM.colour.value.copy(s.color).multiplyScalar(Math.min(3, s.intensity) * 0.15);
 }
 
 /** The wind clock plants sway by (seconds). */
