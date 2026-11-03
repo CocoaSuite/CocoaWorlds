@@ -5,7 +5,7 @@
 import { BrowserWindow, Menu, app, dialog, ipcMain, shell, type IpcMainInvokeEvent } from 'electron';
 import path from 'node:path';
 import { IPC, type Result } from '../shared/api';
-import { listAssets, readAsset, writeAsset, addSample, librarySounds, readLibrarySound, addLibrarySound, writeTerrain, readGraph, writeGraph, writeGenerated } from './assets-fs';
+import { listAssets, readAsset, writeAsset, addSample, librarySounds, readLibrarySound, addLibrarySound, trashAsset, restoreAsset, writeTerrain, readGraph, writeGraph, writeGenerated } from './assets-fs';
 import { ProjectError, autosaveScene, createProject, discardRecovery, listPrefabs, openProject, savePrefab, saveProjectSettings, saveScene, createScene, setStartScene, readScene } from './project-fs';
 import { SettingsStore } from './settings';
 import { downloadRuntime, gameData, gameFileName, ownRuntime, writeDesktopGame, writeWebGame, type ExportTarget } from './export';
@@ -220,6 +220,8 @@ function registerIpc(): void {
   handle(IPC.librarySounds, async () => librarySounds(path.join(app.getAppPath(), 'samples')));
   handle(IPC.readLibrarySound, async (p) => readLibrarySound(path.join(app.getAppPath(), 'samples'), p));
   handle(IPC.addLibrarySound, async (dir, p) => addLibrarySound(str(dir), path.join(app.getAppPath(), 'samples'), p));
+  handle(IPC.trashAsset, async (dir, rel) => trashAsset(str(dir), rel));
+  handle(IPC.restoreAsset, async (dir, t, rel) => restoreAsset(str(dir), t, rel));
   handle(IPC.readGraph, async (dir, rel) => readGraph(str(dir), rel));
   handle(IPC.writeGraph, async (dir, rel, graph, create) => writeGraph(str(dir), rel, graph, create));
   handle(IPC.writeGenerated, async (dir, name, bytes) => writeGenerated(str(dir), name, bytes));

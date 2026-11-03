@@ -269,6 +269,7 @@ function AssetTile({ tile, showKind }: { tile: Tile; showKind: boolean }) {
   const [listening, listen] = useListening(tile.kind === 'sounds' ? tile.asset.path : tile.kind === 'library' ? `lib:${tile.sound.path}` : '', (p) =>
     p.startsWith('lib:') ? libraryUrl(p.slice(4)) : assetUrl(p),
   );
+  const [confirm, setConfirm] = useState<string[] | null>(null);
   let extra: React.ReactNode = null;
   let picture: React.ReactNode;
   let action: string;
@@ -354,13 +355,54 @@ function AssetTile({ tile, showKind }: { tile: Tile; showKind: boolean }) {
       break;
     }
   }
+  // Project textures, sounds and models can be deleted (× on hover, or right-click): first, what still uses it.
+  const file = tile.kind === 'textures' || tile.kind === 'sounds' || tile.kind === 'models' ? tile.asset.path : null;
+  const ask = (e?: React.MouseEvent) => {
+    e?.preventDefault();
+    if (file) setConfirm(st.assetUsers(file));
+  };
   return (
-    <div className={`cw-lib-tile k-${tile.kind}`} role="listitem" aria-label={tile.name} title={title}>
+    <div className={`cw-lib-tile k-${tile.kind}`} role="listitem" aria-label={tile.name} title={title} onContextMenu={file ? ask : undefined}>
       <button type="button" className="cw-lib-hit" aria-label={action} onClick={onClick} onDoubleClick={onDouble}>
         {picture}
         <span className="cw-lib-name">{tile.name}</span>
       </button>
       {extra}
+      {file && !confirm && (
+        <button type="button" className="cw-lib-del" aria-label={`${t('assets.delete')} ${tile.name}`} title={t('assets.delete')} onClick={() => ask()}>
+          ×
+        </button>
+      )}
+      {file && confirm && (
+        <div className="cw-lib-confirm" role="alertdialog" aria-label={`${t('assets.delete')} ${tile.name}?`}>
+          <strong>
+            {t('assets.delete')} {tile.name}?
+          </strong>
+          {confirm.length > 0 ? (
+            <span>
+              {t('assets.stillUsed')} {confirm.slice(0, 4).join(', ')}
+              {confirm.length > 4 ? ` +${confirm.length - 4}` : ''}
+            </span>
+          ) : (
+            <span>{t('assets.unused')}</span>
+          )}
+          <span className="cw-lib-confirm-row">
+            <button
+              type="button"
+              className="cw-lib-use danger"
+              onClick={() => {
+                st.deleteAsset(file);
+                setConfirm(null);
+              }}
+            >
+              {t('assets.delete')}
+            </button>
+            <button type="button" className="cw-lib-use" onClick={() => setConfirm(null)}>
+              {t('assets.cancel')}
+            </button>
+          </span>
+        </div>
+      )}
       {showKind && tile.kind !== 'library' && <span className="cw-lib-kind">{t(LABEL[tile.kind])}</span>}
     </div>
   );

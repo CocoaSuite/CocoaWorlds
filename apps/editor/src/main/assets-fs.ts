@@ -149,6 +149,33 @@ export async function readAsset(dir: string, rel: unknown): Promise<Uint8Array> 
   return new Uint8Array(await fs.readFile(full));
 }
 
+/**
+ * Delete an asset: moved into `assets/_deleted/` (renamed if taken) rather than erased, so it can be put back.
+ * Returns where it went.
+ */
+export async function trashAsset(dir: string, rel: unknown): Promise<string> {
+  if (typeof rel !== 'string' || !Object.values(ASSET_KINDS).some((k) => rel.startsWith(`${k.dir}/`))) throw new ProjectError('Only textures, sounds and models can be deleted.');
+  const from = resolveInside(dir, rel);
+  if (!(await exists(from))) throw new ProjectError(`${rel} isn't there any more.`);
+  const sub = rel.replace(/^assets\//, 'assets/_deleted/');
+  const folder = path.dirname(resolveInside(dir, sub));
+  await fs.mkdir(folder, { recursive: true });
+  const e = path.extname(rel), stem = path.basename(rel, e);
+  let file = `${stem}${e}`;
+  for (let i = 2; await exists(path.join(folder, file)); i++) file = `${stem}_${i}${e}`;
+  await fs.rename(from, path.join(folder, file));
+  return `${path.posix.dirname(sub)}/${file}`;
+}
+
+/** Put a deleted asset back where it was (undo). */
+export async function restoreAsset(dir: string, trashed: unknown, rel: unknown): Promise<void> {
+  if (typeof trashed !== 'string' || !trashed.startsWith('assets/_deleted/') || typeof rel !== 'string' || !rel.startsWith('assets/')) throw new ProjectError('Nothing to put back.');
+  const to = resolveInside(dir, rel);
+  if (await exists(to)) throw new ProjectError(`${rel} is taken again: it can't be put back.`);
+  await fs.mkdir(path.dirname(to), { recursive: true });
+  await fs.rename(resolveInside(dir, trashed), to);
+}
+
 async function exists(p: string): Promise<boolean> {
   return fs.stat(p).then(
     () => true,

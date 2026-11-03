@@ -261,6 +261,10 @@ interface Actions {
   /** The project's textures, sounds and models. */
   assets: Record<AssetKind, AssetEntry[]>;
   loadAssets(): Promise<void>;
+  /** What in this scene and the project still uses an asset (names, for people). */
+  assetUsers(path: string): string[];
+  /** Delete an asset (into `assets/_deleted/`, undoable). */
+  deleteAsset(path: string): void;
   /** Copy files the user picked into the project's assets; returns the new project paths. */
   importAssets(kind: AssetKind, files: File[]): Promise<string[]>;
   makePrefab(name: string): Promise<boolean>;
@@ -1373,6 +1377,43 @@ export const useEditor = create<State & Actions>()((set, get) => ({
     const r = await window.cocoa.projects.listAssets(session.dir);
     if (!r.ok) return get().log('error', 'Assets', r.error);
     if (get().session === session) set({ assets: r.value });
+  },
+
+  assetUsers(path) {
+    const st = get();
+    const out: string[] = [];
+    // (Anything that names it: a component field, a face's material, a material's map…)
+    const uses = (v: unknown): boolean => (typeof v === 'string' ? v === path : Array.isArray(v) ? v.some(uses) : !!v && typeof v === 'object' && Object.values(v).some(uses));
+    for (const e of st.doc?.entities ?? []) if (uses(e.components)) out.push(e.name);
+    for (const m of st.session?.project.settings.materials ?? []) if (uses(m)) out.push(`${t('assets.material')} ${m.name}`);
+    if (uses(st.doc?.settings)) out.push(t('assets.sceneSettings'));
+    return out;
+  },
+
+  deleteAsset(path) {
+    const session = get().session;
+    if (!session) return;
+    let trashed: string | null = null;
+    const name = path.split('/').pop() ?? path;
+    get().execute({
+      label: `Delete ${name}`,
+      apply: () =>
+        void window.cocoa.projects.trashAsset(session.dir, path).then((r) => {
+          if (!r.ok) return get().notify(r.error);
+          trashed = r.value;
+          void get().loadAssets();
+        }),
+      revert: () => {
+        if (!trashed) return;
+        const from = trashed;
+        trashed = null;
+        void window.cocoa.projects.restoreAsset(session.dir, from, path).then((r) => {
+          if (!r.ok) return get().notify(r.error);
+          void get().loadAssets();
+        });
+      },
+    });
+    get().log('info', 'Assets', `Deleted ${path} (kept in assets/_deleted)`);
   },
 
   async importAssets(kind, files) {

@@ -88,6 +88,10 @@ export interface CocoaApi {
     readLibrarySound(path: string): Promise<Result<Uint8Array>>;
     /** Copy a library sound into the project's sounds (once: the same file there already is used again). */
     addLibrarySound(dir: string, path: string): Promise<Result<AssetEntry>>;
+    /** Delete an asset (moved into `assets/_deleted/`); returns where it went. */
+    trashAsset(dir: string, path: string): Promise<Result<string>>;
+    /** Put a deleted asset back. */
+    restoreAsset(dir: string, trashed: string, path: string): Promise<Result<void>>;
     /** A graph material's graph (`materials/….cwmat`), unchecked. */
     readGraph(dir: string, path: string): Promise<Result<unknown>>;
     /** Save a graph; with `create`, as a new file (renamed if taken). Returns its path. */
@@ -139,6 +143,8 @@ export const IPC = {
   writeTerrain: 'assets:writeTerrain',
   readLibrarySound: 'assets:readLibrarySound',
   addLibrarySound: 'assets:addLibrarySound',
+  trashAsset: 'assets:trash',
+  restoreAsset: 'assets:restore',
   readGraph: 'materials:readGraph',
   writeGraph: 'materials:writeGraph',
   writeGenerated: 'materials:writeGenerated',
