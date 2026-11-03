@@ -829,6 +829,20 @@ function GraphMaterialProps({
       <Row label={t('mat.opacity')}>
         <Slider label={t('mat.opacity')} value={m.opacity ?? 1} onChange={(v) => edit({ opacity: v >= 1 ? undefined : v }, 'Material opacity', `mat-opacity-${m.id}`)} />
       </Row>
+      <Row label={t('mat.refraction')}>
+        <Slider label={t('mat.refraction')} value={m.refraction ?? 0} onChange={(v) => edit({ refraction: v > 0 ? v : undefined }, 'Glass', `mat-glass-${m.id}`)} />
+      </Row>
+      {(m.refraction ?? 0) > 0 && (
+        <>
+          <Row label={t('mat.ior')}>
+            <NumberField label="#" ariaLabel={t('mat.ior')} value={m.ior ?? 1.5} step={0.05} onCommit={(v) => edit({ ior: Math.max(1, Math.min(2.4, v)) }, 'Glass bending')} />
+          </Row>
+          <Row label={t('mat.thickness')}>
+            <NumberField label="u" ariaLabel={t('mat.thickness')} value={m.thickness ?? 8} step={1} onCommit={(v) => edit({ thickness: Math.max(0, v) }, 'Glass thickness')} />
+          </Row>
+          <p className="cw-muted cw-screens-note">{t('mat.glassHint')}</p>
+        </>
+      )}
       <Row label={t('mat.bevel')}>
         <Slider label={t('mat.bevel')} value={m.bevel ?? 0} min={0} max={32} step={1} digits={0} onChange={(v) => edit({ bevel: v > 0 ? v : undefined }, 'Bevel edges', `mat-bevel-${m.id}`)} />
       </Row>
