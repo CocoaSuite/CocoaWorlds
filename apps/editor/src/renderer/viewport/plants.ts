@@ -66,8 +66,8 @@ function blade(b: Builder, root: THREE.Vector3, dir: number, lean: number, len: 
     // Leaning out more and more as it goes (drooping), from `lean` at the root.
     const a = lean + bend * t * t * 1.4;
     const along = v3().addScaledVector(out, Math.sin(a)).add(v3(0, Math.cos(a), 0));
-    // (Lit as if facing up and out: soft, not edge-on dark.)
-    const n = v3().addScaledVector(out, 0.35).add(v3(0, 1, 0)).normalize();
+    // Ground foliage is lit like the floor it grows from: every normal straight up.
+    const n = v3(0, 1, 0);
     const c = c0.clone().lerp(c1, t);
     const w = width(t);
     ids.push([vert(b, p.clone().addScaledVector(side, -w), n, c), vert(b, p.clone().addScaledVector(side, w), n, c)]);
@@ -156,7 +156,10 @@ function grow(d: PlantDef, seed: number): Builder {
     }
   // ...and a crown filling its outline.
   const y0 = H * d.trunkClear, cw = d.crownWidth / 2;
-  const centre = (y: number) => v3(0, y, 0);
+  // Spherized normals: every leaf corner lit as a point on the crown's outline (an ellipsoid round its middle),
+  // so the whole crown shades as one soft shape.
+  const cy = y0 + (top - y0) * 0.5, ry = Math.max(1, (top - y0) / 2), rx = Math.max(1, cw);
+  const sph = (q: THREE.Vector3) => v3(q.x / (rx * rx), (q.y - cy) / (ry * ry), q.z / (rx * rx)).normalize();
   for (let i = 0; i < d.leaves; i++) {
     const t = Math.pow(rnd(), d.crown === 'cone' ? 1.25 : 1);
     const y = y0 + (top - y0) * t;
@@ -164,7 +167,7 @@ function grow(d: PlantDef, seed: number): Builder {
     const a = rnd() * Math.PI * 2;
     const p = v3(Math.cos(a) * rad, y, Math.sin(a) * rad);
     // Lit as part of one soft crown: normals point out from its middle (and a little up).
-    const n = p.clone().sub(centre(y0 + (top - y0) * 0.5)).normalize().add(v3(0, 0.3, 0)).normalize();
+    const n = sph(p);
     const shade = 0.25 + 0.75 * t;
     const c = tint(c0.clone().lerp(c1, Math.min(1, shade * (0.6 + 0.4 * rnd()))));
     const s = vary(d.leafSize);
@@ -175,7 +178,10 @@ function grow(d: PlantDef, seed: number): Builder {
       if (u.lengthSq() < 0.1) u.set(1, 0, 0);
       const w = f.clone().cross(u).normalize();
       const q = [u.clone().multiplyScalar(-s / 2).addScaledVector(w, -s / 2), u.clone().multiplyScalar(s / 2).addScaledVector(w, -s / 2), u.clone().multiplyScalar(s / 2).addScaledVector(w, s / 2), u.clone().multiplyScalar(-s / 2).addScaledVector(w, s / 2)];
-      const ids = q.map((o) => vert(b, p.clone().add(o), n, c));
+      const ids = q.map((o) => {
+        const at = p.clone().add(o);
+        return vert(b, at, sph(at), c);
+      });
       b.idx.push(ids[0]!, ids[1]!, ids[2]!, ids[0]!, ids[2]!, ids[3]!);
     } else {
       // A soft lump: the chosen shape, stretched, its corners jittered, turned at random about the up axis.
@@ -195,8 +201,8 @@ function grow(d: PlantDef, seed: number): Builder {
           q = v3(o.x * cs - o.z * sn, o.y, o.x * sn + o.z * cs).multiplyScalar(j).multiply(k);
           moved.set(key, q);
         }
-        const nn = n.clone().addScaledVector(o.clone().normalize(), 0.5).normalize();
-        b.idx.push(vert(b, p.clone().add(q), nn, c));
+        const at = p.clone().add(q);
+        b.idx.push(vert(b, at, sph(at), c));
       }
     }
   }
