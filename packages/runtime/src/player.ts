@@ -33,7 +33,7 @@ export const PLAYER = {
   /** How quickly the view follows steps and crouching (per second; higher is quicker). */
   viewSmoothing: 16,
   jumpSpeed: 268,
-  stepHeight: 18,
+  stepHeight: 26,
   maxSlope: 45.6,
   useReach: 96,
   maxHealth: 100,

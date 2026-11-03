@@ -13,7 +13,7 @@ import * as THREE from 'three';
 import { brushBounds, worldBrushes } from '../brush/brushes';
 import { FoliageRenderer } from './foliage';
 import { waterLookOf, waterMaterialFor } from './water-look';
-import { PlantRenderer } from './plants';
+import { PlantRenderer, plantById } from './plants';
 import { TerrainRenderer, loadTerrain, terrainChunks } from './terrains';
 import { BATCH_MIN, ModelBatches, batchKey } from './model-batches';
 import { WEAR_RING, buildLevel } from './world-build';
@@ -55,6 +55,7 @@ export class PlaySession {
   /** Grass detail by distance from the camera. */
   updateFoliage(cam: THREE.Camera, unitsPerPixel?: number): void {
     this.foliage.update(cam, unitsPerPixel);
+    this.plants.update(cam);
   }
 
   /** Where the game's creatures can walk. */
@@ -94,14 +95,21 @@ export class PlaySession {
       const f = await loadTerrain(file);
       if (f) terrains.set(e.id, terrainChunks(file, f).map(({ mesh }) => ({ positions: mesh.positions, indices: mesh.indices })));
     }
+    // Trees' trunks collide (their crowns don't).
+    const trunks = new Map<string, { width: number; height: number }>();
+    for (const e of scene.entities) {
+      const id = (e.components.plant as { plant?: string } | undefined)?.plant;
+      const def = id ? plantById(id) : null;
+      if (def?.form === 'tree') trunks.set(e.id, { width: Math.max(4, def.trunkWidth * 0.9), height: def.height * Math.max(0.35, def.trunkClear + 0.5) });
+    }
     // Invisible colliders (COL) collide but aren't drawn in the game.
     const hidden = new THREE.MeshBasicMaterial({ visible: false });
-    return new PlaySession(scene, (name) => (isInvisibleMaterial(name) ? hidden : material(name)), rules, values, models, terrains, saved ?? null, arrive ?? null);
+    return new PlaySession(scene, (name) => (isInvisibleMaterial(name) ? hidden : material(name)), rules, values, models, terrains, trunks, saved ?? null, arrive ?? null);
   }
 
-  private constructor(scene: SceneFile, material: (name: string) => THREE.Material, rules: GameRules | undefined, values: GameValue[] | undefined, models: Map<string, ModelMesh>, terrains: Map<string, ModelMesh[]>, saved: SavedProgress | null, arrive: Travel | null) {
+  private constructor(scene: SceneFile, material: (name: string) => THREE.Material, rules: GameRules | undefined, values: GameValue[] | undefined, models: Map<string, ModelMesh>, terrains: Map<string, ModelMesh[]>, trunks: Map<string, { width: number; height: number }>, saved: SavedProgress | null, arrive: Travel | null) {
     this.group.name = 'play';
-    this.world = GameWorld.create(scene, { rules, values, models, terrains, saved, arrive });
+    this.world = GameWorld.create(scene, { rules, values, models, terrains, trunks, saved, arrive });
     // The same copies the game world made (Repeat groups).
     const doc = new SceneDoc(expandRepeats(structuredClone(scene), brushBounds));
     const bodies = new Set(this.world.movingBodies().map((b) => b.id));

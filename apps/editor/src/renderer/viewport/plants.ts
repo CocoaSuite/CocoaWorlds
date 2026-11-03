@@ -161,7 +161,7 @@ function grow(d: PlantDef, seed: number, level = 0): Builder {
   for (let k = 0; k + 1 < rings.length; k++)
     for (let i = 0; i < sides; i++) {
       const j = (i + 1) % sides;
-      b.idx.push(rings[k]![i]!, rings[k + 1]![j]!, rings[k + 1]![i]!, rings[k]![i]!, rings[k]![j]!, rings[k + 1]![j]!);
+      b.idx.push(rings[k]![i]!, rings[k + 1]![i]!, rings[k + 1]![j]!, rings[k]![i]!, rings[k + 1]![j]!, rings[k]![j]!);
     }
   // ...and a crown filling its outline.
   const y0 = H * d.trunkClear, cw = d.crownWidth / 2;
@@ -181,6 +181,13 @@ function grow(d: PlantDef, seed: number, level = 0): Builder {
     const n = sph(p);
     const shade = 0.25 + 0.75 * t;
     const c = tint(c0.clone().lerp(c1, Math.min(1, shade * (0.6 + 0.4 * rnd()))));
+    // Lumps take their colour from where each corner is (height and a gentle wash), not one colour per lump:
+    // where lumps cut into each other both are the same colour there, so no hard seam shows.
+    const colourAt = (q: THREE.Vector3) => {
+      const h = (q.y - y0) / Math.max(1, top - y0);
+      const wash = Math.sin(q.x * 0.013 + q.z * 0.011) * Math.cos(q.y * 0.017 + q.x * 0.007);
+      return c0.clone().lerp(c1, Math.min(1, Math.max(0, 0.2 + 0.7 * h + wash * 0.25 * (0.3 + d.variation))));
+    };
     const s = vary(d.leafSize) * lod.size;
     if (d.foliage === 'cards') {
       // A leaf card: a quad facing roughly out, tipped at random.
@@ -213,7 +220,7 @@ function grow(d: PlantDef, seed: number, level = 0): Builder {
           moved.set(key, q);
         }
         const at = p.clone().add(q);
-        b.idx.push(vert(b, at, sph(at), c));
+        b.idx.push(vert(b, at, sph(at), colourAt(at)));
       }
     }
   }
@@ -291,12 +298,56 @@ export function plantImpostor(d: PlantDef, seed = d.seed): { map: THREE.Texture;
 }
 
 /** The material plants are drawn with: their own colours, both sides, lit softly. */
-export const PLANT_MATERIAL = new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide });
+export const PLANT_MATERIAL = fading(new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide }));
 
-/** Draws the scene's Plant objects (editor and game). */
+/**
+ * A plant material that can dissolve into another detail level (a screen-door dither: the two keep
+ * complementary pixels), and whose back faces light like its front (no dark undersides).
+ */
+function fading<M extends THREE.Material>(m: M): M {
+  const fade = { amount: { value: 1 }, side: { value: 0 } };
+  m.onBeforeCompile = (sh) => {
+    sh.uniforms.uFade = fade.amount;
+    sh.uniforms.uFadeSide = fade.side;
+    sh.fragmentShader = sh.fragmentShader
+      .replace(
+        'void main() {',
+        `uniform float uFade;
+uniform float uFadeSide;
+void main() {
+  float cwDither = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715))));
+  if (uFadeSide < 0.5 ? cwDither >= uFade : cwDither < 1.0 - uFade) discard;`,
+      )
+      .replace('#include <normal_fragment_begin>', THREE.ShaderChunk.normal_fragment_begin.replace('normal *= faceDirection;', ''));
+  };
+  m.customProgramCacheKey = () => `cw-plant-fade-${m.type}`;
+  m.userData.fade = fade;
+  return m;
+}
+
+const setFade = (o: THREE.Object3D, amount: number, side: number) => {
+  o.visible = amount > 0.001;
+  const f = ((o as THREE.Mesh).material as THREE.Material).userData.fade as { amount: { value: number }; side: { value: number } };
+  f.amount.value = amount;
+  f.side.value = side;
+};
+
+interface Shown {
+  key: string;
+  holder: THREE.Group;
+  levels: THREE.Object3D[];
+  /** Where each level hands over to the next (u from the camera). */
+  ends: number[];
+  at: THREE.Vector3;
+}
+
+/** The last part of each level's range where it dissolves into the next (a share of that distance). */
+const BLEND = 0.2;
+
+/** Draws the scene's Plant objects (editor and game), each at the detail level its distance calls for. */
 export class PlantRenderer {
   readonly group = new THREE.Group();
-  private shown = new Map<string, { key: string; mesh: THREE.LOD }>();
+  private shown = new Map<string, Shown>();
   private last: SceneDoc | null = null;
   private off = onPlantsChange(() => this.sync(this.last));
 
@@ -316,54 +367,78 @@ export class PlantRenderer {
       const key = JSON.stringify([def, p.seed]);
       let s = this.shown.get(e.id);
       if (s?.key !== key) {
-        if (s) this.group.remove(s.mesh);
-        // Three detail levels, switched by distance (scaled to the plant's size).
-        const mesh = new THREE.LOD();
+        if (s) this.drop(e.id);
+        const holder = new THREE.Group();
+        holder.name = `plant:${e.id}`;
+        holder.matrixAutoUpdate = false;
         const g0 = plantGeometry(def, p.seed);
-        const size = Math.max(64, g0.boundingSphere?.radius ?? 64);
-        [0, 1, 2].forEach((l) => {
-          const m = new THREE.Mesh(l ? plantGeometry(def, p.seed, l) : g0, PLANT_MATERIAL);
+        const size = Math.max(32, g0.boundingSphere?.radius ?? 32);
+        const levels: THREE.Object3D[] = [0, 1, 2].map((l) => {
+          const m = new THREE.Mesh(l ? plantGeometry(def, p.seed, l) : g0, fading(new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide })));
           m.castShadow = true;
           // (A tree's crown is lit by its rounded normals; shadows from its own jagged leaves would stripe it.)
           m.receiveShadow = def.form === 'clump';
-          m.userData.entityId = e.id;
-          mesh.addLevel(m, [0, size * 6, size * 16][l]!);
+          return m;
         });
+        const ends = [size * 6, size * 16];
         // Trees, very far away: a picture of themselves, always facing the camera (two triangles).
         if (def.form === 'tree') {
           const imp = plantImpostor(def, p.seed);
-          const card = new THREE.Sprite(new THREE.SpriteMaterial({ map: imp.map, alphaTest: 0.5 }));
+          const card = new THREE.Sprite(fading(new THREE.SpriteMaterial({ map: imp.map, alphaTest: 0.5 })));
           card.center.set(0.5, 0);
           card.scale.set(imp.width, imp.height, 1);
-          card.userData.entityId = e.id;
-          mesh.addLevel(card, size * 40);
+          levels.push(card);
+          ends.push(size * 40);
         }
-        mesh.name = `plant:${e.id}`;
-        mesh.userData.entityId = e.id;
-        mesh.matrixAutoUpdate = false;
-        this.group.add(mesh);
-        s = { key, mesh };
+        for (const o of levels) {
+          o.userData.entityId = e.id;
+          // (Plants are left out of ambient occlusion: their leaves would cast dark halos on what's behind.)
+          o.userData.noAo = true;
+          o.visible = o === levels[0];
+          holder.add(o);
+        }
+        this.group.add(holder);
+        s = { key, holder, levels, ends, at: new THREE.Vector3() };
         this.shown.set(e.id, s);
       }
-      s.mesh.matrix.fromArray(doc.worldMatrix(e.id));
-      s.mesh.matrixWorldNeedsUpdate = true;
+      s.holder.matrix.fromArray(doc.worldMatrix(e.id));
+      s.holder.matrixWorldNeedsUpdate = true;
+      s.at.setFromMatrixPosition(s.holder.matrix);
     }
-    for (const [id, s] of [...this.shown]) {
-      if (seen.has(id)) continue;
-      this.group.remove(s.mesh);
-      this.shown.delete(id);
-    }
+    for (const id of [...this.shown.keys()]) if (!seen.has(id)) this.drop(id);
     this.onDraw();
   }
 
-  /** What to pick plants by (each its nearest level's mesh). */
+  /** Show each plant at its level for this camera, dissolving into the next near the end of each range. */
+  update(cam: THREE.Camera): void {
+    const eye = cam.getWorldPosition(new THREE.Vector3());
+    for (const s of this.shown.values()) {
+      const d = eye.distanceTo(s.at);
+      let level = s.ends.findIndex((e) => d < e);
+      if (level < 0) level = s.levels.length - 1;
+      const end = s.ends[level];
+      const t = end === undefined ? 0 : Math.min(1, Math.max(0, (d - end * (1 - BLEND)) / (end * BLEND)));
+      s.levels.forEach((o, l) => (o.visible = false));
+      setFade(s.levels[level]!, 1 - t, 0);
+      if (t > 0 && s.levels[level + 1]) setFade(s.levels[level + 1]!, t, 1);
+    }
+  }
+
+  private drop(id: string): void {
+    const s = this.shown.get(id);
+    if (!s) return;
+    for (const o of s.levels) ((o as THREE.Mesh).material as THREE.Material).dispose();
+    this.group.remove(s.holder);
+    this.shown.delete(id);
+  }
+
+  /** What to pick plants by (each its full-detail mesh). */
   get meshes(): THREE.Mesh[] {
-    return [...this.shown.values()].map((s) => s.mesh.levels[0]!.object as THREE.Mesh);
+    return [...this.shown.values()].map((s) => s.levels[0] as THREE.Mesh);
   }
 
   dispose(): void {
     this.off();
-    this.group.clear();
-    this.shown.clear();
+    for (const id of [...this.shown.keys()]) this.drop(id);
   }
 }

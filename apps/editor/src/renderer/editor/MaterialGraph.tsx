@@ -812,6 +812,9 @@ function GraphMaterialProps({
       <Row label={t('mat.opacity')}>
         <Slider label={t('mat.opacity')} value={m.opacity ?? 1} onChange={(v) => edit({ opacity: v >= 1 ? undefined : v }, 'Material opacity', `mat-opacity-${m.id}`)} />
       </Row>
+      <Row label={t('mat.bevel')}>
+        <Slider label={t('mat.bevel')} value={m.bevel ?? 0} min={0} max={32} step={1} digits={0} onChange={(v) => edit({ bevel: v > 0 ? v : undefined }, 'Bevel edges', `mat-bevel-${m.id}`)} />
+      </Row>
       <WearSettings m={m} edit={edit} />
       <label className="cw-screens-sw" title={t('mat.cutoutHint')}>
         <Switch label={t('mat.cutout')} checked={m.cutout !== false} onChange={(v) => edit({ cutout: v ? undefined : false }, v ? 'Cut-out on' : 'Cut-out off')} />

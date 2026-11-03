@@ -303,12 +303,14 @@ export class GameWorld {
       models?: Map<string, ModelMesh>;
       /** Each terrain's surface (terrain space), by object: it collides as fixed ground. */
       terrains?: Map<string, ModelMesh[]>;
+      /** Trees' trunks, by plant object: width and height (u); each collides as a fixed box. */
+      trunks?: Map<string, { width: number; height: number }>;
       saved?: SavedProgress | null;
       clock?: () => number;
       arrive?: Travel | null;
     } = {},
   ): GameWorld {
-    const w = new GameWorld(scene, gameRules({ game: options.rules }), options.values ?? [], options.models ?? new Map(), options.terrains ?? new Map());
+    const w = new GameWorld(scene, gameRules({ game: options.rules }), options.values ?? [], options.models ?? new Map(), options.terrains ?? new Map(), options.trunks ?? new Map());
     if (options.clock) w.clock = options.clock;
     if (options.saved) w.loadProgress(options.saved);
     if (options.arrive) w.arrive(options.arrive);
@@ -447,10 +449,12 @@ export class GameWorld {
   /** Model triangles by file (see `create`). */
   private models: Map<string, ModelMesh>;
   private terrains: Map<string, ModelMesh[]>;
+  private trunks: Map<string, { width: number; height: number }>;
 
-  private constructor(scene: SceneFile, rules: GameRules, values: GameValueDef[], models: Map<string, ModelMesh>, terrains: Map<string, ModelMesh[]>) {
+  private constructor(scene: SceneFile, rules: GameRules, values: GameValueDef[], models: Map<string, ModelMesh>, terrains: Map<string, ModelMesh[]>, trunks: Map<string, { width: number; height: number }>) {
     this.models = models;
     this.terrains = terrains;
+    this.trunks = trunks;
     this.ui = uiOf(scene.settings);
     for (const sc of this.ui.screens) {
       if (sc.shownAtStart) this.uiShown.add(sc.id);
@@ -541,6 +545,13 @@ export class GameWorld {
         if (e.components.conveyor && !unitOf.has(e.id)) conveyors.set(e.id, readComponent<ConveyorData>('conveyor', e.components.conveyor));
       } else if (e.components.terrain) {
         this.addTerrain(e.id, doc.worldMatrix(e.id));
+      } else if (e.components.plant && this.trunks.has(e.id)) {
+        // A tree's trunk: a fixed box from the ground up (the crown is walked under, not into).
+        const t = this.trunks.get(e.id)!, m = doc.worldMatrix(e.id);
+        const body = this.world.createRigidBody(RAPIER.RigidBodyDesc.fixed().setTranslation(m[12]!, m[13]! + t.height / 2, m[14]!));
+        const c = this.world.createCollider(RAPIER.ColliderDesc.cuboid(t.width / 2, t.height / 2, t.width / 2).setFriction(0.6), body);
+        this.owner.set(c.handle, e.id);
+        this.grow({ min: [m[12]! - t.width, m[13]!, m[14]! - t.width], max: [m[12]! + t.width, m[13]! + t.height, m[14]! + t.width] });
       } else if (e.components.npc) {
         this.npcEntities.push(e);
       } else if (e.components.rigidBody || e.components.collider || this.modelShape(e)) {

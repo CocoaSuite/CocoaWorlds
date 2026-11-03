@@ -27,7 +27,7 @@ export interface NavOptions {
   maxSide: number;
 }
 
-export const NAV_DEFAULTS: NavOptions = { cell: 16, radius: 16, height: 72, climb: 20, drop: 64, slope: 46, maxSide: 400 };
+export const NAV_DEFAULTS: NavOptions = { cell: 16, radius: 16, height: 72, climb: 28, drop: 64, slope: 46, maxSide: 400 };
 
 /** What the grid asks of the physics world. */
 export interface NavQuery {

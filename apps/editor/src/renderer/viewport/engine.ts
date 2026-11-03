@@ -1583,6 +1583,7 @@ export class ViewportEngine {
     this.updateLighting();
     if (this.play?.placeCamera(this.fpCam)) {
       this.play.updateFoliage(this.fpCam);
+      this.plants.update(this.fpCam);
       this.waterDepth.prepare(r, this.scene, this.fpCam);
       this.play.applyWater(this.scene, this.fpCam);
       if (!this.renderAo(this.fpCam)) r.render(this.scene, this.fpCam);
@@ -1591,6 +1592,7 @@ export class ViewportEngine {
     this.grid.setCamera(this.rig.camera.position);
     this.foliage.update(this.rig.camera, this.rig.unitsPerPixel);
     this.play?.updateFoliage(this.rig.camera, this.rig.unitsPerPixel);
+    this.plants.update(this.rig.camera);
     this.waterDepth.prepare(r, this.scene, this.rig.camera);
     if (!this.renderAo(this.rig.camera)) r.render(this.scene, this.rig.camera);
     const s = 72;

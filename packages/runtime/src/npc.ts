@@ -111,7 +111,7 @@ export class Npc {
     this.body = w.world.createRigidBody(RAPIER.RigidBodyDesc.fixed().setTranslation(this.feet.x, this.feet.y + this.height / 2, this.feet.z));
     this.collider = w.world.createCollider(RAPIER.ColliderDesc.capsule(this.height / 2 - this.radius, this.radius).setFriction(0), this.body);
     this.controller = w.world.createCharacterController(0.5);
-    this.controller.enableAutostep(18, 4, false);
+    this.controller.enableAutostep(26, 4, false);
     this.controller.enableSnapToGround(9);
     this.controller.setMaxSlopeClimbAngle((46 * Math.PI) / 180);
     this.controller.setUp({ x: 0, y: 1, z: 0 });

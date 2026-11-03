@@ -108,8 +108,9 @@ export class SceneLighting {
           cam.near = 1;
           cam.far = radius * 4;
           sun.shadow.mapSize.set(2048, 2048);
-          sun.shadow.bias = -0.0002;
-          sun.shadow.normalBias = 0.35;
+          sun.shadow.bias = -0.0005;
+          // (In world units: about a shadow-map texel at this scale, so curved meshes don't stripe themselves.)
+          sun.shadow.normalBias = 2.5;
         }
         this.suns.push(sun);
         light = sun;
@@ -123,7 +124,7 @@ export class SceneLighting {
           spot.shadow.camera.near = 4;
           spot.shadow.camera.far = l.range;
           spot.shadow.bias = -0.0003;
-          spot.shadow.normalBias = 0.3;
+          spot.shadow.normalBias = 1.5;
         }
         light = spot;
       } else {
@@ -134,7 +135,7 @@ export class SceneLighting {
           bulb.shadow.camera.near = 4;
           bulb.shadow.camera.far = l.range;
           bulb.shadow.bias = -0.001;
-          bulb.shadow.normalBias = 0.3;
+          bulb.shadow.normalBias = 1.5;
         }
         light = bulb;
       }

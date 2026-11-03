@@ -3,7 +3,7 @@
  * sliders while a live preview turns beside a person for scale, and place them (or grow them as Foliage).
  */
 import { PLANT_PRESETS, type PlantDef } from '@cocoaworlds/core';
-import { Button, ColorField, Segmented } from '@cocoaworlds/ui';
+import { Button, ColorField, NumberField, Segmented } from '@cocoaworlds/ui';
 import { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
@@ -11,7 +11,7 @@ import { getLang } from '../i18n';
 import { useEditor } from '../store';
 import { PLANT_MATERIAL, plantGeometry } from '../viewport/plants';
 import { UNITS_PER_METRE } from '../viewport/models';
-import { Row, Slider } from './MaterialsPanel';
+import { Row } from './MaterialsPanel';
 
 const L = (en: string, ru: string) => (getLang() === 'ru' ? ru : en);
 const newId = () => `plant_${Date.now().toString(36)}${Math.floor(Math.random() * 1e4).toString(36)}`;
@@ -28,11 +28,15 @@ export function PlantsPanel() {
     st.setPlants([...list, def], `New ${preset.name}`);
     setSel(def.id);
   };
-  const num = (k: keyof PlantDef, label: string, min: number, max: number, step = 1, digits = 0) => (
-    <Row label={label}>
-      <Slider label={label} value={Number(p![k])} min={min} max={max} step={step} digits={digits} onChange={(v) => edit({ [k]: v } as Partial<PlantDef>, k)} />
-    </Row>
-  );
+  // A precise number (type it, or drag its label), kept within its range.
+  const num = (k: keyof PlantDef, label: string, min: number, max: number, step = 1, unit = 'u', fallback?: number) => {
+    const set = (v: number) => edit({ [k]: Math.min(max, Math.max(min, v)) } as Partial<PlantDef>, k);
+    return (
+      <Row label={label}>
+        <NumberField label={unit} ariaLabel={label} step={step} value={Number(p![k] ?? fallback ?? 0)} onChange={set} onCommit={set} />
+      </Row>
+    );
+  };
   return (
     <div className="cw-plants">
       <aside className="cw-plants-list" aria-label={L('Plants', 'Растения')}>
@@ -63,46 +67,40 @@ export function PlantsPanel() {
           </Row>
           {p.form === 'clump' ? (
             <>
-              {num('blades', L('Blades', 'Листья'), 0, 60)}
-              {num('bladeHeight', L('Blade height', 'Высота листьев'), 4, 400)}
-              {num('bladeWidth', L('Blade width', 'Ширина листьев'), 1, 80)}
+              {num('blades', L('Blades', 'Листья'), 0, 80, 1, '#')}
+              {num('bladeHeight', L('Blade height', 'Высота листьев'), 1, 400, 0.5)}
+              {num('bladeWidth', L('Blade width', 'Ширина листьев'), 0.2, 80, 0.1)}
               <Row label={L('Blade shape', 'Форма листа')}>
                 <Segmented label={L('Blade shape', 'Форма листа')} value={p.bladeShape} onChange={(bladeShape) => edit({ bladeShape })} options={[{ value: 'grass', label: L('Grass', 'Трава') }, { value: 'strap', label: L('Strap', 'Лента') }, { value: 'leaf', label: L('Leaf', 'Лист') }]} />
               </Row>
-              {num('spread', L('Lean out (°)', 'Наклон (°)'), 0, 85)}
-              {num('bend', L('Droop', 'Изгиб'), 0, 1.5, 0.05, 2)}
-              {num('stalks', L('Stalks', 'Стебли'), 0, 30)}
-              {num('stalkHeight', L('Stalk height', 'Высота стеблей'), 10, 600)}
-              {num('buds', L('Leaves per stalk', 'Листьев на стебле'), 0, 12)}
+              {num('spread', L('Lean out', 'Наклон'), 0, 85, 1, '°')}
+              {num('bend', L('Droop', 'Изгиб'), 0, 1.5, 0.05, '#')}
+              {num('stalks', L('Stalks', 'Стебли'), 0, 30, 1, '#')}
+              {num('stalkHeight', L('Stalk height', 'Высота стеблей'), 2, 600, 0.5)}
+              {num('buds', L('Leaves per stalk', 'Листьев на стебле'), 0, 12, 1, '#')}
             </>
           ) : (
             <>
-              {num('height', L('Height', 'Высота'), 40, 3000, 10)}
-              {num('trunkWidth', L('Trunk width', 'Толщина ствола'), 2, 120)}
-              {num('trunkClear', L('Bare trunk', 'Голый ствол'), 0, 0.8, 0.01, 2)}
+              {num('height', L('Height', 'Высота'), 10, 3000, 5)}
+              {num('trunkWidth', L('Trunk width', 'Толщина ствола'), 0.5, 120, 0.5)}
+              {num('trunkClear', L('Bare trunk', 'Голый ствол'), 0, 0.8, 0.01, '#')}
               <Row label={L('Crown', 'Крона')}>
                 <Segmented label={L('Crown', 'Крона')} value={p.crown} onChange={(crown) => edit({ crown })} options={[{ value: 'round', label: L('Round', 'Круглая') }, { value: 'column', label: L('Column', 'Колонна') }, { value: 'cone', label: L('Cone', 'Конус') }, { value: 'poplar', label: L('Poplar', 'Тополь') }]} />
               </Row>
-              {num('crownWidth', L('Crown width', 'Ширина кроны'), 20, 1500, 10)}
+              {num('crownWidth', L('Crown width', 'Ширина кроны'), 5, 1500, 5)}
               <Row label={L('Leaves as', 'Листва')}>
                 <Segmented label={L('Leaves as', 'Листва')} value={p.foliage} onChange={(foliage) => edit({ foliage })} options={[{ value: 'cards', label: L('Cards', 'Листики') }, { value: 'lumps', label: L('Lumps', 'Комки') }]} />
               </Row>
-              {num('leaves', L('Leaves', 'Листьев'), 5, 3000, 5)}
-              {num('leafSize', L('Leaf size', 'Размер листа'), 4, 300)}
+              {num('leaves', L('Leaves', 'Листьев'), 3, 3000, 5, '#')}
+              {num('leafSize', L('Leaf size', 'Размер листа'), 1, 300, 0.5)}
               {p.foliage === 'lumps' && (
                 <>
                   <Row label={L('Lump shape', 'Форма комков')}>
                     <Segmented label={L('Lump shape', 'Форма комков')} value={p.lumpShape ?? 'diamond'} onChange={(lumpShape) => edit({ lumpShape })} options={[{ value: 'diamond', label: L('Diamond', 'Ромб') }, { value: 'round', label: L('Round', 'Круглые') }, { value: 'blob', label: L('Blob', 'Капля') }, { value: 'spiky', label: L('Spiky', 'Колючие') }]} />
                   </Row>
-                  <Row label={L('Lump width (X)', 'Ширина комка (X)')}>
-                    <Slider label={L('Lump width (X)', 'Ширина комка (X)')} value={p.lumpX ?? 1} min={0.2} max={3} step={0.05} digits={2} onChange={(lumpX) => edit({ lumpX }, 'lumpX')} />
-                  </Row>
-                  <Row label={L('Lump height (Y)', 'Высота комка (Y)')}>
-                    <Slider label={L('Lump height (Y)', 'Высота комка (Y)')} value={p.lumpY ?? 1.2} min={0.2} max={3} step={0.05} digits={2} onChange={(lumpY) => edit({ lumpY }, 'lumpY')} />
-                  </Row>
-                  <Row label={L('Lump depth (Z)', 'Глубина комка (Z)')}>
-                    <Slider label={L('Lump depth (Z)', 'Глубина комка (Z)')} value={p.lumpZ ?? 1} min={0.2} max={3} step={0.05} digits={2} onChange={(lumpZ) => edit({ lumpZ }, 'lumpZ')} />
-                  </Row>
+                  {num('lumpX', L('Lump width (X)', 'Ширина комка (X)'), 0.1, 4, 0.05, '×', 1)}
+                  {num('lumpY', L('Lump height (Y)', 'Высота комка (Y)'), 0.1, 4, 0.05, '×', 1.2)}
+                  {num('lumpZ', L('Lump depth (Z)', 'Глубина комка (Z)'), 0.1, 4, 0.05, '×', 1)}
                 </>
               )}
             </>
@@ -118,7 +116,7 @@ export function PlantsPanel() {
               <ColorField label={L('Trunk colour', 'Цвет ствола')} value={p.trunkColour} onChange={(trunkColour) => edit({ trunkColour }, 'trunk')} />
             </Row>
           )}
-          {num('variation', L('Variation', 'Разнообразие'), 0, 1, 0.05, 2)}
+          {num('variation', L('Variation', 'Разнообразие'), 0, 1, 0.05, '#')}
           <div className="cw-plants-actions">
             <Button onClick={() => edit({ seed: Math.floor(Math.random() * 1e6) })}>{L('New variation', 'Другой вариант')}</Button>
             <Button variant="primary" onClick={() => st.placePlant(p.id)}>
