@@ -94,9 +94,18 @@ if (uHasDepth > 0.5) {
 vec2 cwP = vCwWorld.xz;
 float cwT = smoothstep(0.0, uDepth, cwD);
 vec3 cwCol = mix(uShallow, uDeep, pow(cwT, 0.7));
-// Rippling light below the surface: soft lighter patches between drifting cells, only where it's shallow-ish.
-vec2 cwC = cwCells(cwP / 90.0, uTime * 0.5);
-cwCol += (1.0 - smoothstep(0.0, 0.18, cwC.y)) * 0.07 * (1.0 - cwT);
+// Rippling light below the surface: soft, warped, and patchy (strong in some places, gone in others), where shallow-ish.
+vec2 cwWarp = vec2(cwNoise(cwP / 60.0 + uTime * 0.05), cwNoise(cwP / 60.0 + 17.3 - uTime * 0.04)) - 0.5;
+vec2 cwC = cwCells(cwP / 85.0 + cwWarp * 1.4, uTime * 0.45);
+float cwPatch = smoothstep(0.35, 0.8, cwNoise(cwP / 160.0 + uTime * 0.02));
+cwCol += (1.0 - smoothstep(0.0, 0.22, cwC.y)) * 0.06 * cwPatch * (1.0 - cwT);
+// Waves sweeping across the open water: broad soft swells, bent and broken up, a few with white crests.
+vec2 cwDir = normalize(vec2(0.8, 0.6));
+float cwSw = dot(cwP, cwDir) / 420.0 + (cwNoise(cwP / 260.0) - 0.5) * 1.1 + (cwNoise(cwP / 60.0 + uTime * 0.08) - 0.5) * 0.18;
+float cwSwell = 0.5 + 0.5 * sin(6.2831 * (cwSw - uTime * 0.09));
+float cwOpen = smoothstep(1.5, 4.0, cwD / 18.0);
+cwCol += smoothstep(0.55, 1.0, cwSwell) * 0.045 * cwOpen;
+float cwCrest = smoothstep(0.988, 0.998, cwSwell) * step(0.72, cwNoise(cwP / 70.0 + vec2(uTime * 0.05, 0.0))) * cwOpen;
 // Foam: a blobby band with holes along every shore and round anything in the water...
 float cwEdge = cwD / 18.0;
 vec2 cwH = cwCells(cwP / 11.0 + vec2(uTime * 0.05, 0.0), uTime * 0.8);
@@ -109,7 +118,7 @@ cwLine *= step(0.45, cwNoise(cwP / 14.0 + uTime * 0.1)) * (1.0 - smoothstep(1.2,
 // ...and glints twinkling on the open water.
 vec2 cwG = floor(cwP / 9.0);
 float cwSpark = step(0.985, cwHash(cwG)) * step(length(fract(cwP / 9.0) - 0.5), 0.12) * step(0.55, sin(uTime * 2.5 + cwHash(cwG + 7.0) * 6.2831));
-float cwFoam = clamp(cwShore + cwLine * 0.9 + cwSpark, 0.0, 1.0) * uFoamOn;
+float cwFoam = clamp(cwShore + cwLine * 0.9 + cwSpark + cwCrest * 0.8, 0.0, 1.0) * uFoamOn;
 cwCol = mix(cwCol, vec3(1.0), cwFoam);
 diffuseColor.rgb = cwCol;
 // Clear where shallow (the bottom shows through), solid where deep or foaming.

@@ -158,7 +158,10 @@ depth with what's behind each pixel, and everything follows from how much water 
 - **Foam**: a blobby band with holes right where the water meets anything (shores, rocks, legs, piers), bands
   rolling in towards the shore in pieces, bending off the straight (big slow bends and small kinks), and glints
   twinkling on open water. **Foam** switches it all off.
-- **Light below**: soft lighter patches between slowly drifting cells, where it's shallow.
+- **Light below**: faint lighter patches between slowly drifting cells, warped and patchy (strong in some places,
+  gone in others), where it's shallow.
+- **Swells**: broad, softly lighter waves sweeping across open water, bent off the straight; a few carry a white
+  crest. (Part of **Foam**.)
 
 The water is lit like any surface (shadows fall on it) with a little light of its own, so it stays bright in shade.
 Everything moves with a shared clock; in the editor the picture moves when the view is redrawn. (`viewport/water-look.ts`.)
