@@ -101,6 +101,7 @@ function foliageShader(m: THREE.Material, fade: Fade): void {
     sh.uniforms.uTime = FOLIAGE_TIME;
     sh.uniforms.uFade = fade.amount;
     sh.uniforms.uFadeSide = fade.side;
+    sh.uniforms.uWind = fade.wind ?? { value: 1 };
     // Blending between levels: a screen-door dissolve. The level going away keeps the pixels whose dither is under
     // its share; the one coming in keeps exactly the others, so nothing is drawn twice and nothing goes missing.
     sh.fragmentShader = sh.fragmentShader.replace(
@@ -112,7 +113,7 @@ function foliageShader(m: THREE.Material, fade: Fade): void {
         if (uFadeSide < 0.5 ? cwDither >= uFade : cwDither < 1.0 - uFade) discard;`,
     );
     sh.vertexShader = sh.vertexShader
-      .replace('#include <common>', '#include <common>\nattribute vec3 aFloor;\nuniform float uTime;')
+      .replace('#include <common>', '#include <common>\nattribute vec3 aFloor;\nuniform float uTime;\nuniform float uWind;')
       .replace('#include <beginnormal_vertex>', 'vec3 objectNormal = aFloor;')
       .replace(
         '#include <begin_vertex>',
@@ -122,7 +123,7 @@ function foliageShader(m: THREE.Material, fade: Fade): void {
         #else
         vec2 at = vec2(0.0);
         #endif
-        float sway = position.y * position.y;
+        float sway = position.y * position.y * uWind;
         transformed.x += sin(uTime * 1.6 + at.x * 0.021 + at.y * 0.013) * 0.07 * sway;
         transformed.z += cos(uTime * 1.25 + at.y * 0.019) * 0.05 * sway;`,
       );
@@ -143,6 +144,8 @@ function foliageShader(m: THREE.Material, fade: Fade): void {
 interface Fade {
   amount: { value: number };
   side: { value: number };
+  /** How strongly it sways (1 normal). */
+  wind?: { value: number };
 }
 
 /** A chunk of one brush's grass: the same tufts at each level, only one shown at a time. */
@@ -514,7 +517,7 @@ export class FoliageRenderer {
       const meshes = (plant ?? this.geometries).map((g, l) => {
         const geo = g.clone();
         geo.setAttribute('aFloor', floor);
-        const mesh = new THREE.InstancedMesh(geo, this.material(plant ? '#ffffff' : sc.colour), count);
+        const mesh = new THREE.InstancedMesh(geo, this.material(plant ? '#ffffff' : sc.colour, def?.wind ?? 1), count);
         mesh.name = `foliage:${id}:lod${l}`;
         mesh.instanceMatrix = matrices;
         mesh.instanceColor = colours;
@@ -550,9 +553,9 @@ export class FoliageRenderer {
    * Each mesh has a material of its own, to carry its own share of a blend between levels (they all share one
    * compiled shader).
    */
-  private material(colour: string): THREE.MeshLambertMaterial {
+  private material(colour: string, wind = 1): THREE.MeshLambertMaterial {
     const m = new THREE.MeshLambertMaterial({ color: colour, vertexColors: true, side: THREE.DoubleSide });
-    const fade: Fade = { amount: { value: 1 }, side: { value: 0 } };
+    const fade: Fade = { amount: { value: 1 }, side: { value: 0 }, wind: { value: wind } };
     m.userData.fade = fade;
     foliageShader(m, fade);
     return m;

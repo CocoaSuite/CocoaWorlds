@@ -96,6 +96,15 @@ function crownRadius(shape: PlantDef['crown'], t: number): number {
       return t < 0.12 ? 0.75 + t * 2 : Math.max(0.04, 1 - (t - 0.12) / 0.88) ** 0.9;
     case 'poplar':
       return Math.sin(Math.PI * Math.min(1, t)) ** 0.8 * (0.75 + 0.25 * Math.sin(Math.PI * t * 0.9));
+    case 'oval':
+      // An egg: widest a little below the middle.
+      return Math.sqrt(Math.max(0, 1 - ((t - 0.42) / (t < 0.42 ? 0.42 : 0.58)) ** 2));
+    case 'umbrella':
+      // Spreading wide with a flat top (an oak, an acacia).
+      return t < 0.35 ? 0.45 + t * 1.57 : Math.sqrt(Math.max(0, 1 - ((t - 0.35) / 0.65) ** 3));
+    case 'weeping':
+      // A wide curtain from a rounded top (a willow): its leaves hang (see droop).
+      return t < 0.7 ? 0.85 + (0.15 * t) / 0.7 : Math.sqrt(Math.max(0, 1 - ((t - 0.7) / 0.3) ** 2));
   }
 }
 
@@ -171,12 +180,15 @@ function grow(d: PlantDef, seed: number, level = 0): Builder {
   const sph = (q: THREE.Vector3) => v3(q.x / (rx * rx), (q.y - cy) / (ry * ry), q.z / (rx * rx)).normalize();
   // (Fewer leaves further away: the same ones, each bigger, so the crown keeps its outline.)
   const count = Math.max(3, Math.round(d.leaves * lod.leaves));
+  const droop = d.droop ?? (d.crown === 'weeping' ? 0.8 : 0);
   for (let i = 0; i < count; i++) {
     const t = Math.pow(rnd(), d.crown === 'cone' ? 1.25 : 1);
     const y = y0 + (top - y0) * t;
     const rad = crownRadius(d.crown, t) * cw * (d.foliage === 'lumps' ? r(0.55, 0.95) : Math.sqrt(r(0.15, 1)));
     const a = rnd() * Math.PI * 2;
-    const p = v3(Math.cos(a) * rad, y, Math.sin(a) * rad);
+    // Hanging under their weight: leaves sink more the further out they are (never into the ground).
+    const sag = droop * Math.min(1, rad / Math.max(1, cw)) ** 2 * (top - y0) * (d.crown === 'weeping' ? 0.75 : 0.35);
+    const p = v3(Math.cos(a) * rad, Math.max(H * 0.04, y - sag * r(0.6, 1.1)), Math.sin(a) * rad);
     // Lit as part of one soft crown: normals point out from its middle (and a little up).
     const n = sph(p);
     const shade = 0.25 + 0.75 * t;
@@ -191,10 +203,13 @@ function grow(d: PlantDef, seed: number, level = 0): Builder {
     const s = vary(d.leafSize) * lod.size;
     if (d.foliage === 'cards') {
       // A leaf card: a quad facing roughly out, tipped at random.
-      const f = n.clone().add(v3(r(-0.6, 0.6), r(-0.4, 0.6), r(-0.6, 0.6))).normalize();
+      const f = n.clone().add(v3(r(-0.6, 0.6), r(-0.4, 0.6) - droop * 0.9, r(-0.6, 0.6))).normalize();
       const u = v3(0, 1, 0).cross(f).normalize();
       if (u.lengthSq() < 0.1) u.set(1, 0, 0);
       const w = f.clone().cross(u).normalize();
+      // Hanging leaves stretch into long, narrow strands (a willow's curtain).
+      u.multiplyScalar(1 - droop * 0.35);
+      w.multiplyScalar(1 + droop * 1.8);
       const q = [u.clone().multiplyScalar(-s / 2).addScaledVector(w, -s / 2), u.clone().multiplyScalar(s / 2).addScaledVector(w, -s / 2), u.clone().multiplyScalar(s / 2).addScaledVector(w, s / 2), u.clone().multiplyScalar(-s / 2).addScaledVector(w, s / 2)];
       const ids = q.map((o) => {
         const at = p.clone().add(o);
@@ -305,10 +320,28 @@ export const PLANT_MATERIAL = fading(new THREE.MeshLambertMaterial({ vertexColor
  * complementary pixels), and whose back faces light like its front (no dark undersides).
  */
 function fading<M extends THREE.Material>(m: M): M {
-  const fade = { amount: { value: 1 }, side: { value: 0 } };
+  const fade = { amount: { value: 1 }, side: { value: 0 }, sway: { value: 0 }, height: { value: 1 } };
   m.onBeforeCompile = (sh) => {
     sh.uniforms.uFade = fade.amount;
     sh.uniforms.uFadeSide = fade.side;
+    sh.uniforms.uSway = fade.sway;
+    sh.uniforms.uSwayH = fade.height;
+    sh.uniforms.uTime = PLANT_TIME;
+    // Wind: the plant sways more towards its top, each one in its own rhythm (from where it stands).
+    sh.vertexShader = sh.vertexShader
+      .replace('#include <common>', '#include <common>\nuniform float uSway;\nuniform float uSwayH;\nuniform float uTime;')
+      .replace(
+        '#include <begin_vertex>',
+        `vec3 transformed = vec3(position);
+        {
+          vec2 at = modelMatrix[3].xz;
+          float h = clamp(position.y / uSwayH, 0.0, 1.5);
+          float s = h * h * uSway;
+          float ph = at.x * 0.013 + at.y * 0.017;
+          transformed.x += (sin(uTime * 1.3 + ph) + 0.35 * sin(uTime * 3.1 + ph * 2.0 + position.y * 0.02)) * s;
+          transformed.z += cos(uTime * 1.05 + ph * 1.3) * 0.7 * s;
+        }`,
+      );
     sh.fragmentShader = sh.fragmentShader
       .replace(
         'void main() {',
@@ -323,6 +356,23 @@ void main() {
   m.customProgramCacheKey = () => `cw-plant-fade-${m.type}`;
   m.userData.fade = fade;
   return m;
+}
+
+/** The wind clock plants sway by (seconds). */
+export const PLANT_TIME = { value: 0 };
+
+/** How far a plant's top sways (u) and the height it's measured against, for its material. */
+export function setPlantWind(m: THREE.Material, d: PlantDef): void {
+  const f = m.userData.fade as { sway: { value: number }; height: { value: number } } | undefined;
+  if (!f) return;
+  const h = Math.max(1, plantGeometry(d).boundingBox?.max.y ?? 1);
+  f.height.value = h;
+  f.sway.value = h * (d.form === 'tree' ? 0.012 : 0.05) * (d.wind ?? 1);
+}
+
+/** A fresh plant material (its own fade and wind). */
+export function plantMaterial(): THREE.MeshLambertMaterial {
+  return fading(new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide }));
 }
 
 const setFade = (o: THREE.Object3D, amount: number, side: number) => {
@@ -374,7 +424,8 @@ export class PlantRenderer {
         const g0 = plantGeometry(def, p.seed);
         const size = Math.max(32, g0.boundingSphere?.radius ?? 32);
         const levels: THREE.Object3D[] = [0, 1, 2].map((l) => {
-          const m = new THREE.Mesh(l ? plantGeometry(def, p.seed, l) : g0, fading(new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide })));
+          const m = new THREE.Mesh(l ? plantGeometry(def, p.seed, l) : g0, plantMaterial());
+          setPlantWind(m.material, def);
           m.castShadow = true;
           // (A tree's crown is lit by its rounded normals; shadows from its own jagged leaves would stripe it.)
           m.receiveShadow = def.form === 'clump';
@@ -411,6 +462,7 @@ export class PlantRenderer {
 
   /** Show each plant at its level for this camera, dissolving into the next near the end of each range. */
   update(cam: THREE.Camera): void {
+    PLANT_TIME.value = performance.now() / 1000;
     const eye = cam.getWorldPosition(new THREE.Vector3());
     for (const s of this.shown.values()) {
       const d = eye.distanceTo(s.at);

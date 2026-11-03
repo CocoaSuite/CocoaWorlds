@@ -549,3 +549,17 @@ code { font: 12px var(--mono); color: var(--fg); }
 .cw-plants-empty { padding: 24px; }
 .cw-plants-props { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; border-left: 1px solid var(--line); overflow: auto; }
 .cw-plants-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.cw-plants-tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.cw-plants-tile { position: relative; }
+.cw-plants-tile > button:first-child { width: 100%; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 4px 2px; border: 1px solid var(--line); border-radius: 8px; background: transparent; color: inherit; font-size: 11px; cursor: pointer; }
+.cw-plants-tile > button:first-child:hover { border-color: var(--accent, #6aa0ff); }
+.cw-plants-tile-x { position: absolute; top: 2px; right: 2px; width: 16px; height: 16px; padding: 0; border: 0; border-radius: 50%; background: rgba(0, 0, 0, 0.45); color: #fff; font-size: 11px; line-height: 16px; cursor: pointer; }
+.cw-plants-thumb { display: block; width: 48px; height: 48px; border-radius: 6px; background: #b9c6d2; overflow: hidden; flex: none; }
+.cw-plants-thumb img { width: 100%; height: 100%; object-fit: contain; }
+.cw-plants-item { display: flex; align-items: center; gap: 8px; }
+.cw-plants-item .cw-plants-thumb { width: 28px; height: 28px; }
+.cw-plants-variants { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.cw-plants-variants button { padding: 2px; border: 2px solid transparent; border-radius: 8px; background: transparent; cursor: pointer; }
+.cw-plants-variants button.on { border-color: var(--accent, #6aa0ff); }
+.cw-plants-variants .cw-plants-thumb { width: 100%; height: 72px; }
+.cw-plants-reset { margin-left: 4px; padding: 0 3px; border: 0; background: transparent; color: var(--accent, #6aa0ff); font-size: 12px; cursor: pointer; }

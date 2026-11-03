@@ -28,7 +28,9 @@ export interface PlantDef {
   trunkWidth: number;
   /** Bare trunk below the crown (share of the height). */
   trunkClear: number;
-  crown: 'round' | 'column' | 'cone' | 'poplar';
+  crown: 'round' | 'column' | 'cone' | 'poplar' | 'oval' | 'umbrella' | 'weeping';
+  /** How much the crown's leaves hang down under their own weight, more towards its edge (0…1). */
+  droop?: number;
   crownWidth: number;
   /** Leaves as flat cards, or as soft lumps (a cypress). */
   foliage: 'cards' | 'lumps';
@@ -45,6 +47,10 @@ export interface PlantDef {
   trunkColour: string;
   /** How much sizes and colours vary from blade to blade (0…1). */
   variation: number;
+  /** How strongly it sways in the wind (0 still … 1 normal … 3 gusty). */
+  wind?: number;
+  /** The preset it was made from (what Reset goes back to). */
+  preset?: string;
   seed: number;
 }
 
@@ -82,8 +88,16 @@ export const PLANT_PRESETS: { key: string; name: string; def: Omit<PlantDef, 'id
   { key: 'stalks', name: 'Budding stalks', def: { ...base, blades: 8, bladeHeight: 28, bladeWidth: 4, bladeShape: 'strap', spread: 25, bend: 0.1, stalks: 6, stalkHeight: 50, buds: 4, colour: '#356b2a', tipColour: '#79b04e' } },
   { key: 'poplar', name: 'Poplar', def: { ...base, form: 'tree', height: 640, trunkWidth: 10, trunkClear: 0.15, crown: 'poplar', crownWidth: 150, foliage: 'cards', leaves: 700, leafSize: 14, colour: '#3e8a2f', tipColour: '#8fca5c' } },
   { key: 'cypress', name: 'Cypress', def: { ...base, form: 'tree', height: 560, trunkWidth: 9, trunkClear: 0.05, crown: 'cone', crownWidth: 150, foliage: 'lumps', leaves: 90, leafSize: 46, colour: '#5f9a35', tipColour: '#9ccc4e', variation: 0.3 } },
+  { key: 'oak', name: 'Oak', def: { ...base, form: 'tree', height: 520, trunkWidth: 18, trunkClear: 0.3, crown: 'umbrella', crownWidth: 460, foliage: 'lumps', leaves: 120, leafSize: 70, lumpShape: 'blob', colour: '#3f7a2c', tipColour: '#86bd52', wind: 0.6 } },
+  { key: 'willow', name: 'Willow', def: { ...base, form: 'tree', height: 480, trunkWidth: 14, trunkClear: 0.25, crown: 'weeping', crownWidth: 380, foliage: 'cards', leaves: 900, leafSize: 13, droop: 0.8, colour: '#5a8a35', tipColour: '#a6cf6a', wind: 1.4 } },
   { key: 'bush', name: 'Bush', def: { ...base, form: 'tree', height: 50, trunkWidth: 3, trunkClear: 0, crown: 'round', crownWidth: 80, foliage: 'lumps', leaves: 30, leafSize: 24, colour: '#4c8a33', tipColour: '#8bbf5a' } },
 ];
+
+/** What a plant started from (its preset's values; the first preset for one made before presets were kept). */
+export function plantDefaults(d: Pick<PlantDef, 'preset' | 'form'>, extra: { key: string; def: Omit<PlantDef, 'id' | 'name'> }[] = []): Omit<PlantDef, 'id' | 'name'> {
+  const all = [...PLANT_PRESETS, ...extra];
+  return (all.find((x) => x.key === d.preset) ?? all.find((x) => x.key === (d.form === 'tree' ? 'poplar' : 'grass'))!).def;
+}
 
 /** The project's plants (none in older files). */
 export function plantsOf(settings: { plants?: PlantDef[] } | undefined): PlantDef[] {
