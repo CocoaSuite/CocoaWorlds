@@ -66,7 +66,8 @@ test('foliage: tufts on a brush top, shown in the editor and in Play', async () 
     });
     assert.equal(inGame, before);
     // Level of detail: full blades near the player, simpler ones further out (and every tuft at one level at most).
-    await new Promise((r) => setTimeout(r, 500));
+    // (Once the game has drawn a frame from the player's eyes: the first can take a while in software.)
+    await until(() => page.evaluate(() => window.__cwViewport.play.foliage.shown[1] > 0), true, 20000);
     const shown = await page.evaluate(() => window.__cwViewport.play.foliage.shown);
     assert.ok(shown[0] > 0 && shown[1] > 0, `levels ${shown}`);
     assert.ok(shown[0] + shown[1] + shown[2] <= saved && shown[0] < saved / 2, `levels ${shown} of ${saved}`);
