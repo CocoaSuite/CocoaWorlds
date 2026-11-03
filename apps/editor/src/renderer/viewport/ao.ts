@@ -29,7 +29,9 @@ export class AoRenderer {
     const size = this.r.getSize(new THREE.Vector2());
     if (!this.c || this.c.cam !== cam || this.c.scene !== scene) {
       this.dispose();
-      const composer = new EffectComposer(this.r);
+      // (The picture keeps its depth, so occlusion can be left off wherever grass or a plant is in front.)
+      const target = new THREE.WebGLRenderTarget(Math.max(1, size.x), Math.max(1, size.y), { type: THREE.HalfFloatType, depthTexture: new THREE.DepthTexture(1, 1) });
+      const composer = new EffectComposer(this.r, target);
       composer.addPass(new RenderPass(scene, cam));
       const pass = new GTAOPass(scene, cam, size.x, size.y);
       // Objects marked `noAo` (grass) are left out of what the occlusion is measured from, so they get only the
@@ -44,6 +46,43 @@ export class AoRenderer {
             p._visibilityCache.push(o);
           }
         });
+      };
+      // Occlusion is measured without them, then multiplied over the finished picture: so where one is in front, the
+      // darkening belongs to what's hidden behind it (the crease at a bush's foot, a wall's corner) and painted dark
+      // ghosts over grass and bushes. Wherever the picture's depth is nearer than the depth occlusion was measured
+      // at, something left out is in front: no occlusion there.
+      const blend = pass.blendMaterial;
+      Object.assign(blend.uniforms, { tSceneDepth: { value: null }, tAoDepth: { value: null }, cameraNear: { value: 1 }, cameraFar: { value: 1000 }, isOrtho: { value: 0 } });
+      blend.fragmentShader = `#include <packing>
+uniform float intensity;
+uniform sampler2D tDiffuse;
+uniform sampler2D tSceneDepth;
+uniform sampler2D tAoDepth;
+uniform float cameraNear;
+uniform float cameraFar;
+uniform float isOrtho;
+varying vec2 vUv;
+float viewZ(float d) {
+  return isOrtho > 0.5 ? orthographicDepthToViewZ(d, cameraNear, cameraFar) : perspectiveDepthToViewZ(d, cameraNear, cameraFar);
+}
+void main() {
+  vec4 texel = texture2D(tDiffuse, vUv);
+  float near = -viewZ(texture2D(tSceneDepth, vUv).x);
+  float measured = -viewZ(texture2D(tAoDepth, vUv).x);
+  float inFront = smoothstep(0.5, 2.0, measured - near);
+  gl_FragColor = vec4(mix(mix(vec3(1.), texel.rgb, intensity), vec3(1.), inFront), texel.a);
+}`;
+      blend.needsUpdate = true;
+      const draw = pass.render.bind(pass);
+      pass.render = (r, write, read, dt, mask) => {
+        const u = blend.uniforms;
+        u.tSceneDepth!.value = read.depthTexture;
+        u.tAoDepth!.value = pass.depthTexture;
+        const c = cam as THREE.PerspectiveCamera;
+        u.cameraNear!.value = c.near;
+        u.cameraFar!.value = c.far;
+        u.isOrtho!.value = (cam as THREE.OrthographicCamera).isOrthographicCamera ? 1 : 0;
+        draw(r, write, read, dt, mask);
       };
       composer.addPass(pass);
       composer.addPass(new OutputPass());
