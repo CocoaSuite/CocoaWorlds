@@ -146,7 +146,7 @@ function PlantPreview({ def }: { def: PlantDef }) {
   const host = useRef<HTMLDivElement>(null);
   const view = useRef<{ r: THREE.WebGLRenderer; scene: THREE.Scene; cam: THREE.PerspectiveCamera; ctl: OrbitControls; mesh: THREE.Mesh; pole: THREE.Line } | null>(null);
   const [h, setH] = useState(0);
-  const [tris, setTris] = useState(0);
+  const [tris, setTris] = useState<number[]>([]);
   useEffect(() => {
     const el = host.current!;
     const r = new THREE.WebGLRenderer({ antialias: true });
@@ -215,8 +215,7 @@ function PlantPreview({ def }: { def: PlantDef }) {
     const height = Math.max(box.max.y, 1);
     const width = Math.max(box.max.x - box.min.x, box.max.z - box.min.z, 1);
     setH(height);
-    const g = v.mesh.geometry;
-    setTris(Math.round((g.index ? g.index.count : g.getAttribute('position').count) / 3));
+    setTris([0, 1, 2].map((l) => (plantGeometry(def, def.seed, l).index?.count ?? 0) / 3));
     // The height pole beside it, and the person just outside it.
     const x = width / 2 + 40;
     v.pole.geometry.dispose();
@@ -231,7 +230,7 @@ function PlantPreview({ def }: { def: PlantDef }) {
   }, [def]);
   return (
     <div className="cw-plants-preview" ref={host} data-testid="plant-preview">
-      <div className="cw-plants-height">{(h / UNITS_PER_METRE).toFixed(2)} m · {Math.round(h)} u · {tris.toLocaleString()} {L('triangles', 'треугольников')}</div>
+      <div className="cw-plants-height">{(h / UNITS_PER_METRE).toFixed(2)} m · {Math.round(h)} u · {L('triangles', 'треугольников')}: {tris.map((n) => n.toLocaleString()).join(' / ')} {L('(near / mid / far)', '(близко / средне / далеко)')}</div>
     </div>
   );
 }

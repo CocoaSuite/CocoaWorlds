@@ -99,7 +99,15 @@ function crownRadius(shape: PlantDef['crown'], t: number): number {
   }
 }
 
-function grow(d: PlantDef, seed: number): Builder {
+/** Detail levels: how many leaves (and how much bigger each, to keep the crown full), blade segments, trunk sides. */
+export const PLANT_LODS = [
+  { leaves: 1, size: 1, segs: 6, sides: 7, buds: true },
+  { leaves: 0.4, size: 1.35, segs: 3, sides: 6, buds: false },
+  { leaves: 0.12, size: 2.1, segs: 2, sides: 5, buds: false },
+];
+
+function grow(d: PlantDef, seed: number, level = 0): Builder {
+  const lod = PLANT_LODS[level]!;
   const rnd = seededRandom(Math.round(seed) * 7919 + 13);
   const r = (a: number, b: number) => a + (b - a) * rnd();
   const vary = (x: number) => x * (1 + (rnd() * 2 - 1) * d.variation * 0.5);
@@ -113,7 +121,7 @@ function grow(d: PlantDef, seed: number): Builder {
       const root = v3(Math.cos(dir), 0, Math.sin(dir)).multiplyScalar(r(0, d.bladeWidth * 0.8));
       const shape = SHAPES[d.bladeShape];
       const w = vary(d.bladeWidth) / 2;
-      blade(b, root, dir, r(0.05, 1) * d.spread * deg, vary(d.bladeHeight), d.bend * r(0.6, 1.3), (t) => shape(t) * w, tint(c0), tint(c1));
+      blade(b, root, dir, r(0.05, 1) * d.spread * deg, vary(d.bladeHeight), d.bend * r(0.6, 1.3), (t) => shape(t) * w, tint(c0), tint(c1), lod.segs);
     }
     for (let i = 0; i < d.stalks; i++) {
       const dir = i * 2.39996 + 1.1 + r(-0.4, 0.4);
@@ -121,7 +129,8 @@ function grow(d: PlantDef, seed: number): Builder {
       const len = vary(d.stalkHeight);
       const root = v3(Math.cos(dir), 0, Math.sin(dir)).multiplyScalar(r(0, d.bladeWidth));
       const thick = Math.max(0.6, d.bladeWidth * 0.12);
-      blade(b, root, dir, lean, len, d.bend * 0.2, () => thick, tint(c0), tint(c0.clone().lerp(c1, 0.5)), 8);
+      blade(b, root, dir, lean, len, d.bend * 0.2, () => thick, tint(c0), tint(c0.clone().lerp(c1, 0.5)), lod.segs + 2);
+      if (!lod.buds) continue;
       // Small leaves up the stalk's upper half, turning round it, and a bud at the top.
       const out = v3(Math.cos(dir), 0, Math.sin(dir));
       const at = (t: number) => {
@@ -141,7 +150,7 @@ function grow(d: PlantDef, seed: number): Builder {
     return b;
   }
   // ── Tree: a tapering trunk... ──
-  const H = d.height, top = H * 0.97, sides = 7;
+  const H = d.height, top = H * 0.97, sides = lod.sides;
   const ring = (y: number, rad: number) =>
     Array.from({ length: sides }, (_, i) => {
       const a = (i / sides) * Math.PI * 2;
@@ -160,7 +169,9 @@ function grow(d: PlantDef, seed: number): Builder {
   // so the whole crown shades as one soft shape.
   const cy = y0 + (top - y0) * 0.5, ry = Math.max(1, (top - y0) / 2), rx = Math.max(1, cw);
   const sph = (q: THREE.Vector3) => v3(q.x / (rx * rx), (q.y - cy) / (ry * ry), q.z / (rx * rx)).normalize();
-  for (let i = 0; i < d.leaves; i++) {
+  // (Fewer leaves further away: the same ones, each bigger, so the crown keeps its outline.)
+  const count = Math.max(3, Math.round(d.leaves * lod.leaves));
+  for (let i = 0; i < count; i++) {
     const t = Math.pow(rnd(), d.crown === 'cone' ? 1.25 : 1);
     const y = y0 + (top - y0) * t;
     const rad = crownRadius(d.crown, t) * cw * (d.foliage === 'lumps' ? r(0.55, 0.95) : Math.sqrt(r(0.15, 1)));
@@ -170,7 +181,7 @@ function grow(d: PlantDef, seed: number): Builder {
     const n = sph(p);
     const shade = 0.25 + 0.75 * t;
     const c = tint(c0.clone().lerp(c1, Math.min(1, shade * (0.6 + 0.4 * rnd()))));
-    const s = vary(d.leafSize);
+    const s = vary(d.leafSize) * lod.size;
     if (d.foliage === 'cards') {
       // A leaf card: a quad facing roughly out, tipped at random.
       const f = n.clone().add(v3(r(-0.6, 0.6), r(-0.4, 0.6), r(-0.6, 0.6))).normalize();
@@ -185,7 +196,7 @@ function grow(d: PlantDef, seed: number): Builder {
       b.idx.push(ids[0]!, ids[1]!, ids[2]!, ids[0]!, ids[2]!, ids[3]!);
     } else {
       // A soft lump: the chosen shape, stretched, its corners jittered, turned at random about the up axis.
-      const shape = d.lumpShape ?? 'diamond';
+      const shape = level > 0 ? 'diamond' : (d.lumpShape ?? 'diamond');
       const t = LUMPS[shape];
       const k = v3(d.lumpX ?? 1, d.lumpY ?? 1.2, d.lumpZ ?? 1).multiplyScalar(s / 2);
       const spin = rnd() * Math.PI * 2, cs = Math.cos(spin), sn = Math.sin(spin);
@@ -212,11 +223,11 @@ function grow(d: PlantDef, seed: number): Builder {
 const cache = new Map<string, THREE.BufferGeometry>();
 
 /** A plant's mesh (kept: the same recipe and seed give the same one). Its root is at the origin. */
-export function plantGeometry(d: PlantDef, seed = d.seed): THREE.BufferGeometry {
-  const key = JSON.stringify([d, seed]);
+export function plantGeometry(d: PlantDef, seed = d.seed, level = 0): THREE.BufferGeometry {
+  const key = JSON.stringify([d, seed, level]);
   let g = cache.get(key);
   if (!g) {
-    const b = grow(d, seed);
+    const b = grow(d, seed, level);
     g = new THREE.BufferGeometry();
     g.setAttribute('position', new THREE.Float32BufferAttribute(b.pos, 3));
     g.setAttribute('normal', new THREE.Float32BufferAttribute(b.nor, 3));
@@ -236,7 +247,7 @@ export const PLANT_MATERIAL = new THREE.MeshLambertMaterial({ vertexColors: true
 /** Draws the scene's Plant objects (editor and game). */
 export class PlantRenderer {
   readonly group = new THREE.Group();
-  private shown = new Map<string, { key: string; mesh: THREE.Mesh }>();
+  private shown = new Map<string, { key: string; mesh: THREE.LOD }>();
   private last: SceneDoc | null = null;
   private off = onPlantsChange(() => this.sync(this.last));
 
@@ -257,11 +268,20 @@ export class PlantRenderer {
       let s = this.shown.get(e.id);
       if (s?.key !== key) {
         if (s) this.group.remove(s.mesh);
-        const mesh = new THREE.Mesh(plantGeometry(def, p.seed), PLANT_MATERIAL);
+        // Three detail levels, switched by distance (scaled to the plant's size).
+        const mesh = new THREE.LOD();
+        const g0 = plantGeometry(def, p.seed);
+        const size = Math.max(64, g0.boundingSphere?.radius ?? 64);
+        [0, 1, 2].forEach((l) => {
+          const m = new THREE.Mesh(l ? plantGeometry(def, p.seed, l) : g0, PLANT_MATERIAL);
+          m.castShadow = true;
+          // (A tree's crown is lit by its rounded normals; shadows from its own jagged leaves would stripe it.)
+          m.receiveShadow = def.form === 'clump';
+          m.userData.entityId = e.id;
+          mesh.addLevel(m, [0, size * 6, size * 16][l]!);
+        });
         mesh.name = `plant:${e.id}`;
         mesh.userData.entityId = e.id;
-        mesh.castShadow = true;
-        mesh.receiveShadow = true;
         mesh.matrixAutoUpdate = false;
         this.group.add(mesh);
         s = { key, mesh };
@@ -278,8 +298,9 @@ export class PlantRenderer {
     this.onDraw();
   }
 
+  /** What to pick plants by (each its nearest level's mesh). */
   get meshes(): THREE.Mesh[] {
-    return [...this.shown.values()].map((s) => s.mesh);
+    return [...this.shown.values()].map((s) => s.mesh.levels[0]!.object as THREE.Mesh);
   }
 
   dispose(): void {

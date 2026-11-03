@@ -474,7 +474,7 @@ export class FoliageRenderer {
 
   private add(id: string, entry: Entry, sc: ScatterData, t: Tufts): void {
     const def = sc.plant ? plantById(sc.plant) : null;
-    const plant = def ? unitPlant(def) : null;
+    const plant = def ? [0, 1, 2].map((l) => unitPlant(def, l)) : null;
     const tint = new THREE.Color();
     const rnd = seededRandom(Math.round(sc.seed) + 99);
     // Tufts by chunk.
@@ -511,7 +511,7 @@ export class FoliageRenderer {
         patchTint(t.data[o]!, t.data[o + 2]!, sc.seed, tint).multiplyScalar(0.97 + rnd() * 0.06);
         colours.setXYZ(k, tint.r, tint.g, tint.b);
       });
-      const meshes = (plant ? [plant, plant, plant] : this.geometries).map((g, l) => {
+      const meshes = (plant ?? this.geometries).map((g, l) => {
         const geo = g.clone();
         geo.setAttribute('aFloor', floor);
         const mesh = new THREE.InstancedMesh(geo, this.material(plant ? '#ffffff' : sc.colour), count);
@@ -597,12 +597,13 @@ export class FoliageRenderer {
 
 const units = new Map<string, THREE.BufferGeometry>();
 /** A plant's mesh one unit tall (its root at the origin), for growing it as foliage. */
-function unitPlant(def: import('@cocoaworlds/core').PlantDef): THREE.BufferGeometry {
-  const key = JSON.stringify(def);
+function unitPlant(def: import('@cocoaworlds/core').PlantDef, level = 0): THREE.BufferGeometry {
+  const key = JSON.stringify([def, level]);
   let g = units.get(key);
   if (!g) {
-    g = plantGeometry(def).clone();
-    const h = Math.max(1, g.boundingBox?.max.y ?? 1);
+    g = plantGeometry(def, def.seed, level).clone();
+    // (Every level scaled by the full plant's height, so they line up.)
+    const h = Math.max(1, plantGeometry(def).boundingBox?.max.y ?? 1);
     g.scale(1 / h, 1 / h, 1 / h);
     if (units.size > 50) units.clear();
     units.set(key, g);
