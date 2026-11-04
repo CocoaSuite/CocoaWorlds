@@ -75,6 +75,8 @@ export interface ScriptHost {
   held?(): string | null;
   /** Whether the player holds `what` or a copy of it (null: anything). */
   holds?(what: string | null): boolean;
+  /** Whether the player is in a hiding spot. */
+  hiding?(): boolean;
 }
 
 export interface ScriptError {
@@ -130,6 +132,8 @@ export type RunnerEvent =
   | { type: 'hit'; targets: string[] }
   /** A creature died. */
   | { type: 'dies'; target: string }
+  /** The player got into a hiding spot, came out, or was found in it (`targets`: the spot and what it is inside). */
+  | { type: 'hides' | 'unhides' | 'found'; targets: string[] }
   /** The player clicked a button on screen. */
   | { type: 'uiClick'; element: string }
   /** The player used an item from the hotbar. */
@@ -238,6 +242,8 @@ export class ScriptRunner {
           if (ev.kind === 'breaks' && inst.program.owner === e.target) this.spawn(inst, h, null);
         } else if (e.type === 'dies') {
           if (ev.kind === 'dies' && inst.program.owner === e.target) this.spawn(inst, h, null);
+        } else if (e.type === 'hides' || e.type === 'unhides' || e.type === 'found') {
+          if (ev.kind === e.type && e.targets.includes(inst.program.owner)) this.spawn(inst, h, null);
         } else if (e.type === 'hit') {
           if (ev.kind === 'hit' && e.targets.includes(inst.program.owner)) this.spawn(inst, h, null);
         } else if (e.type === 'die') {
@@ -576,6 +582,9 @@ export class ScriptRunner {
           break;
         case 'count':
           s.push(this.host.itemCount?.(op.name) ?? 0);
+          break;
+        case 'hiding':
+          s.push(!!this.host.hiding?.());
           break;
         case 'holds': {
           const v = s.pop() ?? null;

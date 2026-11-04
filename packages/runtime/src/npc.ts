@@ -20,19 +20,24 @@ type V = { x: number; y: number; z: number };
 
 export const NPC_SIZE = { radius: 16, height: 72, eye: 64 };
 
-export type NpcState = 'idle' | 'wander' | 'busy' | 'flee' | 'chase' | 'attack' | 'walk' | 'follow' | 'dead';
+export type NpcState = 'idle' | 'wander' | 'busy' | 'flee' | 'chase' | 'attack' | 'walk' | 'follow' | 'pull' | 'dead';
 
 /** What an animation is for; the Creature component names the model's animation for each. */
-export type AnimRole = 'idle' | 'walk' | 'attack' | 'die' | 'run' | 'busy' | 'hurt';
-export const ANIM_ROLES: AnimRole[] = ['idle', 'walk', 'attack', 'die', 'run', 'busy', 'hurt'];
+export type AnimRole = 'idle' | 'walk' | 'attack' | 'die' | 'run' | 'busy' | 'hurt' | 'pull';
+export const ANIM_ROLES: AnimRole[] = ['idle', 'walk', 'attack', 'die', 'run', 'busy', 'hurt', 'pull'];
 
 /** What a creature can ask the world. */
 export interface NpcWorld {
   readonly world: RAPIER.World;
   time(): number;
   gravity: number;
-  /** The player's feet and eyes, or null when there's no player. */
-  player(): { feet: V; eye: V; collider: number } | null;
+  /**
+   * The player's feet and eyes, or null when there's no player. `hidden`: the hiding spot they are in (their feet
+   * stay where they got in); `entering` while they are still getting in, when they can be seen doing it.
+   */
+  player(): { feet: V; eye: V; collider: number; hidden?: string | null; entering?: boolean } | null;
+  /** It reached a hiding spot it saw the player get into: they are pulled out. */
+  pullOut?(npc: Npc, spot: string): void;
   /** Colliders a creature moves through (zones, water, ladders). */
   passes(c: RAPIER.Collider): boolean;
   /** Hurt the player (an attack up close). */
@@ -61,6 +66,9 @@ export class Npc {
   /** When the player was last seen, and where. */
   private seenAt = -Infinity;
   private lastSeen: V | null = null;
+  /** The hiding spot it saw the player get into. */
+  private found: string | null = null;
+  private pullUntil = 0;
   /** Neutral creatures turn on the player once hurt. */
   angry = false;
   /** Where a script is walking it (null: not walking). */
@@ -225,6 +233,7 @@ export class Npc {
     // Running away when the player comes near (the shy kind).
     if (p && this.data.flee === 'near' && this.state !== 'follow' && this.flatDistance(p.feet) < Math.min(192, this.data.sight)) this.fleeUntil = Math.max(this.fleeUntil, now + 1);
 
+    if (!p?.hidden) this.found = null;
     if (this.goal) {
       // A scripted walk: nothing else until there.
       if (this.flatDistance(this.goal) < 3) this.goal = null;
@@ -237,8 +246,28 @@ export class Npc {
       move = { x: this.feet.x + (away.x / len) * 200, y: this.feet.y, z: this.feet.z + (away.z / len) * 200 };
       speed *= 1.6;
       running = true;
+    } else if (p && this.hostile && now < this.pullUntil) {
+      this.state = 'pull';
+      face = p.feet;
+    } else if (p && this.hostile && p.hidden && (this.found === p.hidden || (p.entering && this.sees(p)))) {
+      // Saw them get in: to the spot, and out they come.
+      this.found = p.hidden;
+      this.state = 'chase';
+      if (this.flatDistance(p.feet) > Math.max(this.data.reach, 16) + this.radius + 16) move = p.feet;
+      else {
+        face = p.feet;
+        this.found = null;
+        this.state = 'pull';
+        this.seenAt = now;
+        this.lastSeen = { ...p.feet };
+        const pull = Math.max(0, Number(this.data.pull ?? 0.8) || 0);
+        this.pullUntil = now + pull;
+        this.nextAttack = now + pull;
+        this.play('pull', false, true);
+        this.w.pullOut?.(this, p.hidden);
+      }
     } else if (p && this.hostile) {
-      const sees = this.sees(p);
+      const sees = !p.hidden && this.sees(p);
       if (sees) {
         this.seenAt = now;
         this.lastSeen = { ...p.feet };
@@ -325,7 +354,7 @@ export class Npc {
       if (Math.hypot(fx, fz) > 1) this.turnTowards(Math.atan2(-fx, -fz), dt);
     }
     // (Attacking in place, the attack itself plays its animation; a stumble plays out.)
-    if (now >= this.stumbleUntil && (this.state !== 'attack' || dx || dz))
+    if (now >= this.stumbleUntil && this.state !== 'pull' && (this.state !== 'attack' || dx || dz))
       this.play(this.state === 'busy' ? 'busy' : dx || dz ? (running ? 'run' : 'walk') : 'idle', true);
     this.fall(dt, dx, dz);
   }

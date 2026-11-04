@@ -26,7 +26,7 @@ where it can see the player and fires bullets with an **Aim spread**), or **Neve
 
 Shots, swings and blasts take its **Health**; a hit that doesn't kill plays its hurt animation. At 0 it dies: a plain figure falls over, a model plays its dying
 animation, and shots go through. **Animations** names the model's animations for standing, walking, attacking,
-dying, running, being busy and being hurt, separated by commas (the default is `idle, walk, attack, die`).
+dying, running, being busy, being hurt and pulling the player out of a hiding spot, separated by commas (the default is `idle, walk, attack, die`).
 Missing ones are skipped: running falls back to walking, and busy to standing. Animations blend into each
 other over 0.15 s.
 
@@ -51,6 +51,28 @@ Under **Creatures**:
 
 The value **distance from … to …** measures how far apart two things are (objects, creatures, the player), for
 conditions such as “the player is within 300 of the nest”.
+
+## Hiding spots
+
+A **Hiding spot** component (Add component › Hiding spot) on a locker, a wardrobe or a plank propped over a gap
+lets the player get in with **E** (its **Prompt** shows, “Hide” by default) and out with **E** again. Getting in,
+the view moves quickly to the spot's eyes (**Getting in takes**, 0.25 s); getting out, it moves back and the
+player stands where they were when they pressed E.
+
+| Setting | What it does |
+|---|---|
+| Look from | An object placed and turned where the eyes go, looking along its −Z (an empty object inside the locker). Empty: this object (a brush: its middle, looking north). |
+| Eyes at | Moves the eyes from there, in that object's own axes. |
+| Look left and right | How far the view turns each way. 0: fixed, as through a locker's slats. |
+| Look up and down | The same, up and down. |
+
+Inside, the player can't move, fire or be seen. A creature that **sees them getting in** knows: it goes to the
+spot, plays its pulling animation (the 8th name in **Animations**; without one, its attack), and the player is
+pulled out and held still for its **Pulling out takes** time, after which it attacks. A creature that didn't see
+them get in loses track of them, as when they slip out of sight.
+
+Blocks: **When the player hides in this**, **When the player comes out of this** and **When a creature finds the
+player in this** (on the spot); **Make the player come out of hiding**; the value **the player is hiding**.
 
 ## Googly eyes
 

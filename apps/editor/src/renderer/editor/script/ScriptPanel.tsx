@@ -151,7 +151,7 @@ export function ScriptPanel({ screens = false }: { screens?: boolean } = {}) {
       ev.clientX,
       ev.clientY,
       [
-        ...(['start', 'enter', 'leave', 'use', 'useHolding', 'message', 'messageStop', 'every', 'die', 'breaks', 'hit', 'dies', 'near', 'far', 'uiClick', 'useItem', 'listPick', 'key'] as EventKind[]).map((k) => ({
+        ...(['start', 'enter', 'leave', 'use', 'useHolding', 'message', 'messageStop', 'every', 'die', 'breaks', 'hit', 'dies', 'hides', 'unhides', 'found', 'near', 'far', 'uiClick', 'useItem', 'listPick', 'key'] as EventKind[]).map((k) => ({
           label: eventName(k),
           onSelect: () => {
             const zone: Ref = objects.find((o) => o.id === owner.id)?.isZone ? { self: true } : objects.find((o) => o.isZone) ? { entity: objects.find((o) => o.isZone)!.id } : { self: true };
@@ -441,6 +441,7 @@ function EventRow({ ev, onRemove, onCopy, pick }: { ev: EventBlock; onRemove: ()
   else if (ev.kind === 'breaks') content = w('breaks');
   else if (ev.kind === 'hit') content = w('hit');
   else if (ev.kind === 'dies') content = w('dies');
+  else if (ev.kind === 'hides' || ev.kind === 'unhides' || ev.kind === 'found') content = w(ev.kind);
   else if (ev.kind === 'enter' || ev.kind === 'leave')
     content = (
       <>
@@ -790,6 +791,7 @@ function statementWords(s: Statement, set: (patch: Record<string, unknown>, merg
       );
     case 'freezePlayer':
     case 'unfreezePlayer':
+    case 'unhide':
     case 'drop':
       return w(s.kind);
     case 'place':
@@ -1264,6 +1266,7 @@ function ExprSlot({ expr, type, label }: { expr: Expr; type: 'number' | 'boolean
     case 'selectedItem':
     case 'pickedRow':
     case 'clock':
+    case 'hiding':
       body = <span className="cw-pill-text">{w(expr.kind)}</span>;
       break;
     case 'distance':

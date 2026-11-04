@@ -496,12 +496,43 @@ export const COMPONENTS: ComponentDef[] = [
         key: 'anims', group: e('Body', 'Тело'),
         label: e('Animations', 'Анимации'),
         hint: e(
-          'Names in its model for standing, walking, attacking, dying, running, being busy and being hurt, separated by commas. Leave out what it hasn’t got.',
-          'Имена анимаций модели: стоит, идёт, атакует, погибает, бежит, занят, ранен — через запятую. Чего нет, не пишите.',
+          'Names in its model for standing, walking, attacking, dying, running, being busy, being hurt and pulling the player out of hiding, separated by commas. Leave out what it hasn’t got.',
+          'Имена анимаций модели: стоит, идёт, атакует, погибает, бежит, занят, ранен, вытаскивает игрока из укрытия — через запятую. Чего нет, не пишите.',
         ),
         type: { kind: 'text' },
         default: 'idle, walk, attack, die',
       },
+      {
+        key: 'pull', group: e('Attack', 'Атака'),
+        label: e('Pulling out takes', 'Вытаскивает за'),
+        hint: e('Seen going into a hiding spot, the player is pulled out; it attacks this long after.', 'Если видел, как игрок спрятался, вытаскивает его и атакует через это время.'),
+        type: { kind: 'number', min: 0, step: 0.1, unit: 's' },
+        default: 0.8,
+      },
+    ],
+  },
+  {
+    name: 'hidingSpot',
+    label: e('Hiding spot', 'Укрытие'),
+    description: e(
+      'A locker, a wardrobe, a gap under a plank: E gets in and out. Creatures can’t see the player inside unless they saw them get in.',
+      'Шкафчик, шкаф, щель под доской: E — залезть и вылезти. Существа не видят игрока внутри, если не видели, как он туда залез.',
+    ),
+    appliesTo: 'any',
+    conflicts: ['rigidBody', 'trigger', 'soundArea', 'water', 'ladder', 'npc'],
+    fields: [
+      { key: 'prompt', label: e('Prompt', 'Подсказка'), type: { kind: 'text' }, default: 'Hide' },
+      {
+        key: 'view',
+        label: e('Look from', 'Смотреть из'),
+        hint: e('An object placed and turned where the eyes go (looking along its −Z). Empty: this object.', 'Объект, поставленный и повёрнутый туда, где глаза (смотрит по −Z). Пусто — этот объект.'),
+        type: { kind: 'object' },
+        default: '',
+      },
+      { key: 'offset', label: e('Eyes at', 'Глаза в'), hint: e('From that object, in its own axes.', 'От этого объекта, в его осях.'), type: { kind: 'vec3', step: 4 }, default: [0, 0, 0] },
+      { key: 'side', label: e('Look left and right', 'Смотреть влево-вправо'), hint: e('0: the view is fixed (looking through slats).', '0 — взгляд неподвижен (сквозь щели).'), type: { kind: 'number', min: 0, max: 180, step: 5, unit: '°' }, default: 0 },
+      { key: 'upDown', label: e('Look up and down', 'Смотреть вверх-вниз'), type: { kind: 'number', min: 0, max: 89, step: 5, unit: '°' }, default: 0 },
+      { key: 'time', label: e('Getting in takes', 'Залезает за'), type: { kind: 'number', min: 0, max: 2, step: 0.05, unit: 's' }, default: 0.25 },
     ],
   },
   {
@@ -962,5 +993,16 @@ export interface NpcData {
   clumsy: boolean;
   height: number;
   radius: number;
+  pull: number;
+  [k: string]: unknown;
+}
+
+export interface HidingSpotData {
+  prompt: string;
+  view: string;
+  offset: [number, number, number];
+  side: number;
+  upDown: number;
+  time: number;
   [k: string]: unknown;
 }

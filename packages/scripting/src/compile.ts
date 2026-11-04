@@ -108,6 +108,8 @@ export type Op =
   | { op: 'selitem' }
   /** Pops an object (or yes: anything); pushes whether the player holds it (or a copy of it). */
   | { op: 'holds' }
+  /** Pushes whether the player is hiding. */
+  | { op: 'hiding' }
   | { op: 'halt' };
 
 /** How far (units) “When the player uses this” reaches unless it says otherwise. */
@@ -116,7 +118,7 @@ export const USE_REACH = 96;
 export type GameAction = 'hurt' | 'heal' | 'addScore' | 'giveArmour';
 export type GameValue = 'health' | 'score' | 'armour';
 
-export type ActionName = 'move' | 'turn' | 'turnTo' | 'return' | 'show' | 'hide' | 'turnOn' | 'turnOff' | 'startTrain' | 'stopTrain' | 'walkTo' | 'runAway' | 'wander' | 'setSide' | 'freeze' | 'unfreeze' | 'viewFrom' | 'remove' | 'scale' | 'physical' | 'push' | 'moveTo' | 'teleport' | 'damage' | 'place' | 'pickUp' | 'drop';
+export type ActionName = 'move' | 'turn' | 'turnTo' | 'return' | 'show' | 'hide' | 'turnOn' | 'turnOff' | 'startTrain' | 'stopTrain' | 'walkTo' | 'runAway' | 'wander' | 'setSide' | 'freeze' | 'unfreeze' | 'viewFrom' | 'remove' | 'scale' | 'physical' | 'push' | 'moveTo' | 'teleport' | 'damage' | 'place' | 'pickUp' | 'drop' | 'unhide';
 
 export type CompiledEvent =
   | { kind: 'start' }
@@ -128,6 +130,7 @@ export type CompiledEvent =
   | { kind: 'breaks' }
   | { kind: 'hit' }
   | { kind: 'dies' }
+  | { kind: 'hides' | 'unhides' | 'found' }
   | { kind: 'every'; seconds: number }
   | { kind: 'near' | 'far'; distance: number }
   | { kind: 'uiClick'; element: string }
@@ -243,6 +246,7 @@ class HandlerCompiler {
     else if (ev.kind === 'breaks') event = { kind: 'breaks' };
     else if (ev.kind === 'hit') event = { kind: 'hit' };
     else if (ev.kind === 'dies') event = { kind: 'dies' };
+    else if (ev.kind === 'hides' || ev.kind === 'unhides' || ev.kind === 'found') event = { kind: ev.kind };
     else if (ev.kind === 'die') {
       event = { kind: 'die' };
       this.ruleOff('health', ev.id);
@@ -631,6 +635,10 @@ class HandlerCompiler {
         this.emit({ op: 'ref', ref: { player: true } });
         this.emit({ op: 'act', name: 'drop', argc: 0 });
         break;
+      case 'unhide':
+        this.emit({ op: 'ref', ref: { player: true } });
+        this.emit({ op: 'act', name: 'unhide', argc: 0 });
+        break;
       case 'freezePlayer':
       case 'unfreezePlayer':
         this.emit({ op: 'ref', ref: { player: true } });
@@ -811,6 +819,9 @@ class HandlerCompiler {
         if (this.h.event.kind !== 'listPick') this.problem(e.id, '“The picked row” only works inside “When the player picks a row”.');
         this.emit({ op: 'picked' });
         return 'text';
+      case 'hiding':
+        this.emit({ op: 'hiding' });
+        return 'boolean';
       case 'armour':
         this.ruleOff('health', e.id);
         this.emit({ op: 'read', name: 'armour' });

@@ -787,7 +787,7 @@ export class PlaySession {
       this.body.rotation.set(0, v.yaw, 0);
       const crouched = this.world.player?.crouched ?? false;
       this.body.scale.set(1, crouched ? 0.5 : 1, 1);
-    }
+    } else if (this.body) this.body.visible = false;
     return true;
   }
 

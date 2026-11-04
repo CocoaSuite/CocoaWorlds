@@ -34,6 +34,8 @@ export type Expr =
   /** The player's armour (0–100, Half-Life's suit power). */
   | { id: string; kind: 'armour' }
   | { id: string; kind: 'score' }
+  /** Whether the player is in a hiding spot. */
+  | { id: string; kind: 'hiding' }
   /** The copy made last by “Make a copy” in this stack. */
   | { id: string; kind: 'copy' }
   /** Another object's variable (read only). */
@@ -105,6 +107,8 @@ export type Statement =
   /** Scripted scenes: the player can't move (or can again); the view looks through an object for a while. */
   | { id: string; kind: 'freezePlayer' }
   | { id: string; kind: 'unfreezePlayer' }
+  /** Out of the hiding spot the player is in. */
+  | { id: string; kind: 'unhide' }
   | { id: string; kind: 'viewFrom'; target: Ref; seconds: Expr }
   /** Make a creature an enemy, a friend or neutral (a guard turning on the player who took an egg). */
   | { id: string; kind: 'setSide'; target: Ref; side: 'hostile' | 'friendly' | 'neutral' }
@@ -181,6 +185,8 @@ export type EventBlock =
   | { id: string; kind: 'hit' }
   /** This creature died. */
   | { id: string; kind: 'dies' }
+  /** The player got into this hiding spot, came out of it, or was found in it by a creature (pulled out). */
+  | { id: string; kind: 'hides' | 'unhides' | 'found' }
   /** The player came within `distance` units of this object (`far`: went further away than that). */
   | { id: string; kind: 'near' | 'far'; distance: Expr }
   /** The player clicked a button of the screen UI (by id). */

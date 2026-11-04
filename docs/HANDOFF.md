@@ -115,3 +115,19 @@ Done:
 
 Next, if wanted: `preview.png` (the preview sphere, 256 px); on import, offer to replace a material whose id is
 already in the project; import of image materials as a graph of Image nodes (ask first).
+
+### 6. Mascot horror: hiding spots, enemy AI, heartbeat minigame
+
+Goal: one enemy with a richer AI, hiding spots, and a heartbeat rhythm minigame when the enemy is near a hidden
+player. Built as general components and blocks, nothing game-specific in the engine.
+
+Hiding spots: **done.** `hidingSpot` component (`packages/core/src/components.ts`: look from, eyes at, look
+left/right and up/down limits, getting-in time) and the creature's `pull` setting and `pull` animation role.
+Runtime: `GameWorld` hiding section in `packages/runtime/src/world.ts` (`enterHiding`, `leaveHiding`,
+`stopHiding`, `limitLook`, `hiddenView`; the player's collider is off inside, feet stay where they got in);
+`npc.ts` (`found`: a creature that sees the player while they are getting in walks to the spot and pulls them
+out). Blocks: events `hides`, `unhides`, `found`, statement `unhide`, value `hiding`. Docs: `docs/creatures.md`
+(Hiding spots). Tests: `packages/runtime/test/hiding.test.ts`.
+
+Next: the enemy AI (the user lays it out), then the heartbeat minigame (likely a reusable timing-bar screen
+element with blocks for hits, misses and the end).

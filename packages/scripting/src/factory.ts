@@ -26,6 +26,9 @@ export function newEvent(kind: EventKind, zone: Ref = self): EventBlock {
     case 'breaks':
     case 'hit':
     case 'dies':
+    case 'hides':
+    case 'unhides':
+    case 'found':
       return { id: id(), kind };
     case 'enter':
     case 'leave':
@@ -110,6 +113,7 @@ export function newStatement(kind: StatementKind, opts: { target?: Ref; variable
       return { id: id(), kind, target, direction: 'up', strength: num(400) };
     case 'freezePlayer':
     case 'unfreezePlayer':
+    case 'unhide':
       return { id: id(), kind };
     case 'viewFrom':
       return { id: id(), kind, target, seconds: num(3) };
@@ -192,6 +196,7 @@ export function newExpr(kind: ExprKind, opts: { variable?: string } = {}): Expr 
     case 'armour':
     case 'score':
     case 'copy':
+    case 'hiding':
       return { id: id(), kind };
     case 'varOf':
       return { id: id(), kind, variable: opts.variable ?? 'value', of: other };

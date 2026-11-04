@@ -103,6 +103,11 @@ const W = {
   breaks: ['When this breaks', 'Когда это ломается'],
   hit: ['When this is hit (shot, struck or blasted)', 'Когда в это попадают (выстрел, удар, взрыв)'],
   dies: ['When this creature dies', 'Когда это существо погибает'],
+  hides: ['When the player hides in this', 'Когда игрок прячется здесь'],
+  unhides: ['When the player comes out of this', 'Когда игрок вылезает отсюда'],
+  found: ['When a creature finds the player in this', 'Когда существо находит здесь игрока'],
+  unhide: ['Make the player come out of hiding', 'Вытащить игрока из укрытия'],
+  hiding: ['the player is hiding', 'игрок прячется'],
   walkTo: ['Walk', 'Отвести'],
   runAway: ['run away from the player for', 'убегать от игрока в течение'],
   wanderOn: ['wander about', 'бродить вокруг'],
@@ -205,6 +210,9 @@ const PALETTE_EVENT: Record<EventKind, Pair> = {
   breaks: ['When this breaks', 'Когда это ломается'],
   hit: ['When this is hit (shot, struck or blasted)', 'Когда в это попадают (выстрел, удар, взрыв)'],
   dies: ['When this creature dies', 'Когда это существо погибает'],
+  hides: ['When the player hides in this', 'Когда игрок прячется здесь'],
+  unhides: ['When the player comes out of this', 'Когда игрок вылезает отсюда'],
+  found: ['When a creature finds the player in this', 'Когда существо находит здесь игрока'],
   near: ['When the player comes near this', 'Когда игрок подходит к этому'],
   far: ['When the player goes away from this', 'Когда игрок уходит от этого'],
   useHolding: ['When the player uses this while holding something', 'Когда игрок использует это, держа что-то'],
@@ -225,6 +233,7 @@ const PALETTE_STMT: Record<StatementKind, Pair> = {
   wander: ['Make a creature wander or stay', 'Существо бродит или стоит'],
   freezePlayer: ['Freeze the player', 'Остановить игрока'],
   unfreezePlayer: ['Let the player move again', 'Снова дать игроку двигаться'],
+  unhide: ['Make the player come out of hiding', 'Вытащить игрока из укрытия'],
   viewFrom: ['Look through an object (camera)', 'Смотреть через объект (камера)'],
   startTrain: ['Start the train', 'Запустить поезд'],
   stopTrain: ['Stop the train', 'Остановить поезд'],
@@ -279,7 +288,7 @@ export const STATEMENT_GROUPS: { title: Pair; kinds: StatementKind[] }[] = [
   { title: ['Do', 'Действия'], kinds: ['move', 'turn', 'turnTo', 'return', 'show', 'hide', 'turnOn', 'turnOff', 'startTrain', 'stopTrain', 'send', 'log'] },
   { title: ['Objects', 'Объекты'], kinds: ['spawn', 'remove', 'moveTo', 'scale', 'physical', 'push', 'damage', 'place', 'pickUp', 'drop'] },
   { title: ['Creatures', 'Существа'], kinds: ['walkTo', 'setSide', 'runAway', 'wander'] },
-  { title: ['Player and score', 'Игрок и счёт'], kinds: ['teleport', 'hurt', 'heal', 'giveArmour', 'addScore', 'freezePlayer', 'unfreezePlayer', 'viewFrom', 'changeScene'] },
+  { title: ['Player and score', 'Игрок и счёт'], kinds: ['teleport', 'hurt', 'heal', 'giveArmour', 'addScore', 'freezePlayer', 'unfreezePlayer', 'unhide', 'viewFrom', 'changeScene'] },
   { title: ['Screen and signs', 'Экран и таблички'], kinds: ['say', 'showScreen', 'hideScreen', 'toggleScreen', 'showUi', 'hideUi', 'setUiText', 'addRow', 'removeRow', 'clearList', 'setText'] },
   { title: ['Inventory', 'Инвентарь'], kinds: ['giveItem', 'takeItem'] },
   { title: ['Sound', 'Звук'], kinds: ['playSound', 'stopSound'] },
@@ -314,13 +323,14 @@ const VALUE: Record<ExprKind, Pair> = {
   clock: ['The time now (real clock)', 'Текущее время (настоящие часы)'],
   distance: ['Distance between two things', 'Расстояние между двумя объектами'],
   holds: ['The player holds …', 'Игрок держит …'],
+  hiding: ['The player is hiding', 'Игрок прячется'],
 };
 export const valueName = (k: ExprKind) => pick(VALUE[k]);
 
 /** Which value blocks fit a slot of a given type. */
 export const VALUES_FOR: Record<'number' | 'boolean' | 'text' | 'any', ExprKind[]> = {
   number: ['number', 'variable', 'varOf', 'maths', 'random', 'distance', 'time', 'clock', 'health', 'armour', 'score', 'itemCount'],
-  boolean: ['boolean', 'inside', 'holds', 'variable', 'varOf', 'compare', 'logic', 'not'],
+  boolean: ['boolean', 'inside', 'holds', 'hiding', 'variable', 'varOf', 'compare', 'logic', 'not'],
   text: ['text', 'variable', 'varOf', 'join', 'number', 'object', 'score', 'itemCount', 'selectedItem', 'pickedRow'],
-  any: ['number', 'text', 'boolean', 'variable', 'varOf', 'maths', 'compare', 'logic', 'not', 'inside', 'holds', 'random', 'distance', 'join', 'time', 'clock', 'health', 'armour', 'score', 'itemCount', 'selectedItem', 'pickedRow', 'object', 'copy'],
+  any: ['number', 'text', 'boolean', 'variable', 'varOf', 'maths', 'compare', 'logic', 'not', 'inside', 'holds', 'hiding', 'random', 'distance', 'join', 'time', 'clock', 'health', 'armour', 'score', 'itemCount', 'selectedItem', 'pickedRow', 'object', 'copy'],
 };

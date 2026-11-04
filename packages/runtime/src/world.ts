@@ -21,6 +21,7 @@ import {
   type TriggerData,
   type ChargerData,
   type NpcData,
+  type HidingSpotData,
   type LevelChangeData,
   type PathPointData,
   type TrainData,
@@ -191,7 +192,7 @@ interface Body {
 export function npcAnimation(list: string, role: AnimRole): string {
   const names = String(list ?? '').split(',').map((x) => x.trim());
   const of = (r: AnimRole) => names[ANIM_ROLES.indexOf(r)] ?? '';
-  return of(role) || (role === 'run' ? of('walk') : role === 'busy' ? of('idle') : '');
+  return of(role) || (role === 'run' ? of('walk') : role === 'busy' ? of('idle') : role === 'pull' ? of('attack') : '');
 }
 
 /**
@@ -634,6 +635,7 @@ export class GameWorld {
       this.owner.set(npc.collider.handle, e.id);
       this.npcs.set(e.id, npc);
     }
+    for (const e of doc.entities) if (e.components.hidingSpot) this.spots.set(e.id, readComponent<HidingSpotData>('hidingSpot', e.components.hidingSpot));
     // Measured now (while loading) rather than on the first creature's first walk.
     if (this.npcs.size) this.navigation();
 
@@ -704,6 +706,7 @@ export class GameWorld {
       playAnimation: (target, name, loop) => this.bus.emit({ type: 'anim', target, name, loop, time: this.time }),
       spawn: (template, place) => this.spawn(template, place),
       held: () => this.held?.id ?? null,
+      hiding: () => this.hidingIn !== null,
       holds: (what) => !!this.held && (what === null || this.heldIds().includes(what)),
       isInside: (zone, what) => this.isInside(zone, what),
       distance: (a, b) => {
@@ -1066,7 +1069,10 @@ export class GameWorld {
     while (this.accumulator >= STEP) {
       this.applyTweens(this.time + STEP);
       this.moveTrains();
-      if (this.player) {
+      if (this.player && this.hiding) {
+        this.stayHidden();
+        if (this.useQueued) this.doUse();
+      } else if (this.player) {
         if (this.frozen) Object.assign(this.player.input, { forward: 0, right: 0, jump: false, crouch: false, fire: false, use: false });
         this.player.step(STEP);
         if (this.player.landingSpeed) {
@@ -1109,8 +1115,124 @@ export class GameWorld {
   /** What the player is pressing (from the keyboard and mouse). */
   setPlayerInput(input: Partial<PlayerInput>): void {
     // (A click can press and let go between two steps: the press still fires once.)
-    if (input.fire) this.fireQueued = true;
+    if (input.fire && !this.hiding) this.fireQueued = true;
     if (this.player) Object.assign(this.player.input, input);
+    if (this.hiding) this.limitLook();
+  }
+
+  // ── Hiding spots ──
+
+  private spots = new Map<string, HidingSpotData>();
+  /**
+   * The spot the player hides in: where they stood and looked when they got in, the spot's view, when they got
+   * in, and when they started getting out (null: still in). `heldUntil`: pulled out, held still until then.
+   */
+  private hiding: {
+    id: string;
+    data: HidingSpotData;
+    feet: { x: number; y: number; z: number };
+    from: { eye: [number, number, number]; yaw: number; pitch: number };
+    view: { eye: [number, number, number]; yaw: number; pitch: number };
+    at: number;
+    out: number | null;
+    heldUntil: number;
+  } | null = null;
+
+  /** The hiding spot the player is in (null: not hiding, or getting out). */
+  get hidingIn(): string | null {
+    return this.hiding && this.hiding.out === null ? this.hiding.id : null;
+  }
+
+  /** Where the eyes go in a spot and the way they face (−Z of its Look from object, or of the spot). */
+  private spotView(id: string, data: HidingSpotData): { eye: [number, number, number]; yaw: number; pitch: number } {
+    const at = data.view && this.doc.get(data.view) ? data.view : id;
+    const m = this.doc.worldMatrix(at);
+    const base = pivotOf(this.doc, at, boundsOfEntity);
+    const o = Array.isArray(data.offset) ? data.offset.map((v) => Number(v) || 0) : [0, 0, 0];
+    const eye: [number, number, number] = [0, 1, 2].map((k) => base[k]! + m[k]! * o[0]! + m[4 + k]! * o[1]! + m[8 + k]! * o[2]!) as never;
+    const f = [-m[8]!, -m[9]!, -m[10]!];
+    const len = Math.hypot(f[0]!, f[1]!, f[2]!) || 1;
+    return { eye, yaw: Math.atan2(-f[0]! / len, -f[2]! / len), pitch: Math.asin(Math.max(-1, Math.min(1, f[1]! / len))) };
+  }
+
+  private enterHiding(id: string): void {
+    const p = this.player!;
+    const data = this.spots.get(id)!;
+    this.dropHeld();
+    const view = this.spotView(id, data);
+    this.hiding = { id, data, feet: p.feetPosition, from: { eye: p.eye(), yaw: p.input.yaw, pitch: p.input.pitch }, view, at: this.time, out: null, heldUntil: 0 };
+    Object.assign(p.input, { forward: 0, right: 0, jump: false, crouch: false, fire: false, use: false, yaw: view.yaw, pitch: view.pitch });
+    p.collider.setEnabled(false);
+    this.runner.dispatch({ type: 'hides', targets: [id, ...this.ancestorsOf(id)] });
+    this.bus.emit({ type: 'use', target: id, by: 'player', time: this.time });
+  }
+
+  /** Out of the spot, back where they got in, looking the way they did; `held`: pulled out, held still this long. */
+  private leaveHiding(held = 0): void {
+    const h = this.hiding;
+    if (!h || h.out !== null) return;
+    const p = this.player!;
+    h.from = { eye: this.hiddenView().eye, yaw: p.input.yaw, pitch: p.input.pitch };
+    h.out = this.time;
+    h.heldUntil = this.time + held;
+    p.collider.setEnabled(true);
+    p.teleport(h.feet, h.from.yaw);
+    p.input.pitch = 0;
+    this.runner.dispatch({ type: 'unhides', targets: [h.id, ...this.ancestorsOf(h.id)] });
+  }
+
+  /** Out at once, with no move (dying, being put somewhere by a script). */
+  private stopHiding(): void {
+    if (!this.hiding) return;
+    const out = this.hiding.out === null;
+    if (out) this.runner.dispatch({ type: 'unhides', targets: [this.hiding.id, ...this.ancestorsOf(this.hiding.id)] });
+    this.hiding = null;
+    this.player?.collider.setEnabled(true);
+  }
+
+  /** Each step while hiding: held still; once out (and let go), back to normal. */
+  private stayHidden(): void {
+    const h = this.hiding!;
+    const p = this.player!;
+    Object.assign(p.input, { forward: 0, right: 0, jump: false, crouch: false, fire: false, use: false });
+    this.fireQueued = false;
+    if (h.out !== null && this.time >= Math.max(h.out + this.moveTime(), h.heldUntil)) this.hiding = null;
+  }
+
+  private moveTime(): number {
+    return Math.max(0, Math.min(2, Number(this.hiding?.data.time) || 0));
+  }
+
+  /** Inside, the view turns only as far as the spot lets it. */
+  private limitLook(): void {
+    const h = this.hiding!;
+    const p = this.player!;
+    if (h.out !== null) {
+      p.input.yaw = h.from.yaw;
+      p.input.pitch = 0;
+      return;
+    }
+    const deg = Math.PI / 180;
+    const side = Math.max(0, Number(h.data.side) || 0) * deg, upDown = Math.max(0, Number(h.data.upDown) || 0) * deg;
+    p.input.yaw = h.view.yaw + Math.max(-side, Math.min(side, turnOf(p.input.yaw - h.view.yaw)));
+    p.input.pitch = Math.max(h.view.pitch - upDown, Math.min(h.view.pitch + upDown, p.input.pitch));
+  }
+
+  /** The camera while hiding: a quick move between the player's eyes and the spot's, then the spot's view. */
+  private hiddenView(): { eye: [number, number, number]; yaw: number; pitch: number } {
+    const h = this.hiding!;
+    const p = this.player!;
+    const inside = { eye: h.view.eye, yaw: p.input.yaw, pitch: p.input.pitch };
+    const t = this.moveTime() > 0 ? Math.min(1, (this.time + this.accumulator - (h.out ?? h.at)) / this.moveTime()) : 1;
+    const to = h.out === null ? inside : { eye: p.eye(), yaw: p.input.yaw, pitch: p.input.pitch };
+    if (t >= 1) return to;
+    const k = t * t * (3 - 2 * t);
+    const from = h.from;
+    return {
+      eye: [0, 1, 2].map((i) => from.eye[i]! + (to.eye[i]! - from.eye[i]!) * k) as never,
+      yaw: from.yaw + turnOf(to.yaw - from.yaw) * k,
+      pitch: from.pitch + (to.pitch - from.pitch) * k,
+    };
   }
 
   /** A scripted scene holds the player still (no moving, jumping, firing or using; they can look around). */
@@ -1147,10 +1269,13 @@ export class GameWorld {
    * no word), or null when there's nothing to use.
    */
   usePrompt(): string | null {
+    if (this.hiding) return null;
     const hit = this.useAim();
     if (!hit) return null;
     const { id, targets, distance } = hit;
     if (this.held) return this.runner.usesHolding(targets, this.heldIds(), distance) ? '' : null;
+    const spot = targets.find((t) => this.spots.has(t));
+    if (spot && distance <= PLAYER.useReach) return String(this.spots.get(spot)!.prompt ?? '');
     const prompt = this.runner.usePrompt(targets, distance);
     if (prompt !== null) return prompt;
     if (distance > PLAYER.useReach) return null;
@@ -1241,7 +1366,14 @@ export class GameWorld {
         const p = this.player;
         if (!p) return null;
         const [x, y, z] = p.eye();
-        return { feet: p.feetPosition, eye: { x, y, z }, collider: p.collider.handle };
+        const h = this.hiding;
+        const hidden = h && h.out === null ? h.id : null;
+        return { feet: hidden ? { ...h!.feet } : p.feetPosition, eye: { x, y, z }, collider: p.collider.handle, hidden, entering: !!hidden && this.time - h!.at <= Math.max(this.moveTime(), STEP) };
+      },
+      pullOut: (npc, spot) => {
+        if (this.hidingIn !== spot) return;
+        this.leaveHiding(Math.max(0, Number(npc.data.pull ?? 0.8) || 0));
+        this.runner.dispatch({ type: 'found', targets: [spot, ...this.ancestorsOf(spot)] });
       },
       passes: (c) => this.triggers.has(c.handle) || this.volumes.has(c.handle) || this.standInOf.has(c.handle),
       hurtPlayer: (amount, by) => this.hurt(amount, this.names.get(by) ?? 'a creature'),
@@ -1395,7 +1527,7 @@ export class GameWorld {
   playerView(): { eye: [number, number, number]; yaw: number; pitch: number; thirdPerson: boolean; feet: [number, number, number] } | null {
     const p = this.player;
     if (!p) return null;
-    const cam = this.cameraEye();
+    const cam = this.cameraEye() ?? (this.hiding ? this.hiddenView() : null);
     if (cam) {
       const f = p.feetPosition;
       return { ...cam, thirdPerson: false, feet: [f.x, f.y, f.z] };
@@ -1414,6 +1546,10 @@ export class GameWorld {
   }
 
   private doUse(): void {
+    if (this.hiding) {
+      if (this.hiding.out === null && !this.frozen) this.leaveHiding();
+      return;
+    }
     if (this.held) {
       if (!this.useHolding()) this.dropHeld();
       return;
@@ -1421,6 +1557,8 @@ export class GameWorld {
     const hit = this.useAim();
     if (!hit) return;
     const { id, targets, distance } = hit;
+    const spot = targets.find((t) => this.spots.has(t));
+    if (spot && distance <= PLAYER.useReach) return this.enterHiding(spot);
     if (distance <= PLAYER.useReach) {
       if (this.grab(id)) return;
       // Friends follow (or stay) when used.
@@ -1569,6 +1707,7 @@ export class GameWorld {
     this.deaths++;
     this.health = PLAYER.maxHealth;
     this.armour = 0;
+    this.stopHiding();
     this.player.respawn();
     this.bus.emit({ type: 'player.die', cause, time: this.time });
     this.runner.dispatch({ type: 'die' });
@@ -1756,6 +1895,8 @@ export class GameWorld {
       return null;
     }
     if (name === 'drop') return this.dropHeld(), null;
+    if (name === 'unhide') return this.leaveHiding(), null;
+    if (name === 'teleport') this.stopHiding();
     if (name === 'push') {
       const [dx, dy, dz, strength] = args.map(n) as [number, number, number, number];
       p.push(dx * strength, dy * strength, dz * strength);
@@ -2503,4 +2644,9 @@ function sampled(positions: ArrayLike<number>, m: number[]): number[][] {
   const n = positions.length / 3, step = Math.max(1, Math.floor(n / 500));
   for (let i = 0; i < n; i += step) out.push(applyMat4(m, [positions[i * 3]!, positions[i * 3 + 1]!, positions[i * 3 + 2]!]));
   return out;
+}
+
+/** An angle as a turn between −π and π. */
+function turnOf(a: number): number {
+  return a - Math.PI * 2 * Math.round(a / (Math.PI * 2));
 }
