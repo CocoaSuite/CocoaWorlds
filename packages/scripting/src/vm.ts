@@ -43,6 +43,10 @@ export interface ScriptHost {
   setText?(target: string, text: string): void;
   /** Play a sound at a place (an object, the player, 'aim') or everywhere (null). */
   playSound?(sound: string, place: Value, volume: number, owner: string): void;
+  /** A noise at a place, carrying `range` units. */
+  noise?(place: Value, range: number, owner: string): void;
+  /** The Director's hint to hunting creatures. */
+  hint?(place: Value, spread: number, sure: number, as: 'sound' | 'sighting' | 'event'): void;
   /** Stop the sounds an object is making. */
   stopSound?(target: string): void;
   /** Play an animation of an object's model. */
@@ -141,7 +145,9 @@ export type RunnerEvent =
   /** The player picked a row of a list on screen. */
   | { type: 'listPick'; list: string; row: string }
   /** The player pressed a key. */
-  | { type: 'key'; key: string };
+  | { type: 'key'; key: string }
+  /** A hunting creature made a move (`targets`: it, and the hiding spot it is at with what that is inside). */
+  | { type: 'does'; what: string; targets: string[] };
 
 export class ScriptRunner {
   private instances: Instance[];
@@ -242,6 +248,8 @@ export class ScriptRunner {
           if (ev.kind === 'breaks' && inst.program.owner === e.target) this.spawn(inst, h, null);
         } else if (e.type === 'dies') {
           if (ev.kind === 'dies' && inst.program.owner === e.target) this.spawn(inst, h, null);
+        } else if (e.type === 'does') {
+          if (ev.kind === 'does' && (!ev.what || ev.what === e.what) && e.targets.includes(inst.program.owner)) this.spawn(inst, h, null);
         } else if (e.type === 'hides' || e.type === 'unhides' || e.type === 'found') {
           if (ev.kind === e.type && e.targets.includes(inst.program.owner)) this.spawn(inst, h, null);
         } else if (e.type === 'hit') {
@@ -535,6 +543,19 @@ export class ScriptRunner {
           const inst = of && typeof of === 'object' ? this.instances.find((i) => i.program.owner === of.ref) : undefined;
           const slot = inst ? inst.program.variables.findIndex((v) => v.name === op.name) : -1;
           s.push(inst && slot >= 0 ? (inst.vars[slot] ?? null) : null);
+          break;
+        }
+        case 'noise': {
+          const range = Math.max(0, num(s.pop() ?? 0));
+          const place = s.pop() ?? null;
+          this.host.noise?.(place, range, t.inst.program.owner);
+          break;
+        }
+        case 'hint': {
+          const sure = num(s.pop() ?? 0);
+          const spread = Math.max(0, num(s.pop() ?? 0));
+          const place = s.pop() ?? null;
+          this.host.hint?.(place, spread, sure, op.as);
           break;
         }
         case 'sound': {

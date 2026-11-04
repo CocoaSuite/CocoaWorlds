@@ -50,6 +50,8 @@ export function newEvent(kind: EventKind, zone: Ref = self): EventBlock {
       return { id: id(), kind, list: '' };
     case 'key':
       return { id: id(), kind, key: 'KeyI' };
+    case 'does':
+      return { id: id(), kind, what: '' };
   }
 }
 
@@ -133,6 +135,10 @@ export function newStatement(kind: StatementKind, opts: { target?: Ref; variable
       return { id: id(), kind, target, amount: num(10) };
     case 'playSound':
       return { id: id(), kind, sound: '', at: { self: true }, volume: num(1) };
+    case 'noise':
+      return { id: id(), kind, at: { self: true }, range: num(600) };
+    case 'hint':
+      return { id: id(), kind, at: { player: true }, spread: num(600), sure: num(0.5), as: 'event' };
     case 'stopSound':
       return { id: id(), kind, target };
     case 'playAnim':

@@ -129,5 +129,20 @@ Runtime: `GameWorld` hiding section in `packages/runtime/src/world.ts` (`enterHi
 out). Blocks: events `hides`, `unhides`, `found`, statement `unhide`, value `hiding`. Docs: `docs/creatures.md`
 (Hiding spots). Tests: `packages/runtime/test/hiding.test.ts`.
 
-Next: the enemy AI (the user lays it out), then the heartbeat minigame (likely a reusable timing-bar screen
-element with blocks for hits, misses and the end).
+Enemy AI: **done** (the user's brief: behaviour tree, Director stimuli, search, hiding spot suspicion and
+interactions, personality layer). Creature **Mind: Hunter** (`npc.mind`, settings in `hunterFields()` in
+`components.ts`, moves in `packages/core/src/moments.ts`). Code in `packages/runtime/src/hunter/`: `tree.ts`
+(Priority, Sequence, Guard, Restart, Task), `blackboard.ts`, `stimuli.ts` (weigh, freshness, age bands),
+`spots.ts` (SpotInfo, SpotMemory, suspicion, react), `interactions.ts` (checks per spot kind), `personality.ts`
+(beats to moves, moves to animations), `settings.ts`, `mind.ts` (Hunter: senses, the tree, tasks). `Npc` runs the
+mind's plan (`npc.ts`: `mind`, `canSee`, `clear`, `startPull`, `playMoment`). World: `noise`, `hint`,
+`spotInfo`, `NOISE`, player noises, `reveal`/`did` in `npcWorld()`; pulled-out players are put beside the
+creature (`Player.fitsAt`). Fixed on the way: creatures' own capsules were solid when the navigation grid was
+measured (holes round each creature's start). Blocks: event `does`, statements `noise`, `hint`. Tests:
+`packages/runtime/test/hunter.test.ts`.
+
+Waiting on: the user's mascot model (robot in a chicken costume) and its animations; then fill its **Moves**
+(and Animations, including `pull`). Still the chicken as a stand-in.
+
+Next: the heartbeat minigame (likely a reusable timing-bar screen element with blocks for hits, misses and the
+end; a miss can be “Make a noise at the hiding spot”, which a listening Hunter acts on).

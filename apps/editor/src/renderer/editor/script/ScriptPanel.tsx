@@ -35,10 +35,10 @@ import {
   type VariableDef,
   emptyScript,
 } from '@cocoaworlds/scripting';
-import { UI_SCRIPT_OWNER, uiOf, type GameValue } from '@cocoaworlds/core';
+import { CREATURE_MOMENTS, UI_SCRIPT_OWNER, uiOf, type GameValue } from '@cocoaworlds/core';
 import { Button, ContextMenu, IconButton, type MenuEntry } from '@cocoaworlds/ui';
 import { createContext, useContext, useEffect, useMemo, useState, type KeyboardEvent, type ReactNode } from 'react';
-import { t } from '../../i18n';
+import { getLang, t } from '../../i18n';
 import { useEditor } from '../../store';
 import { sceneInfo } from './scene-info';
 import { STATEMENT_GROUPS, VALUES_FOR, axisLabel, directionLabel, eventName, groupTitle, statementName, valueName, w } from './words';
@@ -151,7 +151,7 @@ export function ScriptPanel({ screens = false }: { screens?: boolean } = {}) {
       ev.clientX,
       ev.clientY,
       [
-        ...(['start', 'enter', 'leave', 'use', 'useHolding', 'message', 'messageStop', 'every', 'die', 'breaks', 'hit', 'dies', 'hides', 'unhides', 'found', 'near', 'far', 'uiClick', 'useItem', 'listPick', 'key'] as EventKind[]).map((k) => ({
+        ...(['start', 'enter', 'leave', 'use', 'useHolding', 'message', 'messageStop', 'every', 'die', 'breaks', 'hit', 'dies', 'hides', 'unhides', 'found', 'does', 'near', 'far', 'uiClick', 'useItem', 'listPick', 'key'] as EventKind[]).map((k) => ({
           label: eventName(k),
           onSelect: () => {
             const zone: Ref = objects.find((o) => o.id === owner.id)?.isZone ? { self: true } : objects.find((o) => o.isZone) ? { entity: objects.find((o) => o.isZone)!.id } : { self: true };
@@ -473,6 +473,20 @@ function EventRow({ ev, onRemove, onCopy, pick }: { ev: EventBlock; onRemove: ()
       {w('listPick')} <ElementSlot value={ev.list} kinds={['list']} label={w('listPick')} onChange={(list) => set({ list } as Partial<EventBlock>)} />
     </>
   );
+  else if (ev.kind === 'does') content = (
+    <>
+      {w('does')}{' '}
+      <select className="cw-input cw-mini" aria-label={w('does')} value={ev.what} onChange={(e) => set({ what: e.target.value } as Partial<EventBlock>)}>
+        <option value="">{w('anyMove')}</option>
+        {CREATURE_MOMENTS.map((m) => (
+          <option key={m.name} value={m.name}>
+            {m.label[getLang() === 'ru' ? 'ru' : 'en']}
+          </option>
+        ))}
+      </select>{' '}
+      {w('doesHere')}
+    </>
+  );
   else if (ev.kind === 'key') content = (
     <>
       {w('keyEv')} <KeySlot value={ev.key} label={w('keyEv')} onChange={(key) => set({ key } as Partial<EventBlock>)} />
@@ -773,6 +787,25 @@ function statementWords(s: Statement, set: (patch: Record<string, unknown>, merg
         <>
           {w('scale')} <RefSlot value={s.target} onChange={(target) => set({ target })} label={w('scale')} /> {w('setTo')}{' '}
           <ExprSlot expr={s.factor} type="number" label={`${w('scale')} ${w('setTo')}`} /> {w('timesSize')} <ExprSlot expr={s.seconds} type="number" label={`${w('scale')} ${w('over')}`} /> {w('seconds')}
+        </>
+      );
+    case 'noise':
+      return (
+        <>
+          {w('noise')} <RefSlot value={s.at} allowPlayer allowAim onChange={(at) => at && set({ at })} label={w('noise')} /> {w('carrying')}{' '}
+          <ExprSlot expr={s.range} type="number" label={`${w('noise')} ${w('carrying')}`} /> {w('units')}
+        </>
+      );
+    case 'hint':
+      return (
+        <>
+          {w('hint')} <RefSlot value={s.at} allowPlayer allowAim onChange={(at) => at && set({ at })} label={w('hint')} /> {w('giveOrTake')}{' '}
+          <ExprSlot expr={s.spread} type="number" label={`${w('hint')} ${w('giveOrTake')}`} /> {w('sure')} <ExprSlot expr={s.sure} type="number" label={`${w('hint')} ${w('sure')}`} /> {w('asKind')}{' '}
+          <select className="cw-input cw-mini" aria-label={`${w('hint')} ${w('asKind')}`} value={s.as} onChange={(e) => set({ as: e.target.value as 'sound' | 'sighting' | 'event' })}>
+            <option value="sound">{w('hintSound')}</option>
+            <option value="sighting">{w('hintSighting')}</option>
+            <option value="event">{w('hintEvent')}</option>
+          </select>
         </>
       );
     case 'push':

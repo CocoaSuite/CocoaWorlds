@@ -218,6 +218,12 @@ export class Player {
     this.body.setTranslation({ x: feet.x, y: y + this.height / 2, z: feet.z }, true);
   }
 
+  /** Whether the player would fit standing here (nothing solid in the way, other than sensors). */
+  fitsAt(feet: V): boolean {
+    const hit = this.world.intersectionWithShape({ x: feet.x, y: feet.y + 1 + this.height / 2, z: feet.z }, { x: 0, y: 0, z: 0, w: 1 }, playerShape(this.height), RAPIER.QueryFilterFlags.EXCLUDE_SENSORS, SOLID, this.collider);
+    return !hit;
+  }
+
   /** What the player is looking at up to `reach` away: the point and the collider. */
   look(reach: number): { point: [number, number, number]; collider: RAPIER.Collider } | null {
     const [x, y, z] = this.eye();

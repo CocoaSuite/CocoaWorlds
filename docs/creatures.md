@@ -52,6 +52,65 @@ Under **Creatures**:
 The value **distance from … to …** measures how far apart two things are (objects, creatures, the player), for
 conditions such as “the player is within 300 of the nest”.
 
+## The Hunter mind
+
+A Creature's **Mind** (under Behaviour) is **Simple** by default: what is described above. **Hunter** gives an
+enemy a behaviour tree that only knows what it sees and hears. Its settings are under the **Hunting** headings.
+
+What it does, highest first (a higher one cuts a lower one short at once, even mid-move):
+
+1. **Engage**: while it sees the player (in front of it within **Sees up to**, nothing in the way, or within
+   **Notices up close** behind it): a snap of the head, then it runs at them and attacks in reach. **Capture**: a
+   hiding spot it saw the player get into is opened at once.
+2. **Investigate**: news that matters enough (**Investigates from**): it reacts, walks there (slower than it
+   wanders, slower still close by), looks around and listens, then starts a search. Fresh news (**Fresh for**) takes
+   it to the very place; older news somewhere round it, wider the older and the less sure; stale news (past **Old
+   after**) straight to a search of the area. Better news replaces what it is on and starts it again.
+3. **Search** for between **Searches at least** and **at most** seconds: the hiding spot most worth checking
+   within **Checks spots within**, else a point round the **Search area**, which grows by **Area grows by** each
+   time (up to **Area at most**). Time up: it gives up (its losing move) and wanders again.
+4. **Wander**: to a walkable place within **Wanders up to**, at half speed, then a wait (**Waits at least / at
+   most**), often with an odd move first (**Does something odd**).
+
+Losing sight of the player is news like any other: it goes to where it last saw them and searches round there.
+
+**What it hears.** Noises carry a distance; a Hunter hears one that close times its **Hearing**, half as far
+through walls, and places it roughly (less exactly the further off). The player makes noise running (not crouching
+or walking slowly; 360 u), landing hard (480 u), firing (1600 u), and getting into or out of a hiding spot (200 u,
+from the spot). Blocks make more: **Make a noise at [place] heard up to [n] units**.
+
+**The Director** is the game's own scripts, not part of the creature: **Tell creatures the player is near [place],
+give or take [n] units, sure [0–1], as [a sound / a sighting / an event]**. Each Hunter that doesn't see the
+player gets its own guess within that spread (at least 64 u), so it never learns the exact place this way; how much
+the hint counts is its kind (sighting 1, event 0.8, sound 0.6) × sureness × freshness. Hunters that see the player
+ignore hints. For example, on a “Director” empty: *Every 20 seconds → Tell creatures the player is near the
+player, give or take 600, sure 0.3, as an event*.
+
+**Hiding spots.** A Hunter never knows who is inside. It weighs what it can observe into a suspicion (0–1):
+signs of use (a spot used in the last 30 s, seen when close by or while its entrance moves) × **Weight: signs of
+use**, noise heard from it × **Weight: noise**, the sureness of the news it is following, more for spots near
+it, × **Weight: hint**, and having seen it in use × **Weight: seen in use**. Then:
+
+| Suspicion | What it does |
+|---|---|
+| Below **Knocks from** | Usually walks past; now and then (**Chance: a quick look**) a glance from where it stands. |
+| From Knocks from | By **Chance: knocks** it walks up, knocks or shakes it, and listens. Noise from the spot while it listens makes it open up. Otherwise it walks past. |
+| From **Opens from** | It walks up and opens it (by **Kind**): a locker or cabinet is opened and looked into, a wardrobe slowly, under something it crouches and looks, a box is kicked. The player inside is pulled out and attacked; an empty one gets a silent stare. |
+
+A checked spot is left alone for **Leaves a checked spot for**, and a spot it chose to pass is passed for the rest
+of that search, so it can walk right past an occupied spot.
+
+**Moves.** Each thing it does is a move with a name: `scratch`, `tilt`, `lookAround`, `cluck`, `stare`,
+`headShake`, `twitch`, `crouch` (idle moves, picked at random), `hear` (snapping round to a sound), `listen`,
+`rummage`, `spot` (seeing the player), `lose` (giving up), `empty` (an empty spot), `knock`, `rattle`, `open`,
+`openSlow`, `lookIn`, `lookUnder`, `kick`. **Moves** names an animation for each, with how long it lasts:
+`scratch=belly_scratch 2.4; tilt=head_tilt; knock=knock 1.2`. A move without one plays its fallback from
+**Animations** (busy, standing, hurt or attacking) for its usual time. Walking, running, attacking and dying use
+Animations as before.
+
+**When a creature [does a move]** runs on the creature, and on the hiding spot it is at: a locker's script can
+swing its door on *opens a hiding spot*, a cluck can play a sound on the creature.
+
 ## Hiding spots
 
 A **Hiding spot** component (Add component › Hiding spot) on a locker, a wardrobe or a plank propped over a gap
@@ -61,6 +120,7 @@ player stands where they were when they pressed E.
 
 | Setting | What it does |
 |---|---|
+| Kind | Locker, wardrobe, cabinet, under something, box or other: how a Hunter checks it. |
 | Look from | An object placed and turned where the eyes go, looking along its −Z (an empty object inside the locker). Empty: this object (a brush: its middle, looking north). |
 | Eyes at | Moves the eyes from there, in that object's own axes. |
 | Look left and right | How far the view turns each way. 0: fixed, as through a locker's slats. |

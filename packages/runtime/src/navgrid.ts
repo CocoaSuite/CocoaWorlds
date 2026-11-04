@@ -199,6 +199,16 @@ export class NavGrid {
     return best;
   }
 
+  /** A walkable spot `min`…`max` u from a place, in a random direction (null when none is found). */
+  spotAround(p: V, min: number, max: number, random: () => number): V | null {
+    for (let i = 0; i < 12; i++) {
+      const a = random() * Math.PI * 2, r = min + random() * Math.max(0, max - min);
+      const s = this.nearest({ x: p.x + Math.cos(a) * r, y: p.y, z: p.z + Math.sin(a) * r }, 3);
+      if (s >= 0) return this.at(s);
+    }
+    return null;
+  }
+
   /** Every link between spots (for drawing in the editor). */
   links(): [number, number][] {
     const out: [number, number][] = [];

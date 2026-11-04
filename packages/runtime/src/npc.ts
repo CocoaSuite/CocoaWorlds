@@ -15,12 +15,14 @@
  */
 import RAPIER from '@dimforge/rapier3d-compat';
 import type { NpcData } from '@cocoaworlds/core';
+import { Hunter, type HunterBody, type PlayerSeen } from './hunter/mind';
+import type { SpotInfo } from './hunter/spots';
 
 type V = { x: number; y: number; z: number };
 
 export const NPC_SIZE = { radius: 16, height: 72, eye: 64 };
 
-export type NpcState = 'idle' | 'wander' | 'busy' | 'flee' | 'chase' | 'attack' | 'walk' | 'follow' | 'pull' | 'dead';
+export type NpcState = 'idle' | 'wander' | 'busy' | 'flee' | 'chase' | 'attack' | 'walk' | 'follow' | 'pull' | 'investigate' | 'search' | 'inspect' | 'dead';
 
 /** What an animation is for; the Creature component names the model's animation for each. */
 export type AnimRole = 'idle' | 'walk' | 'attack' | 'die' | 'run' | 'busy' | 'hurt' | 'pull';
@@ -44,15 +46,23 @@ export interface NpcWorld {
   hurtPlayer(amount: number, by: string): void;
   /** Fire a shot from `from` along `dir`. */
   shoot(from: V, dir: V, npc: Npc): void;
-  /** Play one of the creature's animations (by role). */
-  animate(npc: Npc, role: AnimRole, loop: boolean): void;
+  /** Play one of the creature's animations (by role, or a Hunter's move by name). */
+  animate(npc: Npc, role: AnimRole | string, loop: boolean): void;
   /** 0…1 (replaceable in tests). */
   random(): number;
   /** A walkable way there (corners to head for, ending at `to`), or null when there's no navigation or no way. */
   route?(from: V, to: V): V[] | null;
+  /** A walkable spot min…max u from a place. */
+  around?(at: V, min: number, max: number): V | null;
+  /** Hiding spots, as they can be observed. */
+  spots?(): SpotInfo[];
+  /** A Hunter opens a spot up: true if the player was inside (they are pulled out). */
+  reveal?(npc: Npc, spot: string): boolean;
+  /** A Hunter makes a move (scripts hear of it). */
+  did?(npc: Npc, moment: string, spot: string | null): void;
 }
 
-export class Npc {
+export class Npc implements HunterBody {
   readonly body: RAPIER.RigidBody;
   readonly collider: RAPIER.Collider;
   private controller: RAPIER.KinematicCharacterController;
@@ -69,6 +79,9 @@ export class Npc {
   /** The hiding spot it saw the player get into. */
   private found: string | null = null;
   private pullUntil = 0;
+  /** A Hunter's mind (null: the simple one below). */
+  readonly mind: Hunter | null = null;
+  private momentKey = 0;
   /** Neutral creatures turn on the player once hurt. */
   angry = false;
   /** Where a script is walking it (null: not walking). */
@@ -123,6 +136,45 @@ export class Npc {
     this.controller.enableSnapToGround(9);
     this.controller.setMaxSlopeClimbAngle((46 * Math.PI) / 180);
     this.controller.setUp({ x: 0, y: 1, z: 0 });
+    if (data.mind === 'hunter') {
+      this.mind = new Hunter(this, {
+        time: () => w.time(),
+        random: () => w.random(),
+        player: () => w.player(),
+        route: w.route ? (a, b) => w.route!(a, b) : undefined,
+        around: w.around ? (a, min, max) => w.around!(a, min, max) : undefined,
+        spots: w.spots ? () => w.spots!() : undefined,
+        reveal: w.reveal ? (spot) => w.reveal!(this, spot) : undefined,
+        did: w.did ? (m, spot) => w.did!(this, m, spot) : undefined,
+      });
+    }
+  }
+
+  /** Sees the player now (for the Hunter). */
+  canSee(p: PlayerSeen): boolean {
+    return this.sees(p);
+  }
+
+  /** Nothing solid between two points. */
+  clear(from: V, to: V): boolean {
+    const d = { x: to.x - from.x, y: to.y - from.y, z: to.z - from.z };
+    const len = Math.hypot(d.x, d.y, d.z);
+    if (len < 2) return true;
+    const player = this.w.player()?.collider;
+    return !this.w.world.castRay(new RAPIER.Ray(from, { x: d.x / len, y: d.y / len, z: d.z / len }), len - 1, true, RAPIER.QueryFilterFlags.EXCLUDE_SENSORS, undefined, this.collider, undefined, (c) => !this.w.passes(c) && c.handle !== player);
+  }
+
+  /** Pulling the player out of a hiding spot: it holds still for its pull time, then attacks. */
+  startPull(): void {
+    const now = this.w.time();
+    const p = this.w.player();
+    const pull = Math.max(0, Number(this.data.pull ?? 0.8) || 0);
+    this.state = 'pull';
+    this.seenAt = now;
+    if (p) this.lastSeen = { ...p.feet };
+    this.pullUntil = now + pull;
+    this.nextAttack = now + pull;
+    this.play('pull', false, true);
   }
 
   get alive(): boolean {
@@ -230,6 +282,7 @@ export class Npc {
     let face: V | null = null;
     let speed = this.data.speed;
     let running = false;
+    let moment: { name: string; key: number } | null = null;
     // Running away when the player comes near (the shy kind).
     if (p && this.data.flee === 'near' && this.state !== 'follow' && this.flatDistance(p.feet) < Math.min(192, this.data.sight)) this.fleeUntil = Math.max(this.fleeUntil, now + 1);
 
@@ -249,6 +302,18 @@ export class Npc {
     } else if (p && this.hostile && now < this.pullUntil) {
       this.state = 'pull';
       face = p.feet;
+    } else if (this.mind && this.hostile) {
+      const plan = this.mind.think(now, p);
+      this.state = plan.state as NpcState;
+      move = plan.move;
+      face = plan.face;
+      speed *= plan.speed;
+      running = plan.run;
+      moment = plan.moment;
+      if (plan.attack && p && now >= this.nextAttack) {
+        this.nextAttack = now + 1 / Math.max(0.1, this.data.rate);
+        this.attack(p);
+      }
     } else if (p && this.hostile && p.hidden && (this.found === p.hidden || (p.entering && this.sees(p)))) {
       // Saw them get in: to the spot, and out they come.
       this.found = p.hidden;
@@ -257,13 +322,7 @@ export class Npc {
       else {
         face = p.feet;
         this.found = null;
-        this.state = 'pull';
-        this.seenAt = now;
-        this.lastSeen = { ...p.feet };
-        const pull = Math.max(0, Number(this.data.pull ?? 0.8) || 0);
-        this.pullUntil = now + pull;
-        this.nextAttack = now + pull;
-        this.play('pull', false, true);
+        this.startPull();
         this.w.pullOut?.(this, p.hidden);
       }
     } else if (p && this.hostile) {
@@ -354,7 +413,8 @@ export class Npc {
       if (Math.hypot(fx, fz) > 1) this.turnTowards(Math.atan2(-fx, -fz), dt);
     }
     // (Attacking in place, the attack itself plays its animation; a stumble plays out.)
-    if (now >= this.stumbleUntil && this.state !== 'pull' && (this.state !== 'attack' || dx || dz))
+    if (moment) this.playMoment(moment.name, moment.key);
+    else if (now >= this.stumbleUntil && this.state !== 'pull' && (this.state !== 'attack' || dx || dz))
       this.play(this.state === 'busy' ? 'busy' : dx || dz ? (running ? 'run' : 'walk') : 'idle', true);
     this.fall(dt, dx, dz);
   }
@@ -487,6 +547,14 @@ export class Npc {
   /** The animation playing now (its role), for tests and the editor. */
   get animation(): string {
     return this.anim.split('/')[0]!;
+  }
+
+  /** A Hunter's move, once per key. */
+  private playMoment(name: string, key: number): void {
+    if (key === this.momentKey) return;
+    this.momentKey = key;
+    this.anim = `moment/${key}`;
+    this.w.animate(this, name, false);
   }
 
   private play(role: AnimRole, loop: boolean, again = false): void {

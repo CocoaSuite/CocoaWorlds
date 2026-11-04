@@ -509,6 +509,17 @@ export const COMPONENTS: ComponentDef[] = [
         type: { kind: 'number', min: 0, step: 0.1, unit: 's' },
         default: 0.8,
       },
+      {
+        key: 'mind', group: e('Behaviour', 'Поведение'),
+        label: e('Mind', 'Разум'),
+        hint: e(
+          'Hunter: as an enemy it wanders, investigates sounds and hints, searches the area and its hiding spots, and only knows what it sees and hears.',
+          'Охотник: как враг бродит, проверяет звуки и подсказки, обыскивает местность и укрытия и знает только то, что видит и слышит.',
+        ),
+        type: { kind: 'enum', options: [{ value: 'simple', label: e('Simple', 'Простой') }, { value: 'hunter', label: e('Hunter', 'Охотник') }] },
+        default: 'simple',
+      },
+      ...hunterFields(),
     ],
   },
   {
@@ -521,6 +532,23 @@ export const COMPONENTS: ComponentDef[] = [
     appliesTo: 'any',
     conflicts: ['rigidBody', 'trigger', 'soundArea', 'water', 'ladder', 'npc'],
     fields: [
+      {
+        key: 'kind',
+        label: e('Kind', 'Вид'),
+        hint: e('How a hunting creature checks it.', 'Как охотник его проверяет.'),
+        type: {
+          kind: 'enum',
+          options: [
+            { value: 'locker', label: e('Locker', 'Шкафчик') },
+            { value: 'wardrobe', label: e('Wardrobe', 'Шкаф') },
+            { value: 'cabinet', label: e('Cabinet', 'Тумба') },
+            { value: 'under', label: e('Under something (a bed, a plank)', 'Под чем-то (кровать, доска)') },
+            { value: 'box', label: e('Box', 'Коробка') },
+            { value: 'other', label: e('Other', 'Другое') },
+          ],
+        },
+        default: 'locker',
+      },
       { key: 'prompt', label: e('Prompt', 'Подсказка'), type: { kind: 'text' }, default: 'Hide' },
       {
         key: 'view',
@@ -831,6 +859,56 @@ export const COMPONENTS: ComponentDef[] = [
 
 const byName = new Map(COMPONENTS.map((c) => [c.name, c]));
 
+/** The Hunter mind's settings (on the Creature component, shown when its Mind is Hunter). */
+function hunterFields(): FieldDef[] {
+  const when = { key: 'mind', is: ['hunter'] };
+  const n = (key: string, group: Text, label: Text, def: number, type: Omit<Extract<FieldType, { kind: 'number' }>, 'kind'>, hint?: Text): FieldDef => ({ key, group, label, hint, default: def, when, type: { kind: 'number', ...type } });
+  const sense = e('Hunting: senses', 'Охота: чувства');
+  const roam = e('Hunting: wandering', 'Охота: блуждание');
+  const look = e('Hunting: investigating and searching', 'Охота: проверка и поиск');
+  const hide = e('Hunting: hiding spots', 'Охота: укрытия');
+  const p = { min: 0, max: 1, step: 0.05 };
+  return [
+    n('hearing', sense, e('Hearing', 'Слух'), 1, { min: 0, step: 0.1 }, e('1: hears a sound as far as it carries. Through walls, half as far.', '1 — слышит звук так далеко, как он разносится. Сквозь стены — вдвое ближе.')),
+    n('feel', sense, e('Notices up close', 'Замечает вплотную'), 48, { min: 0, step: 8, unit: 'u' }, e('Notices the player this close even behind it.', 'Замечает игрока так близко даже за спиной.')),
+    n('notice', sense, e('Investigates from', 'Проверяет от'), 0.25, p, e('How important (kind × sureness × freshness) a sound or hint must be to go and look.', 'Насколько важным (вид × уверенность × свежесть) должен быть звук или подсказка, чтобы пойти проверить.')),
+    n('fresh', sense, e('Fresh for', 'Свежо'), 5, { min: 0, step: 1, unit: 's' }, e('Younger news: it goes to the very place.', 'Свежее: идёт прямо туда.')),
+    n('old', sense, e('Old after', 'Устаревает через'), 20, { min: 1, step: 1, unit: 's' }, e('Between fresh and old it looks around the place, wider the older; older still, it searches the area.', 'Между свежим и старым — осматривает место, тем шире, чем старше; ещё старше — обыскивает округу.')),
+    n('wanderRadius', roam, e('Wanders up to', 'Бродит до'), 800, { min: 64, step: 64, unit: 'u' }),
+    n('waitMin', roam, e('Waits at least', 'Ждёт минимум'), 1.5, { min: 0, step: 0.5, unit: 's' }),
+    n('waitMax', roam, e('Waits at most', 'Ждёт максимум'), 5, { min: 0, step: 0.5, unit: 's' }),
+    n('idleChance', roam, e('Does something odd', 'Делает что-то странное'), 0.5, p, e('Chance of an idle move when it stops.', 'Вероятность странного движения на остановке.')),
+    n('slow', look, e('Investigating speed', 'Скорость проверки'), 0.7, { min: 0.1, max: 2, step: 0.05 }, e('Of its speed; wandering is half.', 'От скорости; при блуждании — половина.')),
+    n('searchMin', look, e('Searches at least', 'Ищет минимум'), 20, { min: 1, step: 1, unit: 's' }),
+    n('searchMax', look, e('Searches at most', 'Ищет максимум'), 40, { min: 1, step: 1, unit: 's' }),
+    n('searchRadius', look, e('Search area', 'Зона поиска'), 400, { min: 32, step: 32, unit: 'u' }),
+    n('searchGrow', look, e('Area grows by', 'Зона растёт на'), 150, { min: 0, step: 16, unit: 'u' }, e('After each spot where nothing is found.', 'После каждой точки, где ничего не нашлось.')),
+    n('searchLimit', look, e('Area at most', 'Зона максимум'), 1200, { min: 32, step: 64, unit: 'u' }),
+    n('spotRange', hide, e('Checks spots within', 'Проверяет укрытия в'), 500, { min: 0, step: 32, unit: 'u' }),
+    n('wUse', hide, e('Weight: signs of use', 'Вес: следы использования'), 0.4, p),
+    n('wNoise', hide, e('Weight: noise from it', 'Вес: шум из него'), 0.3, p),
+    n('wHint', hide, e('Weight: hint sureness', 'Вес: уверенность подсказки'), 0.2, p),
+    n('wSeen', hide, e('Weight: seen in use', 'Вес: видел использование'), 0.1, p),
+    n('mediumAt', hide, e('Knocks from', 'Стучит от'), 0.3, p, e('Suspicion from which it may knock and listen.', 'Подозрение, с которого может постучать и прислушаться.')),
+    n('highAt', hide, e('Opens from', 'Открывает от'), 0.65, p, e('Suspicion from which it opens the spot and looks in.', 'Подозрение, с которого открывает укрытие и заглядывает.')),
+    n('lowChance', hide, e('Chance: a quick look', 'Шанс: беглый взгляд'), 0.15, p, e('At a spot below the knocking level.', 'У укрытия ниже уровня стука.')),
+    n('mediumChance', hide, e('Chance: knocks', 'Шанс: стучит'), 0.7, p, e('Otherwise it walks past.', 'Иначе проходит мимо.')),
+    n('spotCooldown', hide, e('Leaves a checked spot for', 'Не трогает проверенное укрытие'), 30, { min: 0, step: 5, unit: 's' }),
+    {
+      key: 'moves',
+      group: e('Hunting: moves', 'Охота: движения'),
+      label: e('Moves', 'Движения'),
+      hint: e(
+        'Animations for what it does, as moment=animation seconds, separated by ;. Moments: scratch, tilt, lookAround, cluck, stare, headShake, twitch, crouch, hear, listen, rummage, spot, lose, empty, knock, rattle, open, openSlow, lookIn, lookUnder, kick. Missing ones use its Animations.',
+        'Анимации действий: момент=анимация секунды, через ;. Моменты: scratch, tilt, lookAround, cluck, stare, headShake, twitch, crouch, hear, listen, rummage, spot, lose, empty, knock, rattle, open, openSlow, lookIn, lookUnder, kick. Без них — Анимации.',
+      ),
+      type: { kind: 'text' },
+      default: '',
+      when,
+    },
+  ];
+}
+
 export const componentDef = (name: string): ComponentDef | undefined => byName.get(name);
 
 /** A component's data with every missing field filled from the defaults. Unknown fields are kept. */
@@ -994,10 +1072,14 @@ export interface NpcData {
   height: number;
   radius: number;
   pull: number;
+  mind?: 'simple' | 'hunter';
   [k: string]: unknown;
 }
 
+export type HidingSpotKind = 'locker' | 'wardrobe' | 'cabinet' | 'under' | 'box' | 'other';
+
 export interface HidingSpotData {
+  kind: HidingSpotKind;
   prompt: string;
   view: string;
   offset: [number, number, number];

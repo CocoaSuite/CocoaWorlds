@@ -78,6 +78,10 @@ export type Op =
   | { op: 'varof'; name: string }
   /** Pops volume, then the place (null: everywhere): play `sound`. */
   | { op: 'sound'; sound: string }
+  /** Pops range, then the place: a noise. */
+  | { op: 'noise' }
+  /** Pops sureness, spread, then the place: a hint for hunting creatures. */
+  | { op: 'hint'; as: 'sound' | 'sighting' | 'event' }
   /** Pops an object: stop its sounds. */
   | { op: 'stopsound' }
   /** Pops an object: play its model's animation. */
@@ -136,7 +140,8 @@ export type CompiledEvent =
   | { kind: 'uiClick'; element: string }
   | { kind: 'useItem'; item: string }
   | { kind: 'listPick'; list: string }
-  | { kind: 'key'; key: string };
+  | { kind: 'key'; key: string }
+  | { kind: 'does'; what: string };
 
 export interface CompiledHandler {
   id: string;
@@ -261,7 +266,8 @@ class HandlerCompiler {
       if (this.checkElement(ev.element, ev.id, 'button')) event = { kind: 'uiClick', element: ev.element };
     } else if (ev.kind === 'listPick') {
       if (this.checkElement(ev.list, ev.id, 'list')) event = { kind: 'listPick', list: ev.list };
-    } else if (ev.kind === 'key') {
+    } else if (ev.kind === 'does') event = { kind: 'does', what: ev.what ?? '' };
+    else if (ev.kind === 'key') {
       if (!/^(Key[A-Z]|Tab|Digit0)$/.test(ev.key)) this.problem(ev.id, 'Pick a key.');
       else event = { kind: 'key', key: ev.key };
     } else if (ev.kind === 'useItem') {
@@ -688,6 +694,17 @@ class HandlerCompiler {
         else this.emit({ op: 'push', v: null });
         this.expect(s.volume, 'number', 'The volume must be a number (1 is normal).');
         this.emit({ op: 'sound', sound: s.sound });
+        break;
+      case 'noise':
+        this.pushPlace(s.at, s.id);
+        this.expect(s.range, 'number', 'How far the noise carries must be a number.');
+        this.emit({ op: 'noise' });
+        break;
+      case 'hint':
+        this.pushPlace(s.at, s.id);
+        this.expect(s.spread, 'number', '“Give or take” must be a number of units.');
+        this.expect(s.sure, 'number', 'How sure must be a number from 0 to 1.');
+        this.emit({ op: 'hint', as: s.as });
         break;
       case 'stopSound':
         this.actTarget(s.target, s.id);

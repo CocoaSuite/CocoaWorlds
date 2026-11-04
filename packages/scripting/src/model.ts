@@ -124,6 +124,10 @@ export type Statement =
   | { id: string; kind: 'damage'; target: Ref; amount: Expr }
   /** Play a sound file (`assets/sounds/…`) once, at a place (heard in 3D) or everywhere (null). */
   | { id: string; kind: 'playSound'; sound: string; at: Place | null; volume: Expr }
+  /** A noise hunting creatures may hear, carrying `range` units. */
+  | { id: string; kind: 'noise'; at: Place; range: Expr }
+  /** The Director: tell hunting creatures the player is roughly at a place (give or take `spread`), this sure (0–1). */
+  | { id: string; kind: 'hint'; at: Place; spread: Expr; sure: Expr; as: 'sound' | 'sighting' | 'event' }
   /** Stop the sounds an object is making (its Sound component and what its scripts played). */
   | { id: string; kind: 'stopSound'; target: Ref }
   /** Play one of a model's animations by name, looping or once. */
@@ -196,7 +200,9 @@ export type EventBlock =
   /** The player picked a row of a list on screen (“the picked row” says which). */
   | { id: string; kind: 'listPick'; list: string }
   /** The player pressed a key (a KeyboardEvent code: 'KeyI', 'Tab', 'KeyQ' …). */
-  | { id: string; kind: 'key'; key: string };
+  | { id: string; kind: 'key'; key: string }
+  /** A hunting creature makes a move (`what`: its name, '' for any): runs on the creature and on the hiding spot it is at. */
+  | { id: string; kind: 'does'; what: string };
 
 export interface Handler {
   id: string;

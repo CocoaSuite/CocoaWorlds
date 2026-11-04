@@ -51,6 +51,9 @@ import { PLAYER, Player, fallDamage, type PlayerInput } from './player';
 import { Weapons, type V3 } from './weapons';
 import { ANIM_ROLES, Npc, type AnimRole } from './npc';
 import { NavGrid } from './navgrid';
+import { momentAnimation } from './hunter/personality';
+import type { SpotInfo } from './hunter/spots';
+import type { StimulusKind } from './hunter/stimuli';
 import { COLLIDER_MATERIAL, signedDist, type Plane, bounds, brushToWorld, isNoGrassBrush, buildMesh, buildWorld, fromData, hullPoints, vertices, type Brush, type BrushData, type WorldBrush } from '@cocoaworlds/geometry';
 
 /**
@@ -105,6 +108,8 @@ export interface ModelMesh {
 }
 /** Physics runs at a fixed rate whatever the frame rate. */
 export const STEP = 1 / 60;
+/** How far the player's noises carry (u) for creatures that listen (Hunters). */
+export const NOISE = { footsteps: 360, landing: 480, shot: 1600, hiding: 200 };
 /** Most armour the player can carry (Half-Life's suit holds 100). */
 export const MAX_ARMOUR = 100;
 const MAX_STEPS_PER_FRAME = 5;
@@ -702,6 +707,15 @@ export class GameWorld {
         const follow = place && typeof place === 'object' && place.ref !== 'player' ? this.bodyOf(place.ref) : null;
         this.bus.emit({ type: 'sound', sound, at, follow, volume, loop: false, range: 2048, source: owner, time: this.time });
       },
+      noise: (place, range, owner) => {
+        const at = this.placePoint(place);
+        const ref = place && typeof place === 'object' ? place.ref : null;
+        if (at) this.noise(this.v3(at), range, ref && ref !== 'player' ? ref : this.spots.has(owner) ? owner : null);
+      },
+      hint: (place, spread, sure, as) => {
+        const at = this.placePoint(place);
+        if (at) this.hint(this.v3(at), spread, sure, as);
+      },
       stopSound: (target) => this.bus.emit({ type: 'sound.stop', source: target, time: this.time }),
       playAnimation: (target, name, loop) => this.bus.emit({ type: 'anim', target, name, loop, time: this.time }),
       spawn: (template, place) => this.spawn(template, place),
@@ -882,7 +896,7 @@ export class GameWorld {
     this.world.step();
     this.world.timestep = dt;
     this.nav = NavGrid.build(
-      { world: this.world, solid: (c) => !!c.parent()?.isFixed() && !this.triggers.has(c.handle) && !this.volumes.has(c.handle) && !this.standIns.has(c.handle) && !this.standInOf.has(c.handle) },
+      { world: this.world, solid: (c) => !!c.parent()?.isFixed() && !this.triggers.has(c.handle) && !this.volumes.has(c.handle) && !this.standIns.has(c.handle) && !this.standInOf.has(c.handle) && !this.npcs.has(this.owner.get(c.handle) ?? '') },
       [x.min[0] - 32, x.min[1] - 32, x.min[2] - 32],
       [x.max[0] + 32, x.max[1] + 32, x.max[2] + 32],
     );
@@ -1075,6 +1089,7 @@ export class GameWorld {
       } else if (this.player) {
         if (this.frozen) Object.assign(this.player.input, { forward: 0, right: 0, jump: false, crouch: false, fire: false, use: false });
         this.player.step(STEP);
+        this.playerNoise();
         if (this.player.landingSpeed) {
           const damage = fallDamage(this.player.landingSpeed);
           this.player.landingSpeed = 0;
@@ -1163,12 +1178,17 @@ export class GameWorld {
     this.hiding = { id, data, feet: p.feetPosition, from: { eye: p.eye(), yaw: p.input.yaw, pitch: p.input.pitch }, view, at: this.time, out: null, heldUntil: 0 };
     Object.assign(p.input, { forward: 0, right: 0, jump: false, crouch: false, fire: false, use: false, yaw: view.yaw, pitch: view.pitch });
     p.collider.setEnabled(false);
+    this.spotUsed.set(id, this.time);
+    this.noise(this.v3(this.spotView(id, data).eye), NOISE.hiding, id);
     this.runner.dispatch({ type: 'hides', targets: [id, ...this.ancestorsOf(id)] });
     this.bus.emit({ type: 'use', target: id, by: 'player', time: this.time });
   }
 
-  /** Out of the spot, back where they got in, looking the way they did; `held`: pulled out, held still this long. */
-  private leaveHiding(held = 0): void {
+  /**
+   * Out of the spot, back where they got in, looking the way they did. Pulled out by a creature (`by`): held still
+   * this long, facing it, in front of it if it stands where they got in.
+   */
+  private leaveHiding(held = 0, by: Npc | null = null): void {
     const h = this.hiding;
     if (!h || h.out !== null) return;
     const p = this.player!;
@@ -1176,9 +1196,75 @@ export class GameWorld {
     h.out = this.time;
     h.heldUntil = this.time + held;
     p.collider.setEnabled(true);
-    p.teleport(h.feet, h.from.yaw);
+    let feet = h.feet, yaw = h.from.yaw;
+    if (by) {
+      // (Where they got in, unless the creature stands there: beside it, else behind it.)
+      const n = by.feet;
+      const dx = h.view.eye[0] - n.x, dz = h.view.eye[2] - n.z;
+      const len = Math.hypot(dx, dz) || 1;
+      const ux = dx / len, uz = dz / len, gap = by.radius + PLAYER.radius + 8;
+      const tries = [feet, ...[[-uz, ux], [uz, -ux], [-ux, -uz]].map(([x, z]) => ({ x: n.x + x! * gap, y: n.y, z: n.z + z! * gap }))];
+      feet = tries.find((f) => Math.hypot(f.x - n.x, f.z - n.z) >= gap - 1 && p.fitsAt(f)) ?? feet;
+      yaw = Math.atan2(n.x - feet.x, n.z - feet.z) + Math.PI;
+    }
+    p.teleport(feet, yaw);
     p.input.pitch = 0;
+    this.spotUsed.set(h.id, this.time);
+    this.noise(this.v3(h.view.eye), NOISE.hiding, h.id);
     this.runner.dispatch({ type: 'unhides', targets: [h.id, ...this.ancestorsOf(h.id)] });
+  }
+
+  /** Where each spot is and where to stand to check it (worked out once). */
+  private spotPlaces = new Map<string, { at: V3; front: V3 }>();
+  /** When each spot was last used and last made a noise. */
+  private spotUsed = new Map<string, number>();
+  private spotNoise = new Map<string, number>();
+
+  /** Hiding spots as creatures can observe them (never who is inside). */
+  private spotInfo(): SpotInfo[] {
+    const out: SpotInfo[] = [];
+    for (const [id, data] of this.spots) {
+      if (!this.doc.get(id) || !this.isVisible(id)) continue;
+      let place = this.spotPlaces.get(id);
+      if (!place) {
+        const v = this.spotView(id, data);
+        const base = pivotOf(this.doc, id, boundsOfEntity);
+        const front: V3 = [v.eye[0] - Math.sin(v.yaw) * 56, base[1], v.eye[2] - Math.cos(v.yaw) * 56];
+        place = { at: [base[0], base[1], base[2]], front };
+        this.spotPlaces.set(id, place);
+      }
+      const used = this.spotUsed.get(id) ?? -Infinity;
+      const v3 = (p: V3) => ({ x: p[0], y: p[1], z: p[2] });
+      out.push({ id, kind: data.kind ?? 'locker', at: v3(place.at), front: v3(place.front), open: this.time - used <= Math.max(0.6, this.moveTimeOf(data)), usedAt: used, noiseAt: this.spotNoise.get(id) ?? -Infinity });
+    }
+    return out;
+  }
+
+  private moveTimeOf(data: HidingSpotData): number {
+    return Math.max(0, Math.min(2, Number(data.time) || 0));
+  }
+
+  /**
+   * A noise: creatures that hear it (by their Hearing; half as far through walls) may come to look. `source`: the
+   * hiding spot it came from, if any.
+   */
+  noise(at: { x: number; y: number; z: number }, range: number, source: string | null = null): void {
+    if (!(range > 0)) return;
+    const spot = source && this.spots.has(source) ? source : null;
+    if (spot) this.spotNoise.set(spot, this.time);
+    for (const n of this.npcs.values()) if (n.alive && n.hostile) n.mind?.hear(at, range, spot);
+  }
+
+  /**
+   * The Director's hint: the player is roughly here (give or take `spread` u), this sure, as this kind of news.
+   * Each creature gets its own guess within `spread` (at least 64 u), so a hint never gives away the exact place.
+   */
+  hint(at: { x: number; y: number; z: number }, spread: number, confidence: number, kind: StimulusKind): void {
+    for (const n of this.npcs.values()) {
+      if (!n.alive || !n.mind || n.mind.bb.hasVisual) continue;
+      const r = Math.max(64, spread) * Math.sqrt(this.random()), a = this.random() * Math.PI * 2;
+      n.mind.offer({ at: { x: at.x + Math.cos(a) * r, y: at.y, z: at.z + Math.sin(a) * r }, confidence: Math.max(0, Math.min(1, confidence)), time: this.time, kind });
+    }
   }
 
   /** Out at once, with no move (dying, being put somewhere by a script). */
@@ -1200,7 +1286,23 @@ export class GameWorld {
   }
 
   private moveTime(): number {
-    return Math.max(0, Math.min(2, Number(this.hiding?.data.time) || 0));
+    return this.hiding ? this.moveTimeOf(this.hiding.data) : 0;
+  }
+
+  private v3(p: readonly number[]): { x: number; y: number; z: number } {
+    return { x: p[0]!, y: p[1]!, z: p[2]! };
+  }
+
+  private nextStep = 0;
+
+  /** The player's own noises: footsteps (not crouching or walking slowly), landing hard. */
+  private playerNoise(): void {
+    const p = this.player!;
+    const v = p.velocity;
+    if (p.landingSpeed > 300) this.noise(p.feetPosition, NOISE.landing);
+    if (!p.onGround || p.crouched || p.input.walk || Math.hypot(v.x, v.z) < 100 || this.time < this.nextStep) return;
+    this.nextStep = this.time + 0.35;
+    this.noise(p.feetPosition, NOISE.footsteps);
   }
 
   /** Inside, the view turns only as far as the spot lets it. */
@@ -1351,6 +1453,7 @@ export class GameWorld {
     this.nextShotAt = this.time + 1 / weapon.rate;
     if (weapon.sound) this.bus.emit({ type: 'sound', sound: weapon.sound, at: null, follow: null, volume: 1, loop: false, range: 2048, source: 'player', time: this.time });
     this.weapons.fire(weapon, name, p.eye(), p.lookDirection(), 'player', p.collider.handle);
+    this.noise(p.feetPosition, NOISE.shot);
   }
 
   /** What creatures can ask of the world. */
@@ -1372,7 +1475,7 @@ export class GameWorld {
       },
       pullOut: (npc, spot) => {
         if (this.hidingIn !== spot) return;
-        this.leaveHiding(Math.max(0, Number(npc.data.pull ?? 0.8) || 0));
+        this.leaveHiding(Math.max(0, Number(npc.data.pull ?? 0.8) || 0), npc);
         this.runner.dispatch({ type: 'found', targets: [spot, ...this.ancestorsOf(spot)] });
       },
       passes: (c) => this.triggers.has(c.handle) || this.volumes.has(c.handle) || this.standInOf.has(c.handle),
@@ -1387,11 +1490,22 @@ export class GameWorld {
           npc.collider.handle,
         ),
       animate: (npc, role, loop) => {
-        const name = npcAnimation(npc.data.anims, role);
+        const byRole = (r: string) => npcAnimation(npc.data.anims, r as AnimRole);
+        const name = (ANIM_ROLES as string[]).includes(role) ? byRole(role) : momentAnimation(String(npc.data.moves ?? ''), role, byRole);
         if (name) this.bus.emit({ type: 'anim', target: npc.id, name, loop, time: this.time });
       },
       random: () => this.random(),
       route: (from, to) => this.navigation()?.path(from, to) ?? null,
+      around: (at, min, max) => this.navigation()?.spotAround(at, min, max, () => this.random()) ?? null,
+      spots: () => this.spotInfo(),
+      reveal: (npc, spot) => {
+        if (this.hidingIn !== spot) return false;
+        this.leaveHiding(Math.max(0, Number(npc.data.pull ?? 0.8) || 0), npc);
+        this.runner.dispatch({ type: 'found', targets: [spot, ...this.ancestorsOf(spot)] });
+        npc.startPull();
+        return true;
+      },
+      did: (npc, what, spot) => this.runner.dispatch({ type: 'does', what, targets: [npc.id, ...(spot ? [spot, ...this.ancestorsOf(spot)] : [])] }),
     };
   }
 
