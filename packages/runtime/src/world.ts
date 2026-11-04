@@ -1924,6 +1924,12 @@ export class GameWorld {
     return this.bodies.get(id)?.shape ?? null;
   }
 
+  /** Where a point body started (its world matrix): a collision shape's or a model's. */
+  pointMatrix(id: string): number[] | null {
+    const b = this.bodies.get(id);
+    return b?.shape?.matrix ?? b?.model?.matrix ?? null;
+  }
+
   // ── Sound ──
 
   /** A Sound component that plays from the start (or a copy's, as it appears). */

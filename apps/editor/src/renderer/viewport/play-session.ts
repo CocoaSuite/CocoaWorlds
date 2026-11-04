@@ -528,19 +528,21 @@ export class PlaySession {
     } else {
       // A point object with a collision shape: draw its model if it has one, else the shape, placed like the
       // entity (scale in the shape).
-      const shape = this.world.pointShape(b.id);
-      if (!shape) return;
+      // (A model colliding by its own mesh has no collision shape, only where it started.)
+      const at = this.world.pointMatrix(b.id);
       const model = this.modelOf(b.id);
-      if (model) {
+      if (model && at) {
         const holder = new THREE.Group();
         holder.matrixAutoUpdate = false;
-        holder.matrix.fromArray(shape.matrix);
+        holder.matrix.fromArray(at);
         this.group.add(holder);
         this.movers.push({ id: b.id, obj: holder, base: holder.matrix.clone() });
         this.attachModel(holder, model, b.id);
         this.eyesOn(b.id, holder, this.eyesIn(b.id, holder.matrix));
         return;
       }
+      const shape = this.world.pointShape(b.id);
+      if (!shape) return;
       const c = shape.collider;
       const geo =
         c.shape === 'sphere'

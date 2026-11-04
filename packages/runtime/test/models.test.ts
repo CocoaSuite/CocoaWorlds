@@ -75,6 +75,15 @@ describe('models collide by their own shape', () => {
     w.dispose();
   });
 
+  it('a model with Physics and its own collision says where it starts (so it is drawn)', () => {
+    const ball = newEntity('ball', { model: { model: 'assets/models/crate.glb', units: 'metres', animation: '', castShadows: true, collision: 'hull' } as never, rigidBody: { motion: 'dynamic' } as never }, { position: [200, 100, 0] });
+    const w = GameWorld.create(scene(floor(), ball, spawn()), { models: new Map([['assets/models/crate.glb', boxes([[[-0.5, 0, -0.5], [0.5, 1, 0.5]]])]]) });
+    expect(w.movingBodies().some((b) => b.id === ball.id)).toBe(true);
+    expect(w.pointShape(ball.id)).toBeNull();
+    expect(w.pointMatrix(ball.id)!.slice(12, 15)).toEqual([200, 100, 0]);
+    w.dispose();
+  });
+
   it('a Collision shape without Physics stays put and blocks the player', () => {
     const post = newEntity('post', { collider: { shape: 'box', size: [64, 128, 64], offset: [0, 64, 0] } as never }, { position: [0, 0, -160] });
     const w = GameWorld.create(scene(floor(), post, spawn()));
