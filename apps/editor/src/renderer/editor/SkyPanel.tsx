@@ -11,7 +11,7 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { getLang } from '../i18n';
 import { useEditor } from '../store';
 import { PLANT_TIME, aimRim, plantGeometry, plantMaterial, setPlantWind } from '../viewport/plants';
-import { applySky, skyAmbient, skyMaterial, skyMesh, sunSkyColour } from '../viewport/sky';
+import { applySky, skyAmbient, skyEnvPng, skyMaterial, skyMesh, sunSkyColour } from '../viewport/sky';
 import { Row } from './MaterialsPanel';
 
 const L = (en: string, ru: string) => (getLang() === 'ru' ? ru : en);
@@ -63,6 +63,19 @@ export function SkyPanel() {
     const item: SavedSky = { id: `sky_${Date.now().toString(36)}`, name: `${L('Sky', 'Небо')} ${saved.length + 1}`, sky: rest, ...(sun ? { sun: { height: Math.round(sun.height), colour: sun.colour, intensity: sun.intensity } } : {}) };
     st.setSkies([...saved, item], 'Save sky');
     setRenaming(item.id);
+  };
+  const exportEnv = async () => {
+    try {
+      const r = await window.cocoa.materials.pickFolder(L('Export sky to…', 'Экспорт неба в…'));
+      if (!r.ok) throw new Error(r.error);
+      if (!r.value) return;
+      const bytes = await skyEnvPng(sky, sun ? { dir: sun.toward, colour: sunSkyColour(sun.colour, sun.intensity) } : null);
+      const w = await window.cocoa.materials.writeFiles(r.value, [{ name: 'sky_env.png', bytes }]);
+      if (!w.ok) throw new Error(w.error);
+      st.notify(L('Sky exported', 'Небо экспортировано'));
+    } catch (e) {
+      st.notify(`${L('Export failed', 'Ошибка экспорта')}: ${(e as Error).message}`);
+    }
   };
   const swatch = (x: Omit<SkySettings, 'enabled'>) => ({ background: `linear-gradient(${x.top}, ${x.horizon} 62%, ${x.ground} 64%)` });
   const num = (k: keyof SkySettings, label: string, min: number, max: number, step: number, unit = '#') => {
@@ -124,6 +137,7 @@ export function SkyPanel() {
           ))}
         </div>
         <Button onClick={save}>{L('Save this sky', 'Сохранить это небо')}</Button>
+        <Button onClick={() => void exportEnv()}>{L('Export sky as env texture', 'Экспорт неба как текстуры окружения')}</Button>
         <div className="cw-muted cw-hint">{L('A preset also sets the scene’s Sun: its height, colour and brightness (not its direction). Saved skies are kept in the project, for every scene; double-click one to rename it.', 'Заготовка задаёт и Солнце сцены: высоту, цвет и яркость (не направление). Сохранённое небо хранится в проекте, для всех сцен; двойной щелчок — переименовать.')}</div>
       </aside>
       <div className="cw-plants-view">
