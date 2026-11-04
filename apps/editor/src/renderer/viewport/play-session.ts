@@ -298,6 +298,7 @@ export class PlaySession {
 
   /** Googly eyes in the game, by the object (or body) they are on. */
   private eyes: { id: string; eyes: GooglyEyes }[] = [];
+  private eyesById = new Map<string, GooglyEyes>();
 
   /** Put an object's googly eyes (if it has any) on `parent`, placed by `local` in it. */
   private eyesOn(id: string, parent: THREE.Object3D, local: THREE.Matrix4): void {
@@ -311,6 +312,10 @@ export class PlaySession {
     holder.add(eyes.object);
     parent.add(holder);
     this.eyes.push({ id, eyes });
+    this.eyesById.set(id, eyes);
+    // (A model already loaded: ride on its bone now. One still loading does it when it arrives.)
+    const inst = this.models.get(id);
+    if (inst) eyes.rideModel(inst.object);
   }
 
   private material: (name: string) => THREE.Material;
@@ -336,6 +341,8 @@ export class PlaySession {
       .then((inst) => {
         if (this.disposed) return inst.dispose();
         holder.add(inst.object);
+        // (Googly eyes ride on its head bone now, while it still stands in its rest pose.)
+        this.eyesById.get(id)?.rideModel(inst.object);
         if (inst.mixer) this.mixers.push(inst.mixer);
         this.models.set(id, inst);
       })
@@ -575,7 +582,10 @@ export class PlaySession {
         if (m.obj instanceof THREE.Mesh) m.obj.geometry.dispose();
       }
       this.movers = this.movers.filter((m) => !gone.has(m.id));
-      for (const x of this.eyes) if (gone.has(x.id)) x.eyes.dispose();
+      for (const x of this.eyes) if (gone.has(x.id)) {
+        x.eyes.dispose();
+        this.eyesById.delete(x.id);
+      }
       this.eyes = this.eyes.filter((x) => !gone.has(x.id));
     }
     const motion = new THREE.Matrix4();

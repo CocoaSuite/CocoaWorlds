@@ -89,6 +89,8 @@ export function buildMarker(e: EntityData): Marker {
   group.rotation.order = 'YXZ';
   const lines: THREE.LineSegments[] = [];
   let pick: THREE.Mesh;
+  // (Made below, once the marker's own parts are in; a model that loads later carries them on a bone.)
+  let eyes: GooglyEyes | undefined;
   let box: THREE.LineSegments | undefined;
   let baseColor = COLORS.idle;
   const light = e.components.light as { kind?: string; range?: number; angle?: number } | undefined;
@@ -120,6 +122,8 @@ export function buildMarker(e: EntityData): Marker {
       .then((inst) => {
         if (group.userData.disposed) return inst.dispose();
         group.add(inst.object);
+        // (Googly eyes ride on its head bone, if they should and it has one.)
+        eyes?.rideModel(inst.object);
         group.userData.dispose = inst.dispose;
         p.geometry.dispose();
         p.geometry = new THREE.BoxGeometry(Math.max(8, inst.size.x), Math.max(8, inst.size.y), Math.max(8, inst.size.z)).translate(inst.center.x, inst.center.y, inst.center.z);
@@ -229,7 +233,6 @@ export function buildMarker(e: EntityData): Marker {
   for (const l of lines) group.add(l);
   pick.userData.entityId = e.id;
   group.add(pick);
-  let eyes: GooglyEyes | undefined;
   if (e.components.googlyEyes) {
     eyes = buildGooglyEyes(readComponent<GooglyEyesData>('googlyEyes', e.components.googlyEyes));
     group.add(eyes.object);

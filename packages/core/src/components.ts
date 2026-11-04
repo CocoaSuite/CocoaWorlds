@@ -46,6 +46,12 @@ export type GooglyEyesData = {
   offset: [number, number, number];
   /** Each eye turned outwards by this much (°): 0 both look ahead, 90 they look to the sides (birds, fish). */
   splay: number;
+  /** Each eye turned to look up by this much (°; below 0, down). */
+  tilt: number;
+  /** On a model with bones: ride on one, so its animations carry the eyes (a head that turns turns them). */
+  followBone: boolean;
+  /** The bone, by name ('' : the model's head, a bone with “head” in its name). */
+  bone: string;
   /** The pupil's size, as a part of the eye (0.2–0.8). */
   pupil: number;
   /** How freely the pupils roll: 0 stiff, 1 rattling about. */
@@ -284,6 +290,18 @@ export const COMPONENTS: ComponentDef[] = [
         default: [0, 0, 0],
       },
       { key: 'splay', label: e('Turned out', 'Развёрнуты'), hint: e('0: both look ahead. 90: they look to the sides, like a bird’s.', '0 — оба смотрят вперёд, 90 — в стороны, как у птицы.'), type: { kind: 'number', min: 0, max: 90, step: 5, unit: '°' }, default: 0, when: { key: 'count', is: ['two'] } },
+      { key: 'tilt', label: e('Looking up', 'Смотрят вверх'), hint: e('Below 0 they look down.', 'Меньше 0 — смотрят вниз.'), type: { kind: 'number', min: -60, max: 60, step: 5, unit: '°' }, default: 0 },
+      {
+        key: 'followBone',
+        label: e('Ride on a bone', 'На кости'),
+        hint: e(
+          'On a model with bones, the eyes ride on one of them, so its animations carry them: a pecking head takes them along. Position is set as the model stands still.',
+          'У модели с костями глаза крепятся к кости и двигаются с её анимацией: клюющая голова уносит их с собой. Положение задаётся для модели в покое.',
+        ),
+        type: { kind: 'boolean' },
+        default: true,
+      },
+      { key: 'bone', label: e('Bone', 'Кость'), hint: e('Its name in the model. Empty: the head (a bone with “head” in its name).', 'Её имя в модели. Пусто — голова (кость, в имени которой есть «head»).'), type: { kind: 'text' }, default: '', when: { key: 'followBone', is: [true] } },
       { key: 'pupil', label: e('Pupil size', 'Размер зрачка'), type: { kind: 'number', min: 0.2, max: 0.8, step: 0.05 }, default: 0.5, group: e('Look', 'Вид') },
       { key: 'loose', label: e('Loose', 'Болтаются'), hint: e('0: the pupils barely move. 1: they rattle about at every bump.', '0 — зрачки почти не двигаются, 1 — трясутся от каждого толчка.'), type: { kind: 'number', min: 0, max: 1, step: 0.05 }, default: 0.6, group: e('Look', 'Вид') },
       { key: 'white', label: e('Eye colour', 'Цвет глаза'), type: { kind: 'color' }, default: '#ffffff', group: e('Look', 'Вид') },

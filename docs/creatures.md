@@ -64,19 +64,26 @@ over. Dragging the object in the editor shakes them too.
 | Eyes | Two, or one big one. |
 | Size | Across one eye (12 u by default). |
 | Apart | From the middle of one eye to the middle of the other. |
-| Position | Where the eyes sit, from the object's origin, in its own axes. They look the way the object faces (−Z). On a plain creature figure they start on the front of its head; on a model, move them to its face. |
+| Position | Where the eyes sit, from the object's origin, in its own axes, with the model standing still (as the editor shows it). They look the way the object faces (−Z). On a plain creature figure they start on the front of its head, on the ready-made chicken over its own eyes; on another model, move them to its face. |
 | Turned out | 0: both look ahead. Up to 90: they look to the sides, like a bird's or a fish's. |
+| Looking up | Each eye tipped up (or, below 0, down). |
+| Ride on a bone | On a model with bones (on by default), the eyes ride on one, so its animations carry them: a pecking, bobbing or dying head takes them along, and the pupils rattle as it goes. |
+| Bone | Which bone, by its name in the model. Empty: the head (the first bone with “head” in its name). With no such bone, the eyes stay on the object. |
 | Pupil size | The pupil as a part of the eye. |
 | Loose | 0: the pupils barely move. 1: they rattle about at every bump. |
 | Eye colour, Pupil colour | White and black by default. |
 
-They are lit like everything else: they catch the lights and the sky's reflections, cast small shadows, and
+**The chicken** comes with them (Add › Chicken), and Googly eyes added to a chicken already in the scene start in
+the same place: over its own eyes, a little bigger, looking out to the sides and up, riding on its head.
+
+In the editor, models stand still, so the eyes ride on the bone only in Play. They are lit like everything else: they catch the lights and the sky's reflections, cast small shadows, and
 have a glossy plastic cover. They follow their object in Play: a creature as it walks (and falls when it dies),
 a physics object as it tumbles, and an object carried by a moving one (a train, a lift).
 
 How it works: each eye is a shallow dome drawn by one shader on a lit physical material, with the white, the
 pupil, its shadow and the clear rim all drawn in the shader. The pupil's place comes from a small simulation
-each frame (gravity, the eye's own acceleration, bouncing off the rim) in `viewport/googly-eyes.ts`.
+each frame (gravity, the eye's own acceleration, bouncing off the rim) in `viewport/googly-eyes.ts`. Riding on a
+bone: once the model has loaded, still in its rest pose, the eyes are moved onto the bone keeping where they are.
 
 ## Finding the way (navigation)
 
@@ -108,6 +115,7 @@ that name is never replaced) at half size, with clumsy animations (`idle`,
 | Runs away | for 2 s when hit, then comes back | for 3 s when hit |
 | Clumsy | yes | yes |
 | Health, speed, size | 20, 110 u/s, 56 × 14 | the same |
+| Googly eyes | on its head, over its own eyes | the same |
 
 Its behaviour is ordinary blocks in its **Visual script** tab, to read and change:
 

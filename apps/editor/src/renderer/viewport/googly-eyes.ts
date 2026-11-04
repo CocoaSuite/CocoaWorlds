@@ -8,6 +8,9 @@
  * plane: gravity pulls it down, the eye's own acceleration throws it about (start, stop, turn, bounce), it
  * bounces off the rim and slides round it, and it stays put in the world while the eye spins round it.
  *
+ * On a model with bones they can ride on one (the head, by default): placed in the object's space as the model
+ * stands still, then moved onto the bone keeping that place, so its animations carry them (`rideModel`).
+ *
  * Used by the editor's markers (dragging an object rattles them) and by Play, so both behave the same.
  */
 import type { GooglyEyesData } from '@cocoaworlds/core';
@@ -131,6 +134,11 @@ export interface GooglyEyes {
   update(dt: number): boolean;
   /** Each pupil's place in its eye (x, y; the eye's radius is 1), as the shader draws it. */
   pupils(): [number, number][];
+  /**
+   * Ride on the bone of `model` the settings name (the head by default), if they ask for it and it has one. Call it
+   * once the model is in the same place as the eyes' object and still in its rest pose. Returns the bone.
+   */
+  rideModel(model: THREE.Object3D): THREE.Object3D | null;
   dispose(): void;
 }
 
@@ -150,6 +158,49 @@ export function restsAt(off: THREE.Vector3, f: THREE.Vector3, reach: number): bo
   return off.dot(f) / (d * pull) > 0.995;
 }
 
+/**
+ * Googly eyes for the ready-made chicken (`chicken_rigged`, in metres): just outside its own eyes and a bit bigger,
+ * looking out to the sides and up as they do, riding on its head. (Measured from the eye whites in the model:
+ * middles at ±0.187, 2.450, −0.685 m, 0.104 m across, facing 0.897, 0.400, −0.189.)
+ */
+export const CHICKEN_EYES: Partial<GooglyEyesData> = {
+  count: 'two',
+  size: 11.5,
+  spacing: 15.6,
+  offset: [0, 96.6, -27],
+  splay: 78,
+  tilt: 24,
+  pupil: 0.5,
+  followBone: true,
+  bone: '',
+};
+
+/** Names compared loosely: any case, and without the dots and spaces loaders strip (“wing.R” is “wingR”). */
+const plainName = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
+
+/** The bone of a model called `name`, or with an empty name its head: the first bone with “head” in its name. */
+export function findBone(model: THREE.Object3D, name: string): THREE.Object3D | null {
+  const want = plainName(name);
+  let found: THREE.Object3D | null = null;
+  model.traverse((o) => {
+    if (found || !(o as THREE.Bone).isBone) return;
+    const n = plainName(o.name);
+    if (want ? n === want : n.includes('head')) found = o;
+  });
+  return found;
+}
+
+/** Move `object` onto `bone`, keeping where it is in the world now, so the bone carries it from here on. */
+export function rideOn(object: THREE.Object3D, bone: THREE.Object3D): void {
+  object.updateWorldMatrix(true, false);
+  bone.updateWorldMatrix(true, false);
+  const local = bone.matrixWorld.clone().invert().multiply(object.matrixWorld);
+  bone.add(object);
+  object.matrixAutoUpdate = false;
+  object.matrix.copy(local);
+  object.matrixWorldNeedsUpdate = true;
+}
+
 /** Build a pair (or one) of googly eyes, placed in the object's own space. */
 export function buildGooglyEyes(data: GooglyEyesData): GooglyEyes {
   const object = new THREE.Group();
@@ -159,6 +210,7 @@ export function buildGooglyEyes(data: GooglyEyesData): GooglyEyes {
   object.position.set(off[0] ?? 0, off[1] ?? 0, off[2] ?? 0);
   const two = data.count !== 'one';
   const splay = THREE.MathUtils.degToRad(THREE.MathUtils.clamp(data.splay || 0, 0, 90));
+  const tilt = THREE.MathUtils.degToRad(THREE.MathUtils.clamp(data.tilt || 0, -60, 60));
   const geo = eyeGeometry();
   const pupils: Pupil[] = [];
   const materials: THREE.Material[] = [];
@@ -169,8 +221,10 @@ export function buildGooglyEyes(data: GooglyEyesData): GooglyEyes {
     mesh.name = 'googly-eye';
     mesh.scale.setScalar(r);
     mesh.position.x = (side * Math.max(0, data.spacing)) / 2;
-    // Turned out: the left eye (−X) looks towards −X, the right one towards +X.
+    // Turned out (the left eye, −X, looks towards −X; the right one towards +X), and up or down.
+    mesh.rotation.order = 'YXZ';
     mesh.rotation.y = -side * splay;
+    mesh.rotation.x = tilt;
     mesh.castShadow = true;
     mesh.receiveShadow = true;
     object.add(mesh);
@@ -265,6 +319,12 @@ export function buildGooglyEyes(data: GooglyEyesData): GooglyEyes {
     object,
     update,
     pupils: () => pupils.map((p) => [p.uniform.value.x, p.uniform.value.y]),
+    rideModel: (model) => {
+      if (data.followBone === false) return null;
+      const bone = findBone(model, data.bone ?? '');
+      if (bone) rideOn(object, bone);
+      return bone;
+    },
     dispose: () => {
       for (const m of materials) m.dispose();
     },

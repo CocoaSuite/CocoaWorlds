@@ -46,9 +46,15 @@ creation; opt-out for Play sound blocks; custom echo settings; a "Change backgro
 ### 4. Googly eyes (shader-based)
 
 Status: done. A **Googly eyes** component (`googlyEyes`, point objects only: models, creatures, empties): one or
-two eyes, size, apart, position (object space, looking along −Z), turned out (splay), pupil size, looseness,
-colours. On a plain creature figure, adding it places the eyes on the front of the head (`store.ts`
-`addComponent`).
+two eyes, size, apart, position (object space, rest pose, looking along −Z), turned out (splay), looking up
+(tilt), pupil size, looseness, colours, ride on a bone (`followBone`, `bone`: empty means the first bone with
+“head” in its name). On a plain creature figure, adding it places the eyes on the front of the head; on the
+chicken, `CHICKEN_EYES` (measured from its eye whites; also in `chickenComponents`, so Add › Chicken has them).
+
+Bones: `rideModel` → `findBone` + `rideOn`. Once the model has loaded (still in its rest pose, before any mixer
+update), the eyes' object is re-parented onto the bone with the matrix that keeps its world place. Editor:
+`markers.ts` model `.then`. Play: `attachModel`'s `.then` via `eyesById` (or at once in `eyesOn` if the model is
+already in). Checked in a browser with the real `chicken.glb` (peck and walk carry them).
 
 Each eye is a shared shallow dome (`eyeGeometry`) with its own clear-coated `MeshPhysicalMaterial`. Its look is
 drawn in the fragment shader through `onBeforeCompile`: the white with cup shading, the pupil with its contact
@@ -63,5 +69,6 @@ pupils move), `viewport/play-session.ts` (`eyesOn`: creatures' `inner`, point bo
 objects carried by movers, still objects; updated in `tick`). Docs: `docs/creatures.md` (Googly eyes),
 `FEATURE_STATUS.md`, `KNOWN_LIMITATIONS.md`. Tests: `apps/editor/test/googly-eyes.test.ts`.
 
-Not done: an e2e test (Electron wasn't available in that session). Next, if wanted: eyes that follow a model's
-head bone; pupils that look at the player; eyes on brushes; a "Shake the eyes" block.
+Not done: an e2e test (Electron wasn't available in that session). Next, if wanted: pupils that look at the
+player; eyes on brushes; a "Shake the eyes" block; eyes placed from a model's own eye slots automatically (any
+model, not only the chicken).

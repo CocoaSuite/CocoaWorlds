@@ -80,6 +80,7 @@ import {
 } from '@cocoaworlds/geometry';
 import { create } from 'zustand';
 import { modelSlots } from './viewport/models';
+import { CHICKEN_EYES } from './viewport/googly-eyes';
 import { brushBounds, brushComponent, brushOf, isLocked, isShown, newBrushEntity, toLocal, toWorld, worldBrushOf, shapeBrushes, shapeName, worldBrushes, type DrawRole, type Outline, type ShapeOptions } from './brush/brushes';
 import { useShallow } from 'zustand/react/shallow';
 import type { AssetEntry, AssetKind, OpenedProject, PrefabEntry } from '../shared/api';
@@ -1200,8 +1201,11 @@ export const useEditor = create<State & Actions>()((set, get) => ({
     if (!doc || !e || e.components[name]) return;
     const label = componentDef(name)?.label.en ?? name;
     const data = name === 'script' ? emptyScript() : defaultComponent(name);
-    // Googly eyes on a plain creature figure: on the front of its head (a model's head is the user's to find).
-    if (name === 'googlyEyes' && e.components.npc && !(e.components.model as { model?: string } | undefined)?.model) Object.assign(data, { offset: [0, 60, -17], size: 11, spacing: 13 });
+    // Googly eyes on a plain creature figure: on the front of its head; on the ready-made chicken: over its own eyes
+    // (on another model, its head is the user's to find).
+    const model = (e.components.model as { model?: string } | undefined)?.model;
+    if (name === 'googlyEyes' && model && /(^|\/)chicken_rigged(_\d+)?\.glb$/.test(model)) Object.assign(data, CHICKEN_EYES);
+    else if (name === 'googlyEyes' && e.components.npc && !model) Object.assign(data, { offset: [0, 60, -17], size: 11, spacing: 13 });
     get().execute(setComponentCmd(doc, id, name, data as never, `Add ${label}`));
     if (name === 'script') set({ bottomTab: 'script', showBottom: true });
   },
@@ -1841,6 +1845,7 @@ export function chickenComponents(model: string, friendly: boolean): EntityData[
       anims: 'idle, walk, peck, die, run, peck, flap',
     },
     script: chickenScript(friendly) as unknown as EntityData['components'][string],
+    googlyEyes: { ...defaultComponent('googlyEyes'), ...CHICKEN_EYES },
   };
 }
 
