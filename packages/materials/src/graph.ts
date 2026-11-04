@@ -4,7 +4,7 @@
  * node has one output; an input takes at most one link. Output nodes (Colour, Height, Normal …) say which map
  * of the material they make.
  */
-import { NODES, nodeDef, type NodeDef, type OutputRole, type ParamValue, type RampStop } from './nodes';
+import { NODES, nodeDef, nodeDef as nodeOf, type NodeDef, type OutputRole, type ParamValue, type RampStop } from './nodes';
 
 export const GRAPH_FORMAT = 'cocoaworlds.material';
 export const GRAPH_VERSION = 1;
@@ -228,7 +228,15 @@ const isObj = (v: unknown): v is Record<string, unknown> => typeof v === 'object
 const isRamp = (v: unknown): v is RampStop[] =>
   Array.isArray(v) && v.length >= 1 && v.length <= 8 && v.every((s) => isObj(s) && typeof s.at === 'number' && s.at >= 0 && s.at <= 1 && typeof s.color === 'string' && /^#[0-9a-f]{6}$/i.test(s.color));
 
-function paramOk(def: NodeDef, key: string, v: unknown): boolean {
+/** What validation needs to know of a kind of node (a `NodeDef`, or a node from a file's own catalog). */
+export interface NodeShape {
+  label: { en: string };
+  inputs: { id: string }[];
+  output: unknown;
+  params: { id: string; kind: NodeDef['params'][number]['kind']; options?: { value: string }[] }[];
+}
+
+function paramOk(def: NodeShape, key: string, v: unknown, imagePrefix: string): boolean {
   const p = def.params.find((x) => x.id === key);
   if (!p) return false;
   switch (p.kind) {
@@ -237,7 +245,7 @@ function paramOk(def: NodeDef, key: string, v: unknown): boolean {
     case 'seed':
       return typeof v === 'number' && Number.isFinite(v);
     case 'choice':
-      return typeof v === 'string' && p.options.some((o) => o.value === v);
+      return typeof v === 'string' && !!p.options?.some((o) => o.value === v);
     case 'color':
       return typeof v === 'string' && /^#[0-9a-f]{6}$/i.test(v);
     case 'bool':
@@ -245,12 +253,17 @@ function paramOk(def: NodeDef, key: string, v: unknown): boolean {
     case 'ramp':
       return isRamp(v);
     case 'image':
-      return typeof v === 'string' && (v === '' || v.startsWith('assets/textures/'));
+      return typeof v === 'string' && (v === '' || v.startsWith(imagePrefix));
   }
 }
 
-/** What's wrong with a graph read from a file, or null when it is fine. */
-export function validateGraph(g: unknown): string | null {
+/**
+ * What's wrong with a graph read from a file, or null when it is fine. By default against CocoaWorlds' own
+ * nodes, with images in the project; a `.cocoamat` is checked against its own nodes, with images inside it.
+ */
+export function validateGraph(g: unknown, opts: { nodes?: (type: string) => NodeShape | undefined; imagePrefix?: string } = {}): string | null {
+  const nodeDef = opts.nodes ?? ((t: string) => nodeOf(t));
+  const imagePrefix = opts.imagePrefix ?? 'assets/textures/';
   if (!isObj(g) || g.format !== GRAPH_FORMAT) return 'This is not a Cocoa Materials graph.';
   if (g.version !== GRAPH_VERSION) return `This graph was made by a newer version (format ${String(g.version)}).`;
   if (!Array.isArray(g.nodes) || !Array.isArray(g.links)) return 'The graph has no nodes or links.';
@@ -263,7 +276,7 @@ export function validateGraph(g: unknown): string | null {
     if (!def) return `Unknown node “${String(n.type)}”.`;
     if (typeof n.x !== 'number' || typeof n.y !== 'number') return `The ${def.label.en} node has no position.`;
     if (!isObj(n.params)) return `The ${def.label.en} node has no settings.`;
-    for (const [k, v] of Object.entries(n.params)) if (!paramOk(def, k, v)) return `The ${def.label.en} node has a bad setting “${k}”.`;
+    for (const [k, v] of Object.entries(n.params)) if (!paramOk(def, k, v, imagePrefix)) return `The ${def.label.en} node has a bad setting “${k}”.`;
   }
   const taken = new Set<string>();
   const nodes = g.nodes as GraphNode[];

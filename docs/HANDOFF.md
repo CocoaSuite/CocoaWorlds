@@ -86,84 +86,32 @@ model, not only the chicken).
 
 ### 5. Export materials for CocoaSurface (`.cocoamat`, editable graphs) and as bitmaps
 
-Status: **open, not started.** Requested 2026-11-04. CocoaSurface is another CocoaSuite app, in development.
-It must open materials made in CocoaWorlds' Materials workspace **as editable graphs**: it evaluates the node
-graph itself and shows the graph's **exposed settings as the material's parameters**, which people change
-there. The file carries the graph, the exposed parameters with their kinds, ranges, defaults and values, the
-material's own settings, and the definition of every node it uses. Baked images are optional extras. The format
-is specified in **[cocoamat-format.md](cocoamat-format.md)**, with the node reference generated from the code in
-[`cocoamat/nodes.md`](cocoamat/nodes.md) and [`cocoamat/nodes.json`](cocoamat/nodes.json). The spec is the
-contract with CocoaSurface: implement it exactly, and if code and spec disagree, fix one of them in the same
-change.
+Status: **done.** The format is specified in **[cocoamat-format.md](cocoamat-format.md)** (now "implemented"),
+with the node reference generated from the code in [`cocoamat/nodes.md`](cocoamat/nodes.md) and
+[`cocoamat/nodes.json`](cocoamat/nodes.json). The spec is the contract with CocoaSurface: if code and spec
+disagree, fix one of them in the same change. After changing any node, or `LIBRARY`, run
+`CW_WRITE_CATALOG=1 npx vitest run packages/materials/test/catalog.test.ts`, and rewrite the samples (below).
 
-Already done (with this note): `packages/materials/src/catalog.ts` (`nodeCatalog()`, `catalogMarkdown()`,
-`fnv1a`, each node's `hash`) and `packages/materials/test/catalog.test.ts`, which fails if `docs/cocoamat/`
-is out of date. After changing any node, or `LIBRARY`, run
-`CW_WRITE_CATALOG=1 npx vitest run packages/materials/test/catalog.test.ts`.
+Done:
+- **Format code** (pure, tested in node): `packages/materials/src/cocoamat.ts` (`manifestOf`, `parametersOf`,
+  `graphForExport`, `imagesUsed`/`imageNames`, `catalogFor`, `writeCocoaMat`, `readCocoaMat` with every refusal
+  of spec sections 3 and 9, `evaluable`, `changedNodes`, `materialOf` for import) and `zip.ts` (ZIP writer and
+  reader, PNG encoder, on `CompressionStream`). `validateGraph` takes a file's own catalog and image prefix.
+  Decision C5: the file is built in the UI, not in the main process (see DECISIONS.md).
+- **Editor**: Materials list › **Export…** (and right-click; Ctrl+click picks several) › *CocoaSuite material
+  (.cocoamat)…* (disabled with the hint for image materials) and *Images (PNG)…* (dialog: size, normal green,
+  packed ORM, which maps); **Import…** beside it. Code: `renderer/materials/export.ts`,
+  `editor/MaterialExport.tsx`, `editor/MaterialsPanel.tsx`; main process `main/material-files.ts` (save/open
+  dialogs; writes only into folders a dialog gave; `CW_MATERIAL_EXPORT_DIR` and `CW_MATERIAL_IMPORT_FILE` skip
+  the dialogs in tests). UI strings in English and Russian.
+- **Settled**: normal green is **down** (proved in `test-e2e/cocoamat-samples.test.mjs`); wear noise now adds
+  (white shows wear sooner, as the node says; the fallback noise is turned over so old materials look the same,
+  `viewport/triplanar.ts`); tolerance mean < 1/255, max < 8/255 per map (spec 5.5).
+- **Samples for CocoaSurface**: `docs/cocoamat/samples/` (stone, bricks, image), each with its 256 px maps.
+  `cocoamat-samples.test.mjs` checks them; `CW_WRITE_SAMPLES=1` rewrites them.
+- **Tests**: `packages/materials/test/cocoamat.test.ts` (manifest, image paths, catalog cut, ZIP read back by
+  `extract-zip`, refusals, clamping, PNG), e2e `test-e2e/material-export.test.mjs` (a material and its variant
+  exported, read back with their values, the variant imported and baked the same, images with ORM and green up).
 
-What to build:
-
-1. **Export as CocoaSuite material (`.cocoamat`)**, for **graph materials**: in the Materials workspace, an
-   **Export…** button (and the list's right-click menu) with *CocoaSuite material (.cocoamat)…*. One file per
-   material through a native save dialog. With several picked, choose a folder and write one file each. Write the
-   ZIP as spec section 1, with:
-   - `material.json` (section 2) from the `MaterialDef`: `tile` becomes `tiling.worldSize`; `bakeSize` becomes
-     `evaluation.size`; the plain settings go in `surface`; and wear, glass, blend and bevel. `parameters` comes
-     from the graph's `exposedOf(g)`, with kind, min, max, step and options from the node definition, `default`
-     from the graph, and `value` from `m.overrides` (missing: the default).
-   - `graph.json`: the graph as it is in `materials/<name>.cwmat`, **without** the overrides applied (the values
-     live in `parameters`, so CocoaSurface can show ↺). Image settings are rewritten from `assets/textures/…`
-     to `images/<file>`, and those images are copied in (convert WebP to PNG; PNG and JPEG as they are).
-   - `nodes.json`: `nodeCatalog()` cut down to the node types the graph uses (keep `library` and
-     `vertexShader`).
-   - optionally `baked/<role>.png` (the current baked maps, if they're fresh) with `baked` in the manifest, and
-     `preview.png` (the Materials preview sphere, 256 px).
-   - **Variants** (several materials sharing one graph): each exports as its own file with the same graph and its
-     own `parameters` values.
-   - **Image materials** (not graphs) have no graph to export. The *CocoaSuite material* item is disabled for
-     them, with the hint "Only graph materials; export its images instead". (If the user wants them too, a
-     graph made of Image nodes wired to outputs would carry them. Ask first.)
-2. **Export as images** (*Images (PNG)…*, spec section 10) for every material: evaluate the graph at the
-   chosen size with the material's values (a `GraphEvaluator` as in `bakeOnce`, `renderer/materials/graphs.ts`),
-   or re-encode an image material's images. Options: size, normal green down or up, packed ORM, which maps.
-3. **A reader in code** (`packages/core` or `packages/materials`, no DOM): `readCocoaMat(bytes)` →
-   `{ manifest, graph, nodes, images } | error`. It validates as spec sections 3 and 9 (reuse `validateGraph`,
-   but check node types against the file's `nodes.json`). It's for the tests, and it's the model for
-   CocoaSurface's native reader.
-4. **Import `.cocoamat` into CocoaWorlds** (recommended, since CocoaSurface may also write these files): make a
-   graph material from it, with the graph in `materials/`, images in `assets/textures/`, values as `overrides`,
-   then bake. If a node's `hash` differs from CocoaWorlds' own, warn that it may look different. Ask the user
-   before doing import if time is short.
-
-Where things go (suggested):
-- `packages/materials/src/cocoamat.ts`: manifest types, `manifestOf(material, graph)`, `graphForExport`
-  (image paths), `readCocoaMat` and validation. Pure, tested in node.
-- The ZIP writer goes in the **main process** (`apps/editor/src/main/`): a small store/deflate writer on
-  `zlib.deflateRawSync` and `zlib.crc32` (Node 22, Electron 45), unless a dependency is clearly better. Typed IPC
-  as for `writeGenerated` (`shared/api.ts`, `main.ts`, `preload.ts`), with save and folder dialogs.
-- UI strings in English and Russian (`i18n.ts`).
-
-Settle these first (each is named in the spec):
-- **Normal green direction** (spec section 6): prove it with a test (bake one bump), then keep or flip the
-  `normalGreen` default.
-- **Wear noise** (spec section 8): the shader subtracts it, but the hint says white shows wear sooner. Make them
-  agree.
-- **Exactness**: the graph evaluates on the GPU, and hashes in the noise use float maths, so another card or API
-  can differ slightly. CocoaSurface's conformance check is therefore "within a tolerance". Pick one (suggested:
-  mean absolute difference < 1/255 and max < 8/255 per map) and write it into the spec.
-
-Tests to write:
-- Unit: `manifestOf` (a full graph material with exposed settings of several kinds, and a bare one): defaults,
-  `parameters` kinds, ranges, values, and `graph.json` image paths rewritten.
-- Unit: the ZIP writer (`mimetype` first, stored, at offset 38), read back with `extract-zip` and `readCocoaMat`.
-  Also the refusals: wrong mimetype, higher major version, unknown node type, bad link, `..` path.
-- **Sample files for CocoaSurface** in `docs/cocoamat/samples/`: two or three small `.cocoamat` files (the
-  default stone graph; bricks with exposed colour, rows and stagger; one with an Image node). Beside each go its
-  maps evaluated by CocoaWorlds at 256 px (`<name>_<role>.png`). These are CocoaSurface's conformance test: evaluate
-  the file and compare within the tolerance.
-- e2e (`test-e2e/material-export.test.mjs`): export a graph material and a variant, read them back, and check the
-  values. If import is done, round-trip it and compare the baked maps.
-
-Docs when done: `docs/materials.md` (an Export section), `FEATURE_STATUS.md`, `KNOWN_LIMITATIONS.md` (wear and
-bevel are only approximate outside CocoaWorlds; 8-bit maps; GPU tolerance), and the spec's status line becomes
-"implemented in CocoaWorlds <version>".
+Next, if wanted: `preview.png` (the preview sphere, 256 px); on import, offer to replace a material whose id is
+already in the project; import of image materials as a graph of Image nodes (ask first).

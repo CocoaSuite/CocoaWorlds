@@ -41,6 +41,7 @@
 - **Big levels update a moment after an edit.** From 64 brushes the level is rebuilt in a background worker, so the view can lag an edit by the build time (shown in the stats). Picking uses the last finished build.
 - **Brush rotation re-projects textures** (world alignment). Texture lock is exact for moves only.
 - **Carving can drop hair-thin slivers** (< 0.5 u thick, ≤ 8 cubic units) left by cutters at very shallow angles; the count is reported.
+- **Exported materials are only approximate outside CocoaWorlds** for wear and bevelled edges (they depend on CocoaWorlds' brush data). Maps are 8-bit, and graphs evaluated on another graphics card match only within a tolerance (mean under 1/255, largest under 8/255). `.cocoamat` files carry no `preview.png` yet, and importing a file whose material id is already in the project makes a copy rather than offering to replace it.
 - **Automated end-to-end tests run on a software renderer** (SwiftShader). Real-GPU behaviour is covered by manual testing only so far.
 
 ## Expected limitations of the approved architecture

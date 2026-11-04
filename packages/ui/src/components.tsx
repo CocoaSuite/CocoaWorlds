@@ -54,7 +54,7 @@ export const Spacer = () => <div className="cw-sp" />;
 
 // ── Menus ──
 
-export type MenuEntry = { label: string; shortcut?: string; disabled?: boolean; onSelect: () => void } | 'separator';
+export type MenuEntry = { label: string; shortcut?: string; disabled?: boolean; hint?: string; onSelect: () => void } | 'separator';
 
 function MenuItems({ items, close }: { items: MenuEntry[]; close: () => void }) {
   return (
@@ -68,6 +68,7 @@ function MenuItems({ items, close }: { items: MenuEntry[]; close: () => void }) 
             type="button"
             role="menuitem"
             disabled={it.disabled}
+            title={it.hint}
             onClick={() => {
               close();
               it.onSelect();

@@ -141,7 +141,7 @@ export async function createGraphMaterial(name: string): Promise<MaterialDef | n
 // ── The graphics card ──
 
 let gl: WebGL2RenderingContext | null = null;
-function context(): WebGL2RenderingContext {
+export function context(): WebGL2RenderingContext {
   if (gl && !gl.isContextLost()) return gl;
   const c = document.createElement('canvas');
   c.width = c.height = 128;
@@ -152,7 +152,7 @@ function context(): WebGL2RenderingContext {
 }
 
 const bitmaps = new Map<string, Promise<ImageBitmap>>();
-function loadBitmap(path: string): Promise<ImageBitmap> {
+export function loadBitmap(path: string): Promise<ImageBitmap> {
   let p = bitmaps.get(path);
   if (!p) {
     p = assetUrl(path)

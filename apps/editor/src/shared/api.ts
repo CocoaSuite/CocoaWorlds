@@ -99,6 +99,15 @@ export interface CocoaApi {
     /** Save a map baked from a graph as `assets/textures/generated/<name>`. Returns its path. */
     writeGenerated(dir: string, name: string, bytes: Uint8Array): Promise<Result<string>>;
   };
+  materials: {
+    /** Save a `.cocoamat` through a save dialog. Returns where, or null when cancelled. */
+    saveFile(name: string, bytes: Uint8Array): Promise<Result<string | null>>;
+    /** Choose a folder to export into (null when cancelled). Only such folders can be written to. */
+    pickFolder(title: string): Promise<Result<string | null>>;
+    writeFiles(folder: string, files: { name: string; bytes: Uint8Array }[]): Promise<Result<string[]>>;
+    /** Pick `.cocoamat` files to import (none when cancelled). */
+    openFiles(): Promise<Result<{ name: string; bytes: Uint8Array }[]>>;
+  };
   game: {
     /**
      * Export the project's game (saved files) for a target: asks where (unless a folder is given in tests),
@@ -148,6 +157,10 @@ export const IPC = {
   readGraph: 'materials:readGraph',
   writeGraph: 'materials:writeGraph',
   writeGenerated: 'materials:writeGenerated',
+  saveMaterialFile: 'materials:saveFile',
+  pickExportFolder: 'materials:pickFolder',
+  writeExportFiles: 'materials:writeFiles',
+  openMaterialFiles: 'materials:openFiles',
   exportGame: 'game:export',
   exportProgress: 'game:exportProgress',
   revealGame: 'game:reveal',

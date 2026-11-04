@@ -1,6 +1,7 @@
 # The CocoaSuite material file (`.cocoamat`), version 1.0
 
-**Status: draft, not implemented yet** (see [HANDOFF.md](HANDOFF.md), task 5). This document is the contract
+**Status: implemented in CocoaWorlds 0.1.0** (writer, reader, import and bitmap export:
+`packages/materials/src/cocoamat.ts`, `zip.ts`; `apps/editor/src/renderer/materials/export.ts`). This document is the contract
 between CocoaWorlds (writes it now, may read it later) and CocoaSurface (reads it natively, and may write it).
 
 **A `.cocoamat` file is an editable material graph.** It holds the node graph made in CocoaWorlds' Materials
@@ -232,7 +233,7 @@ gets the same pictures, up to floating-point differences between graphics cards.
 **A node's `glsl` body is the normative definition of what it does.** Each node is one fragment program. A
 reader either runs the programs as they are (GLSL ES 3.00 on OpenGL ES 3 or WebGL 2, or translated for Metal,
 Vulkan or D3D: glslang to SPIR-V to SPIRV-Cross), or implements nodes natively. If it implements them natively, it
-checks `hash` (section 5.5) to know its version still matches the file's. It must then make the same pictures.
+checks `hash` (section 5.6) to know its version still matches the file's. It must then make the same pictures.
 
 ### 5.2 One node's program
 
@@ -299,7 +300,22 @@ catalog default. (Exposed values are applied before evaluation, section 2.)
 - **A map is its output node's picture, clamped to 0–1.** Written as an image, it's quantised to 8 bits
   (`round(v × 255)`), first row first. Grey outputs write the same value to R, G and B.
 
-### 5.5 Node identity across versions
+### 5.5 Matching CocoaWorlds (tolerance)
+
+Graphs run on the graphics card, and the noise hashes use float maths, so another card, driver or API can give
+slightly different pictures. A reader matches CocoaWorlds when, for every map, evaluated at the same size and
+written as 8-bit (5.4), compared with CocoaWorlds' map channel by channel (R, G, B):
+
+- the **mean** absolute difference is **under 1/255**, and
+- the **largest** difference is **under 8/255**.
+
+**Conformance samples** are in [`cocoamat/samples/`](cocoamat/samples/): small `.cocoamat` files (`stone`: the
+default graph; `bricks`: exposed colour, rows and stagger with values set; `image`: an Image node with its
+picture in the file), each beside its maps as CocoaWorlds evaluates them at 256 px, `<name>_<role>.png`. Evaluate
+each file at 256 and compare within the tolerance. (`apps/editor/test-e2e/cocoamat-samples.test.mjs` does this
+for CocoaWorlds itself, and writes them afresh with `CW_WRITE_SAMPLES=1`.)
+
+### 5.6 Node identity across versions
 
 `hash` is FNV-1a (32-bit, written as 8 lowercase hex digits) of the node's whole fragment program from 5.2,
 encoded as UTF-8. Same `type` and same `hash` means it does the same thing. When CocoaWorlds changes what a
@@ -323,8 +339,8 @@ shades the other way uses `g' = 1 − g`.
 
 Evidence: *Height to normal* makes `n = normalize(−dH/du · s, −dH/dv · s, 1)`, and v goes down the picture
 (5.4). CocoaWorlds' triplanar shading reads green along the picture's down (`viewport/triplanar.ts`, `NORMALS`).
-**Task 5 confirms it with a test** (one bump: above its middle, green < 0.5) and corrects the default if
-needed. The field exists so a wrong guess is never silent. Nodes such as *Adjust normals* (flip green) work on
+**Confirmed by a test** (`cocoamat-samples.test.mjs`: one soft bump; above its middle green < 0.5, below it > 0.5;
+left of it red < 0.5). The field exists so a wrong guess is never silent. Nodes such as *Adjust normals* (flip green) work on
 the graph's own convention.
 
 ## 7. Baked maps (optional)
@@ -347,8 +363,8 @@ w    = max(width, 0.001)
 raw  = max(edge   * (1 − smoothstep(0, w, distanceToOuterEdge)),
            crease * (1 − smoothstep(0, w, distanceToCrease)),
            up     * smoothstep(0.55, 0.95, worldNormal.y))             // +Y is up
-nz   = wearNoise map (laid triplanar) if the graph makes one, else smooth 3D value noise of worldPos / max(w·1.5, 1)
-m    = smoothstep(0.35, 0.65, raw − (nz − 0.5) · noise · 1.6)
+nz   = wearNoise map (laid triplanar) if the graph makes one, else 1 − smooth 3D value noise of worldPos / max(w·1.5, 1)
+m    = smoothstep(0.35, 0.65, raw + (nz − 0.5) · noise · 1.6)
 ```
 
 Distances are in units across the face. Without edge data, CocoaWorlds estimates them from curvature
@@ -357,8 +373,8 @@ Then colour = mix(base, `wear.color` × wearColor map (white when absent), m). R
 mix(base, the wear map if present else `wear.roughness` / `wear.metalness`, m). Wear maps are always laid
 triplanar.
 
-White in the noise makes wear show **later** (it's subtracted), though the Wear noise node's hint says
-"sooner". Task 5 settles which is meant. The formula above is what CocoaWorlds draws today.
+White in the Wear noise map makes wear show **sooner**, as the node says. (Before CocoaWorlds 0.1.0's export, it
+was subtracted; the made-up noise is turned over so materials without the map look as they did.)
 
 ## 9. Reading, step by step
 
@@ -380,12 +396,15 @@ the material's values, and each map is written as `<name>_<role>.png` into a cho
 not allowed in file names made `_`), plus `<name>.material.json` (the manifest, for reference). Options:
 
 - **Size**: 256 / 512 / 1024 / 2048 (4096 where the card allows). The graph is evaluated at that size.
-- **Normal green**: down (CocoaWorlds, DirectX style) or up (OpenGL style).
+- **Normal green**: down (CocoaWorlds, DirectX style) or up (OpenGL style). The manifest's `normalGreen` says
+  which was chosen. (Only a graph's own Normal output is flipped; an image material's normal map is copied as
+  it is.)
 - **Pack occlusion, roughness, metal** into `<name>_orm.png` (R, G, B), as glTF and Unreal expect. A missing map
   is filled from the material's values (occlusion 1).
 - **Which maps**: all the graph makes (default), or a chosen set.
 
-Image materials (not made from a graph) export as images only. There's no graph to put in a `.cocoamat`.
+Image materials (not made from a graph) export as images only, their images redrawn at the chosen size.
+There's no graph to put in a `.cocoamat`.
 
 ## 11. Changing the format
 
@@ -394,4 +413,4 @@ Image materials (not made from a graph) export as images only. There's no graph 
 - Changing what a field means, or making something required, is a major version.
 - Changing a node's program changes its `hash`. Files keep their own definition, so old files still look
   the same.
-- Update this document, the catalog (regenerate it) and the sample files (task 5) in the same change.
+- Update this document, the catalog (regenerate it) and the sample files in the same change.

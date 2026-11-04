@@ -155,6 +155,24 @@ A map from the graph replaces its slider: a Roughness output decides the roughne
 Height gives bumps only when there is no Normal output. Opacity cuts holes where it is dark (or fades, with
 cut-out off).
 
+## Export and import
+
+**Export…** above the list (or right-click a material) exports the picked material; Ctrl+click picks more.
+
+- **CocoaSuite material (.cocoamat)…** (graph materials): the graph itself, its exposed settings as the
+  material's parameters with this material's values, its own settings, the nodes it uses, the images its Image
+  nodes read, and freshly baked maps. CocoaSurface opens it as an editable graph. One material goes through a
+  save dialog; several go into a chosen folder, one file each (variants too, each with its own values). The
+  format: [cocoamat-format.md](cocoamat-format.md).
+- **Images (PNG)…** (any material): its maps as `<name>_<role>.png` plus `<name>.material.json`, at 256–2048
+  (4096 where the card allows), with the normal map's green down (CocoaWorlds, DirectX) or up (OpenGL, Blender),
+  occlusion, roughness and metal packed into `<name>_orm.png` if wanted, and a choice of maps.
+
+**Import…** makes graph materials from `.cocoamat` files: the graph goes in `materials/`, its images in
+`assets/textures/`, its parameter values become the material's own settings, and it bakes. A file using nodes
+this CocoaWorlds doesn't have is refused; one whose nodes work differently here imports with a warning in the
+log.
+
 ## Files
 
 Materials are kept in the project file (`project.cwproj`, under `settings.materials`). Each has an id such as

@@ -64,8 +64,9 @@ float wearMask() {
     raw = max(raw, wearParams.y * clamp(-k * w * 4.0, 0.0, 1.0));
   }
   raw = max(raw, wearParams.z * smoothstep(0.55, 0.95, normalize(vWearN).y));
-  float nz = wearHas.w > 0.5 ? tri(wearNoiseMap).r : wearValueNoise(vWearPos / max(w * 1.5, 1.0));
-  return smoothstep(0.35, 0.65, raw - (nz - 0.5) * wearMat.z * 1.6);
+  // (White in a Wear noise map shows wear sooner. The made-up noise is turned over so old materials look the same.)
+  float nz = wearHas.w > 0.5 ? tri(wearNoiseMap).r : 1.0 - wearValueNoise(vWearPos / max(w * 1.5, 1.0));
+  return smoothstep(0.35, 0.65, raw + (nz - 0.5) * wearMat.z * 1.6);
 }
 `;
 

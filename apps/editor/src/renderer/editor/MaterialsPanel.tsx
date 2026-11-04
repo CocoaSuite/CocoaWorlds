@@ -4,7 +4,7 @@
  * project, so every scene can use them; changes show at once on every face that uses one, and are undoable.
  */
 import { newMaterial, newWear, type MaterialDef, type WearDef } from '@cocoaworlds/core';
-import { Button, ColorField, NumberField, Segmented, Switch } from '@cocoaworlds/ui';
+import { Button, ColorField, ContextMenu, NumberField, Segmented, Switch } from '@cocoaworlds/ui';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { brushOf } from '../brush/brushes';
@@ -15,6 +15,8 @@ import type { FaceRef } from '../viewport/world-render';
 import { MaterialSwatch } from './MaterialSwatch';
 import { GraphWorkspace } from './MaterialGraph';
 import { bakeLater, createGraphMaterial, useGraphs } from '../materials/graphs';
+import { bakeImported, importCocoaMats } from '../materials/export';
+import { ImagesDialog, exportItems } from './MaterialExport';
 
 export type Shape = 'sphere' | 'cube' | 'wall';
 
@@ -70,6 +72,38 @@ export function MaterialsPanel() {
   const fileRef = useRef<HTMLInputElement>(null);
   const mat = list.find((m) => m.id === selected) ?? list[0] ?? null;
   const used = mat ? facesUsing(mat.id) : [];
+  // Ctrl+click picks more materials (for exporting several at once).
+  const [extra, setExtra] = useState<string[]>([]);
+  const picks = mat ? [mat, ...list.filter((m) => m.id !== mat.id && extra.includes(m.id))] : [];
+  const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
+  const [imagesFor, setImagesFor] = useState<MaterialDef[] | null>(null);
+  const clickItem = (e: React.MouseEvent, id: string) => {
+    if (e.ctrlKey || e.metaKey) {
+      if (id !== mat?.id) setExtra((x) => (x.includes(id) ? x.filter((y) => y !== id) : [...x, id]));
+      return;
+    }
+    setExtra([]);
+    setSelected(id);
+  };
+  const importFiles = async () => {
+    const st = useEditor.getState();
+    const r = await window.cocoa.materials.openFiles();
+    if (!r.ok) return st.notify(r.error);
+    if (!r.value.length) return;
+    try {
+      const { made, problems } = await importCocoaMats(r.value);
+      for (const p of problems) st.log('warn', 'Materials', p);
+      if (made.length) {
+        const cur = useEditor.getState().session?.project.settings.materials ?? [];
+        setAll([...cur, ...made], made.length === 1 ? `Import material ${made[0]!.name}` : 'Import materials');
+        setSelected(made[made.length - 1]!.id);
+        bakeImported(made);
+      }
+      st.notify(problems.length ? problems[0]! : t('mex.imported').replace('{n}', String(made.length)));
+    } catch (e) {
+      st.notify((e as Error).message);
+    }
+  };
 
   useEffect(() => endGesture, []);
 
@@ -222,6 +256,17 @@ export function MaterialsPanel() {
         <Button size="sm" onClick={() => fileRef.current?.click()}>
           {t('mat.fromImage')}
         </Button>
+        <span className="cw-mats-io">
+          <Button size="sm" disabled={!mat} title={t('mex.selectHint')} onClick={(e) => {
+            const r = e.currentTarget.getBoundingClientRect();
+            setMenu({ x: r.left, y: r.bottom + 4 });
+          }}>
+            {t('mex.exportMenu')}
+          </Button>
+          <Button size="sm" title={t('mex.importHint')} onClick={() => void importFiles()}>
+            {t('mex.import')}
+          </Button>
+        </span>
         <Button
           size="sm"
           onClick={async () => {
@@ -247,7 +292,22 @@ export function MaterialsPanel() {
         {!list.length && <p className="cw-muted cw-screens-hint">{t('mat.none')}</p>}
         <ul className="cw-mats-list" role="listbox" aria-label={t('mat.list')}>
           {list.map((m) => (
-            <li key={m.id} role="option" aria-selected={m.id === mat?.id} aria-label={m.name} className={m.id === mat?.id ? 'on' : ''} onClick={() => setSelected(m.id)}>
+            <li
+              key={m.id}
+              role="option"
+              aria-selected={m.id === mat?.id || extra.includes(m.id)}
+              aria-label={m.name}
+              className={m.id === mat?.id ? 'on' : extra.includes(m.id) ? 'also' : ''}
+              onClick={(e) => clickItem(e, m.id)}
+              onContextMenu={(e) => {
+                e.preventDefault();
+                if (m.id !== mat?.id && !extra.includes(m.id)) {
+                  setExtra([]);
+                  setSelected(m.id);
+                }
+                setMenu({ x: e.clientX, y: e.clientY });
+              }}
+            >
               <MaterialSwatch def={m} className="cw-mats-sw" />
               <span>{m.name}</span>
             </li>
@@ -256,6 +316,8 @@ export function MaterialsPanel() {
         <p className="cw-muted cw-screens-hint">{t('mat.hint')}</p>
       </aside>
       )}
+      {menu && <ContextMenu x={menu.x} y={menu.y} items={exportItems(picks, () => setImagesFor(picks))} onClose={() => setMenu(null)} />}
+      {imagesFor && <ImagesDialog ms={imagesFor} onClose={() => setImagesFor(null)} />}
 
       {mat?.graph ? (
         <GraphWorkspace
