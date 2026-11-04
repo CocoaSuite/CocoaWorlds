@@ -7,7 +7,7 @@
 
 export type Lang = 'en' | 'ru';
 
-export type SoundData = { sound: string; volume: number; loop: boolean; playOnStart: boolean; range: number; areaEffects: boolean };
+export type SoundData = { sound: string; volume: number; loop: boolean; playOnStart: boolean; range: number; areaEffects: boolean; loudness?: number };
 /** How a place makes things sound (component `soundArea`): see SOUND_EFFECTS. */
 export type SoundEffect = 'none' | 'room' | 'hall' | 'cave' | 'underwater' | 'outdoors';
 /** A brush that changes how everything sounds while the player's ears are inside it. */
@@ -167,6 +167,13 @@ export const COMPONENTS: ComponentDef[] = [
         hint: e('Off: sounds the same everywhere (music, interface sounds), not echoed in caves or muffled under water.', 'Выкл.: звучит везде одинаково (музыка, звуки интерфейса), без эха в пещерах и приглушения под водой.'),
         type: { kind: 'boolean' },
         default: true,
+      },
+      {
+        key: 'loudness',
+        label: e('Creatures hear it', 'Слышат существа'),
+        hint: e('Loudness for hunting creatures: 0 they ignore it, 1 heard as far as their Hears you up to, 2 twice as far. A looping sound keeps calling them while it plays.', 'Громкость для охотников: 0 — не замечают, 1 — слышно на их «Слышит до», 2 — вдвое дальше. Повторяющийся звук зовёт их, пока играет.'),
+        type: { kind: 'number', min: 0, step: 0.1 },
+        default: 0,
       },
     ],
   },
@@ -550,6 +557,7 @@ export const COMPONENTS: ComponentDef[] = [
         default: 'locker',
       },
       { key: 'prompt', label: e('Prompt', 'Подсказка'), type: { kind: 'text' }, default: 'Hide' },
+      { key: 'reach', label: e('Reach', 'Дотянуться'), hint: e('How close the player must be to get in with E.', 'Как близко нужно подойти, чтобы залезть по E.'), type: { kind: 'number', min: 16, step: 8, unit: 'u' }, default: 96 },
       {
         key: 'view',
         label: e('Look from', 'Смотреть из'),
@@ -869,7 +877,7 @@ function hunterFields(): FieldDef[] {
   const hide = e('Hunting: hiding spots', 'Охота: укрытия');
   const p = { min: 0, max: 1, step: 0.05 };
   return [
-    n('hearing', sense, e('Hearing', 'Слух'), 1, { min: 0, step: 0.1 }, e('1: hears a sound as far as it carries. Through walls, half as far.', '1 — слышит звук так далеко, как он разносится. Сквозь стены — вдвое ближе.')),
+    n('hears', sense, e('Hears you up to', 'Слышит до'), 1000, { min: 0, step: 50, unit: 'u' }, e('How far it hears a sound of loudness 1 (louder sounds further, quieter ones less). Through walls, half as far.', 'Как далеко слышит звук громкостью 1 (громче — дальше, тише — ближе). Сквозь стены — вдвое ближе.')),
     n('feel', sense, e('Notices up close', 'Замечает вплотную'), 48, { min: 0, step: 8, unit: 'u' }, e('Notices the player this close even behind it.', 'Замечает игрока так близко даже за спиной.')),
     n('notice', sense, e('Investigates from', 'Проверяет от'), 0.25, p, e('How important (kind × sureness × freshness) a sound or hint must be to go and look.', 'Насколько важным (вид × уверенность × свежесть) должен быть звук или подсказка, чтобы пойти проверить.')),
     n('fresh', sense, e('Fresh for', 'Свежо'), 5, { min: 0, step: 1, unit: 's' }, e('Younger news: it goes to the very place.', 'Свежее: идёт прямо туда.')),
@@ -1086,5 +1094,6 @@ export interface HidingSpotData {
   side: number;
   upDown: number;
   time: number;
+  reach: number;
   [k: string]: unknown;
 }

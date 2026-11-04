@@ -74,10 +74,12 @@ What it does, highest first (a higher one cuts a lower one short at once, even m
 
 Losing sight of the player is news like any other: it goes to where it last saw them and searches round there.
 
-**What it hears.** Noises carry a distance; a Hunter hears one that close times its **Hearing**, half as far
-through walls, and places it roughly (less exactly the further off). The player makes noise running (not crouching
-or walking slowly; 360 u), landing hard (480 u), firing (1600 u), and getting into or out of a hiding spot (200 u,
-from the spot). Blocks make more: **Make a noise at [place] heard up to [n] units**.
+**What it hears.** Every sound has a **loudness**. A Hunter hears a sound of loudness 1 within its **Hears you up
+to** (1000 u), louder ones further (loudness 2: twice as far), quieter ones less, and half as far through walls. It
+places what it hears roughly (less exactly the further off). The player's own noises: running 0.35 (not crouching or
+walking slowly), landing hard 0.5, firing 1.6, getting into or out of a hiding spot 0.2 (from the spot). More:
+**Make a noise at [place] loudness [n]**; **Play sound** has a loudness for creatures too (0: they don't hear it);
+and a Sound component's **Creatures hear it** (a looping one calls them every 2 s while it plays).
 
 **The Director** is the game's own scripts, not part of the creature: **Tell creatures the player is near [place],
 give or take [n] units, sure [0–1], as [a sound / a sighting / an event]**. Each Hunter that doesn't see the
@@ -120,6 +122,7 @@ player stands where they were when they pressed E.
 
 | Setting | What it does |
 |---|---|
+| Reach | How close the player must be to get in with E (96 u). |
 | Kind | Locker, wardrobe, cabinet, under something, box or other: how a Hunter checks it. |
 | Look from | An object placed and turned where the eyes go, looking along its −Z (an empty object inside the locker). Empty: this object (a brush: its middle, looking north). |
 | Eyes at | Moves the eyes from there, in that object's own axes. |

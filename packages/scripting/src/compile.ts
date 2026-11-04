@@ -76,9 +76,9 @@ export type Op =
   | { op: 'copy' }
   /** Pops an object; pushes its variable called `name` (nothing if it has none). */
   | { op: 'varof'; name: string }
-  /** Pops volume, then the place (null: everywhere): play `sound`. */
+  /** Pops loudness, volume, then the place (null: everywhere): play `sound`. */
   | { op: 'sound'; sound: string }
-  /** Pops range, then the place: a noise. */
+  /** Pops loudness, then the place: a noise. */
   | { op: 'noise' }
   /** Pops sureness, spread, then the place: a hint for hunting creatures. */
   | { op: 'hint'; as: 'sound' | 'sighting' | 'event' }
@@ -693,11 +693,13 @@ class HandlerCompiler {
         if (s.at) this.pushPlace(s.at, s.id);
         else this.emit({ op: 'push', v: null });
         this.expect(s.volume, 'number', 'The volume must be a number (1 is normal).');
+        if (s.loudness) this.expect(s.loudness, 'number', 'How loud it is for creatures must be a number (0: they don’t hear it).');
+        else this.emit({ op: 'push', v: 0 });
         this.emit({ op: 'sound', sound: s.sound });
         break;
       case 'noise':
         this.pushPlace(s.at, s.id);
-        this.expect(s.range, 'number', 'How far the noise carries must be a number.');
+        this.expect(s.loudness, 'number', 'The loudness must be a number (1: heard as far as a creature hears).');
         this.emit({ op: 'noise' });
         break;
       case 'hint':

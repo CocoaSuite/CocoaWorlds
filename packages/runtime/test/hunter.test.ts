@@ -71,7 +71,7 @@ describe('the Hunter mind', () => {
   it('a sound breaks off its wandering: it investigates, searches, gives up and wanders again', () => {
     const w = make(floor(), spawn(), hunter([0, 0, -1500], 0, { searchMin: 3, searchMax: 3 }));
     run(w, 1);
-    w.noise({ x: 400, y: 0, z: -1500 }, 1000);
+    w.noise({ x: 400, y: 0, z: -1500 }, 1);
     const states = run(w, 25);
     const i = states.indexOf('investigate'), s = states.indexOf('search'), back = states.lastIndexOf('wander');
     expect(i).toBeGreaterThanOrEqual(0);
@@ -85,7 +85,7 @@ describe('the Hunter mind', () => {
     const w = make(floor(), spawn(), hunter([0, 0, -1500], 0, { idleChance: 1, moves: 'stare=stare 30; scratch=s 30; tilt=t 30; lookAround=l 30; cluck=c 30; headShake=h 30; twitch=w 30; crouch=c 30' }));
     run(w, 30, () => npc(w).state === 'idle' && npc(w).mind!.plan?.moment != null);
     expect(npc(w).mind!.plan.moment).not.toBeNull();
-    w.noise({ x: 300, y: 0, z: -1500 }, 1500);
+    w.noise({ x: 300, y: 0, z: -1500 }, 1.5);
     run(w, 2 / 60);
     expect(npc(w).state).toBe('investigate');
     w.dispose();
@@ -94,9 +94,25 @@ describe('the Hunter mind', () => {
   it('a sound too far away (or too quiet) is not heard', () => {
     const w = make(floor(), spawn(), hunter([0, 0, -1500], 0));
     run(w, 0.5);
-    w.noise({ x: 1500, y: 0, z: 1500 }, 300);
+    w.noise({ x: 1500, y: 0, z: 1500 }, 0.3);
     expect(npc(w).mind!.bb.shouldInvestigate).toBe(false);
     w.dispose();
+  });
+
+  it('hears within its range times the loudness; a looping sound with loudness calls it', () => {
+    const w = make(floor(), spawn(), hunter([0, 0, -1500], 0, { hears: 500 }));
+    run(w, 0.5);
+    w.noise({ x: 600, y: 0, z: -1500 }, 1);
+    expect(npc(w).mind!.bb.shouldInvestigate).toBe(false);
+    w.noise({ x: 600, y: 0, z: -1500 }, 2);
+    expect(npc(w).mind!.bb.shouldInvestigate).toBe(true);
+    w.dispose();
+
+    const radio = newEntity('radio', { sound: { sound: 'radio.ogg', loop: true, loudness: 3 } }, { position: [800, 0, -1500] });
+    const w2 = make(floor(), spawn(), radio, hunter([0, 0, -1500], 0, { hears: 500 }));
+    const states = run(w2, 4);
+    expect(states).toContain('investigate');
+    w2.dispose();
   });
 
   it('a Director hint sends it to look, never at the exact place', () => {
@@ -158,7 +174,7 @@ describe('the Hunter mind', () => {
     run(w, 0.5);
     expect(w.hidingIn).not.toBeNull();
     expect(npc(w).mind!.bb.shouldInvestigate).toBe(false);
-    w.noise({ x: 0, y: 0, z: -300 }, 3000);
+    w.noise({ x: 0, y: 0, z: -300 }, 3);
     run(w, 40, () => w.hidingIn === null);
     expect(w.hidingIn).toBeNull();
     expect(w.playerStatus()!.score).toBe(11);
@@ -173,7 +189,7 @@ describe('the Hunter mind', () => {
     run(w, 0.1);
     w.use();
     run(w, 0.5);
-    w.noise({ x: 0, y: 0, z: -300 }, 3000);
+    w.noise({ x: 0, y: 0, z: -300 }, 3);
     const states = run(w, 25);
     expect(states).toContain('search');
     expect(states).not.toContain('inspect');
@@ -182,12 +198,12 @@ describe('the Hunter mind', () => {
   });
 
   it('knocking and listening: a noise from inside makes it open up', () => {
-    const knock = scriptOf({ id: 'h', event: { id: 'e', kind: 'does', what: 'knock' }, body: [{ id: 'n', kind: 'noise', at: { self: true }, range: { id: 'r', kind: 'number', value: 600 } } as Statement] });
+    const knock = scriptOf({ id: 'h', event: { id: 'e', kind: 'does', what: 'knock' }, body: [{ id: 'n', kind: 'noise', at: { self: true }, loudness: { id: 'r', kind: 'number', value: 0.6 } } as Statement] });
     const w = make(floor(), spawn(), ...locker('cabinet', knock), hunter([0, 0, -1500], 0, { mediumAt: 0, highAt: 0.99, mediumChance: 1, spotRange: 2000, searchMin: 30, searchMax: 30 }));
     run(w, 0.1);
     w.use();
     run(w, 0.5);
-    w.noise({ x: 0, y: 0, z: -300 }, 3000);
+    w.noise({ x: 0, y: 0, z: -300 }, 3);
     run(w, 40, () => w.hidingIn === null);
     expect(w.hidingIn).toBeNull();
     w.dispose();

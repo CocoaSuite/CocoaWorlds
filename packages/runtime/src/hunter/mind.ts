@@ -109,10 +109,10 @@ export class Hunter {
     if (moved || !this.bb.searching) this.bb.investigationKey++;
   }
 
-  /** A sound: heard if close enough (half as far through walls), placed roughly. */
-  hear(at: V, range: number, spot: string | null): void {
+  /** A sound of some loudness: heard within its Hears up to × loudness (half as far through walls), placed roughly. */
+  hear(at: V, loudness: number, spot: string | null): void {
     const ear = this.body.eye();
-    const reach = range * this.cfg.hearing * (this.body.clear(ear, { ...at, y: at.y + 16 }) ? 1 : 0.5);
+    const reach = loudness * this.cfg.hears * (this.body.clear(ear, { ...at, y: at.y + 16 }) ? 1 : 0.5);
     const d = Math.hypot(at.x - ear.x, at.z - ear.z);
     if (!(reach > 0) || d > reach) return;
     const now = this.w.time();

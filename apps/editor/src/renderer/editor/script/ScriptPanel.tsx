@@ -792,8 +792,8 @@ function statementWords(s: Statement, set: (patch: Record<string, unknown>, merg
     case 'noise':
       return (
         <>
-          {w('noise')} <RefSlot value={s.at} allowPlayer allowAim onChange={(at) => at && set({ at })} label={w('noise')} /> {w('carrying')}{' '}
-          <ExprSlot expr={s.range} type="number" label={`${w('noise')} ${w('carrying')}`} /> {w('units')}
+          {w('noise')} <RefSlot value={s.at} allowPlayer allowAim onChange={(at) => at && set({ at })} label={w('noise')} /> {w('loudness')}{' '}
+          <ExprSlot expr={s.loudness} type="number" label={`${w('noise')} ${w('loudness')}`} />
         </>
       );
     case 'hint':
@@ -912,7 +912,14 @@ function statementWords(s: Statement, set: (patch: Record<string, unknown>, merg
         <>
           {w('playSound')} <SoundSlot value={s.sound} onChange={(sound) => set({ sound })} /> {w('at')}{' '}
           <RefSlot value={s.at} allowNone noneLabel={w('everywhere')} allowPlayer allowAim onChange={(at) => set({ at })} label={`${w('playSound')} ${w('at')}`} /> {w('volume')}{' '}
-          <ExprSlot expr={s.volume} type="number" label={`${w('playSound')} ${w('volume')}`} />
+          <ExprSlot expr={s.volume} type="number" label={`${w('playSound')} ${w('volume')}`} /> {w('forCreatures')}{' '}
+          {s.loudness ? (
+            <ExprSlot expr={s.loudness} type="number" label={`${w('playSound')} ${w('forCreatures')}`} />
+          ) : (
+            <button type="button" className="cw-input cw-mini" onClick={() => set({ loudness: { ...newExpr('number'), value: 0 } as Expr })}>
+              0
+            </button>
+          )}
         </>
       );
     case 'playAnim':

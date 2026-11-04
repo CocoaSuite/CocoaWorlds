@@ -42,9 +42,9 @@ export interface ScriptHost {
   /** Change what a text sign says. */
   setText?(target: string, text: string): void;
   /** Play a sound at a place (an object, the player, 'aim') or everywhere (null). */
-  playSound?(sound: string, place: Value, volume: number, owner: string): void;
-  /** A noise at a place, carrying `range` units. */
-  noise?(place: Value, range: number, owner: string): void;
+  playSound?(sound: string, place: Value, volume: number, owner: string, loudness?: number): void;
+  /** A noise at a place, this loud for hunting creatures. */
+  noise?(place: Value, loudness: number, owner: string): void;
   /** The Director's hint to hunting creatures. */
   hint?(place: Value, spread: number, sure: number, as: 'sound' | 'sighting' | 'event'): void;
   /** Stop the sounds an object is making. */
@@ -546,9 +546,9 @@ export class ScriptRunner {
           break;
         }
         case 'noise': {
-          const range = Math.max(0, num(s.pop() ?? 0));
+          const loudness = Math.max(0, num(s.pop() ?? 0));
           const place = s.pop() ?? null;
-          this.host.noise?.(place, range, t.inst.program.owner);
+          this.host.noise?.(place, loudness, t.inst.program.owner);
           break;
         }
         case 'hint': {
@@ -559,9 +559,10 @@ export class ScriptRunner {
           break;
         }
         case 'sound': {
+          const loudness = Math.max(0, num(s.pop() ?? 0));
           const volume = Math.max(0, num(s.pop() ?? 1));
           const place = s.pop() ?? null;
-          if (op.sound) this.host.playSound?.(op.sound, place, volume, t.inst.program.owner);
+          if (op.sound) this.host.playSound?.(op.sound, place, volume, t.inst.program.owner, loudness);
           break;
         }
         case 'anim': {

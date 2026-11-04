@@ -71,6 +71,7 @@ Models (GLB, glTF) can be imported the same way; see Models below.
   inside the brush's faces (draw it as a box or other convex shape). A Sound area brush is never solid or
   drawn in the game, and can also be a Trigger zone.
 - **Under water** everything is muffled, with or without an area: water does it by itself.
+- A Sound component's **Creatures hear it** is its loudness for hunting creatures (0: ignored); see [creatures.md](creatures.md#the-hunter-mind).
 - A Sound component's **Changed by sound areas** (on by default) can be turned off for music and interface
   sounds, which then sound the same everywhere. Sounds from blocks and weapons are always changed.
 - The echoes are made in code (decaying noise through a convolver); no audio files ship for them.

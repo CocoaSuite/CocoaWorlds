@@ -3,7 +3,8 @@ import type { StimulusKind } from './stimuli';
 
 /** A Hunter's settings: from the Creature component (Hunting groups), with these defaults. */
 export interface HunterSettings {
-  hearing: number;
+  /** How far it hears a sound of loudness 1 (u). */
+  hears: number;
   feel: number;
   notice: number;
   fresh: number;
@@ -42,7 +43,7 @@ export interface HunterSettings {
 }
 
 export const HUNTER_DEFAULTS: HunterSettings = {
-  hearing: 1,
+  hears: 1000,
   feel: 48,
   notice: 0.25,
   fresh: 5,

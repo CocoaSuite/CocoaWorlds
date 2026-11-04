@@ -108,8 +108,9 @@ export interface ModelMesh {
 }
 /** Physics runs at a fixed rate whatever the frame rate. */
 export const STEP = 1 / 60;
-/** How far the player's noises carry (u) for creatures that listen (Hunters). */
-export const NOISE = { footsteps: 360, landing: 480, shot: 1600, hiding: 200 };
+/** How loud the player's noises are for creatures that listen (Hunters): 1 carries as far as their Hears you up to. */
+const LOUD_REPEAT = 2;
+export const NOISE = { footsteps: 0.35, landing: 0.5, shot: 1.6, hiding: 0.2 };
 /** Most armour the player can carry (Half-Life's suit holds 100). */
 export const MAX_ARMOUR = 100;
 const MAX_STEPS_PER_FRAME = 5;
@@ -641,6 +642,7 @@ export class GameWorld {
       this.npcs.set(e.id, npc);
     }
     for (const e of doc.entities) if (e.components.hidingSpot) this.spots.set(e.id, readComponent<HidingSpotData>('hidingSpot', e.components.hidingSpot));
+    for (const id of this.spots.keys()) this.spotReach = Math.max(this.spotReach, this.reachOf(id));
     // Measured now (while loading) rather than on the first creature's first walk.
     if (this.npcs.size) this.navigation();
 
@@ -701,22 +703,26 @@ export class GameWorld {
       getGlobal: (name) => this.globals.get(name) ?? null,
       setGlobal: (name, value) => void this.globals.set(name, value),
       say: (text, seconds, from) => this.say(text, seconds, from),
-      playSound: (sound, place, volume, owner) => {
+      playSound: (sound, place, volume, owner, loudness = 0) => {
         const at = place === null ? null : this.placePoint(place);
         if (place !== null && !at) return;
+        if (at && loudness > 0) this.noise(this.v3(at), loudness, place && typeof place === 'object' && this.spots.has(place.ref as string) ? (place.ref as string) : null);
         const follow = place && typeof place === 'object' && place.ref !== 'player' ? this.bodyOf(place.ref) : null;
         this.bus.emit({ type: 'sound', sound, at, follow, volume, loop: false, range: 2048, source: owner, time: this.time });
       },
-      noise: (place, range, owner) => {
+      noise: (place, loudness, owner) => {
         const at = this.placePoint(place);
         const ref = place && typeof place === 'object' ? place.ref : null;
-        if (at) this.noise(this.v3(at), range, ref && ref !== 'player' ? ref : this.spots.has(owner) ? owner : null);
+        if (at) this.noise(this.v3(at), loudness, ref && ref !== 'player' ? ref : this.spots.has(owner) ? owner : null);
       },
       hint: (place, spread, sure, as) => {
         const at = this.placePoint(place);
         if (at) this.hint(this.v3(at), spread, sure, as);
       },
-      stopSound: (target) => this.bus.emit({ type: 'sound.stop', source: target, time: this.time }),
+      stopSound: (target) => {
+        this.loudSounds.delete(target);
+        this.bus.emit({ type: 'sound.stop', source: target, time: this.time });
+      },
       playAnimation: (target, name, loop) => this.bus.emit({ type: 'anim', target, name, loop, time: this.time }),
       spawn: (template, place) => this.spawn(template, place),
       held: () => this.held?.id ?? null,
@@ -1119,6 +1125,7 @@ export class GameWorld {
       n++;
       this.events.drainCollisionEvents((h1, h2, started) => this.onContact(h1, h2, started));
       this.runner.tick(STEP);
+      if (this.loudSounds.size) this.callAgain();
     }
     return n;
   }
@@ -1138,6 +1145,13 @@ export class GameWorld {
   // ── Hiding spots ──
 
   private spots = new Map<string, HidingSpotData>();
+  /** The furthest any hiding spot can be used from. */
+  private spotReach = 0;
+
+  private reachOf(spot: string): number {
+    const r = Number(this.spots.get(spot)?.reach);
+    return r > 0 ? r : PLAYER.useReach;
+  }
   /**
    * The spot the player hides in: where they stood and looked when they got in, the spot's view, when they got
    * in, and when they started getting out (null: still in). `heldUntil`: pulled out, held still until then.
@@ -1245,14 +1259,14 @@ export class GameWorld {
   }
 
   /**
-   * A noise: creatures that hear it (by their Hearing; half as far through walls) may come to look. `source`: the
-   * hiding spot it came from, if any.
+   * A noise of some loudness: creatures that hear it (within Hears you up to × loudness; half as far through walls)
+   * may come to look. `source`: the hiding spot it came from, if any.
    */
-  noise(at: { x: number; y: number; z: number }, range: number, source: string | null = null): void {
-    if (!(range > 0)) return;
+  noise(at: { x: number; y: number; z: number }, loudness: number, source: string | null = null): void {
+    if (!(loudness > 0)) return;
     const spot = source && this.spots.has(source) ? source : null;
     if (spot) this.spotNoise.set(spot, this.time);
-    for (const n of this.npcs.values()) if (n.alive && n.hostile) n.mind?.hear(at, range, spot);
+    for (const n of this.npcs.values()) if (n.alive && n.hostile) n.mind?.hear(at, loudness, spot);
   }
 
   /**
@@ -1377,7 +1391,7 @@ export class GameWorld {
     const { id, targets, distance } = hit;
     if (this.held) return this.runner.usesHolding(targets, this.heldIds(), distance) ? '' : null;
     const spot = targets.find((t) => this.spots.has(t));
-    if (spot && distance <= PLAYER.useReach) return String(this.spots.get(spot)!.prompt ?? '');
+    if (spot && distance <= this.reachOf(spot)) return String(this.spots.get(spot)!.prompt ?? '');
     const prompt = this.runner.usePrompt(targets, distance);
     if (prompt !== null) return prompt;
     if (distance > PLAYER.useReach) return null;
@@ -1391,7 +1405,7 @@ export class GameWorld {
    * player's reach or the furthest a “When the player uses” stack reaches.
    */
   private useAim(): { id: string; targets: string[]; distance: number } | null {
-    const hit = this.player?.aimAt(Math.max(PLAYER.useReach, this.runner.useReach()), (c) => this.isHeld(c));
+    const hit = this.player?.aimAt(Math.max(PLAYER.useReach, this.runner.useReach(), this.spotReach), (c) => this.isHeld(c));
     const id = hit ? this.owner.get(hit.collider.handle) : undefined;
     if (!hit || !id || id === 'player') return null;
     const targets: string[] = [];
@@ -1672,7 +1686,7 @@ export class GameWorld {
     if (!hit) return;
     const { id, targets, distance } = hit;
     const spot = targets.find((t) => this.spots.has(t));
-    if (spot && distance <= PLAYER.useReach) return this.enterHiding(spot);
+    if (spot && distance <= this.reachOf(spot)) return this.enterHiding(spot);
     if (distance <= PLAYER.useReach) {
       if (this.grab(id)) return;
       // Friends follow (or stay) when used.
@@ -2161,7 +2175,10 @@ export class GameWorld {
         z.inside.delete(x);
         z.present.delete(x);
       }
-    for (const x of gone) this.bus.emit({ type: 'sound.stop', source: x, time: this.time });
+    for (const x of gone) {
+      this.loudSounds.delete(x);
+      this.bus.emit({ type: 'sound.stop', source: x, time: this.time });
+    }
     this.runner.removeOwners(gone);
   }
 
@@ -2192,6 +2209,23 @@ export class GameWorld {
     if (!s.sound || !s.playOnStart) return;
     const p = at ?? this.placePoint({ ref: id });
     this.bus.emit({ type: 'sound', sound: s.sound, at: p, follow: this.bodyOf(id), volume: s.volume, loop: s.loop, range: s.range, source: id, areaEffects: s.areaEffects !== false, time: this.time });
+    const loud = Number(s.loudness) || 0;
+    if (loud > 0) {
+      if (p) this.noise(this.v3(p), loud, this.spots.has(id) ? id : null);
+      if (s.loop) this.loudSounds.set(id, { loudness: loud, next: this.time + LOUD_REPEAT });
+    }
+  }
+
+  /** Looping sounds creatures can hear: they call again every few seconds while they play. */
+  private loudSounds = new Map<string, { loudness: number; next: number }>();
+
+  private callAgain(): void {
+    for (const [id, s] of this.loudSounds) {
+      if (this.time < s.next) continue;
+      s.next = this.time + LOUD_REPEAT;
+      const p = this.placePoint({ ref: id });
+      if (p) this.noise(this.v3(p), s.loudness, this.spots.has(id) ? id : null);
+    }
   }
 
   /** The moving body an object belongs to (itself, or the unit it is part of), if any. */

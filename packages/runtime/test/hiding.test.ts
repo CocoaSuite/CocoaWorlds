@@ -60,6 +60,20 @@ describe('hiding spots', () => {
     w.dispose();
   });
 
+  it('Reach sets how close the player must be to get in', () => {
+    const near = GameWorld.create(scene(floor(), spawn(), brush('locker', [-30, 0, -170], [30, 100, -140], { hidingSpot: { reach: 64 } })));
+    run(near, 0.1);
+    expect(near.usePrompt()).toBeNull();
+    near.dispose();
+    const far = GameWorld.create(scene(floor(), spawn(), brush('locker', [-30, 0, -170], [30, 100, -140], { hidingSpot: { reach: 200 } })));
+    run(far, 0.1);
+    expect(far.usePrompt()).toBe('Hide');
+    far.use();
+    run(far, 0.5);
+    expect(far.hidingIn).not.toBeNull();
+    far.dispose();
+  });
+
   it('the view is fixed in a locker, and turns only so far under a plank', () => {
     const w = GameWorld.create(scene(floor(), spawn(), locker()));
     run(w, 0.1);

@@ -123,9 +123,10 @@ export type Statement =
   /** Take health from a breakable object; at 0 it breaks. */
   | { id: string; kind: 'damage'; target: Ref; amount: Expr }
   /** Play a sound file (`assets/sounds/…`) once, at a place (heard in 3D) or everywhere (null). */
-  | { id: string; kind: 'playSound'; sound: string; at: Place | null; volume: Expr }
-  /** A noise hunting creatures may hear, carrying `range` units. */
-  | { id: string; kind: 'noise'; at: Place; range: Expr }
+  /** `loudness`: how loud for hunting creatures (0 or missing: they don't hear it). */
+  | { id: string; kind: 'playSound'; sound: string; at: Place | null; volume: Expr; loudness?: Expr }
+  /** A noise hunting creatures may hear: loudness 1 carries as far as their Hears you up to. */
+  | { id: string; kind: 'noise'; at: Place; loudness: Expr }
   /** The Director: tell hunting creatures the player is roughly at a place (give or take `spread`), this sure (0–1). */
   | { id: string; kind: 'hint'; at: Place; spread: Expr; sure: Expr; as: 'sound' | 'sighting' | 'event' }
   /** Stop the sounds an object is making (its Sound component and what its scripts played). */

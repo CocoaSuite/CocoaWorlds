@@ -134,9 +134,9 @@ export function newStatement(kind: StatementKind, opts: { target?: Ref; variable
     case 'damage':
       return { id: id(), kind, target, amount: num(10) };
     case 'playSound':
-      return { id: id(), kind, sound: '', at: { self: true }, volume: num(1) };
+      return { id: id(), kind, sound: '', at: { self: true }, volume: num(1), loudness: num(0) };
     case 'noise':
-      return { id: id(), kind, at: { self: true }, range: num(600) };
+      return { id: id(), kind, at: { self: true }, loudness: num(1) };
     case 'hint':
       return { id: id(), kind, at: { player: true }, spread: num(600), sure: num(0.5), as: 'event' };
     case 'stopSound':
