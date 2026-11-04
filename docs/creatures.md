@@ -74,7 +74,7 @@ over. Dragging the object in the editor shakes them too.
 | Eye colour, Pupil colour | White and black by default. |
 
 **The chicken** comes with them (Add › Chicken), and Googly eyes added to a chicken already in the scene start in
-the same place: over its own eyes, a little bigger, looking out to the sides and up, riding on its head.
+the same place: over its own eyes and about their size, looking out to the sides and up, riding on its head.
 
 In the editor, models stand still, so the eyes ride on the bone only in Play. They are lit like everything else: they catch the lights and the sky's reflections, cast small shadows, and
 have a glossy plastic cover. They follow their object in Play: a creature as it walks (and falls when it dies),

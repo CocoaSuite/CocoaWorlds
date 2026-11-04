@@ -1099,7 +1099,6 @@ export class ViewportEngine {
     let moved = false;
     for (const { m } of this.markers.values()) {
       if (!m.eyes || !m.group.visible) continue;
-      m.eyes.object.updateWorldMatrix(true, true);
       if (m.eyes.update(dt)) moved = true;
     }
     return moved;

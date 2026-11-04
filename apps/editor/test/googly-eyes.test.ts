@@ -192,6 +192,56 @@ describe('googly eyes on bones', () => {
     expect(most).toBeGreaterThan(0.1);
   });
 
+  it('keep their place when they ride after the scene was drawn and the creature moved (Play)', () => {
+    // As in Play: creature holder › scaled inner › (model, and the eyes in a holder that isn't auto-updated).
+    const scene = new THREE.Scene();
+    const creature = new THREE.Group();
+    const inner = new THREE.Group();
+    inner.scale.setScalar(0.5);
+    creature.add(inner);
+    scene.add(creature);
+    const m = model();
+    inner.add(m.object);
+    const holder = new THREE.Group();
+    holder.matrixAutoUpdate = false;
+    inner.add(holder);
+    const eyes = buildGooglyEyes(data({ offset: [0, 57, -16] }));
+    holder.add(eyes.object);
+    // A frame is drawn (every world matrix worked out), then the creature walks off and turns before the model's
+    // head is there to ride on.
+    scene.updateMatrixWorld(true);
+    creature.position.set(100, 0, -200);
+    creature.rotation.y = 2;
+    eyes.rideModel(m.object);
+    scene.updateMatrixWorld(true);
+    const eyesAt = eyes.object.getWorldPosition(new THREE.Vector3());
+    const want = new THREE.Vector3(0, 57, -16).multiplyScalar(0.5).applyEuler(creature.rotation).add(creature.position);
+    expect(eyesAt.distanceTo(want)).toBeLessThan(1e-3);
+    expect(new THREE.Vector3().setFromMatrixScale(eyes.object.matrixWorld).x).toBeCloseTo(0.5);
+  });
+
+  it('feel the bone move even when nothing else updated the world matrices', () => {
+    const m = model();
+    const scene = new THREE.Scene();
+    scene.add(m.object);
+    const eyes = buildGooglyEyes(data({ count: 'one', offset: [0, 57, -16] }));
+    scene.add(eyes.object);
+    scene.updateMatrixWorld(true);
+    eyes.rideModel(m.object);
+    scene.updateMatrixWorld(true);
+    eyes.update(1 / 60);
+    const rest = eyes.pupils()[0]!;
+    // The animation moves the neck; only the eyes' own update runs (the scene is drawn later).
+    let most = 0;
+    for (let i = 1; i <= 20; i++) {
+      m.neck.rotation.x = -Math.sin((i / 20) * Math.PI) * 1.2;
+      eyes.update(1 / 60);
+      const [x, y] = eyes.pupils()[0]!;
+      most = Math.max(most, Math.hypot(x - rest[0], y - rest[1]));
+    }
+    expect(most).toBeGreaterThan(0.1);
+  });
+
   it('stay on the object when told not to ride, or when the model has no such bone', () => {
     for (const over of [{ followBone: false }, { bone: 'tail' }]) {
       const m = model();
@@ -209,5 +259,7 @@ describe('googly eyes on bones', () => {
     expect(CHICKEN_EYES.bone).toBe('');
     expect(CHICKEN_EYES.count).toBe('two');
     expect(CHICKEN_EYES.splay).toBeGreaterThan(60);
+    // About the size of its own eyes (0.208 m across, 8.2 u), not much bigger.
+    expect(CHICKEN_EYES.size).toBeLessThan(9.5);
   });
 });

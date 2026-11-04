@@ -610,10 +610,7 @@ export class PlaySession {
     }
     for (const m of this.mixers) m.update(dt);
     // Googly eyes' pupils roll about as their objects moved this frame.
-    for (const { eyes } of this.eyes) {
-      eyes.object.updateWorldMatrix(true, true);
-      eyes.update(dt);
-    }
+    for (const { eyes } of this.eyes) eyes.update(dt);
     this.hear();
     // Sounds that travel with a moving object.
     for (const s of this.sounds) {

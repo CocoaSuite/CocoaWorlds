@@ -130,7 +130,7 @@ interface Pupil {
 
 export interface GooglyEyes {
   object: THREE.Group;
-  /** Move the pupils on by `dt` seconds (the eyes' world matrices must be current). True: they moved. */
+  /** Move the pupils on by `dt` seconds (where the eyes are is worked out afresh). True: they moved. */
   update(dt: number): boolean;
   /** Each pupil's place in its eye (x, y; the eye's radius is 1), as the shader draws it. */
   pupils(): [number, number][];
@@ -159,14 +159,14 @@ export function restsAt(off: THREE.Vector3, f: THREE.Vector3, reach: number): bo
 }
 
 /**
- * Googly eyes for the ready-made chicken (`chicken_rigged`, in metres): just outside its own eyes and a bit bigger,
+ * Googly eyes for the ready-made chicken (`chicken_rigged`, in metres): just outside its own eyes, about their size,
  * looking out to the sides and up as they do, riding on its head. (Measured from the eye whites in the model:
  * middles at ±0.187, 2.450, −0.685 m, 0.104 m across, facing 0.897, 0.400, −0.189.)
  */
 export const CHICKEN_EYES: Partial<GooglyEyesData> = {
   count: 'two',
-  size: 11.5,
-  spacing: 15.6,
+  size: 8.5,
+  spacing: 15.4,
   offset: [0, 96.6, -27],
   splay: 78,
   tilt: 24,
@@ -190,10 +190,28 @@ export function findBone(model: THREE.Object3D, name: string): THREE.Object3D | 
   return found;
 }
 
+/**
+ * Work out `o`'s world matrix afresh from its own and every parent's local matrix (and store them on the way).
+ * (`updateWorldMatrix(true, …)` isn't enough: an object that doesn't update its matrix by itself keeps a stale
+ * world matrix after its parents moved, until the whole scene is updated from the top.)
+ */
+export function freshWorld(o: THREE.Object3D): THREE.Matrix4 {
+  const chain: THREE.Object3D[] = [];
+  for (let x: THREE.Object3D | null = o; x; x = x.parent) chain.push(x);
+  for (let i = chain.length - 1; i >= 0; i--) {
+    const x = chain[i]!;
+    if (x.matrixAutoUpdate) x.updateMatrix();
+    if (!x.matrixWorldAutoUpdate) continue;
+    if (x.parent) x.matrixWorld.multiplyMatrices(x.parent.matrixWorld, x.matrix);
+    else x.matrixWorld.copy(x.matrix);
+  }
+  return o.matrixWorld;
+}
+
 /** Move `object` onto `bone`, keeping where it is in the world now, so the bone carries it from here on. */
 export function rideOn(object: THREE.Object3D, bone: THREE.Object3D): void {
-  object.updateWorldMatrix(true, false);
-  bone.updateWorldMatrix(true, false);
+  freshWorld(object);
+  freshWorld(bone);
   const local = bone.matrixWorld.clone().invert().multiply(object.matrixWorld);
   bone.add(object);
   object.matrixAutoUpdate = false;
@@ -243,7 +261,8 @@ export function buildGooglyEyes(data: GooglyEyesData): GooglyEyes {
     if (!(dt > 0)) return false;
     let moved = false;
     for (const p of pupils) {
-      const e = p.mesh.matrixWorld.elements;
+      // (Where the eye really is now: its object may ride on a bone that an animation just moved.)
+      const e = freshWorld(p.mesh).elements;
       _m.set(e[12]!, e[13]!, e[14]!);
       _x.set(e[0]!, e[1]!, e[2]!);
       _y.set(e[4]!, e[5]!, e[6]!);

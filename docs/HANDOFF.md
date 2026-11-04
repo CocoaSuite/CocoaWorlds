@@ -56,6 +56,17 @@ update), the eyes' object is re-parented onto the bone with the matrix that keep
 `markers.ts` model `.then`. Play: `attachModel`'s `.then` via `eyesById` (or at once in `eyesOn` if the model is
 already in). Checked in a browser with the real `chicken.glb` (peck and walk carry them).
 
+Fixed after: in Play the eyes floated in the sky, big, away from the chicken. Three r187's
+`updateWorldMatrix(true, …)` only recomputes an object whose own `matrixWorldNeedsUpdate` is set, so the eyes'
+`googly-holder` (`matrixAutoUpdate = false`) kept an identity world matrix once a frame had been drawn. When the
+model arrived (at once, since the editor had loaded it), the eyes were measured at the world origin at scale 1
+and pinned to the head with that offset. The pupils also read stale positions when on a bone. Now `freshWorld`
+composes the local matrices up the chain, in `rideOn` and in `update` (callers no longer update matrices).
+Tests: "keep their place when they ride after the scene was drawn…" and "feel the bone move…". Checked with a
+real `PlaySession` in Chromium (Player start, a turned chicken in a group, model loaded first): eyes within 3 u of
+the head. Chicken eyes made smaller (size 8.5, about its own eyes). Chickens added before keep the size they were
+saved with (11.5).
+
 Each eye is a shared shallow dome (`eyeGeometry`) with its own clear-coated `MeshPhysicalMaterial`. Its look is
 drawn in the fragment shader through `onBeforeCompile`: the white with cup shading, the pupil with its contact
 shadow and edge, the clear rim, and grey on the back. The pupil is one uniform per eye, so it stays lit,
