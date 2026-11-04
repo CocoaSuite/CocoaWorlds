@@ -83,3 +83,68 @@ objects carried by movers, still objects; updated in `tick`). Docs: `docs/creatu
 Not done: an e2e test (Electron wasn't available in that session). Next, if wanted: pupils that look at the
 player; eyes on brushes; a "Shake the eyes" block; eyes placed from a model's own eye slots automatically (any
 model, not only the chicken).
+
+### 5. Export materials for CocoaSurface (`.cocoamat`) and as bitmaps
+
+Status: **open, not started.** Requested 2026-11-04. CocoaSurface is another CocoaSuite app, in development. It
+must be able to use materials made in CocoaWorlds' Materials workspace, image and graph materials alike, by
+reading a CocoaSuite file natively. The file format is specified in **[cocoamat-format.md](cocoamat-format.md)**.
+That document is the contract with CocoaSurface: implement it exactly, and if the code and the document
+disagree, fix one of them in the same change.
+
+What to build:
+
+1. **Export as CocoaSuite material** (`.cocoamat`): in the Materials workspace, an **Export…** button (and the
+   material list's right-click menu) with *CocoaSuite material (.cocoamat)…*. It saves one file per material
+   through a native save dialog. With several materials picked, ask for a folder and write one file each,
+   named after the material. It writes the ZIP as spec section 1 (`mimetype` first and stored),
+   `material.json` (section 2), the maps (section 3), `preview.png` (the Materials preview sphere, 256 px), and
+   for graph materials `source/graph.cwmat` (with `withOverrides` applied) plus the images its Image nodes use.
+   - Graph materials: bake first if the latest changes aren't baked (`bakeNow` in
+     `renderer/materials/graphs.ts`), then use the baked PNGs (`assets/textures/generated/`).
+   - Image materials: re-encode their images as PNG at their own size (JPG and WebP are allowed in projects). Grey
+     maps become greyscale PNGs. Work out `tiling.worldSize` as in spec section 3.
+   - Plain-colour materials (no images) are valid with an empty `maps`.
+2. **Export as images**: *Images (PNG)…* in the same menu, as spec section 7: choose a folder, write
+   `<name>_<role>.png` plus `<name>.material.json`, with the options for size, normal green up or down, packed ORM,
+   and which maps.
+3. **A reader in code** (`packages/core`, no DOM): parse and validate a `.cocoamat` (`readCocoaMat(bytes) →
+   { manifest, maps } | error`). It's for the tests, and it's the model for CocoaSurface's native reader. Also
+   worth doing while there: *Import .cocoamat* into a project, since a round trip proves the format.
+   Import isn't required by this task. Ask before spending long on it.
+
+Where things go (suggested):
+- `packages/core/src/cocoamat.ts`: manifest types, `manifestOf(material, maps)`, validation, defaults. Pure,
+  tested in node.
+- The ZIP writer goes in the **main process** (`apps/editor/src/main/`). Node's `zlib.deflateRawSync` and
+  `zlib.crc32` (Node 22, in Electron 45) are enough for a store/deflate writer; keep it small, no new
+  dependency unless it's clearly better. Add typed IPC as for `writeGenerated` (`shared/api.ts`, `main.ts`,
+  `preload.ts`), with a save dialog and a folder dialog.
+- The renderer gathers the bytes (baked PNGs via `readAsset`, re-encoding via canvas as `pngBytes` does) and
+  sends them to main to write.
+- UI strings in English and Russian (`i18n.ts`), as everywhere.
+
+Settle these first (each is named in the spec):
+- **Normal map green direction**: the spec says CocoaWorlds bakes green *down* (spec section 4, with the evidence).
+  Prove it with a test (bake one bump, check green above its middle), then keep or flip the spec's default.
+  Bitmap export's "up" option flips green.
+- **Wear noise**: the shader subtracts it (white means wear later), but the node's hint says sooner. Pick one, and
+  make the shader, the hint and spec section 5 agree.
+- Image materials whose maps differ in size: the spec says resize to the largest. Check that's acceptable
+  with the user if it comes up.
+
+Tests to write:
+- Unit (`packages/core/test/cocoamat.test.ts`): a manifest from a full material and from a bare one, covering
+  defaults, clamping, map spaces and refusals (wrong mimetype, higher major version, missing map file, `..`
+  path).
+- Unit (main, `apps/editor/test/`): the ZIP writer. `mimetype` is first and stored, at offset 38. Read it back
+  with `extract-zip` (already a dependency) and with `readCocoaMat`.
+- Golden files: `docs/cocoamat-samples/` with a tiny hand-checked `.cocoamat` (a 4 × 4 graph material with
+  colour, normal and roughness). CocoaSurface's developers can use it as a test vector, and the reader test
+  reads it.
+- e2e (`test-e2e/material-export.test.mjs`): export a graph material and an image material, then read both
+  files back.
+
+Docs when done: `docs/materials.md` (an Export section), `FEATURE_STATUS.md`, `KNOWN_LIMITATIONS.md` (wear and
+bevel are only approximate outside CocoaWorlds; 8-bit maps), and set the spec's status line to "implemented in
+CocoaWorlds <version>".
