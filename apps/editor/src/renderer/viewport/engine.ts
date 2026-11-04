@@ -1094,6 +1094,17 @@ export class ViewportEngine {
     this.needsRender = true;
   }
 
+  /** Move the pupils of shown googly eyes on by `dt`. True: some moved (draw again). */
+  private tickEyes(dt: number): boolean {
+    let moved = false;
+    for (const { m } of this.markers.values()) {
+      if (!m.eyes || !m.group.visible) continue;
+      m.eyes.object.updateWorldMatrix(true, true);
+      if (m.eyes.update(dt)) moved = true;
+    }
+    return moved;
+  }
+
   dispose(): void {
     this.disposed = true;
     this.foliage.dispose();
@@ -1576,6 +1587,8 @@ export class ViewportEngine {
       }
       this.needsRender = true;
     }
+    // Googly eyes' pupils roll on (and the view keeps drawing while they do).
+    if (this.tickEyes(dt)) this.needsRender = true;
     // Scrolling materials (water, lava, conveyors) move.
     if (tickMaterials(now)) this.needsRender = true;
     if (!this.needsRender) return;

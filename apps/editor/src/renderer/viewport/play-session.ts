@@ -5,7 +5,7 @@
  * With a Player start in the scene you play as the player (first person); without one, Play is a physics
  * preview watched with the free camera.
  */
-import { SceneDoc, expandRepeats, readComponent, type ParticlesData, type ColliderData, type GameRules, type GameValue, type ModelData, type SceneFile, type SignData, type TerrainData } from '@cocoaworlds/core';
+import { SceneDoc, expandRepeats, readComponent, type ParticlesData, type ColliderData, type GameRules, type GameValue, type GooglyEyesData, type ModelData, type SceneFile, type SignData, type TerrainData } from '@cocoaworlds/core';
 import { buildMesh, isInvisibleMaterial, type Brush, type VoxelField, type WorldBrush } from '@cocoaworlds/geometry';
 import { GameWorld, initPhysics, type Hearing, type NavGrid, type BodyInfo, type ModelMesh, type SavedProgress, type Travel, type UiState, type PlayerInput, type PlayerStatus, type ScriptLog, type TriggerEvent } from '@cocoaworlds/runtime';
 import type { Problem, ScriptError } from '@cocoaworlds/scripting';
@@ -20,6 +20,7 @@ import { BATCH_MIN, ModelBatches, batchKey } from './model-batches';
 import { WEAR_RING, buildLevel } from './world-build';
 import { toGeometry } from './world-render';
 import { buildSign, type SignObject } from './sign';
+import { buildGooglyEyes, type GooglyEyes } from './googly-eyes';
 import { Effects } from './effects';
 import { EMITTER_DEFAULTS } from './particles';
 import { assetUrl } from '../assets';
@@ -246,6 +247,22 @@ export class PlaySession {
       this.signs.set(e.id, { holder, sign, data });
     }
 
+    // Googly eyes on what draws their object: a creature where it walks, or where the object stands (carried
+    // by the moving object it is inside). Objects that move by themselves got theirs with their body (addMover).
+    for (const e of doc.entities) {
+      if (!e.components.googlyEyes || bodies.has(e.id) || !shown(e.id)) continue;
+      const npc = this.npcViews.get(e.id);
+      if (npc) {
+        this.eyesOn(e.id, npc.inner, new THREE.Matrix4());
+        continue;
+      }
+      const world = new THREE.Matrix4().fromArray(doc.worldMatrix(e.id));
+      const body = this.world.bodyOf(e.id);
+      const mover = body ? this.movers.find((m) => m.id === body) : undefined;
+      if (mover) this.eyesOn(e.id, mover.obj, mover.base.clone().invert().multiply(world));
+      else this.eyesOn(e.id, this.group, world);
+    }
+
     this.info = {
       moving: bodies.size,
       triggers: this.world.stats.triggers,
@@ -277,6 +294,23 @@ export class PlaySession {
     this.world.bus.on('sound.stop', (e) => this.stopSounds(e.source));
     this.world.bus.on('break', (e) => void this.notes.push(`${this.info.names.get(e.target.split('#')[0]!) ?? 'Something'} broke`));
     this.world.bus.on('score', (e) => void this.notes.push(`Score: ${e.score} (${e.by > 0 ? '+' : ''}${e.by})`));
+  }
+
+  /** Googly eyes in the game, by the object (or body) they are on. */
+  private eyes: { id: string; eyes: GooglyEyes }[] = [];
+
+  /** Put an object's googly eyes (if it has any) on `parent`, placed by `local` in it. */
+  private eyesOn(id: string, parent: THREE.Object3D, local: THREE.Matrix4): void {
+    const data = this.doc.get(id.split('#')[0]!)?.components.googlyEyes;
+    if (!data) return;
+    const eyes = buildGooglyEyes(readComponent<GooglyEyesData>('googlyEyes', data));
+    const holder = new THREE.Group();
+    holder.name = 'googly-holder';
+    holder.matrixAutoUpdate = false;
+    holder.matrix.copy(local);
+    holder.add(eyes.object);
+    parent.add(holder);
+    this.eyes.push({ id, eyes });
   }
 
   private material: (name: string) => THREE.Material;
@@ -497,6 +531,7 @@ export class PlaySession {
         this.group.add(holder);
         this.movers.push({ id: b.id, obj: holder, base: holder.matrix.clone() });
         this.attachModel(holder, model, b.id);
+        this.eyesOn(b.id, holder, this.eyesIn(b.id, holder.matrix));
         return;
       }
       const c = shape.collider;
@@ -515,6 +550,13 @@ export class PlaySession {
     obj.castShadow = obj.receiveShadow = true;
     this.group.add(obj);
     this.movers.push({ id: b.id, obj, base });
+    if (b.kind !== 'brush' && b.kind !== 'unit') this.eyesOn(b.id, obj, this.eyesIn(b.id, base));
+  }
+
+  /** Where a body's own object sits in what draws the body (placed at `base`): exact for objects of the scene. */
+  private eyesIn(id: string, base: THREE.Matrix4): THREE.Matrix4 {
+    if (!this.doc.get(id)) return new THREE.Matrix4();
+    return base.clone().invert().multiply(new THREE.Matrix4().fromArray(this.doc.worldMatrix(id)));
   }
 
   /** Advance the game and move what moved. Returns what happened this frame. */
@@ -533,6 +575,8 @@ export class PlaySession {
         if (m.obj instanceof THREE.Mesh) m.obj.geometry.dispose();
       }
       this.movers = this.movers.filter((m) => !gone.has(m.id));
+      for (const x of this.eyes) if (gone.has(x.id)) x.eyes.dispose();
+      this.eyes = this.eyes.filter((x) => !gone.has(x.id));
     }
     const motion = new THREE.Matrix4();
     for (const m of this.movers) {
@@ -555,6 +599,11 @@ export class PlaySession {
       }
     }
     for (const m of this.mixers) m.update(dt);
+    // Googly eyes' pupils roll about as their objects moved this frame.
+    for (const { eyes } of this.eyes) {
+      eyes.object.updateWorldMatrix(true, true);
+      eyes.update(dt);
+    }
     this.hear();
     // Sounds that travel with a moving object.
     for (const s of this.sounds) {
@@ -760,8 +809,10 @@ export class PlaySession {
     this.listener?.removeFromParent();
     this.world.dispose();
     for (const s of this.signs.values()) s.sign.dispose();
+    for (const { eyes } of this.eyes) eyes.dispose();
     this.group.traverse((o) => {
-      if (o instanceof THREE.Mesh && o.name !== 'sign') o.geometry.dispose();
+      // (Googly eyes share one dome.)
+      if (o instanceof THREE.Mesh && o.name !== 'sign' && o.name !== 'googly-eye') o.geometry.dispose();
     });
     this.shapeMat.dispose();
   }

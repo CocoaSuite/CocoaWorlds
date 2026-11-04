@@ -35,6 +35,24 @@ export type SignData = {
   background: boolean;
   faceCamera: boolean;
 };
+/** Cartoon eyes on an object (component `googlyEyes`): drawn by a shader, the pupils roll about loose. */
+export type GooglyEyesData = {
+  count: 'two' | 'one';
+  /** Across one eye (u). */
+  size: number;
+  /** Between the two eyes' middles (u). */
+  spacing: number;
+  /** Where the middle between the eyes is, from the object's origin (u, the object's own axes; eyes look along −Z). */
+  offset: [number, number, number];
+  /** Each eye turned outwards by this much (°): 0 both look ahead, 90 they look to the sides (birds, fish). */
+  splay: number;
+  /** The pupil's size, as a part of the eye (0.2–0.8). */
+  pupil: number;
+  /** How freely the pupils roll: 0 stiff, 1 rattling about. */
+  loose: number;
+  white: string;
+  pupilColor: string;
+};
 export type Text = Record<Lang, string>;
 
 export type FieldType =
@@ -239,6 +257,37 @@ export const COMPONENTS: ComponentDef[] = [
         type: { kind: 'boolean' },
         default: false,
       },
+    ],
+  },
+  {
+    name: 'googlyEyes',
+    label: e('Googly eyes', 'Глаза-шевелилки'),
+    description: e(
+      'Stick-on cartoon eyes whose pupils roll about loose: they fall to the bottom, rattle when the object starts, stops or turns, and swing as it walks. On models, creatures and empty objects.',
+      'Наклеенные мультяшные глаза с болтающимися зрачками: зрачки падают вниз, трясутся, когда объект трогается, тормозит или поворачивается, и качаются при ходьбе. Для моделей, существ и пустых объектов.',
+    ),
+    appliesTo: 'point',
+    fields: [
+      {
+        key: 'count',
+        label: e('Eyes', 'Глаз'),
+        type: { kind: 'enum', options: [{ value: 'two', label: e('Two', 'Два') }, { value: 'one', label: e('One', 'Один') }] },
+        default: 'two',
+      },
+      { key: 'size', label: e('Size', 'Размер'), hint: e('Across one eye.', 'Поперёк одного глаза.'), type: { kind: 'number', min: 1, step: 1, unit: 'u' }, default: 12 },
+      { key: 'spacing', label: e('Apart', 'Расстояние'), hint: e('From the middle of one eye to the middle of the other.', 'От середины одного глаза до середины другого.'), type: { kind: 'number', min: 0, step: 1, unit: 'u' }, default: 14, when: { key: 'count', is: ['two'] } },
+      {
+        key: 'offset',
+        label: e('Position', 'Положение'),
+        hint: e('Where the eyes sit, from the object’s origin. They look the way the object faces (−Z).', 'Где глаза, от начала объекта. Они смотрят туда же, куда объект (−Z).'),
+        type: { kind: 'vec3', step: 1 },
+        default: [0, 0, 0],
+      },
+      { key: 'splay', label: e('Turned out', 'Развёрнуты'), hint: e('0: both look ahead. 90: they look to the sides, like a bird’s.', '0 — оба смотрят вперёд, 90 — в стороны, как у птицы.'), type: { kind: 'number', min: 0, max: 90, step: 5, unit: '°' }, default: 0, when: { key: 'count', is: ['two'] } },
+      { key: 'pupil', label: e('Pupil size', 'Размер зрачка'), type: { kind: 'number', min: 0.2, max: 0.8, step: 0.05 }, default: 0.5, group: e('Look', 'Вид') },
+      { key: 'loose', label: e('Loose', 'Болтаются'), hint: e('0: the pupils barely move. 1: they rattle about at every bump.', '0 — зрачки почти не двигаются, 1 — трясутся от каждого толчка.'), type: { kind: 'number', min: 0, max: 1, step: 0.05 }, default: 0.6, group: e('Look', 'Вид') },
+      { key: 'white', label: e('Eye colour', 'Цвет глаза'), type: { kind: 'color' }, default: '#ffffff', group: e('Look', 'Вид') },
+      { key: 'pupilColor', label: e('Pupil colour', 'Цвет зрачка'), type: { kind: 'color' }, default: '#141414', group: e('Look', 'Вид') },
     ],
   },
   {

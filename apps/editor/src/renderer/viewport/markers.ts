@@ -2,7 +2,7 @@
  * Editor-only visuals for entities that have no geometry of their own yet (spawn points, lights, empties).
  * Each marker has an invisible pick volume so it can be clicked.
  */
-import { readComponent, type EntityData, type ModelData, type SignData } from '@cocoaworlds/core';
+import { readComponent, type EntityData, type GooglyEyesData, type ModelData, type SignData } from '@cocoaworlds/core';
 import { modelInstance, onModelMaterialChange } from './models';
 
 /** Called when a marker's model has loaded (the view needs a redraw). */
@@ -14,6 +14,7 @@ export function onMarkerLoaded(fn: () => void): void {
 }
 import * as THREE from 'three';
 import { buildSign } from './sign';
+import { buildGooglyEyes, type GooglyEyes } from './googly-eyes';
 
 export const COLORS = {
   idle: 0xb8b8b8,
@@ -30,6 +31,8 @@ export interface Marker {
   baseColor: number;
   /** A box round the whole model, shown only while selected (models are too busy to outline). */
   box?: THREE.LineSegments;
+  /** Googly eyes on it (their pupils are moved on every frame by the view). */
+  eyes?: GooglyEyes;
 }
 
 const pickMat = new THREE.MeshBasicMaterial({ visible: false });
@@ -226,7 +229,12 @@ export function buildMarker(e: EntityData): Marker {
   for (const l of lines) group.add(l);
   pick.userData.entityId = e.id;
   group.add(pick);
-  return { group, lines, pick, baseColor, box };
+  let eyes: GooglyEyes | undefined;
+  if (e.components.googlyEyes) {
+    eyes = buildGooglyEyes(readComponent<GooglyEyesData>('googlyEyes', e.components.googlyEyes));
+    group.add(eyes.object);
+  }
+  return { group, lines, pick, baseColor, box, eyes };
 }
 
 /** The 12 edges of a box of `size` round `center` (a hair bigger, so it isn't hidden in the model's surface). */
@@ -244,8 +252,10 @@ export function setMarkerSelected(m: Marker, selected: boolean): void {
 export function disposeMarker(m: Marker): void {
   m.group.userData.disposed = true;
   (m.group.userData.dispose as (() => void) | undefined)?.();
+  m.eyes?.dispose();
   m.group.traverse((o) => {
-    if (o.name === 'sign') return;
+    // (Signs dispose of themselves; googly eyes share one dome and dispose of their own materials.)
+    if (o.name === 'sign' || o.name === 'googly-eye') return;
     // (Model meshes share geometry with the loaded file; only the clone's tree is dropped.)
     for (let x: THREE.Object3D | null = o; x; x = x.parent) if (x.name === 'model') return;
     if (o instanceof THREE.Mesh || o instanceof THREE.LineSegments) {
@@ -258,5 +268,5 @@ export function disposeMarker(m: Marker): void {
 
 /** Stable key for "does this marker need rebuilding" (shape-affecting data only). */
 export function markerKey(e: EntityData): string {
-  return JSON.stringify([e.components.light ?? null, !!e.components.playerSpawn, e.components.sign ?? null, e.components.model ?? null, (e.components.npc as { side?: string } | undefined)?.side ?? null, e.components.reflectionProbe ?? null]);
+  return JSON.stringify([e.components.light ?? null, !!e.components.playerSpawn, e.components.sign ?? null, e.components.model ?? null, (e.components.npc as { side?: string } | undefined)?.side ?? null, e.components.reflectionProbe ?? null, e.components.googlyEyes ?? null]);
 }

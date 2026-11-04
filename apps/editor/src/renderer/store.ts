@@ -1200,6 +1200,8 @@ export const useEditor = create<State & Actions>()((set, get) => ({
     if (!doc || !e || e.components[name]) return;
     const label = componentDef(name)?.label.en ?? name;
     const data = name === 'script' ? emptyScript() : defaultComponent(name);
+    // Googly eyes on a plain creature figure: on the front of its head (a model's head is the user's to find).
+    if (name === 'googlyEyes' && e.components.npc && !(e.components.model as { model?: string } | undefined)?.model) Object.assign(data, { offset: [0, 60, -17], size: 11, spacing: 13 });
     get().execute(setComponentCmd(doc, id, name, data as never, `Add ${label}`));
     if (name === 'script') set({ bottomTab: 'script', showBottom: true });
   },

@@ -52,6 +52,32 @@ Under **Creatures**:
 The value **distance from … to …** measures how far apart two things are (objects, creatures, the player), for
 conditions such as “the player is within 300 of the nest”.
 
+## Googly eyes
+
+A **Googly eyes** component (Add component › Googly eyes) sticks a pair of cartoon eyes on any point object: a
+model, a creature, an empty object. Their pupils roll about loose. They fall to the bottom of the eye, rattle
+when the object starts, stops, turns or bounces, swing as a creature walks, and slide round the rim as it tips
+over. Dragging the object in the editor shakes them too.
+
+| Setting | What it does |
+|---|---|
+| Eyes | Two, or one big one. |
+| Size | Across one eye (12 u by default). |
+| Apart | From the middle of one eye to the middle of the other. |
+| Position | Where the eyes sit, from the object's origin, in its own axes. They look the way the object faces (−Z). On a plain creature figure they start on the front of its head; on a model, move them to its face. |
+| Turned out | 0: both look ahead. Up to 90: they look to the sides, like a bird's or a fish's. |
+| Pupil size | The pupil as a part of the eye. |
+| Loose | 0: the pupils barely move. 1: they rattle about at every bump. |
+| Eye colour, Pupil colour | White and black by default. |
+
+They are lit like everything else: they catch the lights and the sky's reflections, cast small shadows, and
+have a glossy plastic cover. They follow their object in Play: a creature as it walks (and falls when it dies),
+a physics object as it tumbles, and an object carried by a moving one (a train, a lift).
+
+How it works: each eye is a shallow dome drawn by one shader on a lit physical material, with the white, the
+pupil, its shadow and the clear rim all drawn in the shader. The pupil's place comes from a small simulation
+each frame (gravity, the eye's own acceleration, bouncing off the rim) in `viewport/googly-eyes.ts`.
+
 ## Finding the way (navigation)
 
 When play starts, the game measures where creatures can walk. It probes the level straight down on a 16 u

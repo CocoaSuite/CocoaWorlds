@@ -42,3 +42,26 @@ Also fixed: the `components.test.ts` "offers only what fits" failure (the list w
 
 Next, if wanted: a Sound area button in the Tools bar (like Trigger zone) so the brush gets the zone look on
 creation; opt-out for Play sound blocks; custom echo settings; a "Change background sound" block.
+
+### 4. Googly eyes (shader-based)
+
+Status: done. A **Googly eyes** component (`googlyEyes`, point objects only: models, creatures, empties): one or
+two eyes, size, apart, position (object space, looking along −Z), turned out (splay), pupil size, looseness,
+colours. On a plain creature figure, adding it places the eyes on the front of the head (`store.ts`
+`addComponent`).
+
+Each eye is a shared shallow dome (`eyeGeometry`) with its own clear-coated `MeshPhysicalMaterial`. Its look is
+drawn in the fragment shader through `onBeforeCompile`: the white with cup shading, the pupil with its contact
+shadow and edge, the clear rim, and grey on the back. The pupil is one uniform per eye, so it stays lit,
+shadowed, fogged and probe-reflected like other materials. The pupil's place comes from a per-frame simulation
+in the eye's plane: gravity minus the eye's smoothed acceleration, damping, rim bounce and rub. The pupil keeps a
+world offset, so it stays put while the eye spins. Pupils sleep when at rest, and a teleport isn't a shove.
+
+Code: `packages/core/src/components.ts` (`googlyEyes`, `GooglyEyesData`), `viewport/googly-eyes.ts`,
+`viewport/markers.ts` (editor; in `markerKey`), `viewport/engine.ts` (`tickEyes` keeps the view drawing only while
+pupils move), `viewport/play-session.ts` (`eyesOn`: creatures' `inner`, point bodies and copies in `addMover`,
+objects carried by movers, still objects; updated in `tick`). Docs: `docs/creatures.md` (Googly eyes),
+`FEATURE_STATUS.md`, `KNOWN_LIMITATIONS.md`. Tests: `apps/editor/test/googly-eyes.test.ts`.
+
+Not done: an e2e test (Electron wasn't available in that session). Next, if wanted: eyes that follow a model's
+head bone; pupils that look at the player; eyes on brushes; a "Shake the eyes" block.

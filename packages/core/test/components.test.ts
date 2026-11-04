@@ -27,8 +27,8 @@ describe('component registry', () => {
     expect(names({ ...brush, soundArea: {} }, true)).toEqual(['breakable', 'charger', 'scatter', 'script', 'sound', 'trigger']);
     expect(names({ ...brush, rigidBody: {} }, true)).toEqual(['breakable', 'charger', 'scatter', 'script', 'sound']);
     expect(names({ ...brush, water: {} }, true)).toEqual(['breakable', 'charger', 'scatter', 'script', 'sound']);
-    expect(names({}, false)).toEqual(['breakable', 'charger', 'collider', 'landmark', 'light', 'model', 'npc', 'particles', 'pathPoint', 'plant', 'playerSpawn', 'reflectionProbe', 'repeat', 'rigidBody', 'script', 'sign', 'sound', 'train']);
-    expect(names({ light: {} }, false)).toEqual(['breakable', 'charger', 'collider', 'landmark', 'model', 'npc', 'particles', 'pathPoint', 'plant', 'playerSpawn', 'reflectionProbe', 'repeat', 'rigidBody', 'script', 'sign', 'sound', 'train']);
+    expect(names({}, false)).toEqual(['breakable', 'charger', 'collider', 'googlyEyes', 'landmark', 'light', 'model', 'npc', 'particles', 'pathPoint', 'plant', 'playerSpawn', 'reflectionProbe', 'repeat', 'rigidBody', 'script', 'sign', 'sound', 'train']);
+    expect(names({ light: {} }, false)).toEqual(['breakable', 'charger', 'collider', 'googlyEyes', 'landmark', 'model', 'npc', 'particles', 'pathPoint', 'plant', 'playerSpawn', 'reflectionProbe', 'repeat', 'rigidBody', 'script', 'sign', 'sound', 'train']);
     expect(componentDef('group')?.internal).toBe(true);
   });
 });
