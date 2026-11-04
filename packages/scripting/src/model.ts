@@ -14,7 +14,7 @@ export type Ref = { self: true } | { entity: string } | { other: true } | { play
 export type Place = Ref | { aim: true };
 
 /** Statement and event fields that hold a value block (for walking and editing scripts). */
-export const EXPR_KEYS = ['distance', 'seconds', 'degrees', 'text', 'value', 'by', 'condition', 'times', 'amount', 'factor', 'strength', 'gap', 'volume'] as const;
+export const EXPR_KEYS = ['distance', 'seconds', 'degrees', 'text', 'value', 'by', 'condition', 'times', 'amount', 'factor', 'strength', 'gap', 'volume', 'loudness', 'spread', 'sure'] as const;
 
 export type Expr =
   | { id: string; kind: 'number'; value: number }
