@@ -151,3 +151,39 @@ export function skyAmbient(settings: SkySettings | undefined): { above: THREE.Co
   const above = new THREE.Color(s.top).lerp(new THREE.Color(s.horizon), 0.45);
   return { above, below: new THREE.Color(s.ground).lerp(above, 0.25), fog: new THREE.Color(s.horizon) };
 }
+
+/** The sky as an equirectangular environment texture (PNG, 2:1), for reflections and lighting elsewhere. */
+export async function skyEnvPng(settings: SkySettings | undefined, sun: { dir: THREE.Vector3; colour: THREE.Color } | null, width = 2048): Promise<Uint8Array> {
+  const r = new THREE.WebGLRenderer({ preserveDrawingBuffer: true });
+  const mat = skyMaterial();
+  const cube = new THREE.WebGLCubeRenderTarget(width / 2, { type: THREE.HalfFloatType });
+  const quad = new THREE.ShaderMaterial({
+    uniforms: { env: { value: cube.texture } },
+    vertexShader: 'varying vec2 vUv; void main() { vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }',
+    fragmentShader: `
+      uniform samplerCube env; varying vec2 vUv;
+      void main() {
+        float lon = (vUv.x - 0.5) * 6.2831853, lat = (vUv.y - 0.5) * 3.1415927;
+        gl_FragColor = vec4(textureCube(env, vec3(-sin(lon) * cos(lat), sin(lat), -cos(lon) * cos(lat))).rgb, 1.0);
+        #include <colorspace_fragment>
+      }`,
+  });
+  try {
+    applySky(mat, settings, sun);
+    const scene = new THREE.Scene();
+    scene.add(skyMesh(mat));
+    new THREE.CubeCamera(0.1, 5000, cube).update(r, scene);
+    r.setSize(width, width / 2, false);
+    const flat = new THREE.Scene();
+    flat.add(new THREE.Mesh(new THREE.PlaneGeometry(2, 2), quad));
+    r.render(flat, new THREE.Camera());
+    const blob = await new Promise<Blob | null>((ok) => r.domElement.toBlob(ok, 'image/png'));
+    if (!blob) throw new Error('The sky could not be drawn.');
+    return new Uint8Array(await blob.arrayBuffer());
+  } finally {
+    mat.dispose();
+    quad.dispose();
+    cube.dispose();
+    r.dispose();
+  }
+}
