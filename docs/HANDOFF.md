@@ -146,3 +146,18 @@ Waiting on: the user's mascot model (robot in a chicken costume) and its animati
 
 Next: the heartbeat minigame (likely a reusable timing-bar screen element with blocks for hits, misses and the
 end; a miss can be “Make a noise at the hiding spot”, which a listening Hunter acts on).
+
+### 7. Carried floodlights: lights riding objects, light and glow blocks
+
+Status: done. Point objects (lights, models, sounds, particles) inside a physics object ride with its body in Play
+(`unitOf` set after the bodies are made, `world.ts`); a light under a physics object never becomes a unit of its
+own. Lights live in `GameWorld.lights` (on, brightness, reach, cone, colour, each a `Fade`); Turn on/off and
+Show/Hide on a light switch only the light. Light component: `on` (On at start). Blocks: `setLight` (prop,
+value, seconds), `setGlow` (strength, seconds; `GameWorld.glowing()`), value `lightOn`; the checker says when the
+target isn't a light. Drawing: `SceneLighting.lights` and `drive` (off is intensity 0, so shaders don't
+recompile), `PlaySession.driveLights` (called after `lighting.update` in `engine.ts` and `runner.ts`) and
+`updateGlow` (clones a model's glowing materials once, keeps their own glow in `userData.glow`). Tests:
+`packages/runtime/test/lights.test.ts`, `apps/editor/test/scene-lighting.test.ts`.
+
+Next, if wanted: an e2e test with a real carried floodlight; copies keeping their lights; brushes riding too.
+

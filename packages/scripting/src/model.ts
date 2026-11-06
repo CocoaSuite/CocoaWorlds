@@ -53,7 +53,11 @@ export type Expr =
   /** How far apart two things are (objects, creatures, the player), in units. */
   | { id: string; kind: 'distance'; from: Ref; to: Ref }
   /** Whether the player holds this object (or a copy of it); null: holds anything at all. */
-  | { id: string; kind: 'holds'; what: Ref | null };
+  | { id: string; kind: 'holds'; what: Ref | null }
+  /** Whether a light is on. */
+  | { id: string; kind: 'lightOn'; target: Ref };
+
+export type LightProp = 'intensity' | 'range' | 'angle' | 'color';
 
 export type Direction = 'up' | 'down' | 'north' | 'south' | 'east' | 'west';
 export type Axis = 'up' | 'north' | 'east';
@@ -133,6 +137,10 @@ export type Statement =
   | { id: string; kind: 'stopSound'; target: Ref }
   /** Play one of a model's animations by name, looping or once. */
   | { id: string; kind: 'playAnim'; target: Ref; name: string; loop: boolean }
+  /** Change a light's brightness, reach, cone or colour, over some seconds (0: at once). */
+  | { id: string; kind: 'setLight'; target: Ref; prop: LightProp; value: Expr; seconds: Expr }
+  /** How bright the glowing parts of a model are (0: no glow), over some seconds. */
+  | { id: string; kind: 'setGlow'; target: Ref; strength: Expr; seconds: Expr }
   /** Show or hide a whole screen of the screen UI (by id). */
   | { id: string; kind: 'showScreen' | 'hideScreen' | 'toggleScreen'; screen: string }
   /** Add a row to a list, remove the first row with that text, or empty it. */

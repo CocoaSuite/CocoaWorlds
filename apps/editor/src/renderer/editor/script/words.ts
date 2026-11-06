@@ -159,6 +159,14 @@ const W = {
   variableName: ['variable name', 'имя переменной'],
   forWord: ['for', 'на'],
   setText: ['Set the text of', 'Задать текст'],
+  setLight: ['Set', 'Задать'],
+  ofLight: ['of the light', 'у света'],
+  intensity: ['brightness', 'яркость'],
+  range: ['reach', 'дальность'],
+  angle: ['cone', 'конус'],
+  color: ['colour', 'цвет'],
+  setGlow: ['Set the glow of', 'Задать свечение'],
+  isOn: ['is on', 'включён'],
   gameValue: ['game', 'игра'],
   health: ['the player’s health', 'здоровье игрока'],
   armour: ['the player’s armour', 'броня игрока'],
@@ -297,6 +305,8 @@ const PALETTE_STMT: Record<StatementKind, Pair> = {
   place: ['Put an object at a spot', 'Поставить объект на место'],
   pickUp: ['The player picks up an object', 'Игрок берёт объект'],
   drop: ['The player drops what they hold', 'Игрок отпускает то, что держит'],
+  setLight: ['Change a light (brightness, colour …)', 'Изменить свет (яркость, цвет …)'],
+  setGlow: ['Set the glow of a model', 'Задать свечение модели'],
 };
 export const statementName = (k: StatementKind) => pick(PALETTE_STMT[k]);
 
@@ -308,7 +318,7 @@ export const STATEMENT_GROUPS: { title: Pair; kinds: StatementKind[] }[] = [
   { title: ['Screen and signs', 'Экран и таблички'], kinds: ['say', 'showScreen', 'hideScreen', 'toggleScreen', 'showUi', 'hideUi', 'setUiText', 'addRow', 'removeRow', 'clearList', 'setText'] },
   { title: ['Inventory', 'Инвентарь'], kinds: ['giveItem', 'takeItem'] },
   { title: ['Sound', 'Звук'], kinds: ['playSound', 'stopSound'] },
-  { title: ['Models', 'Модели'], kinds: ['playAnim'] },
+  { title: ['Lights and models', 'Свет и модели'], kinds: ['setLight', 'setGlow', 'playAnim'] },
   { title: ['Control', 'Управление'], kinds: ['wait', 'if', 'repeat', 'while', 'forever', 'stop'] },
   { title: ['Variables', 'Переменные'], kinds: ['set', 'change', 'forgetProgress'] },
 ];
@@ -340,13 +350,14 @@ const VALUE: Record<ExprKind, Pair> = {
   distance: ['Distance between two things', 'Расстояние между двумя объектами'],
   holds: ['The player holds …', 'Игрок держит …'],
   hiding: ['The player is hiding', 'Игрок прячется'],
+  lightOn: ['A light is on', 'Свет включён'],
 };
 export const valueName = (k: ExprKind) => pick(VALUE[k]);
 
 /** Which value blocks fit a slot of a given type. */
 export const VALUES_FOR: Record<'number' | 'boolean' | 'text' | 'any', ExprKind[]> = {
   number: ['number', 'variable', 'varOf', 'maths', 'random', 'distance', 'time', 'clock', 'health', 'armour', 'score', 'itemCount'],
-  boolean: ['boolean', 'inside', 'holds', 'hiding', 'variable', 'varOf', 'compare', 'logic', 'not'],
+  boolean: ['boolean', 'inside', 'holds', 'hiding', 'lightOn', 'variable', 'varOf', 'compare', 'logic', 'not'],
   text: ['text', 'variable', 'varOf', 'join', 'number', 'object', 'score', 'itemCount', 'selectedItem', 'pickedRow'],
-  any: ['number', 'text', 'boolean', 'variable', 'varOf', 'maths', 'compare', 'logic', 'not', 'inside', 'holds', 'hiding', 'random', 'distance', 'join', 'time', 'clock', 'health', 'armour', 'score', 'itemCount', 'selectedItem', 'pickedRow', 'object', 'copy'],
+  any: ['number', 'text', 'boolean', 'variable', 'varOf', 'maths', 'compare', 'logic', 'not', 'inside', 'holds', 'hiding', 'lightOn', 'random', 'distance', 'join', 'time', 'clock', 'health', 'armour', 'score', 'itemCount', 'selectedItem', 'pickedRow', 'object', 'copy'],
 };

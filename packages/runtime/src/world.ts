@@ -162,6 +162,26 @@ interface Tween {
 }
 
 type Q3 = [number, number, number];
+type LightData = { color: string; intensity: number; range: number; angle: number; on?: boolean };
+/** A value going from one setting to another between two times (from null: from how it was made). */
+type Fade = { from: number[] | null; to: number[]; t0: number; t1: number };
+interface LiveLight {
+  on: boolean;
+  intensity: Fade;
+  range: Fade;
+  angle: Fade;
+  color: Fade;
+}
+const fadeK = (f: Fade, t: number) => (t >= f.t1 ? 1 : Math.max(0, (t - f.t0) / (f.t1 - f.t0)));
+const fadeAt = (f: Fade, t: number): number[] => {
+  const k = fadeK(f, t);
+  return f.to.map((v, i) => (f.from ? f.from[i]! + (v - f.from[i]!) * k : v));
+};
+const isHex = (c: string) => /^#[0-9a-f]{6}$/i.test(c.trim());
+const rgbOf = (c: string): number[] => {
+  const n = parseInt(c.trim().slice(1), 16) || 0;
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255].map((v) => v / 255);
+};
 type Quat = { x: number; y: number; z: number; w: number };
 
 /** The heaviest thing the player can pick up (kg). */
@@ -475,6 +495,10 @@ export class GameWorld {
   private nextShotAt = 0;
   private fireHeld = false;
   private fireQueued = false;
+  /** Lights while playing: on or off, and their settings (scripts change them, maybe over some seconds). */
+  private lights = new Map<string, LiveLight>();
+  /** Models' glow set by scripts (from null: from how the model was made). */
+  private glows = new Map<string, Fade>();
   /** Objects scripts turned on (true) or off (false), by body. */
   private switched = new Map<string, boolean>();
   private pathPoints = new Map<string, { p: [number, number, number]; data: PathPointData }>();
@@ -523,7 +547,13 @@ export class GameWorld {
     // Scripts (decision S1): every visible object with a Script component.
     const objects = new Map(doc.entities.map((e) => [e.id, { name: e.name, isZone: !!e.components.trigger }]));
     for (const e of doc.entities) if (e.components.sign) this.signs.set(e.id, String((e.components.sign as { text?: unknown }).text ?? ''));
-    const info = { objects, rules, globals: values.map((v) => ({ name: v.name, type: v.type })), signs: new Set(this.signs.keys()) };
+    for (const e of doc.entities) {
+      if (!e.components.light || !shown(e)) continue;
+      const l = readComponent<LightData>('light', e.components.light);
+      const still = (v: number[]): Fade => ({ from: v, to: v, t0: 0, t1: 0 });
+      this.lights.set(e.id, { on: l.on !== false, intensity: still([l.intensity]), range: still([l.range]), angle: still([l.angle]), color: still(rgbOf(l.color)) });
+    }
+    const info = { objects, rules, globals: values.map((v) => ({ name: v.name, type: v.type })), signs: new Set(this.signs.keys()), lights: new Set(this.lights.keys()) };
     this.scriptInfo = info;
     const programs: Program[] = [];
     const scripts: [string, Script][] = [];
@@ -558,7 +588,12 @@ export class GameWorld {
     for (const id of breakables) this.breakHealth.set(id, readComponent<BreakableData>('breakable', doc.get(id)!.components.breakable).health);
     // (Trains too: they move as one along their path.)
     const trainIds = doc.entities.filter((e) => e.components.train && shown(e)).map((e) => e.id);
-    const targets = [...new Set([...scriptTargets(scripts), ...breakables, ...trainIds])].filter((id) => doc.get(id) && !own(doc.get(id)!));
+    // (A light inside a physics object rides with it rather than becoming a unit of its own.)
+    const inBody = (id: string) => {
+      for (let p = doc.get(id)?.parent; p; p = doc.get(p)?.parent ?? null) if (doc.get(p)?.components.rigidBody) return true;
+      return false;
+    };
+    const targets = [...new Set([...scriptTargets(scripts), ...breakables, ...trainIds])].filter((id) => doc.get(id) && !own(doc.get(id)!) && !(doc.get(id)!.components.light && inBody(id)));
     const unitRoots = targets.filter((id) => !targets.some((o) => o !== id && doc.isAncestor(o, id)));
     const unitOf = this.unitOf;
     for (const root of unitRoots) for (const e of doc.subtree(root)) if (!own(e) || e.id === root) unitOf.set(e.id, root);
@@ -614,6 +649,16 @@ export class GameWorld {
       }
     }
     this.addLevel(level, conveyors);
+    // Point objects inside a physics object (a light, a model, an emitter) ride with it.
+    for (const e of doc.entities) {
+      if (unitOf.has(e.id) || this.bodies.has(e.id) || own(e) || e.components.brush) continue;
+      for (let p = e.parent; p; p = doc.get(p)?.parent ?? null) {
+        const b = this.bodies.get(p);
+        if (!b) continue;
+        if (b.info.kind === 'point' || b.info.kind === 'brush') unitOf.set(e.id, p);
+        break;
+      }
+    }
     for (const b of level) {
       const bb = bounds(b.brush);
       if (bb) this.grow(bb);
@@ -758,6 +803,17 @@ export class GameWorld {
       giveItem: (name, amount) => this.giveItem(name, amount),
       itemCount: (name) => this.inventory.get(name) ?? 0,
       selectedItem: () => this.selectedItem(),
+      setLight: (target, prop, value, seconds) => {
+        const l = this.lights.get(target);
+        if (!l) return;
+        const to = prop === 'color' ? (isHex(String(value)) ? rgbOf(String(value)) : null) : [Math.max(0, Number(value) || 0)];
+        if (to) l[prop] = { from: fadeAt(l[prop], this.time), to, t0: this.time, t1: this.time + seconds };
+      },
+      setGlow: (target, strength, seconds) => {
+        const g = this.glows.get(target);
+        this.glows.set(target, { from: g ? (g.from === null && this.time < g.t1 ? null : fadeAt(g, this.time)) : null, to: [strength], t0: this.time, t1: this.time + seconds });
+      },
+      lightOn: (target) => this.lights.get(target)?.on ?? false,
       setText: (target, text) => {
         if (!this.signs.has(target) || this.signs.get(target) === text) return;
         this.signs.set(target, text);
@@ -1905,6 +1961,11 @@ export class GameWorld {
       return null;
     }
     if (name === 'damage') return this.damage(target, typeof args[0] === 'number' ? args[0] : 0), null;
+    const light = this.lights.get(target);
+    if (light && (name === 'turnOn' || name === 'turnOff' || name === 'show' || name === 'hide')) {
+      light.on = name === 'turnOn' || name === 'show';
+      return null;
+    }
     const b = this.bodies.get(target) ?? this.bodies.get(this.unitOf.get(target) ?? '');
     if (!b) throw new Error(`${label} can't be moved or switched by scripts here.`);
     target = b.info.id;
@@ -2399,6 +2460,19 @@ export class GameWorld {
 
   scriptVariables(owner: string) {
     return this.runner.variables(owner);
+  }
+
+  /** A light as it is now (null: not a light in this game). */
+  lightOf(id: string): { on: boolean; intensity: number; range: number; angle: number; color: number[] } | null {
+    const l = this.lights.get(id);
+    if (!l) return null;
+    const t = this.time;
+    return { on: l.on, intensity: fadeAt(l.intensity, t)[0]!, range: fadeAt(l.range, t)[0]!, angle: fadeAt(l.angle, t)[0]!, color: fadeAt(l.color, t) };
+  }
+
+  /** Models whose glow scripts set: the glow from (null: as made), to, and how far along (0–1). */
+  glowing(): [id: string, from: number | null, to: number, k: number][] {
+    return [...this.glows].map(([id, g]) => [id, g.from?.[0] ?? null, g.to[0]!, fadeK(g, this.time)]);
   }
 
   /** Whether a script last turned an object (its body) on or off; undefined if none has. */

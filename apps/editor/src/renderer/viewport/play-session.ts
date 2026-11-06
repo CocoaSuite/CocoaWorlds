@@ -26,6 +26,7 @@ import { EMITTER_DEFAULTS } from './particles';
 import { assetUrl } from '../assets';
 import { modelGeometry, modelInstance, type ModelInstance } from './models';
 import { SoundStage, ramp } from './area-sound';
+import type { SceneLighting } from './scene-lighting';
 
 export interface PlayInfo {
   moving: number;
@@ -171,7 +172,7 @@ export class PlaySession {
       const mover = this.world.bodyOf(e.id);
       // Batched: still for good. No body, or a fixed one that can't break and that no script names (scripts can
       // hide or show it); everything else is drawn by itself so it can change.
-      const fixed = !mover || (!bodies.has(mover) && !e.components.breakable && !scripted.includes(e.id));
+      const fixed = !mover || (!bodies.has(mover) && !e.components.breakable && !e.components.script && !scripted.includes(e.id));
       if (fixed) {
         const k = batchKey(data);
         const b = stillModels.get(k) ?? { data, copies: [] };
@@ -316,6 +317,65 @@ export class PlaySession {
     // (A model already loaded: ride on its bone now. One still loading does it when it arrives.)
     const inst = this.models.get(id);
     if (inst) eyes.rideModel(inst.object);
+  }
+
+  /** Lights' starting places, and the body each rides with. */
+  private lightAt = new Map<string, { start: THREE.Matrix4; body: string | null }>();
+  private lightNow = new THREE.Matrix4();
+
+  /** Lights follow what carries them and take the changes scripts make. */
+  driveLights(lighting: SceneLighting): void {
+    for (const id of lighting.lights.keys()) {
+      const s = this.world.lightOf(id);
+      if (!s) continue;
+      let at = this.lightAt.get(id);
+      if (!at) this.lightAt.set(id, (at = { start: new THREE.Matrix4().fromArray(this.doc.worldMatrix(id)), body: this.world.bodyOf(id) }));
+      let world: THREE.Matrix4 | null = null;
+      let on = s.on;
+      if (at.body) {
+        const m = this.world.motionOf(at.body);
+        if (!m || !this.world.isVisible(at.body)) on = false;
+        else world = this.lightNow.fromArray(m).multiply(at.start);
+      }
+      lighting.drive(id, { ...s, on }, world);
+    }
+  }
+
+  /** Materials made glow by scripts: each model's own copies, with the glow they were made with. */
+  private glowMats = new Map<ModelInstance, THREE.MeshStandardMaterial[]>();
+
+  private glowMaterials(inst: ModelInstance): THREE.MeshStandardMaterial[] {
+    let list = this.glowMats.get(inst);
+    if (list) return list;
+    list = [];
+    inst.object.traverse((o) => {
+      const mesh = o as THREE.Mesh;
+      if (!mesh.isMesh) return;
+      const own = (m: THREE.Material) => {
+        const sm = m as THREE.MeshStandardMaterial;
+        if (!sm.isMeshStandardMaterial || (!sm.emissiveMap && sm.emissive.getHex() === 0)) return m;
+        const c = sm.clone();
+        c.userData.glow = sm.emissiveIntensity;
+        list!.push(c);
+        return c;
+      };
+      mesh.material = Array.isArray(mesh.material) ? mesh.material.map(own) : own(mesh.material);
+    });
+    this.glowMats.set(inst, list);
+    return list;
+  }
+
+  private updateGlow(): void {
+    for (const [id, from, to, k] of this.world.glowing()) {
+      for (const [mid, inst] of this.models) {
+        const base = mid.split('#')[0]!;
+        if (mid !== id && base !== id && !this.doc.isAncestor(id, base)) continue;
+        for (const m of this.glowMaterials(inst)) {
+          const a = from ?? (m.userData.glow as number);
+          m.emissiveIntensity = a + (to - a) * k;
+        }
+      }
+    }
   }
 
   private material: (name: string) => THREE.Material;
@@ -573,6 +633,7 @@ export class PlaySession {
     this.world.step(dt);
     this.effects.syncProjectiles(this.world.projectilesNow());
     this.placeNpcs();
+    this.updateGlow();
     this.emit(dt);
     this.effects.tick(dt);
     const changes = this.world.drainChanges();
@@ -807,6 +868,7 @@ export class PlaySession {
     this.plants.dispose();
     this.batches.dispose();
     for (const m of this.models.values()) m.dispose();
+    for (const list of this.glowMats.values()) for (const m of list) m.dispose();
     for (const s of [...this.sounds]) {
       if (s.audio.isPlaying) s.audio.stop();
       this.dropSound(s);

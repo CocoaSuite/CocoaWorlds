@@ -9,7 +9,7 @@
  *  - A failing action or a division by zero stops only that thread, with a message pointing at the block.
  */
 import type { ActionName, CompiledHandler, GameAction, GameValue, Op, Program, Value } from './compile';
-import type { Ref } from './model';
+import type { LightProp, Ref } from './model';
 
 export const STEP_BUDGET = 10_000;
 
@@ -41,6 +41,12 @@ export interface ScriptHost {
   say?(text: string, seconds: number, owner: string): void;
   /** Change what a text sign says. */
   setText?(target: string, text: string): void;
+  /** Change a light's setting (a number, or a colour as text) over some seconds. */
+  setLight?(target: string, prop: LightProp, value: number | string, seconds: number): void;
+  /** How bright an object's model glows, over some seconds. */
+  setGlow?(target: string, strength: number, seconds: number): void;
+  /** Whether a light is on. */
+  lightOn?(target: string): boolean;
   /** Play a sound at a place (an object, the player, 'aim') or everywhere (null). */
   playSound?(sound: string, place: Value, volume: number, owner: string, loudness?: number): void;
   /** A noise at a place, this loud for hunting creatures. */
@@ -579,6 +585,25 @@ export class ScriptRunner {
           const txt = this.text(s.pop() ?? null);
           const target = s.pop();
           if (target && typeof target === 'object') this.host.setText?.(target.ref, txt);
+          break;
+        }
+        case 'light': {
+          const sec = Math.max(0, num(s.pop() ?? 0));
+          const v = s.pop() ?? null;
+          const target = s.pop();
+          if (target && typeof target === 'object') this.host.setLight?.(target.ref, op.prop, op.prop === 'color' ? this.text(v) : num(v), sec);
+          break;
+        }
+        case 'glow': {
+          const sec = Math.max(0, num(s.pop() ?? 0));
+          const v = Math.max(0, num(s.pop() ?? 0));
+          const target = s.pop();
+          if (target && typeof target === 'object') this.host.setGlow?.(target.ref, v, sec);
+          break;
+        }
+        case 'lit': {
+          const target = s.pop();
+          s.push(!!(target && typeof target === 'object' && this.host.lightOn?.(target.ref)));
           break;
         }
         case 'dist': {

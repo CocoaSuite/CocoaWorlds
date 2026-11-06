@@ -51,7 +51,7 @@ interface Ctx {
   update: (fn: (s: Script) => Script, label: string, mergeKey?: string) => void;
   problems: Map<string, Problem[]>;
   active: Set<string>;
-  objects: { id: string; name: string; isZone: boolean; isSign: boolean }[];
+  objects: { id: string; name: string; isZone: boolean; isSign: boolean; isLight: boolean }[];
   menu: (x: number, y: number, items: MenuEntry[]) => void;
   /** The handler being drawn (for “the thing that entered”). */
   otherAllowed: boolean;
@@ -109,7 +109,7 @@ export function ScriptPanel({ screens = false }: { screens?: boolean } = {}) {
   const project = useEditor((s) => s.session?.project);
   const globals = useMemo(() => project?.settings.values ?? [], [project]);
   const objects = useMemo(
-    () => (doc ? doc.entities.map((e) => ({ id: e.id, name: e.name, isZone: !!e.components.trigger, isSign: !!e.components.sign })) : []),
+    () => (doc ? doc.entities.map((e) => ({ id: e.id, name: e.name, isZone: !!e.components.trigger, isSign: !!e.components.sign, isLight: !!e.components.light })) : []),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [doc, useEditor.getState().rev],
   );
@@ -1000,6 +1000,30 @@ function statementWords(s: Statement, set: (patch: Record<string, unknown>, merg
           <ExprSlot expr={s.text} type="text" label={`${w('setText')} ${w('setTo')}`} />
         </>
       );
+    case 'setLight':
+      return (
+        <>
+          {w('setLight')}
+          <select className="cw-input cw-mini" aria-label={statementName('setLight')} value={s.prop} onChange={(e) => set({ prop: e.target.value, value: e.target.value === 'color' ? ({ ...newExpr('text'), value: '#ffffff' } as Expr) : ({ ...newExpr('number'), value: 1 } as Expr) })}>
+            {(['intensity', 'range', 'angle', 'color'] as const).map((p) => (
+              <option key={p} value={p}>
+                {w(p)}
+              </option>
+            ))}
+          </select>
+          {w('ofLight')} <RefSlot value={s.target} lightsOnly onChange={(target) => set({ target })} label={statementName('setLight')} /> {w('setTo')}{' '}
+          <ExprSlot expr={s.value} type={s.prop === 'color' ? 'text' : 'number'} label={`${statementName('setLight')} ${w('setTo')}`} /> {w('over')}{' '}
+          <ExprSlot expr={s.seconds} type="number" label={`${statementName('setLight')} ${w('over')}`} /> {w('seconds')}
+        </>
+      );
+    case 'setGlow':
+      return (
+        <>
+          {w('setGlow')} <RefSlot value={s.target} onChange={(target) => set({ target })} label={w('setGlow')} /> {w('setTo')}{' '}
+          <ExprSlot expr={s.strength} type="number" label={`${w('setGlow')} ${w('setTo')}`} /> {w('over')}{' '}
+          <ExprSlot expr={s.seconds} type="number" label={`${w('setGlow')} ${w('over')}`} /> {w('seconds')}
+        </>
+      );
     case 'hurt':
     case 'heal':
     case 'giveArmour':
@@ -1035,6 +1059,7 @@ function RefSlot<T extends Ref | Place | null>({
   label,
   zonesOnly,
   signsOnly,
+  lightsOnly,
   allowNone,
   allowPlayer,
   allowAim,
@@ -1046,6 +1071,7 @@ function RefSlot<T extends Ref | Place | null>({
   label: string;
   zonesOnly?: boolean;
   signsOnly?: boolean;
+  lightsOnly?: boolean;
   allowNone?: boolean;
   /** Offer “the player”. */
   allowPlayer?: boolean;
@@ -1073,7 +1099,7 @@ function RefSlot<T extends Ref | Place | null>({
               : v === 'held'
                 ? { held: true }
                 : { entity: v.slice(2) }) as T;
-  const objs = c.objects.filter((o) => o.id !== c.owner && (!zonesOnly || o.isZone) && (!signsOnly || o.isSign));
+  const objs = c.objects.filter((o) => o.id !== c.owner && (!zonesOnly || o.isZone) && (!signsOnly || o.isSign) && (!lightsOnly || o.isLight));
   const current = enc(value);
   const missing = current.startsWith('e:') && !c.objects.some((o) => o.id === current.slice(2));
   return (
@@ -1082,7 +1108,7 @@ function RefSlot<T extends Ref | Place | null>({
       <option value="self">{w('self')}</option>
       {(allowPlayer || current === 'player') && <option value="player">{w('player')}</option>}
       {(allowAim || current === 'aim') && <option value="aim">{w('aim')}</option>}
-      {((!zonesOnly && !signsOnly && !noHeld) || current === 'held') && <option value="held">{w('held')}</option>}
+      {((!zonesOnly && !signsOnly && !lightsOnly && !noHeld) || current === 'held') && <option value="held">{w('held')}</option>}
       {!zonesOnly && (c.otherAllowed || current === 'other') && <option value="other">{c.otherIsPlayer ? w('player') : w('other')}</option>}
       {missing && <option value={current}>?</option>}
       {objs.map((o) => (
@@ -1314,6 +1340,13 @@ function ExprSlot({ expr, type, label }: { expr: Expr; type: 'number' | 'boolean
         <>
           {w('distanceFrom')} <RefSlot value={expr.from} allowPlayer onChange={(from) => set({ from })} label={`${label} ${w('distanceFrom')}`} /> {w('toWord')}{' '}
           <RefSlot value={expr.to} allowPlayer onChange={(to) => set({ to })} label={`${label} ${w('distanceFrom')} ${w('toWord')}`} />
+        </>
+      );
+      break;
+    case 'lightOn':
+      body = (
+        <>
+          <RefSlot value={expr.target} lightsOnly onChange={(target) => set({ target })} label={`${label} ${w('isOn')}`} /> {w('isOn')}
         </>
       );
       break;

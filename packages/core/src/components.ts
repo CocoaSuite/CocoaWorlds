@@ -135,6 +135,7 @@ export const COMPONENTS: ComponentDef[] = [
       { key: 'range', label: e('Reach', 'Дальность'), type: { kind: 'number', min: 0, step: 16, unit: 'u' }, default: 512, when: { key: 'kind', is: ['point', 'spot'] } },
       { key: 'angle', label: e('Cone', 'Конус'), type: { kind: 'number', min: 1, max: 170, step: 1, unit: '°' }, default: 40, when: { key: 'kind', is: ['spot'] } },
       { key: 'castShadows', label: e('Shadows', 'Тени'), type: { kind: 'boolean' }, default: false },
+      { key: 'on', label: e('On at start', 'Включён в начале'), type: { kind: 'boolean' }, default: true },
     ],
   },
   {

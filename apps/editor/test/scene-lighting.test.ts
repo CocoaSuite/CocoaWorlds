@@ -54,4 +54,24 @@ describe('scene lighting', () => {
     l.update(doc, (id) => doc.worldMatrix(id), bounds(), scene);
     expect(l.group.children).toEqual(before);
   });
+
+  it('drive moves a spotlight with what carries it and applies script settings (off: dark, kept)', () => {
+    const doc = setup();
+    const l = new SceneLighting();
+    l.update(doc, (id) => doc.worldMatrix(id), bounds(), new THREE.Scene());
+    const id = doc.entities.find((e) => e.name === 'spot')!.id;
+    const spot = l.lights.get(id)!.light as THREE.SpotLight;
+    const at = new THREE.Matrix4().makeTranslation(10, 20, 30);
+    l.drive(id, { on: true, intensity: 2, range: 300, angle: 60, color: [1, 0, 0] }, at);
+    expect(spot.position.toArray()).toEqual([10, 20, 30]);
+    expect(spot.target.position.z).toBeCloseTo(29);
+    expect(spot.distance).toBe(300);
+    expect(spot.angle).toBeCloseTo(Math.PI / 6);
+    expect(spot.color.getHex()).toBe(0xff0000);
+    const lit = spot.intensity;
+    l.drive(id, { on: false, intensity: 2, range: 300, angle: 60, color: [1, 0, 0] }, null);
+    expect(lit).toBeGreaterThan(0);
+    expect(spot.intensity).toBe(0);
+    expect(spot.parent).toBe(l.group);
+  });
 });

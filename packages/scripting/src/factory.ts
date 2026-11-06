@@ -141,6 +141,10 @@ export function newStatement(kind: StatementKind, opts: { target?: Ref; variable
       return { id: id(), kind, at: { player: true }, spread: num(600), sure: num(0.5), as: 'event' };
     case 'stopSound':
       return { id: id(), kind, target };
+    case 'setLight':
+      return { id: id(), kind, target, prop: 'intensity', value: num(1), seconds: num(0) };
+    case 'setGlow':
+      return { id: id(), kind, target, strength: num(1), seconds: num(0) };
     case 'playAnim':
       return { id: id(), kind, target, name: '', loop: true };
     case 'showScreen':
@@ -212,6 +216,8 @@ export function newExpr(kind: ExprKind, opts: { variable?: string } = {}): Expr 
       return { id: id(), kind, from: player, to: self };
     case 'holds':
       return { id: id(), kind, what: null };
+    case 'lightOn':
+      return { id: id(), kind, target: self };
     case 'itemCount':
       return { id: id(), kind, item: '' };
     case 'selectedItem':

@@ -183,6 +183,19 @@ isn't picked up by plain Use (the stack comes first), so its stack does it: *Whe
 See [rendering.md](rendering.md#sound) for the Sound component, the scene's background sound and Sound
 areas (echo, muffling). Sounds played by blocks are changed by Sound areas and water.
 
+## Lights and glow
+
+| Block | What it does |
+|---|---|
+| Turn on / Turn off *light* (also Show / Hide) | Switches the light only, not the object it is inside |
+| Set *brightness / reach / cone / colour* of the light *light* to *value* over *n* seconds | 0 seconds: at once. Colour is text like `#ffcc88` |
+| Set the glow of *object* to *n* over *n* seconds | The glowing parts of its model (and the models inside it) glow this strongly; 0 is no glow. Only materials with a glow colour change |
+| *light* is on (value) | Yes while the light is switched on |
+
+A Light's **On at start** setting makes it start switched off. Point objects inside a physics object (lights,
+models, sounds, particles) ride with it in Play, so a model with Physics and a Light inside it is a floodlight
+the player can carry with E.
+
 ## Saved progress and the real clock
 
 Game values marked **kept** start the next game with their last value; **Forget saved progress** starts over;

@@ -74,6 +74,8 @@ export class SceneLighting {
   private sky: THREE.Mesh;
   private skyMat: THREE.ShaderMaterial;
   private suns: THREE.DirectionalLight[] = [];
+  /** The lights by object id, with how much brighter the light is than its Brightness (Play changes them). */
+  readonly lights = new Map<string, { light: THREE.Light; falloff: number }>();
 
   constructor() {
     this.group.name = 'scene-lighting';
@@ -165,6 +167,7 @@ export class SceneLighting {
       }
       light.castShadow = l.castShadows;
       light.name = e.id;
+      this.lights.set(e.id, { light, falloff: l.kind === 'directional' ? 1 : FALLOFF });
       this.group.add(light);
     }
 
@@ -210,6 +213,25 @@ export class SceneLighting {
       if ((o as THREE.Light).isLight) (o as THREE.Light & { shadow?: THREE.LightShadow }).shadow?.dispose?.();
     }
     this.suns = [];
+    this.lights.clear();
+  }
+
+  /** Put a light where it is now, as scripts set it (off: no light, kept in place so nothing recompiles). */
+  drive(id: string, s: { on: boolean; intensity: number; range: number; angle: number; color: number[] }, world: THREE.Matrix4 | null): void {
+    const e = this.lights.get(id);
+    if (!e) return;
+    const l = e.light;
+    l.intensity = s.on ? s.intensity * e.falloff : 0;
+    l.color.setRGB(s.color[0]!, s.color[1]!, s.color[2]!);
+    if (l instanceof THREE.PointLight || l instanceof THREE.SpotLight) {
+      l.distance = s.range;
+      l.shadow.camera.far = Math.max(8, s.range);
+    }
+    if (l instanceof THREE.SpotLight) l.angle = THREE.MathUtils.degToRad(Math.min(170, Math.max(1, s.angle)) / 2);
+    if (world && !(l instanceof THREE.DirectionalLight)) {
+      l.position.setFromMatrixPosition(world);
+      if (l instanceof THREE.SpotLight) l.target.position.copy(l.position).add(new THREE.Vector3(0, 0, -1).transformDirection(world));
+    }
   }
 
   dispose(): void {

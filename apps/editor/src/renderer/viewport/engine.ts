@@ -359,6 +359,7 @@ export class ViewportEngine {
     const level = this.play ? this.play.group : this.world.group;
     const bounds = new THREE.Box3().setFromObject(level);
     this.lighting.update(this.doc, (id) => this.mats.get(id) ?? this.doc!.worldMatrix(id), bounds, this.scene);
+    this.play?.driveLights(this.lighting);
     this.lighting.applyTo(this.scene);
   }
 

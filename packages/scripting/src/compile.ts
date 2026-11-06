@@ -3,7 +3,7 @@
  * the compiler turns each handler into a flat list of instructions for the VM. A handler with an error is
  * reported and left out, so one broken script never stops the rest of the game.
  */
-import type { Direction, Expr, Handler, Place, Ref, Script, Statement, ValueType } from './model';
+import type { Direction, Expr, LightProp, Handler, Place, Ref, Script, Statement, ValueType } from './model';
 
 /** What the checker needs to know about the scene. */
 export interface SceneInfo {
@@ -15,6 +15,8 @@ export interface SceneInfo {
   globals?: { name: string; type: Exclude<ValueType, 'object'> }[];
   /** Objects that are text signs (for “Set the text of”). */
   signs?: Set<string>;
+  /** Objects that are lights (for the light blocks). */
+  lights?: Set<string>;
   /** The screen UI: screens and their elements by id (missing: not checked). */
   ui?: { screens: Map<string, string>; elements: Map<string, { name: string; kind: string }> };
   /** The items the player can carry (missing: not checked). */
@@ -114,6 +116,12 @@ export type Op =
   | { op: 'holds' }
   /** Pushes whether the player is hiding. */
   | { op: 'hiding' }
+  /** Pops seconds, a value and a light: change one of its settings. */
+  | { op: 'light'; prop: LightProp }
+  /** Pops seconds, a strength and an object: how bright its model glows. */
+  | { op: 'glow' }
+  /** Pops a light; pushes whether it is on. */
+  | { op: 'lit' }
   | { op: 'halt' };
 
 /** How far (units) “When the player uses this” reaches unless it says otherwise. */
@@ -395,6 +403,13 @@ class HandlerCompiler {
   private actTarget(ref: Ref, block: string, playerOk = false): void {
     if ('player' in ref && !playerOk) this.problem(block, 'This block works on objects, not on the player.');
     this.pushRef(ref, block);
+  }
+
+  private lightTarget(ref: Ref, block: string): void {
+    const r = 'player' in ref ? null : this.resolveRef(ref, block);
+    if ('player' in ref || (r && r !== 'other' && r !== 'held' && this.scene.lights && !this.scene.lights.has(r)))
+      this.problem(block, `${(r && this.scene.objects.get(r)?.name) ?? 'This'} is not a light. Pick a light, or add a Light to it.`);
+    this.emit(r === null ? { op: 'push', v: null } : { op: 'ref', ref });
   }
 
   private statements(list: Statement[]): void {
@@ -712,6 +727,18 @@ class HandlerCompiler {
         this.actTarget(s.target, s.id);
         this.emit({ op: 'stopsound' });
         break;
+      case 'setLight':
+        this.lightTarget(s.target, s.id);
+        this.expect(s.value, s.prop === 'color' ? 'text' : 'number', s.prop === 'color' ? 'The colour must be text like #ffcc88.' : 'This must be a number.');
+        this.expect(s.seconds, 'number', 'The time must be a number of seconds.');
+        this.emit({ op: 'light', prop: s.prop });
+        break;
+      case 'setGlow':
+        this.actTarget(s.target, s.id);
+        this.expect(s.strength, 'number', 'The glow must be a number (0 is none).');
+        this.expect(s.seconds, 'number', 'The time must be a number of seconds.');
+        this.emit({ op: 'glow' });
+        break;
       case 'playAnim':
         if (!s.name.trim()) this.problem(s.id, 'Type the name of the animation (as it is called in the model).');
         this.actTarget(s.target, s.id);
@@ -840,6 +867,10 @@ class HandlerCompiler {
         return 'text';
       case 'hiding':
         this.emit({ op: 'hiding' });
+        return 'boolean';
+      case 'lightOn':
+        this.lightTarget(e.target, e.id);
+        this.emit({ op: 'lit' });
         return 'boolean';
       case 'armour':
         this.ruleOff('health', e.id);
