@@ -151,7 +151,7 @@ export function ScriptPanel({ screens = false }: { screens?: boolean } = {}) {
       ev.clientX,
       ev.clientY,
       [
-        ...(['start', 'enter', 'leave', 'use', 'useHolding', 'message', 'messageStop', 'every', 'die', 'breaks', 'hit', 'dies', 'hides', 'unhides', 'found', 'does', 'near', 'far', 'uiClick', 'useItem', 'listPick', 'key'] as EventKind[]).map((k) => ({
+        ...(['start', 'enter', 'leave', 'use', 'useHolding', 'message', 'messageStop', 'every', 'die', 'breaks', 'hit', 'dies', 'hides', 'unhides', 'found', 'does', 'near', 'far', 'uiClick', 'useItem', 'listPick', 'key', 'press'] as EventKind[]).map((k) => ({
           label: eventName(k),
           onSelect: () => {
             const zone: Ref = objects.find((o) => o.id === owner.id)?.isZone ? { self: true } : objects.find((o) => o.isZone) ? { entity: objects.find((o) => o.isZone)!.id } : { self: true };
@@ -490,6 +490,13 @@ function EventRow({ ev, onRemove, onCopy, pick }: { ev: EventBlock; onRemove: ()
   else if (ev.kind === 'key') content = (
     <>
       {w('keyEv')} <KeySlot value={ev.key} label={w('keyEv')} onChange={(key) => set({ key } as Partial<EventBlock>)} />
+    </>
+  );
+  else if (ev.kind === 'press') content = (
+    <>
+      {w('keyEv')} <KeySlot value={ev.key} label={w('keyEv')} onChange={(key) => set({ key } as Partial<EventBlock>)} /> {w('atThis')}, {w('usePrompt')}{' '}
+      <TextSlot value={ev.prompt ?? ''} label={w('usePrompt')} onChange={(prompt) => set({ prompt } as Partial<EventBlock>)} />, {w('within')}{' '}
+      <ReachSlot value={ev.reach} fallback={96} label={`${w('keyEv')} ${w('within')}`} onChange={(reach) => set({ reach } as Partial<EventBlock>)} /> {w('units')}
     </>
   );
   else if (ev.kind === 'near' || ev.kind === 'far') content = (

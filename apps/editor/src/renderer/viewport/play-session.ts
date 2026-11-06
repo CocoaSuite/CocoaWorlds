@@ -737,6 +737,11 @@ export class PlaySession {
     return this.world.usePrompt();
   }
 
+  /** Keys that do something at what the player holds or looks at, with their prompts. */
+  keyPrompts(): { key: string; prompt: string }[] {
+    return this.world.keyPrompts();
+  }
+
   /** What a text sign says now. */
   signText(id: string): string | undefined {
     return this.world.signText(id);

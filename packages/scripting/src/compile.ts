@@ -149,6 +149,7 @@ export type CompiledEvent =
   | { kind: 'useItem'; item: string }
   | { kind: 'listPick'; list: string }
   | { kind: 'key'; key: string }
+  | { kind: 'press'; key: string; prompt: string; reach: number }
   | { kind: 'does'; what: string };
 
 export interface CompiledHandler {
@@ -278,6 +279,10 @@ class HandlerCompiler {
     else if (ev.kind === 'key') {
       if (!/^(Key[A-Z]|Tab|Digit0)$/.test(ev.key)) this.problem(ev.id, 'Pick a key.');
       else event = { kind: 'key', key: ev.key };
+    } else if (ev.kind === 'press') {
+      const reach = ev.reach ? this.reachOf(ev.reach) : USE_REACH;
+      if (!/^(Key[A-Z]|Tab|Digit0)$/.test(ev.key)) this.problem(ev.id, 'Pick a key.');
+      else if (reach !== null) event = { kind: 'press', key: ev.key, prompt: (ev.prompt ?? '').trim(), reach };
     } else if (ev.kind === 'useItem') {
       if (!ev.item || this.checkItem(ev.item, ev.id)) event = { kind: 'useItem', item: ev.item };
     } else if (ev.kind === 'every') {

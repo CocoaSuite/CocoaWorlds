@@ -152,6 +152,7 @@ export type RunnerEvent =
   | { type: 'listPick'; list: string; row: string }
   /** The player pressed a key. */
   | { type: 'key'; key: string }
+  | { type: 'press'; key: string; targets: string[]; distance: number }
   /** A hunting creature made a move (`targets`: it, and the hiding spot it is at with what that is inside). */
   | { type: 'does'; what: string; targets: string[] };
 
@@ -208,10 +209,22 @@ export class ScriptRunner {
     return null;
   }
 
+  /** The keys that do something at `targets` from this far (“When the player presses … at this”), with their prompts, nearest object first. */
+  keyPrompts(targets: string[], distance: number): { key: string; prompt: string }[] {
+    const out: { key: string; prompt: string }[] = [];
+    for (const id of targets)
+      for (const inst of this.instances) {
+        if (inst.program.owner !== id) continue;
+        for (const h of inst.program.handlers)
+          if (h.event.kind === 'press' && distance <= h.event.reach && !out.some((x) => x.key === (h.event as { key: string }).key)) out.push({ key: h.event.key, prompt: h.event.prompt });
+      }
+    return out;
+  }
+
   /** The furthest any “When the player uses” stack reaches (0 when there are none). */
   useReach(): number {
     let r = 0;
-    for (const inst of this.instances) for (const h of inst.program.handlers) if (h.event.kind === 'use' || h.event.kind === 'useHolding') r = Math.max(r, h.event.reach);
+    for (const inst of this.instances) for (const h of inst.program.handlers) if (h.event.kind === 'use' || h.event.kind === 'useHolding' || h.event.kind === 'press') r = Math.max(r, h.event.reach);
     return r;
   }
 
@@ -250,6 +263,8 @@ export class ScriptRunner {
           if (ev.kind === 'listPick' && ev.list === e.list) this.spawn(inst, h, null, e.row);
         } else if (e.type === 'key') {
           if (ev.kind === 'key' && ev.key === e.key) this.spawn(inst, h, null);
+        } else if (e.type === 'press') {
+          if (ev.kind === 'press' && ev.key === e.key && e.targets.includes(inst.program.owner) && e.distance <= ev.reach) this.spawn(inst, h, null);
         } else if (e.type === 'breaks') {
           if (ev.kind === 'breaks' && inst.program.owner === e.target) this.spawn(inst, h, null);
         } else if (e.type === 'dies') {

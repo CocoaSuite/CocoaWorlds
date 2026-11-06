@@ -22,10 +22,14 @@ export interface Hud {
   messages: string[];
   /** Looking at something usable: its prompt word ('' for plain “Use”), else null. */
   use: string | null;
+  /** Other keys that do something at what's looked at or held, with their prompt words. */
+  keys: { key: string; prompt: string }[];
   /** The screen UI now, and every value texts and bars can show ({Cash}, health, score). */
   ui: UiState;
   allValues: Record<string, unknown>;
 }
+
+const keyName = (code: string) => code.replace(/^Key|^Digit/, '');
 
 function formatValue(v: unknown): string {
   if (typeof v === 'number') return String(Math.round(v * 1000) / 1000);
@@ -49,6 +53,7 @@ export function hudOf(play: PlaySession, locked: boolean): Hud {
     values: screen.values.filter((v) => v.show).map((v) => ({ name: v.name, value: formatValue(v.value) })),
     messages: screen.messages,
     use: locked ? play.usePrompt() : null,
+    keys: locked ? play.keyPrompts() : [],
     ui: play.uiState(),
     allValues: { ...Object.fromEntries(screen.values.map((v) => [v.name, v.value])), health: Math.ceil(status?.health ?? 0), armour: Math.floor(status?.armour ?? 0), score: status?.score ?? 0 },
   };
@@ -59,10 +64,20 @@ export function HudView({ hud }: { hud: Hud }) {
   const low = hud.showHealth && hud.health <= 25;
   return (
     <>
-      {hud.use !== null && (
+      {(hud.use !== null || hud.keys.length > 0) && (
         <div className="cw-ov cw-use-prompt" data-testid="use-prompt" role="status">
-          <kbd>E</kbd>
-          <span>{hud.use || t('hud.use')}</span>
+          {hud.use !== null && (
+            <div className="cw-use-row">
+              <kbd>E</kbd>
+              <span>{hud.use || t('hud.use')}</span>
+            </div>
+          )}
+          {hud.keys.map((k) => (
+            <div key={k.key} className="cw-use-row">
+              <kbd>{keyName(k.key)}</kbd>
+              <span>{k.prompt || t('hud.use')}</span>
+            </div>
+          ))}
         </div>
       )}
       {hud.messages.length > 0 && (

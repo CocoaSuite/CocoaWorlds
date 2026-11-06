@@ -50,6 +50,8 @@ export function newEvent(kind: EventKind, zone: Ref = self): EventBlock {
       return { id: id(), kind, list: '' };
     case 'key':
       return { id: id(), kind, key: 'KeyI' };
+    case 'press':
+      return { id: id(), kind, key: 'KeyF', prompt: '' };
     case 'does':
       return { id: id(), kind, what: '' };
   }

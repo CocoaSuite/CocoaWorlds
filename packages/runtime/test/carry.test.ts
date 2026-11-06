@@ -141,5 +141,40 @@ describe('placing what is held with scripts', () => {
     expect(Math.abs(w.yawOf(id)!)).toBeLessThan(8);
     w.dispose();
   });
+
+  it('“When the player presses a key at this” fires when looking at it within reach or holding it, with its prompt', () => {
+    const s = newScene('press');
+    const lamp = brush('lamp', [-16, 0, -96], [16, 32, -64], { rigidBody: { motion: 'dynamic', mass: 10 } });
+    lamp.components.script = {
+      version: 1,
+      variables: [],
+      handlers: [{ id: 'h', event: { id: 'e', kind: 'press', key: 'KeyF', prompt: 'Switch' }, body: [{ id: 'a', kind: 'addScore', amount: { id: 'n', kind: 'number', value: 1 } }] }],
+    } as never;
+    s.entities = [brush('floor', [-2048, -16, -2048], [2048, 0, 2048]), newEntity('start', { playerSpawn: {} }), lamp];
+    const w = GameWorld.create(s);
+    w.setPlayerInput({ pitch: -0.45 });
+    run(w, 0.2);
+    expect(w.keyPrompts()).toEqual([{ key: 'KeyF', prompt: 'Switch' }]);
+    w.pressKey('KeyF');
+    run(w, 0.1);
+    expect(w.playerStatus()!.score).toBe(1);
+    w.use();
+    run(w, 0.5);
+    w.setPlayerInput({ pitch: 1.2 });
+    run(w, 0.2);
+    expect(w.holding).toBe(lamp.id);
+    expect(w.keyPrompts()).toEqual([{ key: 'KeyF', prompt: 'Switch' }]);
+    w.pressKey('KeyF');
+    run(w, 0.1);
+    expect(w.playerStatus()!.score).toBe(2);
+    w.dropHeld();
+    w.setPlayerInput({ yaw: Math.PI, pitch: 0 });
+    run(w, 1);
+    expect(w.keyPrompts()).toEqual([]);
+    w.pressKey('KeyF');
+    run(w, 0.1);
+    expect(w.playerStatus()!.score).toBe(2);
+    w.dispose();
+  });
 });
 

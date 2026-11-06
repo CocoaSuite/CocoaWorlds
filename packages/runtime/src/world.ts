@@ -2647,6 +2647,25 @@ export class GameWorld {
   /** The player pressed a key the game doesn't use itself (letters, Tab): “When the player presses” starts. */
   pressKey(code: string): void {
     this.runner.dispatch({ type: 'key', key: code });
+    for (const { targets, distance } of this.pressAims()) this.runner.dispatch({ type: 'press', key: code, targets, distance });
+  }
+
+  /** What a key pressed “at this” reaches: what's held (and what it's a copy of), then what's looked at. */
+  private pressAims(): { targets: string[]; distance: number }[] {
+    if (!this.player || this.hiding || this.frozen) return [];
+    const out: { targets: string[]; distance: number }[] = [];
+    if (this.held) out.push({ targets: this.heldIds(), distance: 0 });
+    const hit = this.useAim();
+    if (hit) out.push(hit);
+    return out;
+  }
+
+  /** Keys that do something at what the player holds or looks at, with their prompts (held first, one per key). */
+  keyPrompts(): { key: string; prompt: string }[] {
+    const out: { key: string; prompt: string }[] = [];
+    for (const { targets, distance } of this.pressAims())
+      for (const p of this.runner.keyPrompts(targets, distance)) if (!out.some((x) => x.key === p.key)) out.push(p);
+    return out;
   }
 
   /** The player clicked with the item in the picked hotbar slot. */

@@ -183,6 +183,13 @@ isn't picked up by plain Use (the stack comes first), so its stack does it: *Whe
 See [rendering.md](rendering.md#sound) for the Sound component, the scene's background sound and Sound
 areas (echo, muffling). Sounds played by blocks are changed by Sound areas and water.
 
+## Key prompts
+
+**When the player presses [key] at this, showing [text], within [n] u** works like “When the player uses this”
+with a key of your choice: it runs when the player looks at this object (or anything inside it) within reach, or
+holds it, and the key and text show under the crosshair (below the E prompt; empty text shows “Use”). The plain
+“When the player presses a key” still works from anywhere and shows nothing. E still picks things up.
+
 ## Lights and glow
 
 | Block | What it does |

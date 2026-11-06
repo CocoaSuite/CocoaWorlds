@@ -210,6 +210,11 @@ export type EventBlock =
   | { id: string; kind: 'listPick'; list: string }
   /** The player pressed a key (a KeyboardEvent code: 'KeyI', 'Tab', 'KeyQ' …). */
   | { id: string; kind: 'key'; key: string }
+  /**
+   * The player pressed a key while looking at this object (or anything inside it) within `reach`, or while
+   * holding it. `prompt` shows under the crosshair with the key (“F  Turn on”); empty shows “Use”.
+   */
+  | { id: string; kind: 'press'; key: string; prompt?: string; reach?: Expr }
   /** A hunting creature makes a move (`what`: its name, '' for any): runs on the creature and on the hiding spot it is at. */
   | { id: string; kind: 'does'; what: string };
 
@@ -279,7 +284,7 @@ export function* walk(script: Script): Generator<{ id: string; kind: string }> {
     yield h.event;
     if (h.event.kind === 'every') yield* expr(h.event.seconds);
     if (h.event.kind === 'near' || h.event.kind === 'far') yield* expr(h.event.distance);
-    if ((h.event.kind === 'use' || h.event.kind === 'useHolding') && h.event.reach) yield* expr(h.event.reach);
+    if ((h.event.kind === 'use' || h.event.kind === 'useHolding' || h.event.kind === 'press') && h.event.reach) yield* expr(h.event.reach);
     yield* stmts(h.body);
   }
 }
