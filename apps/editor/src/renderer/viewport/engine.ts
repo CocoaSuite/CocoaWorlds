@@ -674,7 +674,10 @@ export class ViewportEngine {
     }
   }
 
+  private rotating = false;
+
   private onLockChange = (): void => {
+    this.rotating = false;
     if (!this.locked) this.play?.setInput({ fire: false });
     if (!this.asPlayer) return;
     if (!this.locked && !this.uiFree) {
@@ -686,6 +689,7 @@ export class ViewportEngine {
 
   private onMouseMove = (e: MouseEvent): void => {
     if (!this.asPlayer || !this.locked || !this.play) return;
+    if (this.rotating && this.play.holding) return this.play.rotateHeld(e.movementX, e.movementY);
     const look = lookFromMouse(this.play.look, e.movementX, e.movementY);
     if (look) this.play.setInput(look);
   };
@@ -724,6 +728,11 @@ export class ViewportEngine {
     // 1–9 pick a hotbar slot.
     if (down && /^Digit[1-9]$/.test(e.code)) {
       this.play?.selectSlot(Number(e.code.slice(5)) - 1);
+      return true;
+    }
+    // R held with something in hand: the mouse turns it instead of the view.
+    if (e.code === 'KeyR' && (this.rotating || this.play?.holding)) {
+      this.rotating = down;
       return true;
     }
     if (!GAME_KEYS.has(e.code)) {

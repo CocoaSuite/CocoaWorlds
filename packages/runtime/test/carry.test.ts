@@ -126,4 +126,20 @@ describe('placing what is held with scripts', () => {
     expect(w.screenMessages()).toEqual(['Off the spot']);
     w.dispose();
   });
+
+  it('a held crate turns with the player, and R with the mouse turns it in the hands', () => {
+    const { w, id } = world({});
+    w.use();
+    run(w, 0.5);
+    w.setPlayerInput({ pitch: 0, yaw: Math.PI / 2 });
+    run(w, 1);
+    expect(Math.abs(w.yawOf(id)! - 90)).toBeLessThan(5);
+    // (0.006 rad a pixel: 262 px is about 90 degrees.)
+    w.rotateHeld(262, 0);
+    run(w, 1);
+    expect(w.holding).toBe(id);
+    expect(Math.abs(w.yawOf(id)!)).toBeLessThan(8);
+    w.dispose();
+  });
 });
+

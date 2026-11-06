@@ -767,6 +767,15 @@ export class PlaySession {
     this.world.use();
   }
 
+  /** What the player holds (an object id), or null. */
+  get holding(): string | null {
+    return this.world.holding;
+  }
+
+  rotateHeld(dx: number, dy: number): void {
+    this.world.rotateHeld(dx, dy);
+  }
+
   private effects = new Effects();
   private missingAnims = new Set<string>();
   private npcViews = new Map<string, { holder: THREE.Group; inner: THREE.Group; figure: boolean }>();

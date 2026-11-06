@@ -271,6 +271,8 @@ export class GameRunner {
     if (e.key === 'F11' || e.key === 'F12') return;
     e.preventDefault();
     if (down && /^Digit[1-9]$/.test(e.code)) return this.play.selectSlot(Number(e.code.slice(5)) - 1);
+    // R held with something in hand: the mouse turns it instead of the view.
+    if (e.code === 'KeyR' && (this.rotating || this.play.holding)) return void (this.rotating = down);
     if (!GAME_KEYS.has(e.code)) {
       if (down && !e.repeat && isScriptKey(e.code)) this.play.pressKey(e.code);
       return;
@@ -286,6 +288,7 @@ export class GameRunner {
 
   private mouseMove = (e: MouseEvent): void => {
     if (!this.locked || !this.play) return;
+    if (this.rotating && this.play.holding) return this.play.rotateHeld(e.movementX, e.movementY);
     const look = lookFromMouse(this.play.look, e.movementX, e.movementY);
     if (look) this.play.setInput(look);
   };
@@ -309,7 +312,10 @@ export class GameRunner {
     if (e.button === 0) this.play?.setInput({ fire: false });
   };
 
+  private rotating = false;
+
   private lockChange = (): void => {
+    this.rotating = false;
     if (!this.locked) this.play?.setInput({ fire: false });
     if (!this.locked && !this.uiFree) {
       this.keys.clear();

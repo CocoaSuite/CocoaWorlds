@@ -186,6 +186,8 @@ type Quat = { x: number; y: number; z: number; w: number };
 
 /** The heaviest thing the player can pick up (kg). */
 const MAX_CARRY = 50;
+/** Radians a held object turns per pixel of mouse movement. */
+const HELD_TURN = 0.006;
 /** How far (u) what's held may be pushed from its place before it's dropped. */
 const CARRY_SLIP = 128;
 /** The fastest (u/s) what's held moves to its place. */
@@ -1755,7 +1757,8 @@ export class GameWorld {
   // ── Carrying ──
 
   /** What the player holds: its body, and how far in front of their eyes it's held. */
-  private held: { id: string; body: RAPIER.RigidBody; distance: number; stuck: number } | null = null;
+  /** `turn`: how it is turned relative to the way the player faces (it turns with them; R and the mouse turn it). */
+  private held: { id: string; body: RAPIER.RigidBody; distance: number; stuck: number; turn: Quat } | null = null;
 
   /** What the player holds (its object id), or null. */
   get holding(): string | null {
@@ -1793,9 +1796,29 @@ export class GameWorld {
   private hold(id: string, body: RAPIER.RigidBody): void {
     const [x, y, z] = this.player!.eye();
     const at = body.translation();
-    this.held = { id, body, distance: Math.max(56, Math.min(96, Math.hypot(at.x - x, at.y - y, at.z - z))), stuck: 0 };
+    const r = body.rotation();
+    const turn = qmul(qconj(this.facing()), { x: r.x, y: r.y, z: r.z, w: r.w });
+    this.held = { id, body, distance: Math.max(56, Math.min(96, Math.hypot(at.x - x, at.y - y, at.z - z))), stuck: 0, turn };
     body.wakeUp();
     this.bus.emit({ type: 'pickup', target: id, by: 'player', time: this.time });
+  }
+
+  /** The way the player faces (turned about up only). */
+  private facing(): Quat {
+    const yaw = this.player?.input.yaw ?? 0;
+    return { x: 0, y: Math.sin(yaw / 2), z: 0, w: Math.cos(yaw / 2) };
+  }
+
+  /** Turn what's held by a mouse movement (pixels): sideways spins it, up and down tips it. */
+  rotateHeld(dx: number, dy: number): void {
+    const h = this.held;
+    if (!h) return;
+    const a = -dx * HELD_TURN, b = dy * HELD_TURN;
+    const spin = { x: 0, y: Math.sin(a / 2), z: 0, w: Math.cos(a / 2) };
+    const tip = { x: Math.sin(b / 2), y: 0, z: 0, w: Math.cos(b / 2) };
+    const q = qmul(spin, qmul(tip, h.turn));
+    const l = Math.hypot(q.x, q.y, q.z, q.w) || 1;
+    h.turn = { x: q.x / l, y: q.y / l, z: q.z / l, w: q.w / l };
   }
 
   /** Let go of what's held (it keeps the speed it has). */
@@ -1833,8 +1856,14 @@ export class GameWorld {
     // Speed to get there in a tenth of a second (capped), so it bumps into walls rather than going through.
     const k = Math.min(10, CARRY_SPEED / Math.max(1e-3, far));
     h.body.setLinvel({ x: off.x * k, y: off.y * k, z: off.z * k }, true);
-    const w = h.body.angvel();
-    h.body.setAngvel({ x: w.x * 0.8, y: w.y * 0.8, z: w.z * 0.8 }, true);
+    // Turned toward its place too (spun the short way, in about a tenth of a second).
+    const r = h.body.rotation();
+    let dq = qmul(qmul(this.facing(), h.turn), qconj({ x: r.x, y: r.y, z: r.z, w: r.w }));
+    if (dq.w < 0) dq = { x: -dq.x, y: -dq.y, z: -dq.z, w: -dq.w };
+    const s = Math.hypot(dq.x, dq.y, dq.z);
+    const angle = 2 * Math.atan2(s, dq.w);
+    const rate = s > 1e-6 ? Math.min(30, angle * 10) / s : 0;
+    h.body.setAngvel({ x: dq.x * rate, y: dq.y * rate, z: dq.z * rate }, true);
   }
 
   // ── Health and score ──
@@ -2772,6 +2801,10 @@ function qrot(q: Quat, v: [number, number, number]): [number, number, number] {
   const [x, y, z] = v;
   const tx = 2 * (q.y * z - q.z * y), ty = 2 * (q.z * x - q.x * z), tz = 2 * (q.x * y - q.y * x);
   return [x + q.w * tx + (q.y * tz - q.z * ty), y + q.w * ty + (q.z * tx - q.x * tz), z + q.w * tz + (q.x * ty - q.y * tx)];
+}
+
+function qconj(q: Quat): Quat {
+  return { x: -q.x, y: -q.y, z: -q.z, w: q.w };
 }
 
 function qmul(a: Quat, b: Quat): Quat {

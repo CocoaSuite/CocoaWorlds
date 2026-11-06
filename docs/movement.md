@@ -58,7 +58,9 @@ left.
 Use on a physics object (Physics › Moves: Falls and tumbles) of 50 kg or less picks it up: it's held in front
 of the eyes, 56–96 u away (as far as it was when picked up), and follows the view. It's steered there by speed
 (at most 1500 u/s, reaching its place in about a tenth of a second), so it bumps into walls instead of passing
-through them, and its spin dies down. Use again drops it with the speed it has; Fire throws it where the player
+through them. It keeps how it is turned relative to the way the player faces (it turns with them); holding R
+makes the mouse turn it instead of the view (sideways spins it, up and down tips it). R only does this while
+something is held, so scripts can still use R otherwise. Use again drops it with the speed it has; Fire throws it where the player
 looks (2400 / √kg u/s, at most 1000), in place of the weapon in hand. It's dropped by itself when kept more than
 128 u from its place for 0.4 s (caught on something), when the player dies, and during scripted scenes that hold
 the player still. What's held never blocks the player's movement. The use prompt shows on things that can be
