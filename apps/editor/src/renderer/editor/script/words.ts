@@ -312,17 +312,29 @@ const PALETTE_STMT: Record<StatementKind, Pair> = {
 };
 export const statementName = (k: StatementKind) => pick(PALETTE_STMT[k]);
 
+export const EVENT_GROUPS: { title: Pair; kinds: EventKind[] }[] = [
+  { title: ['Game', 'Игра'], kinds: ['start', 'every', 'die'] },
+  { title: ['Player actions', 'Действия игрока'], kinds: ['use', 'press', 'useHolding', 'key', 'useItem'] },
+  { title: ['Distance and zones', 'Расстояние и зоны'], kinds: ['near', 'far', 'enter', 'leave'] },
+  { title: ['Messages', 'Сообщения'], kinds: ['message', 'messageStop'] },
+  { title: ['Objects', 'Объекты'], kinds: ['hit', 'breaks'] },
+  { title: ['Creatures', 'Существа'], kinds: ['dies', 'does'] },
+  { title: ['Hiding spots', 'Укрытия'], kinds: ['hides', 'unhides', 'found'] },
+  { title: ['Screen', 'Экран'], kinds: ['uiClick', 'listPick'] },
+];
+
 export const STATEMENT_GROUPS: { title: Pair; kinds: StatementKind[] }[] = [
-  { title: ['Do', 'Действия'], kinds: ['move', 'turn', 'turnTo', 'return', 'show', 'hide', 'turnOn', 'turnOff', 'startTrain', 'stopTrain', 'send', 'log'] },
-  { title: ['Objects', 'Объекты'], kinds: ['spawn', 'remove', 'moveTo', 'scale', 'physical', 'push', 'damage', 'place', 'pickUp', 'drop'] },
-  { title: ['Creatures', 'Существа'], kinds: ['walkTo', 'setSide', 'runAway', 'wander', 'noise', 'hint'] },
-  { title: ['Player and score', 'Игрок и счёт'], kinds: ['teleport', 'hurt', 'heal', 'giveArmour', 'addScore', 'freezePlayer', 'unfreezePlayer', 'unhide', 'viewFrom', 'changeScene'] },
-  { title: ['Screen and signs', 'Экран и таблички'], kinds: ['say', 'showScreen', 'hideScreen', 'toggleScreen', 'showUi', 'hideUi', 'setUiText', 'addRow', 'removeRow', 'clearList', 'setText'] },
-  { title: ['Inventory', 'Инвентарь'], kinds: ['giveItem', 'takeItem'] },
-  { title: ['Sound', 'Звук'], kinds: ['playSound', 'stopSound'] },
-  { title: ['Lights and models', 'Свет и модели'], kinds: ['setLight', 'setGlow', 'playAnim'] },
-  { title: ['Control', 'Управление'], kinds: ['wait', 'if', 'repeat', 'while', 'forever', 'stop'] },
+  { title: ['Control', 'Управление'], kinds: ['wait', 'if', 'repeat', 'while', 'forever', 'stop', 'send', 'log'] },
   { title: ['Variables', 'Переменные'], kinds: ['set', 'change', 'forgetProgress'] },
+  { title: ['Move', 'Движение'], kinds: ['move', 'turn', 'turnTo', 'return', 'moveTo', 'scale', 'push', 'physical'] },
+  { title: ['Show and switch', 'Показ и включение'], kinds: ['show', 'hide', 'turnOn', 'turnOff', 'startTrain', 'stopTrain'] },
+  { title: ['Objects', 'Объекты'], kinds: ['spawn', 'remove', 'damage', 'place', 'pickUp', 'drop'] },
+  { title: ['Lights and models', 'Свет и модели'], kinds: ['setLight', 'setGlow', 'playAnim'] },
+  { title: ['Sound', 'Звук'], kinds: ['playSound', 'stopSound'] },
+  { title: ['Player', 'Игрок'], kinds: ['teleport', 'hurt', 'heal', 'giveArmour', 'freezePlayer', 'unfreezePlayer', 'unhide', 'viewFrom', 'changeScene'] },
+  { title: ['Score and items', 'Счёт и предметы'], kinds: ['addScore', 'giveItem', 'takeItem'] },
+  { title: ['Creatures', 'Существа'], kinds: ['walkTo', 'setSide', 'runAway', 'wander', 'noise', 'hint'] },
+  { title: ['Screen and signs', 'Экран и таблички'], kinds: ['say', 'showScreen', 'hideScreen', 'toggleScreen', 'showUi', 'hideUi', 'setUiText', 'addRow', 'removeRow', 'clearList', 'setText'] },
 ];
 export const groupTitle = (p: Pair) => pick(p);
 

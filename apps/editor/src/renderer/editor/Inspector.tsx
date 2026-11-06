@@ -2,7 +2,7 @@
 import { PaintPanel } from '../viewport/PaintPanel';
 import { useState } from 'react';
 import { shown, stored, type AxisKind } from '../axes';
-import { PIVOT, aoOf, backgroundSoundOf, gameRules, pivotOf, sceneSettings, worldBoundsOf, type EntityData, type SceneSettings as SceneSettingsData, type Transform, type Vec3 } from '@cocoaworlds/core';
+import { PIVOT, aoOf, bloomOf, backgroundSoundOf, gameRules, pivotOf, sceneSettings, worldBoundsOf, type EntityData, type SceneSettings as SceneSettingsData, type Transform, type Vec3 } from '@cocoaworlds/core';
 import { brushBounds } from '../brush/brushes';
 import { Button, ColorField, Field, NumberField, PanelHeader, Section, Switch } from '@cocoaworlds/ui';
 import { storeProgress } from '../game/progress';
@@ -152,6 +152,7 @@ function SceneSettings() {
   const st = useEditor.getState();
   const cur = sceneSettings(doc.settings);
   const ao = aoOf(doc.settings);
+  const bloom = bloomOf(doc.settings);
   const set = (patch: Partial<SceneSettingsData>, label: string, mergeKey?: string) => st.setSceneSettings(patch, label, mergeKey);
   const sky = cur.sky!;
   const bg = backgroundSoundOf(doc.settings);
@@ -187,6 +188,16 @@ function SceneSettings() {
             <Field label={t('insp.aoStrength')}>{num(t('insp.aoStrength'), ao.strength, 0.1, (v) => set({ ao: { ...ao, strength: Math.max(0, Math.min(2, v)) } }, 'Occlusion strength', 'scene-ao-s'))}</Field>
             <Field label={t('insp.aoRadius')}>{num(t('insp.aoRadius'), ao.radius, 4, (v) => set({ ao: { ...ao, radius: Math.max(1, v) } }, 'Occlusion radius', 'scene-ao-r'), 'u')}</Field>
             <p className="cw-hint">{t('insp.aoHint')}</p>
+          </>
+        )}
+        <Field label={t('insp.bloom')}>
+          <Switch label={t('insp.bloom')} checked={bloom.enabled} onChange={(v) => set({ bloom: { ...bloom, enabled: v } }, v ? 'Bloom on' : 'Bloom off')} />
+        </Field>
+        {bloom.enabled && (
+          <>
+            <Field label={t('insp.bloomStrength')}>{num(t('insp.bloomStrength'), bloom.strength, 0.1, (v) => set({ bloom: { ...bloom, strength: Math.max(0, Math.min(3, v)) } }, 'Bloom strength', 'scene-bloom-s'))}</Field>
+            <Field label={t('insp.bloomThreshold')}>{num(t('insp.bloomThreshold'), bloom.threshold, 0.05, (v) => set({ bloom: { ...bloom, threshold: Math.max(0, v) } }, 'Bloom threshold', 'scene-bloom-t'))}</Field>
+            <Field label={t('insp.bloomRadius')}>{num(t('insp.bloomRadius'), bloom.radius, 0.05, (v) => set({ bloom: { ...bloom, radius: Math.max(0, Math.min(1, v)) } }, 'Bloom spread', 'scene-bloom-r'))}</Field>
           </>
         )}
         <Field label={t('insp.background')}>

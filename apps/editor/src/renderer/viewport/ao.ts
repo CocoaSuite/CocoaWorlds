@@ -2,15 +2,16 @@
  * Ambient occlusion (GTAO, screen space): corners, creases and the ground under things darken. Drawn through a
  * composer for one camera at a time; used by the editor (Lighting: Game), Play and exported games alike.
  */
-import { aoOf, type AoSettings } from '@cocoaworlds/core';
+import { aoOf, bloomOf, type AoSettings, type BloomSettings } from '@cocoaworlds/core';
 import * as THREE from 'three';
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
 import { GTAOPass } from 'three/examples/jsm/postprocessing/GTAOPass.js';
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 
 export class AoRenderer {
-  private c: { composer: EffectComposer; pass: GTAOPass; scene: THREE.Scene; cam: THREE.Camera; w: number; h: number } | null = null;
+  private c: { composer: EffectComposer; pass: GTAOPass; bloom: UnrealBloomPass; scene: THREE.Scene; cam: THREE.Camera; w: number; h: number } | null = null;
 
   /** Software rendering (no graphics card): occlusion would slow everything down, so it is left out. */
   readonly software: boolean;
@@ -22,10 +23,13 @@ export class AoRenderer {
     this.software = /swiftshader|llvmpipe|software/i.test(name);
   }
 
-  /** Draw `scene` from `cam` with occlusion, if it is on. False: nothing drawn (draw it plainly). */
-  render(scene: THREE.Scene, cam: THREE.Camera, settings: { ao?: AoSettings } | undefined): boolean {
+  /** Draw `scene` from `cam` with occlusion and bloom, if either is on. False: nothing drawn (draw it plainly). */
+  render(scene: THREE.Scene, cam: THREE.Camera, settings: { ao?: AoSettings; bloom?: BloomSettings } | undefined): boolean {
     const s = aoOf(settings);
-    if (!s.enabled || s.strength <= 0 || this.software) return false;
+    const b = bloomOf(settings);
+    const aoOn = s.enabled && s.strength > 0 && !this.software;
+    const bloomOn = b.enabled && b.strength > 0;
+    if (!aoOn && !bloomOn) return false;
     const size = this.r.getSize(new THREE.Vector2());
     if (!this.c || this.c.cam !== cam || this.c.scene !== scene) {
       this.dispose();
@@ -98,8 +102,11 @@ void main() {
         draw(r, write, read, dt, mask);
       };
       composer.addPass(pass);
+      // Bloom: bright parts, blurred down a few halvings and added back (cheap: it starts at half size).
+      const bloom = new UnrealBloomPass(new THREE.Vector2(size.x, size.y), b.strength, b.radius, b.threshold);
+      composer.addPass(bloom);
       composer.addPass(new OutputPass());
-      this.c = { composer, pass, scene, cam, w: 0, h: 0 };
+      this.c = { composer, pass, bloom, scene, cam, w: 0, h: 0 };
     }
     const c = this.c;
     if (c.w !== size.x || c.h !== size.y) {
@@ -108,6 +115,11 @@ void main() {
       c.w = size.x;
       c.h = size.y;
     }
+    c.pass.enabled = aoOn;
+    c.bloom.enabled = bloomOn;
+    c.bloom.strength = Math.min(3, b.strength);
+    c.bloom.radius = Math.max(0, Math.min(1, b.radius));
+    c.bloom.threshold = Math.max(0, b.threshold);
     c.pass.blendIntensity = Math.min(2, s.strength);
     c.pass.updateGtaoMaterial({ radius: s.radius, thickness: s.radius * 0.5, distanceExponent: 1.5, scale: 1, samples: 16 });
     c.composer.render();
@@ -117,6 +129,7 @@ void main() {
   dispose(): void {
     this.c?.composer.dispose();
     this.c?.pass.dispose();
+    this.c?.bloom.dispose();
     this.c = null;
   }
 }

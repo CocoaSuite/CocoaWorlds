@@ -37,11 +37,12 @@ import {
 } from '@cocoaworlds/scripting';
 import { CREATURE_MOMENTS, UI_SCRIPT_OWNER, uiOf, type GameValue } from '@cocoaworlds/core';
 import { Button, ContextMenu, IconButton, type MenuEntry } from '@cocoaworlds/ui';
+import { Picker, type PickGroup, type PickItem } from './Picker';
 import { createContext, useContext, useEffect, useMemo, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { getLang, t } from '../../i18n';
 import { useEditor } from '../../store';
 import { sceneInfo } from './scene-info';
-import { STATEMENT_GROUPS, VALUES_FOR, axisLabel, directionLabel, eventName, groupTitle, statementName, valueName, w } from './words';
+import { EVENT_GROUPS, STATEMENT_GROUPS, VALUES_FOR, axisLabel, directionLabel, eventName, groupTitle, statementName, valueName, w } from './words';
 
 interface Ctx {
   owner: string;
@@ -53,6 +54,7 @@ interface Ctx {
   active: Set<string>;
   objects: { id: string; name: string; isZone: boolean; isSign: boolean; isLight: boolean }[];
   menu: (x: number, y: number, items: MenuEntry[]) => void;
+  pick: (x: number, y: number, groups: PickGroup[], extra?: PickItem | null) => void;
   /** The handler being drawn (for “the thing that entered”). */
   otherAllowed: boolean;
   /** In “When the player uses this”, the other thing is the player. */
@@ -97,6 +99,7 @@ export function ScriptPanel({ screens = false }: { screens?: boolean } = {}) {
   const playing = useEditor((s) => !!s.playing);
   const st = useEditor.getState();
   const [menu, setMenu] = useState<{ x: number; y: number; items: MenuEntry[] } | null>(null);
+  const [picker, setPicker] = useState<{ x: number; y: number; groups: PickGroup[]; extra?: PickItem | null } | null>(null);
   const [, setClipRev] = useState(0);
   useEffect(() => {
     const f = () => setClipRev((n) => n + 1);
@@ -144,14 +147,16 @@ export function ScriptPanel({ screens = false }: { screens?: boolean } = {}) {
     active: new Set(active.get(owner.id) ?? []),
     objects,
     menu: (x, y, items) => setMenu({ x, y, items }),
+    pick: (x, y, groups, extra) => setPicker({ x, y, groups, extra }),
     otherAllowed: false,
   };
   const addStack = (ev: { clientX: number; clientY: number }) =>
-    ctx.menu(
+    ctx.pick(
       ev.clientX,
       ev.clientY,
-      [
-        ...(['start', 'enter', 'leave', 'use', 'useHolding', 'message', 'messageStop', 'every', 'die', 'breaks', 'hit', 'dies', 'hides', 'unhides', 'found', 'does', 'near', 'far', 'uiClick', 'useItem', 'listPick', 'key', 'press'] as EventKind[]).map((k) => ({
+      EVENT_GROUPS.map((g) => ({
+        title: groupTitle(g.title),
+        items: g.kinds.map((k) => ({
           label: eventName(k),
           onSelect: () => {
             const zone: Ref = objects.find((o) => o.id === owner.id)?.isZone ? { self: true } : objects.find((o) => o.isZone) ? { entity: objects.find((o) => o.isZone)!.id } : { self: true };
@@ -162,8 +167,8 @@ export function ScriptPanel({ screens = false }: { screens?: boolean } = {}) {
             ctx.update((s) => addHandler(s, { id: blockId(), event: ev, body: [] }), 'Add stack');
           },
         })),
-        ...(clip ? (['separator', { label: clipLabel(), onSelect: () => ctx.update((s) => pasteInto(s, null), 'Paste blocks') }] as MenuEntry[]) : []),
-      ],
+      })),
+      clip ? { label: clipLabel(), onSelect: () => ctx.update((s) => pasteInto(s, null), 'Paste blocks') } : null,
     );
   /** Ctrl+C / Ctrl+X / Ctrl+V / Delete on the block (or stack) that has the keyboard focus. */
   const onKey = (e: KeyboardEvent<HTMLDivElement>) => {
@@ -227,6 +232,7 @@ export function ScriptPanel({ screens = false }: { screens?: boolean } = {}) {
         </div>
       </div>
       {menu && <ContextMenu x={menu.x} y={menu.y} items={menu.items} onClose={() => setMenu(null)} />}
+      {picker && <Picker {...picker} onClose={() => setPicker(null)} />}
     </C.Provider>
   );
 }
@@ -534,14 +540,11 @@ function List({ listKey, list }: { listKey: string; list: Statement[] }) {
         type="button"
         className="cw-add-blk"
         onClick={(ev) =>
-          c.menu(
-            ev.clientX,
-            ev.clientY,
-            paletteItems(
-              c,
-              (stmt) => c.update((sc) => insertStatement(sc, listKey, list.length, stmt), 'Add block'),
-              () => c.update((sc) => pasteInto(sc, { key: listKey, index: list.length }), 'Paste blocks'),
-            ),
+          pickBlock(
+            c,
+            ev,
+            (stmt) => c.update((sc) => insertStatement(sc, listKey, list.length, stmt), 'Add block'),
+            () => c.update((sc) => pasteInto(sc, { key: listKey, index: list.length }), 'Paste blocks'),
           )
         }
       >
@@ -572,16 +575,18 @@ function withUiDefaults<T extends Statement>(s: T): T {
   return s;
 }
 
-function paletteItems(c: Ctx, add: (s: Statement) => void, paste?: () => void): MenuEntry[] {
-  const out: MenuEntry[] = [];
-  if (paste && clip?.kind === 'blocks') out.push({ label: clipLabel(), onSelect: paste }, 'separator');
+/** Open the block picker; `add` puts the new block in, `paste` the copied ones. */
+function pickBlock(c: Ctx, ev: { clientX: number; clientY: number }, add: (s: Statement) => void, paste?: () => void): void {
   const firstVar = c.script.variables[0]?.name;
-  const target: Ref = c.objects.some((o) => o.id === c.owner) ? { self: true } : { self: true };
-  STATEMENT_GROUPS.forEach((g, i) => {
-    if (i) out.push('separator');
-    for (const k of g.kinds) out.push({ label: `${groupTitle(g.title)} › ${statementName(k)}`, onSelect: () => add(withUiDefaults(newStatement(k as StatementKind, { target, variable: firstVar }))) });
-  });
-  return out;
+  c.pick(
+    ev.clientX,
+    ev.clientY,
+    STATEMENT_GROUPS.map((g) => ({
+      title: groupTitle(g.title),
+      items: g.kinds.map((k) => ({ label: statementName(k), onSelect: () => add(withUiDefaults(newStatement(k as StatementKind, { target: { self: true }, variable: firstVar }))) })),
+    })),
+    paste && clip?.kind === 'blocks' ? { label: clipLabel(), onSelect: paste } : null,
+  );
 }
 
 function StatementRow({ s, listKey }: { s: Statement; listKey: string }) {
@@ -619,14 +624,11 @@ function StatementRow({ s, listKey }: { s: Statement; listKey: string }) {
             icon="plus"
             label={t('script.addAfter')}
             onClick={(ev) =>
-              c.menu(
-                ev.clientX,
-                ev.clientY,
-                paletteItems(
-                  c,
-                  (stmt) => at && c.update((sc) => insertStatement(sc, at.key, at.index + 1, stmt), 'Add block'),
-                  () => at && c.update((sc) => pasteInto(sc, { key: at.key, index: at.index + 1 }), 'Paste blocks'),
-                ),
+              pickBlock(
+                c,
+                ev,
+                (stmt) => at && c.update((sc) => insertStatement(sc, at.key, at.index + 1, stmt), 'Add block'),
+                () => at && c.update((sc) => pasteInto(sc, { key: at.key, index: at.index + 1 }), 'Paste blocks'),
               )
             }
           />

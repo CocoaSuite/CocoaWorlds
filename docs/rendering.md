@@ -25,6 +25,14 @@ With nothing selected, the Inspector shows the scene's settings, all with undo:
   start with it off.
 - **Fog**: a colour, where it starts, and where it's thick.
 
+## Bloom
+
+**Bloom** (Scene settings, on by default) puts a soft glow around anything brighter than white: lamps, glowing
+materials (glow strength above 1), the sun's glare. **Glows above** sets how bright a pixel must be (lower: more
+glows), **strength** and **spread** how much. It is Three.js's `UnrealBloomPass` in the same composer as ambient
+occlusion (`viewport/ao.ts`): it starts at half size and blurs a few halvings, so it is cheap. Shown with
+Lighting: Game, in Play and in exported games.
+
 ## Ambient occlusion
 
 **Ambient occlusion** (Scene settings, on by default) darkens corners, creases and the ground under things, so
