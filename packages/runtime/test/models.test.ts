@@ -98,8 +98,8 @@ describe('models collide by their own shape', () => {
 
 describe('Auto: collision meshes from the file', () => {
   const part = (list: [Vec3, Vec3][], moves = false) => ({ ...boxes(list), exact: false, moves });
-  const walk = (parts: ReturnType<typeof part>[], before?: (w: GameWorld, id: string) => void) => {
-    const e = arch('auto');
+  const walk = (parts: ReturnType<typeof part>[], before?: (w: GameWorld, id: string) => void, mode = 'auto') => {
+    const e = arch(mode);
     const w = GameWorld.create(scene(floor(), e, spawn()), { models: new Map([['assets/models/arch.glb', { ...ARCH, parts }]]) });
     before?.(w, e.id);
     run(w, 0.3);
@@ -118,6 +118,12 @@ describe('Auto: collision meshes from the file', () => {
   it('collides by its collision meshes only', () => {
     expect(walk([part([[[-1.5, 0, -0.25], [-1, 3, 0.25]]]), part([[[1, 0, -0.25], [1.5, 3, 0.25]]])])).toBeLessThan(-300);
     expect(walk([part([DOOR])])).toBeGreaterThan(-160 + 10 - 30);
+  });
+
+  it('they win over Box, Hull and Exact too; None still turns collision off', () => {
+    const posts = [part([[[-1.5, 0, -0.25], [-1, 3, 0.25]]]), part([[[1, 0, -0.25], [1.5, 3, 0.25]]])];
+    for (const mode of ['box', 'hull', 'exact']) expect(walk(posts, undefined, mode), mode).toBeLessThan(-300);
+    expect(walk([part([DOOR])], undefined, 'none')).toBeLessThan(-300);
   });
 
   it('a box mesh becomes a box, turned ones too; anything else a hull', () => {

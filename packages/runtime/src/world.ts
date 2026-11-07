@@ -1231,7 +1231,8 @@ export class GameWorld {
     if (!e.components.model || e.components.collider) return null;
     const data = readComponent<ModelData>('model', e.components.model);
     const mesh = data.collision !== 'none' ? this.models.get(data.model) : undefined;
-    if (data.collision === 'auto') return mesh?.parts?.length ? { data, mesh } : null;
+    if (mesh?.parts?.length) return { data, mesh };
+    if (data.collision === 'auto') return null;
     return mesh && mesh.positions.length >= 9 ? { data, mesh } : null;
   }
 
@@ -3831,15 +3832,16 @@ function modelColliders(data: ModelData, mesh: ModelMesh, scale: Q3, moves: bool
     for (let i = 0; i < pts.length; i++) pts[i] = src[i]! * k * scale[i % 3]!;
     return pts;
   };
-  if (data.collision === 'auto') {
+  if (mesh.parts?.length) {
     const out: { desc: RAPIER.ColliderDesc; part: number }[] = [];
-    (mesh.parts ?? []).forEach((p, part) => {
+    mesh.parts.forEach((p, part) => {
       const pts = sized(p.positions);
       const desc = p.exact && !moves && p.indices.length >= 3 ? RAPIER.ColliderDesc.trimesh(pts, p.indices) : (boxOf(pts) ?? hull(pts));
       if (desc) out.push({ desc, part });
     });
     return out;
   }
+  if (data.collision === 'auto') return [];
   const pts = sized(mesh.positions);
   if (data.collision === 'box') {
     const min = [Infinity, Infinity, Infinity], max = [-Infinity, -Infinity, -Infinity];

@@ -109,8 +109,8 @@ Models (GLB, glTF) can be imported the same way; see Models below.
   the player walks through or under, like arches and rooms (with Physics it uses the hull instead).
 
 **Collision meshes.** In Blender, add simple meshes named `collision`, `hitbox` or `col_` (any case; `.001` endings
-are fine; meshes under an object named so count too). They are never drawn, and with Auto they are the model's whole
-collision: a chair can be two boxes instead of every leg. Each mesh that is a box (8 corners, square sides, turned or
+are fine; meshes under an object named so count too). They are never drawn, and they are the model's whole collision with
+any setting but None: a chair can be two boxes instead of every leg. Each mesh that is a box (8 corners, square sides, turned or
 not) becomes a box; anything else is shrink-wrapped (a hull, so an L shape needs two meshes). Names starting
 `collision_mesh`, `hitbox_mesh` or `col_mesh` use their exact triangles (still objects only). A collision mesh that the
 animation moves (animated itself, under an animated object, or parented to a bone) carries its collider along in

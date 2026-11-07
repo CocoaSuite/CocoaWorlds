@@ -234,8 +234,8 @@ export const COMPONENTS: ComponentDef[] = [
         key: 'collision',
         label: e('Collision', 'Столкновения'),
         hint: e(
-          'Auto: the meshes named collision, hitbox or col_ in the file (no collision if it has none). Box: its bounding box (cheapest). Hull: shrink-wrapped, no hollows (good for things that move). Exact: every triangle, for still scenery like arches and rooms (moving objects use the hull).',
-          'Авто: меши с именами collision, hitbox или col_ в файле (без столкновений, если их нет). Коробка: габаритный короб (дешевле всего). Оболочка: «обтянутая» форма без впадин (хорошо для движущихся). Точно: каждый треугольник — для неподвижных арок и комнат (движущиеся используют оболочку).',
+          'Collision meshes in the file (named collision, hitbox or col_) are used instead of any of these except None. Auto: no collision without them. Box: its bounding box (cheapest). Hull: shrink-wrapped, no hollows (good for things that move). Exact: every triangle, for still scenery like arches and rooms (moving objects use the hull).',
+          'Меши столкновений в файле (с именами collision, hitbox или col_) используются вместо любого из этих, кроме «Нет». Авто: без них столкновений нет. Коробка: габаритный короб (дешевле всего). Оболочка: «обтянутая» форма без впадин (хорошо для движущихся). Точно: каждый треугольник — для неподвижных арок и комнат (движущиеся используют оболочку).',
         ),
         type: {
           kind: 'enum',

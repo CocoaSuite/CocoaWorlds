@@ -270,8 +270,8 @@ user's project, plugged in, not only the bench. `npm run bench -- --breakdown` (
 ### 13. Custom collision shapes (collision meshes in model files)
 
 Status: done. Meshes named `collision` / `hitbox` / `col_` / `ucx_` (or under a node named so) are taken out of the
-loaded scene (an empty node keeps each place, so animation still binds) and become the model's colliders with the
-new Model Collision value **Auto** (the default). Box meshes → cuboid (turned too), others → hull, `*_mesh` names →
+loaded scene (an empty node keeps each place, so animation still binds) and become the model's colliders with any
+Model Collision but None (**Auto**, the new default, means none without them). Box meshes → cuboid (turned too), others → hull, `*_mesh` names →
 trimesh on still bodies. Animated ones (track on the node or an ancestor, or under a bone) follow via
 `ModelInstance.movedParts()` → `GameWorld.movePart()` each Play tick. View › Show collisions: outlines on one shared
 material. Code: `viewport/models.ts` (`splitCollision`), `packages/runtime/src/world.ts` (`ModelPart`, `modelColliders`,

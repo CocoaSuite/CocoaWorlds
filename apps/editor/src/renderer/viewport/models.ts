@@ -243,7 +243,7 @@ export async function modelInstance(data: ModelData): Promise<ModelInstance> {
     const node = follow(inner, p.path);
     if (node) {
       const local = new THREE.Matrix4().copy(p.rest).invert();
-      const geo = new THREE.BufferGeometry().setAttribute('position', new THREE.BufferAttribute(p.positions, 3)).setIndex(new THREE.BufferAttribute(p.indices, 1));
+      const geo = new THREE.BufferGeometry().setAttribute('position', new THREE.BufferAttribute(p.positions.slice(), 3)).setIndex(new THREE.BufferAttribute(p.indices, 1));
       geo.applyMatrix4(local);
       const wire = new THREE.LineSegments(new THREE.EdgesGeometry(geo, 20), wireMaterial);
       geo.dispose();
