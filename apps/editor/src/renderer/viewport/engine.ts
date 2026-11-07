@@ -165,6 +165,11 @@ export type GizmoMode = 'none' | 'translate' | 'rotate' | 'scale';
 const DEG = THREE.MathUtils.DEG2RAD;
 const r3 = (n: number) => Math.round(n * 1000) / 1000;
 
+/** New objects: how far the view may aim before they go a set way ahead instead. */
+const AIM_REACH = 4096;
+const AIM_AHEAD = 512;
+const GROUND = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+
 export class ViewportEngine {
   readonly renderer: THREE.WebGLRenderer;
   private scene = new THREE.Scene();
@@ -1129,6 +1134,22 @@ export class ViewportEngine {
     if (p) return p;
     const t = this.rig.target;
     return [this.snapV(t.x), 0, this.snapV(t.z)];
+  }
+
+  /** Where a new object goes: what the middle of the view looks at (off a wall a little), or ahead of the camera. */
+  aimPoint(): [number, number, number] {
+    if (this.rig.kind !== 'perspective') return this.focusPoint();
+    this.raycaster.setFromCamera(new THREE.Vector2(0, 0), this.rig.camera);
+    const ray = this.raycaster.ray;
+    const hit = this.world.pick(this.raycaster);
+    const p = new THREE.Vector3();
+    if (hit && hit.distance < AIM_REACH) {
+      p.copy(hit.point);
+      if (hit.normal.y < 0.7) p.addScaledVector(hit.normal, 32);
+    } else if (ray.intersectPlane(GROUND, p) && p.distanceTo(ray.origin) < AIM_REACH) {
+      // (The ground plane, close enough.)
+    } else ray.at(AIM_AHEAD, p);
+    return [this.snapV(p.x), this.snapV(p.y), this.snapV(p.z)];
   }
 
   frameSelection(): void {

@@ -165,7 +165,7 @@ export function Viewport() {
       return;
     }
     engine.current = e;
-    useEditor.setState({ placementPoint: () => e.focusPoint() });
+    useEditor.setState({ placementPoint: () => e.aimPoint() });
     (window as unknown as { __cwViewport?: ViewportEngine }).__cwViewport = e;
     return () => {
       e.dispose();

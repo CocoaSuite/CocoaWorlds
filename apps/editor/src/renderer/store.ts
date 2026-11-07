@@ -521,7 +521,7 @@ export const useEditor = create<State & Actions>()((set, get) => ({
     if (h.redo() && label) get().log('info', 'Edit', `Redo ${label}`);
   },
 
-  add(kind, at = [0, 0, 0]) {
+  add(kind, at = get().placementPoint() ?? [0, 0, 0]) {
     const doc = get().doc;
     if (!doc) return;
     const base = (name: string, components: EntityData['components'], y = 0) =>
@@ -542,7 +542,7 @@ export const useEditor = create<State & Actions>()((set, get) => ({
     get().log('info', 'Scene', `Added ${e.name}`);
   },
 
-  addTerrain(at = [0, 0, 0]) {
+  addTerrain(at = get().placementPoint() ?? [0, 0, 0]) {
     const doc = get().doc;
     if (!doc) return;
     const name = uniqueName(doc, 'terrain');
@@ -576,7 +576,7 @@ export const useEditor = create<State & Actions>()((set, get) => ({
     get().log('info', 'Scene', `Added a terrain tile beside ${src.name} (${side})`);
   },
 
-  addLadder(at = [0, 0, 0]) {
+  addLadder(at = get().placementPoint() ?? [0, 0, 0]) {
     const doc = get().doc;
     if (!doc) return;
     const root = newEntity(uniqueName(doc, 'ladder'), { group: {}, repeat: { ...defaultComponent('repeat'), length: 128 } }, { position: [at[0], at[1], at[2]] });
@@ -603,7 +603,7 @@ export const useEditor = create<State & Actions>()((set, get) => ({
     get().log('info', 'Scene', 'Added a ladder: drag the blue knob at its top (or set Length) to make it taller');
   },
 
-  async addChicken(friendly, at = [0, 0, 0]) {
+  async addChicken(friendly, at = get().placementPoint() ?? [0, 0, 0]) {
     const { doc, session } = get();
     if (!doc || !session) return;
     const r = await window.cocoa.projects.addSample(session.dir, 'chicken');

@@ -294,3 +294,12 @@ and sleep both go through it) and `setDay`, events `newDay`, `dayStarts` and `at
 `packages/runtime/test/days.test.ts`.
 
 Next, if wanted: weekday names; a day shown on screen without blocks.
+
+### 15. New objects where the view aims
+
+Status: done. Add menus (scene tree, Tools, plants, models, prefabs, ladder, terrain, chicken) place the new object
+at `ViewportEngine.aimPoint()`: in the 3D view, what the middle of the view hits within 4096 u (pushed 32 u off a
+wall), else the ground plane within that reach, else 512 u ahead; 2D views keep the centre of the view. Right-click
+"Add here" still uses the clicked spot. Code: `viewport/engine.ts`, `viewport/Viewport.tsx` (`placementPoint`),
+`store.ts` (defaults). Not run: e2e (the default camera looks at the origin, so tests that add into an empty scene
+should still get the origin).
