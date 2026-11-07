@@ -99,6 +99,8 @@ export interface SavedProgress {
   scene?: string;
   /** When it was saved by asking (the save menu, “Save the game”), in ms since 1970. */
   at?: number;
+  /** The day count. */
+  day?: number;
 }
 
 /**
@@ -318,6 +320,7 @@ export interface Travel {
   values: Record<string, Value>;
   /** The worlds of scenes played this session, as they were left (games that keep the world). */
   worlds?: Record<string, SavedScene>;
+  day?: number;
 }
 
 /** The player's state for the screen (health bar, score). */
@@ -488,6 +491,7 @@ export class GameWorld {
       inventory: [...this.inventory],
       slot: this.slot,
       values: Object.fromEntries(this.globals),
+      day: this.day,
     };
     if (this.keepsWorld) this.travel.worlds = { ...this.otherWorlds, [this.sceneName]: this.saveScene(false) };
     this.bus.emit({ type: 'travel', scene, landmark, time: this.time });
@@ -510,6 +514,7 @@ export class GameWorld {
     this.inventory = new Map(t.inventory);
     this.slot = t.slot;
     for (const [k, v] of Object.entries(t.values)) if (this.globals.has(k)) this.globals.set(k, v);
+    if (typeof t.day === 'number') this.day = t.day;
     const p = this.player;
     if (!p) return;
     const lm = t.landmark ? this.landmarkAt(t.landmark) : null;
@@ -553,6 +558,7 @@ export class GameWorld {
       // (The player is put back only when the game is resumed here, not when arriving from another scene.)
       if (mine) this.loadScene(mine, !arrive && saved.scene === this.sceneName);
     }
+    if (typeof saved.day === 'number' && Number.isFinite(saved.day)) this.day = Math.max(0, Math.round(saved.day));
     // (After the world: a chair wedged under a door is pinned there again.)
     if (saved.base && typeof saved.base === 'object') {
       this.otherBases = { ...saved.base };
@@ -573,6 +579,7 @@ export class GameWorld {
     const kept = this.valueDefs.filter((d) => d.saved);
     if (!kept.length && !this.rules.saveItems && !this.base && !this.rules.saveWorld) return null;
     const out: SavedProgress = { values: Object.fromEntries(kept.map((d) => [d.name, this.globals.get(d.name) ?? d.initial])) };
+    if (this.dayOn || this.day !== this.firstDay) out.day = this.day;
     if (this.rules.saveItems) out.items = [...this.inventory];
     if (this.base) out.base = { ...this.otherBases, [this.sceneName]: this.base.save() };
     if (this.keepsWorld) {
@@ -592,6 +599,7 @@ export class GameWorld {
   forgetProgress(): void {
     this.otherWorlds = {};
     this.worldForgotten = true;
+    this.day = this.firstDay;
     for (const d of this.valueDefs) if (d.saved) this.globals.set(d.name, d.initial);
     if (this.rules.saveItems) {
       this.inventory.clear();
@@ -809,6 +817,10 @@ export class GameWorld {
   /** The time of day (hours) and how many hours pass each second (0: it stands still). */
   dayHour = 12;
   private hoursPerSecond = 0;
+  /** The day count (up by one each midnight) and the one the game starts on. */
+  day = 1;
+  private firstDay = 1;
+  private dayOn = false;
   /** Models' glow set by scripts (from null: from how the model was made). */
   private glows = new Map<string, Fade>();
   /** Objects scripts turned on (true) or off (false), by body. */
@@ -868,6 +880,8 @@ export class GameWorld {
     const day = dayOf(doc.settings);
     this.dayHour = (((day.startHour % 24) + 24) % 24);
     this.hoursPerSecond = day.enabled && day.minutes > 0 ? 24 / (day.minutes * 60) : 0;
+    this.day = this.firstDay = Math.max(0, Math.round(day.startDay));
+    this.dayOn = day.enabled;
     const info = { objects, rules, globals: values.map((v) => ({ name: v.name, type: v.type })), signs: new Set(this.signs.keys()), lights: new Set(this.lights.keys()) };
     this.scriptInfo = info;
     const programs: Program[] = [];
@@ -1142,6 +1156,8 @@ export class GameWorld {
       lightOn: (target) => this.lights.get(target)?.on ?? false,
       timeOfDay: () => this.dayHour,
       setTimeOfDay: (h) => void (this.dayHour = Number.isFinite(h) ? ((h % 24) + 24) % 24 : this.dayHour),
+      day: () => this.day,
+      setDay: (d) => void (Number.isFinite(d) && (this.day = Math.max(0, Math.round(d)))),
       setText: (target, text) => {
         if (!this.signs.has(target) || this.signs.get(target) === text) return;
         this.signs.set(target, text);
@@ -1678,7 +1694,7 @@ export class GameWorld {
       this.accumulator -= STEP;
       this.time += STEP;
       this.base?.tick(STEP);
-      if (this.hoursPerSecond) this.dayHour = (this.dayHour + this.hoursPerSecond * STEP) % 24;
+      if (this.hoursPerSecond) this.passHours(this.hoursPerSecond * STEP);
       n++;
       this.events.drainCollisionEvents((h1, h2, started) => this.onContact(h1, h2, started));
       this.runner.tick(STEP);
@@ -3682,11 +3698,23 @@ export class GameWorld {
     return true;
   }
 
+  /** The clock goes forward: past midnight the day count goes up, and “When the clock reaches” stacks start. */
+  passHours(hours: number): void {
+    if (!(hours > 0)) return;
+    const from = this.dayHour, to = from + hours;
+    this.dayHour = to % 24;
+    for (let d = Math.floor(to / 24); d > 0; d--) {
+      this.day++;
+      this.runner.dispatch({ type: 'newDay' });
+    }
+    this.runner.dispatch({ type: 'hours', from, to });
+  }
+
   /** Sleep: hours pass, the game is saved (a base that saves on sleep), and a wedged chair may have slipped. */
   sleep(room: string | null = null, comfort = 0): void {
     const b = this.base;
     if (!b) return;
-    this.dayHour = (this.dayHour + b.config.sleep.hours) % 24;
+    this.passHours(b.config.sleep.hours);
     this.bus.emit({ type: 'base.sleep', room, comfort, time: this.time });
     this.checkpoint = this.liveProgress();
     if (b.config.sleep.slept) this.say(b.config.sleep.slept, 2.5);

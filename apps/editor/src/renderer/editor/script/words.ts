@@ -51,6 +51,9 @@ const W = {
   pickItem: ['pick an item', 'выберите предмет'],
   use: ['When the player uses this', 'Когда игрок использует это'],
   every: ['Every', 'Каждые'],
+  newDay: ['When a new day starts', 'Когда начинается новый день'],
+  atHour: ['When the clock reaches', 'Когда часы дойдут до'],
+  oClock: ['o’clock', 'ч'],
   die: ['When the player dies', 'Когда игрок погибает'],
   seconds: ['seconds', 'с'],
   // actions
@@ -179,6 +182,8 @@ const W = {
   setTime: ['Set the time of day to', 'Задать время суток'],
   hoursNoon: ['hours (12 is noon)', 'ч (12 — полдень)'],
   timeOfDay: ['the time of day', 'время суток'],
+  setDay: ['Set the day to', 'Задать день'],
+  day: ['the day', 'день'],
   gameValue: ['game', 'игра'],
   health: ['the player’s health', 'здоровье игрока'],
   armour: ['the player’s armour', 'броня игрока'],
@@ -240,6 +245,8 @@ const PALETTE_EVENT: Record<EventKind, Pair> = {
   key: ['When the player presses a key', 'Когда игрок нажимает клавишу'],
   press: ['When the player presses a key at this (with a prompt)', 'Когда игрок нажимает клавишу на этом (с подсказкой)'],
   every: ['Every few seconds', 'Каждые несколько секунд'],
+  newDay: ['When a new day starts (midnight)', 'Когда начинается новый день (полночь)'],
+  atHour: ['When the clock reaches an hour', 'Когда часы дойдут до часа'],
   die: ['When the player dies', 'Когда игрок погибает'],
   breaks: ['When this breaks', 'Когда это ломается'],
   hit: ['When this is hit (shot, struck or blasted)', 'Когда в это попадают (выстрел, удар, взрыв)'],
@@ -326,6 +333,7 @@ const PALETTE_STMT: Record<StatementKind, Pair> = {
   setLight: ['Change a light (brightness, colour …)', 'Изменить свет (яркость, цвет …)'],
   setGlow: ['Set the glow of a model', 'Задать свечение модели'],
   setTime: ['Set the time of day', 'Задать время суток'],
+  setDay: ['Set the day', 'Задать день'],
   oneOf: ['Do one of these at random', 'Сделать одно из этого наугад'],
 };
 export const statementName = (k: StatementKind) => pick(PALETTE_STMT[k]);
@@ -334,6 +342,7 @@ export const EVENT_GROUPS: { title: Pair; kinds: EventKind[] }[] = [
   { title: ['Game', 'Игра'], kinds: ['start', 'every', 'die'] },
   { title: ['Player actions', 'Действия игрока'], kinds: ['use', 'press', 'useHolding', 'key', 'useItem'] },
   { title: ['Distance and zones', 'Расстояние и зоны'], kinds: ['near', 'far', 'enter', 'leave'] },
+  { title: ['Time', 'Время'], kinds: ['newDay', 'atHour'] },
   { title: ['Messages', 'Сообщения'], kinds: ['message', 'messageStop'] },
   { title: ['Objects', 'Объекты'], kinds: ['hit', 'breaks'] },
   { title: ['Creatures', 'Существа'], kinds: ['dies', 'does'] },
@@ -347,7 +356,7 @@ export const STATEMENT_GROUPS: { title: Pair; kinds: StatementKind[] }[] = [
   { title: ['Move', 'Движение'], kinds: ['move', 'turn', 'turnTo', 'return', 'moveTo', 'scale', 'push', 'physical'] },
   { title: ['Show and switch', 'Показ и включение'], kinds: ['show', 'hide', 'turnOn', 'turnOff', 'startTrain', 'stopTrain'] },
   { title: ['Objects', 'Объекты'], kinds: ['spawn', 'remove', 'damage', 'place', 'pickUp', 'drop'] },
-  { title: ['Lights, time and models', 'Свет, время и модели'], kinds: ['setLight', 'setGlow', 'setTime', 'playAnim'] },
+  { title: ['Lights, time and models', 'Свет, время и модели'], kinds: ['setLight', 'setGlow', 'setTime', 'setDay', 'playAnim'] },
   { title: ['Sound', 'Звук'], kinds: ['playSound', 'stopSound'] },
   { title: ['Player', 'Игрок'], kinds: ['teleport', 'hurt', 'heal', 'giveArmour', 'freezePlayer', 'unfreezePlayer', 'unhide', 'viewFrom', 'changeScene'] },
   { title: ['Score and items', 'Счёт и предметы'], kinds: ['addScore', 'giveItem', 'takeItem'] },
@@ -384,13 +393,14 @@ const VALUE: Record<ExprKind, Pair> = {
   hiding: ['The player is hiding', 'Игрок прячется'],
   lightOn: ['A light is on', 'Свет включён'],
   timeOfDay: ['The time of day (hours)', 'Время суток (часы)'],
+  day: ['The day', 'День'],
 };
 export const valueName = (k: ExprKind) => pick(VALUE[k]);
 
 /** Which value blocks fit a slot of a given type. */
 export const VALUES_FOR: Record<'number' | 'boolean' | 'text' | 'any', ExprKind[]> = {
-  number: ['number', 'variable', 'varOf', 'maths', 'random', 'distance', 'time', 'timeOfDay', 'clock', 'health', 'armour', 'score', 'itemCount'],
+  number: ['number', 'variable', 'varOf', 'maths', 'random', 'distance', 'time', 'timeOfDay', 'day', 'clock', 'health', 'armour', 'score', 'itemCount'],
   boolean: ['boolean', 'inside', 'holds', 'hiding', 'lightOn', 'variable', 'varOf', 'compare', 'logic', 'not'],
-  text: ['text', 'variable', 'varOf', 'join', 'number', 'object', 'score', 'itemCount', 'selectedItem', 'pickedRow'],
-  any: ['number', 'text', 'boolean', 'variable', 'varOf', 'maths', 'compare', 'logic', 'not', 'inside', 'holds', 'hiding', 'lightOn', 'random', 'distance', 'join', 'time', 'timeOfDay', 'clock', 'health', 'armour', 'score', 'itemCount', 'selectedItem', 'pickedRow', 'object', 'copy'],
+  text: ['text', 'variable', 'varOf', 'join', 'number', 'object', 'day', 'score', 'itemCount', 'selectedItem', 'pickedRow'],
+  any: ['number', 'text', 'boolean', 'variable', 'varOf', 'maths', 'compare', 'logic', 'not', 'inside', 'holds', 'hiding', 'lightOn', 'random', 'distance', 'join', 'time', 'timeOfDay', 'day', 'clock', 'health', 'armour', 'score', 'itemCount', 'selectedItem', 'pickedRow', 'object', 'copy'],
 };

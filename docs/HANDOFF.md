@@ -284,3 +284,12 @@ material. Code: `viewport/models.ts` (`splitCollision`), `packages/runtime/src/w
 `packages/runtime/test/models.test.ts` (Auto). Not checked yet with a real Blender file in the app.
 
 Next, if wanted: `trigger` meshes in files (zones); outlines on batched copies.
+
+### 14. Days
+
+Status: done. A day count on top of day and night (see docs/rendering.md, Days): `DayCycle.startDay`
+(Inspector › First day), `GameWorld.day` and `passHours` (clock and sleep both go through it), events `newDay` and
+`atHour`, statement `setDay`, value `day`. Saved as `SavedProgress.day`, carried as `Travel.day`. Tests:
+`packages/runtime/test/days.test.ts`.
+
+Next, if wanted: weekday names; a day shown on screen without blocks.

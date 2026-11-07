@@ -36,6 +36,13 @@ exported games run the clock. A scene without a Sun gets one. Blocks: **Set the 
 time of day**. Code: `viewport/day.ts`, `SceneLighting.setDay`, `GameWorld.dayHour`. Reflections follow every
 half hour of game time.
 
+**Days.** The day count starts at **First day** and goes up each time the clock passes midnight (also while
+sleeping in a base). Events: **When a new day starts**, **When the clock reaches h o'clock** (once each time that
+hour passes, also while sleeping). Statement **Set the day to n**, value **the day**. Setting the time of day
+doesn't change the day. The day goes with the player to other scenes and is kept in saved progress (when the cycle is
+on or a block changed it); “Forget saved progress” puts it back to the first day. Code: `GameWorld.passHours`,
+`day`. Tests: `packages/runtime/test/days.test.ts`.
+
 ## Bloom
 
 **Bloom** (Scene settings, on by default) puts a soft glow around anything brighter than white: lamps, glowing

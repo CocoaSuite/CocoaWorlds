@@ -31,7 +31,10 @@ export function newEvent(kind: EventKind, zone: Ref = self): EventBlock {
     case 'sits':
     case 'stands':
     case 'found':
+    case 'newDay':
       return { id: id(), kind };
+    case 'atHour':
+      return { id: id(), kind, hour: num(22) };
     case 'enter':
     case 'leave':
       return { id: id(), kind, zone };
@@ -151,6 +154,8 @@ export function newStatement(kind: StatementKind, opts: { target?: Ref; variable
       return { id: id(), kind, target, prop: 'intensity', value: num(1), seconds: num(0) };
     case 'setTime':
       return { id: id(), kind, value: num(12) };
+    case 'setDay':
+      return { id: id(), kind, value: num(1) };
     case 'setGlow':
       return { id: id(), kind, target, strength: num(1), seconds: num(0) };
     case 'playAnim':
@@ -228,6 +233,7 @@ export function newExpr(kind: ExprKind, opts: { variable?: string } = {}): Expr 
     case 'holds':
       return { id: id(), kind, what: null };
     case 'timeOfDay':
+    case 'day':
       return { id: id(), kind };
     case 'lightOn':
       return { id: id(), kind, target: self };

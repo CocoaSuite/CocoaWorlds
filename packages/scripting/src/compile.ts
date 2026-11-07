@@ -125,6 +125,9 @@ export type Op =
   /** Pops hours: the time of day. Pushes the time of day. */
   | { op: 'settime' }
   | { op: 'gettime' }
+  /** Pops a day number: the day count. Pushes the day count. */
+  | { op: 'setday' }
+  | { op: 'getday' }
   /** Pops a light; pushes whether it is on. */
   | { op: 'lit' }
   | { op: 'halt' };
@@ -149,6 +152,8 @@ export type CompiledEvent =
   | { kind: 'dies' }
   | { kind: 'hides' | 'unhides' | 'found' | 'sits' | 'stands' }
   | { kind: 'every'; seconds: number }
+  | { kind: 'newDay' }
+  | { kind: 'atHour'; hour: number }
   | { kind: 'near' | 'far'; distance: number }
   | { kind: 'uiClick'; element: string }
   | { kind: 'useItem'; item: string }
@@ -293,6 +298,10 @@ class HandlerCompiler {
     } else if (ev.kind === 'every') {
       if (ev.seconds.kind !== 'number' || !(ev.seconds.value > 0)) this.problem(ev.seconds.id, '“Every” needs a number of seconds above 0.');
       else event = { kind: 'every', seconds: Math.max(0.05, ev.seconds.value) };
+    } else if (ev.kind === 'newDay') event = { kind: 'newDay' };
+    else if (ev.kind === 'atHour') {
+      if (ev.hour.kind !== 'number' || !(ev.hour.value >= 0 && ev.hour.value <= 24)) this.problem(ev.hour.id, 'The hour needs to be a number from 0 to 24.');
+      else event = { kind: 'atHour', hour: ev.hour.value % 24 };
     } else if (ev.kind === 'near' || ev.kind === 'far') {
       if (ev.distance.kind !== 'number' || !(ev.distance.value > 0)) this.problem(ev.distance.id, 'The distance needs to be a number above 0.');
       else event = { kind: ev.kind, distance: ev.distance.value };
@@ -784,6 +793,10 @@ class HandlerCompiler {
         this.expect(s.value, 'number', 'The time of day is a number of hours (12 is noon).');
         this.emit({ op: 'settime' });
         break;
+      case 'setDay':
+        this.expect(s.value, 'number', 'The day is a number.');
+        this.emit({ op: 'setday' });
+        break;
       case 'setGlow':
         this.actTarget(s.target, s.id);
         this.expect(s.strength, 'number', 'The glow must be a number (0 is none).');
@@ -921,6 +934,9 @@ class HandlerCompiler {
         return 'boolean';
       case 'timeOfDay':
         this.emit({ op: 'gettime' });
+        return 'number';
+      case 'day':
+        this.emit({ op: 'getday' });
         return 'number';
       case 'lightOn':
         this.lightTarget(e.target, e.id);

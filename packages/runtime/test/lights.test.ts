@@ -76,7 +76,7 @@ describe('lights in play', () => {
 
   it('the clock runs with day and night on; blocks set and read the time of day', () => {
     const s = newScene('day');
-    s.settings.day = { enabled: true, minutes: 1, startHour: 6, night: 0.25 };
+    s.settings.day = { enabled: true, minutes: 1, startHour: 6, night: 0.25, startDay: 1 };
     const box = newEntity('box', {});
     box.components.script = onStart([
       { id: 'w', kind: 'wait', seconds: n(0.5) },

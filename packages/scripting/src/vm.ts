@@ -50,6 +50,9 @@ export interface ScriptHost {
   /** The time of day in hours, and setting it. */
   timeOfDay?(): number;
   setTimeOfDay?(hours: number): void;
+  /** The day count, and setting it. */
+  day?(): number;
+  setDay?(day: number): void;
   /** Play a sound at a place (an object, the player, 'aim') or everywhere (null). */
   playSound?(sound: string, place: Value, volume: number, owner: string, loudness?: number): void;
   /** A noise at a place, this loud for hunting creatures. */
@@ -161,7 +164,11 @@ export type RunnerEvent =
   | { type: 'key'; key: string }
   | { type: 'press'; key: string; targets: string[]; distance: number }
   /** A hunting creature made a move (`targets`: it, and the hiding spot it is at with what that is inside). */
-  | { type: 'does'; what: string; targets: string[] };
+  | { type: 'does'; what: string; targets: string[] }
+  /** Midnight passed. */
+  | { type: 'newDay' }
+  /** The clock went forward from `from` to `to` (hours counted from day 0, so it never wraps). */
+  | { type: 'hours'; from: number; to: number };
 
 export class ScriptRunner {
   private instances: Instance[];
@@ -282,6 +289,10 @@ export class ScriptRunner {
           if (ev.kind === e.type && e.targets.includes(inst.program.owner)) this.spawn(inst, h, null);
         } else if (e.type === 'hit') {
           if (ev.kind === 'hit' && e.targets.includes(inst.program.owner)) this.spawn(inst, h, null);
+        } else if (e.type === 'newDay') {
+          if (ev.kind === 'newDay') this.spawn(inst, h, null);
+        } else if (e.type === 'hours') {
+          if (ev.kind === 'atHour' && Math.floor((e.to - ev.hour) / 24) > Math.floor((e.from - ev.hour) / 24)) this.spawn(inst, h, null);
         } else if (e.type === 'die') {
           if (ev.kind === 'die') this.spawn(inst, h, null);
         } else if (e.type === 'use') {
@@ -628,6 +639,12 @@ export class ScriptRunner {
           break;
         case 'gettime':
           s.push(this.host.timeOfDay?.() ?? 12);
+          break;
+        case 'setday':
+          this.host.setDay?.(num(s.pop() ?? 0));
+          break;
+        case 'getday':
+          s.push(this.host.day?.() ?? 1);
           break;
         case 'lit': {
           const target = s.pop();

@@ -57,7 +57,9 @@ export type Expr =
   /** Whether a light is on. */
   | { id: string; kind: 'lightOn'; target: Ref }
   /** The time of day in hours (0–24; 12 is noon). */
-  | { id: string; kind: 'timeOfDay' };
+  | { id: string; kind: 'timeOfDay' }
+  /** The day count (goes up at midnight). */
+  | { id: string; kind: 'day' };
 
 export type LightProp = 'intensity' | 'range' | 'angle' | 'color';
 
@@ -145,6 +147,7 @@ export type Statement =
   | { id: string; kind: 'setLight'; target: Ref; prop: LightProp; value: Expr; seconds: Expr }
   /** Set the time of day (hours, 0–24). */
   | { id: string; kind: 'setTime'; value: Expr }
+  | { id: string; kind: 'setDay'; value: Expr }
   /** How bright the glowing parts of a model are (0: no glow), over some seconds. */
   | { id: string; kind: 'setGlow'; target: Ref; strength: Expr; seconds: Expr }
   /** Show or hide a whole screen of the screen UI (by id). */
@@ -199,6 +202,10 @@ export type EventBlock =
    */
   | { id: string; kind: 'useHolding'; item: Ref | null; reach: Expr }
   | { id: string; kind: 'every'; seconds: Expr }
+  /** Midnight passed: the day count went up. */
+  | { id: string; kind: 'newDay' }
+  /** The clock passed `hour` (0–24), once a day. */
+  | { id: string; kind: 'atHour'; hour: Expr }
   /** The player's health reached 0 (they start again at the Player start). */
   | { id: string; kind: 'die' }
   /** This breakable object's health reached 0 (it is removed after this starts). */
@@ -294,6 +301,7 @@ export function* walk(script: Script): Generator<{ id: string; kind: string }> {
     yield { id: h.id, kind: 'handler' };
     yield h.event;
     if (h.event.kind === 'every') yield* expr(h.event.seconds);
+    if (h.event.kind === 'atHour') yield* expr(h.event.hour);
     if (h.event.kind === 'near' || h.event.kind === 'far') yield* expr(h.event.distance);
     if ((h.event.kind === 'use' || h.event.kind === 'useHolding' || h.event.kind === 'press') && h.event.reach) yield* expr(h.event.reach);
     yield* stmts(h.body);

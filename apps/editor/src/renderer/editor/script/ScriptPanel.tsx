@@ -510,6 +510,12 @@ function EventRow({ ev, onRemove, onCopy, pick }: { ev: EventBlock; onRemove: ()
       {w(ev.kind === 'near' ? 'nearEv' : 'farEv')} <ExprSlot expr={ev.distance} type="number" label={w(ev.kind === 'near' ? 'nearEv' : 'farEv')} /> {w(ev.kind === 'near' ? 'unitsOfThis' : 'unitsFromThis')}
     </>
   );
+  else if (ev.kind === 'newDay') content = w('newDay');
+  else if (ev.kind === 'atHour') content = (
+    <>
+      {w('atHour')} <ExprSlot expr={ev.hour} type="number" label={w('atHour')} /> {w('oClock')}
+    </>
+  );
   else if (ev.kind === 'every') content = (
     <>
       {w('every')} <ExprSlot expr={ev.seconds} type="number" label={w('every')} /> {w('seconds')}
@@ -1056,6 +1062,12 @@ function statementWords(s: Statement, set: (patch: Record<string, unknown>, merg
           {w('setTime')} <ExprSlot expr={s.value} type="number" label={w('setTime')} /> {w('hoursNoon')}
         </>
       );
+    case 'setDay':
+      return (
+        <>
+          {w('setDay')} <ExprSlot expr={s.value} type="number" label={w('setDay')} />
+        </>
+      );
     case 'setGlow':
       return (
         <>
@@ -1374,6 +1386,7 @@ function ExprSlot({ expr, type, label }: { expr: Expr; type: 'number' | 'boolean
     case 'clock':
     case 'hiding':
     case 'timeOfDay':
+    case 'day':
       body = <span className="cw-pill-text">{w(expr.kind)}</span>;
       break;
     case 'distance':

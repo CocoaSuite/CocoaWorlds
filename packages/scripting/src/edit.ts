@@ -31,6 +31,7 @@ export function replaceBlock(script: Script, id: string, fn: (b: Node) => Node):
     handlers: script.handlers.map((h) => {
       let event = h.event.id === id ? (fn(h.event) as EventBlock) : h.event;
       if (event.kind === 'every' && event.seconds) event = { ...event, seconds: ex(event.seconds) };
+      if (event.kind === 'atHour' && event.hour) event = { ...event, hour: ex(event.hour) };
       if ((event.kind === 'near' || event.kind === 'far') && event.distance) event = { ...event, distance: ex(event.distance) };
       return { ...h, event, body: h.body.map(st) };
     }),
