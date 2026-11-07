@@ -2,7 +2,7 @@
 import { PaintPanel } from '../viewport/PaintPanel';
 import { useState } from 'react';
 import { shown, stored, type AxisKind } from '../axes';
-import { PIVOT, aoOf, bloomOf, backgroundSoundOf, gameRules, pivotOf, sceneSettings, worldBoundsOf, type EntityData, type SceneSettings as SceneSettingsData, type Transform, type Vec3 } from '@cocoaworlds/core';
+import { PIVOT, aoOf, bloomOf, dayOf, backgroundSoundOf, gameRules, pivotOf, sceneSettings, worldBoundsOf, type EntityData, type SceneSettings as SceneSettingsData, type Transform, type Vec3 } from '@cocoaworlds/core';
 import { brushBounds } from '../brush/brushes';
 import { Button, ColorField, Field, NumberField, PanelHeader, Section, Switch } from '@cocoaworlds/ui';
 import { storeProgress } from '../game/progress';
@@ -153,6 +153,7 @@ function SceneSettings() {
   const cur = sceneSettings(doc.settings);
   const ao = aoOf(doc.settings);
   const bloom = bloomOf(doc.settings);
+  const day = dayOf(doc.settings);
   const set = (patch: Partial<SceneSettingsData>, label: string, mergeKey?: string) => st.setSceneSettings(patch, label, mergeKey);
   const sky = cur.sky!;
   const bg = backgroundSoundOf(doc.settings);
@@ -211,6 +212,17 @@ function SceneSettings() {
         <Button size="sm" onClick={() => st.setWorkspace('sky')}>
           {t('insp.openSky')}
         </Button>
+        <Field label={t('insp.day')}>
+          <Switch label={t('insp.day')} checked={day.enabled} onChange={(v) => set({ day: { ...day, enabled: v } }, v ? 'Day and night on' : 'Day and night off')} />
+        </Field>
+        {day.enabled && (
+          <>
+            <Field label={t('insp.dayStart')}>{num(t('insp.dayStart'), day.startHour, 0.5, (v) => set({ day: { ...day, startHour: ((v % 24) + 24) % 24 } }, 'Start hour', 'scene-day-h'), 'h')}</Field>
+            <Field label={t('insp.dayLength')}>{num(t('insp.dayLength'), day.minutes, 1, (v) => set({ day: { ...day, minutes: Math.max(0, v) } }, 'Day length', 'scene-day-m'), 'min')}</Field>
+            <Field label={t('insp.dayNight')}>{num(t('insp.dayNight'), day.night, 0.05, (v) => set({ day: { ...day, night: Math.max(0, Math.min(1, v)) } }, 'Night brightness', 'scene-day-n'))}</Field>
+            <p className="cw-hint">{t('insp.dayHint')}</p>
+          </>
+        )}
         <Field label={t('insp.fog')}>
           <Switch label={t('insp.fog')} checked={cur.fog.enabled} onChange={(v) => set({ fog: { ...cur.fog, enabled: v } }, v ? 'Fog on' : 'Fog off')} />
         </Field>

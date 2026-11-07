@@ -73,4 +73,25 @@ describe('lights in play', () => {
     const { w } = world(() => [{ id: 'x', kind: 'setLight', target: { self: true }, prop: 'intensity', value: n(1), seconds: n(0) }]);
     expect(w.scriptProblems.some((p) => /not a light/.test(p.message))).toBe(true);
   });
+
+  it('the clock runs with day and night on; blocks set and read the time of day', () => {
+    const s = newScene('day');
+    s.settings.day = { enabled: true, minutes: 1, startHour: 6, night: 0.25 };
+    const box = newEntity('box', {});
+    box.components.script = onStart([
+      { id: 'w', kind: 'wait', seconds: n(0.5) },
+      { id: 't', kind: 'setTime', value: n(21) },
+      { id: 'i', kind: 'if', condition: { id: 'c', kind: 'compare', op: '>', a: { id: 'tod', kind: 'timeOfDay' }, b: n(20) }, then: [{ id: 'sc', kind: 'addScore', amount: n(1) }], otherwise: [] },
+    ]) as never;
+    s.entities = [brush('floor', [-512, -16, -512], [512, 0, 512]), newEntity('start', { playerSpawn: {} }), box];
+    const w = GameWorld.create(s);
+    expect(w.dayHour).toBe(6);
+    run(w, 0.25);
+    // (A day in a minute: 0.4 hours a second.)
+    expect(w.dayHour).toBeCloseTo(6.1, 1);
+    run(w, 0.5);
+    expect(w.playerStatus()!.score).toBe(1);
+    expect(w.dayHour).toBeGreaterThan(21);
+  });
 });
+

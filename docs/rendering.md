@@ -25,6 +25,17 @@ With nothing selected, the Inspector shows the scene's settings, all with undo:
   start with it off.
 - **Fog**: a colour, where it starts, and where it's thick.
 
+## Day and night
+
+**Day and night** (Inspector, nothing selected › Sky) makes the scene's first Sun go round: up in the east at 6,
+highest at noon (toward where the Sun was placed), down in the west at 18. The scene's own sky, sun and ambient
+colours are the look at full day; dawn and dusk warm the horizon and the sun; at night a cool, dim moon (the same
+light from the other side) and stars take over, and the ambient light dims (**Night brightness**). Settings: start
+hour, how many real minutes a day lasts (0: still), night brightness. The editor shows the start hour; Play and
+exported games run the clock. A scene without a Sun gets one. Blocks: **Set the time of day to n**, value **the
+time of day**. Code: `viewport/day.ts`, `SceneLighting.setDay`, `GameWorld.dayHour`. Reflections follow every
+half hour of game time.
+
 ## Bloom
 
 **Bloom** (Scene settings, on by default) puts a soft glow around anything brighter than white: lamps, glowing

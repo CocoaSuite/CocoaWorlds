@@ -360,6 +360,7 @@ export class ViewportEngine {
     const bounds = new THREE.Box3().setFromObject(level);
     this.lighting.update(this.doc, (id) => this.mats.get(id) ?? this.doc!.worldMatrix(id), bounds, this.scene);
     this.play?.driveLights(this.lighting);
+    this.lighting.setDay(this.play ? this.play.dayHour : null);
     this.lighting.applyTo(this.scene);
   }
 

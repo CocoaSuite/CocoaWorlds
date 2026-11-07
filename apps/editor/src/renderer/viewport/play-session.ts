@@ -772,6 +772,11 @@ export class PlaySession {
     this.world.use();
   }
 
+  /** The time of day (hours). */
+  get dayHour(): number {
+    return this.world.dayHour;
+  }
+
   /** What the player holds (an object id), or null. */
   get holding(): string | null {
     return this.world.holding;

@@ -124,6 +124,8 @@ export interface SceneSettings {
   ao?: AoSettings;
   /** Glow around very bright things: lamps, glowing materials, the sun's glare (missing: on). */
   bloom?: BloomSettings;
+  /** Day and night: the sun goes round, the sky and light change with it (missing: off). */
+  day?: DayCycle;
   /** The map's background sound (wind, birds, a hum), looping and heard everywhere while playing (missing: none). */
   backgroundSound?: BackgroundSound;
 }
@@ -154,6 +156,17 @@ export interface BloomSettings {
 }
 export const DEFAULT_BLOOM: BloomSettings = { enabled: true, strength: 0.6, threshold: 1, radius: 0.4 };
 export const bloomOf = (s: { bloom?: BloomSettings } | undefined): BloomSettings => ({ ...DEFAULT_BLOOM, ...(s?.bloom ?? {}) });
+export interface DayCycle {
+  enabled: boolean;
+  /** Real minutes for a whole day (0: time stands still unless a block changes it). */
+  minutes: number;
+  /** The hour the game starts at (0–24; 12 is noon). */
+  startHour: number;
+  /** 0–1: how bright the moonlit night is. */
+  night: number;
+}
+export const DEFAULT_DAY: DayCycle = { enabled: false, minutes: 12, startHour: 9, night: 0.25 };
+export const dayOf = (s: { day?: DayCycle } | undefined): DayCycle => ({ ...DEFAULT_DAY, ...(s?.day ?? {}) });
 export const aoOf = (s: { ao?: AoSettings } | undefined): AoSettings => ({ ...DEFAULT_AO, ...(s?.ao ?? {}) });
 
 export interface SkySettings {

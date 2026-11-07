@@ -55,7 +55,9 @@ export type Expr =
   /** Whether the player holds this object (or a copy of it); null: holds anything at all. */
   | { id: string; kind: 'holds'; what: Ref | null }
   /** Whether a light is on. */
-  | { id: string; kind: 'lightOn'; target: Ref };
+  | { id: string; kind: 'lightOn'; target: Ref }
+  /** The time of day in hours (0–24; 12 is noon). */
+  | { id: string; kind: 'timeOfDay' };
 
 export type LightProp = 'intensity' | 'range' | 'angle' | 'color';
 
@@ -139,6 +141,8 @@ export type Statement =
   | { id: string; kind: 'playAnim'; target: Ref; name: string; loop: boolean }
   /** Change a light's brightness, reach, cone or colour, over some seconds (0: at once). */
   | { id: string; kind: 'setLight'; target: Ref; prop: LightProp; value: Expr; seconds: Expr }
+  /** Set the time of day (hours, 0–24). */
+  | { id: string; kind: 'setTime'; value: Expr }
   /** How bright the glowing parts of a model are (0: no glow), over some seconds. */
   | { id: string; kind: 'setGlow'; target: Ref; strength: Expr; seconds: Expr }
   /** Show or hide a whole screen of the screen UI (by id). */

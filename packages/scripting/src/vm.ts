@@ -47,6 +47,9 @@ export interface ScriptHost {
   setGlow?(target: string, strength: number, seconds: number): void;
   /** Whether a light is on. */
   lightOn?(target: string): boolean;
+  /** The time of day in hours, and setting it. */
+  timeOfDay?(): number;
+  setTimeOfDay?(hours: number): void;
   /** Play a sound at a place (an object, the player, 'aim') or everywhere (null). */
   playSound?(sound: string, place: Value, volume: number, owner: string, loudness?: number): void;
   /** A noise at a place, this loud for hunting creatures. */
@@ -616,6 +619,12 @@ export class ScriptRunner {
           if (target && typeof target === 'object') this.host.setGlow?.(target.ref, v, sec);
           break;
         }
+        case 'settime':
+          this.host.setTimeOfDay?.(num(s.pop() ?? 0));
+          break;
+        case 'gettime':
+          s.push(this.host.timeOfDay?.() ?? 12);
+          break;
         case 'lit': {
           const target = s.pop();
           s.push(!!(target && typeof target === 'object' && this.host.lightOn?.(target.ref)));

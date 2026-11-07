@@ -1025,6 +1025,12 @@ function statementWords(s: Statement, set: (patch: Record<string, unknown>, merg
           <ExprSlot expr={s.seconds} type="number" label={`${statementName('setLight')} ${w('over')}`} /> {w('seconds')}
         </>
       );
+    case 'setTime':
+      return (
+        <>
+          {w('setTime')} <ExprSlot expr={s.value} type="number" label={w('setTime')} /> {w('hoursNoon')}
+        </>
+      );
     case 'setGlow':
       return (
         <>
@@ -1342,6 +1348,7 @@ function ExprSlot({ expr, type, label }: { expr: Expr; type: 'number' | 'boolean
     case 'pickedRow':
     case 'clock':
     case 'hiding':
+    case 'timeOfDay':
       body = <span className="cw-pill-text">{w(expr.kind)}</span>;
       break;
     case 'distance':

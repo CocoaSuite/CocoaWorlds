@@ -6,7 +6,8 @@
  * Units: brightness 1 is a plain light; bulbs and spotlights fade with distance (1/d, so rooms stay readable)
  * and stop at their reach.
  */
-import { readComponent, sceneSettings, type EntityData, type SceneDoc } from '@cocoaworlds/core';
+import { dayOf, readComponent, sceneSettings, skyOf, type DayCycle, type EntityData, type SceneDoc, type SceneSettings } from '@cocoaworlds/core';
+import { MOON, dayLook } from './day';
 import * as THREE from 'three';
 import { setReflection } from './project-materials';
 import { applySky, skyAmbient, skyMaterial, skyMesh, sunSkyColour } from './sky';
@@ -76,6 +77,8 @@ export class SceneLighting {
   private suns: THREE.DirectionalLight[] = [];
   /** The lights by object id, with how much brighter the light is than its Brightness (Play changes them). */
   readonly lights = new Map<string, { light: THREE.Light; falloff: number }>();
+  /** With day and night on: the daytime look to change from, and what changes. */
+  private day: { cycle: DayCycle; settings: SceneSettings; sun: THREE.DirectionalLight; sunColour: string; sunIntensity: number; noon: THREE.Vector3; center: THREE.Vector3; radius: number; hemi: THREE.HemisphereLight; reflectAt: number } | null = null;
 
   constructor() {
     this.group.name = 'scene-lighting';
@@ -106,7 +109,9 @@ export class SceneLighting {
     const fromSky = !!settings.sky?.enabled && !!settings.sky.lightFromSky;
     const skyLight = skyAmbient(settings.sky);
     const amb = fromSky ? skyLight.above : new THREE.Color(settings.ambientColor);
-    this.group.add(new THREE.HemisphereLight(amb, fromSky ? skyLight.below : amb.clone().multiplyScalar(0.35), settings.ambientIntensity * 2.2));
+    const hemi = new THREE.HemisphereLight(amb, fromSky ? skyLight.below : amb.clone().multiplyScalar(0.35), settings.ambientIntensity * 2.2);
+    this.group.add(hemi);
+    let firstSun: { colour: string; intensity: number; forward: THREE.Vector3 } | null = null;
     let sunForSky: { dir: THREE.Vector3; colour: THREE.Color } | null = null;
 
     const center = levelBounds.isEmpty() ? new THREE.Vector3() : levelBounds.getCenter(new THREE.Vector3());
@@ -122,6 +127,7 @@ export class SceneLighting {
         const sun = new THREE.DirectionalLight(color, l.intensity);
         // (The sky shows the first sun, where it shines from.)
         sunForSky ??= { dir: forward.clone().negate(), colour: sunSkyColour(l.color, l.intensity) };
+        firstSun ??= { colour: l.color, intensity: l.intensity, forward: forward.clone() };
         sun.position.copy(center).addScaledVector(forward, -radius * 2);
         sun.target.position.copy(center);
         this.group.add(sun.target);
@@ -171,6 +177,30 @@ export class SceneLighting {
       this.group.add(light);
     }
 
+    // Day and night: the first Sun goes round (one is made if there is none).
+    const cycle = dayOf(doc.settings);
+    this.day = null;
+    if (cycle.enabled) {
+      let sun = this.suns[0];
+      if (!sun) {
+        sun = new THREE.DirectionalLight('#fff4e0', 2);
+        sun.target.position.copy(center);
+        this.group.add(sun.target, sun);
+        const cam = sun.shadow.camera;
+        cam.left = cam.bottom = -radius;
+        cam.right = cam.top = radius;
+        cam.near = 1;
+        cam.far = radius * 4;
+        sun.shadow.mapSize.set(2048, 2048);
+        sun.shadow.bias = -0.0005;
+        sun.shadow.normalBias = 2.5;
+        sun.castShadow = true;
+        this.suns.push(sun);
+      }
+      const f = firstSun?.forward ?? new THREE.Vector3(-0.35, -0.6, -0.45);
+      this.day = { cycle, settings, sun, sunColour: firstSun?.colour ?? '#fff4e0', sunIntensity: firstSun?.intensity ?? 2, noon: new THREE.Vector3(-f.x, 0, -f.z), center, radius, hemi, reflectAt: NaN };
+    }
+
     // Sky, background and fog.
     const sky = settings.sky!;
     applySky(this.skyMat, sky, sunForSky);
@@ -182,6 +212,36 @@ export class SceneLighting {
     this.background = new THREE.Color(settings.backgroundColor);
     this.fog = settings.fog.enabled ? new THREE.Fog(fromSky ? skyLight.fog : settings.fog.color, settings.fog.near, settings.fog.far) : null;
     this.applyTo(scene);
+  }
+
+  /** Show the hour (null: the hour the game starts at) when day and night is on. */
+  setDay(hour: number | null): void {
+    const d = this.day;
+    if (!d) return;
+    const h = hour ?? d.cycle.startHour;
+    const st = d.settings;
+    const sky = skyOf(st.sky);
+    const look = dayLook(h, d.noon, { top: sky.top, horizon: sky.horizon, sun: d.sunColour, ambient: st.ambientColor }, d.cycle.night);
+    const moonUp = look.moon > look.sun * d.sunIntensity;
+    d.sun.position.copy(d.center).addScaledVector(moonUp ? look.toward.clone().negate() : look.toward, d.radius * 2);
+    d.sun.color.copy(moonUp ? MOON : look.sunColour);
+    d.sun.intensity = moonUp ? look.moon : look.sun * d.sunIntensity;
+    const hex = (c: THREE.Color) => `#${c.getHexString()}`;
+    const fromSky = !!st.sky?.enabled && !!st.sky.lightFromSky;
+    const above = fromSky ? look.top.clone().lerp(look.horizon, 0.45) : look.ambient;
+    d.hemi.color.copy(above);
+    d.hemi.groundColor.copy(fromSky ? new THREE.Color(sky.ground).multiplyScalar(0.4 + 0.6 * look.day).lerp(above, 0.25) : above.clone().multiplyScalar(0.35));
+    d.hemi.intensity = st.ambientIntensity * 2.2 * look.ambientScale;
+    const sunSeen = sunSkyColour(hex(look.sunColour), d.sunIntensity).multiplyScalar(look.sun);
+    applySky(this.skyMat, { ...sky, top: hex(look.top), horizon: hex(look.horizon), ground: hex(new THREE.Color(sky.ground).multiplyScalar(0.3 + 0.7 * look.day)), stars: Math.max(sky.stars, look.night) }, { dir: look.toward, colour: sunSeen });
+    if (this.fog) this.fog.color.copy(fromSky ? look.horizon : new THREE.Color(st.fog.color).lerp(look.horizon, 1 - look.day));
+    this.background.copy(look.horizon);
+    // (Reflections are drawn again only every half hour of game time: drawing them is slow.)
+    const step = Math.round(h * 2) / 2;
+    if (step !== d.reflectAt) {
+      d.reflectAt = step;
+      setReflection(hex(look.top), hex(look.horizon), hex(new THREE.Color(sky.ground).multiplyScalar(0.3 + 0.7 * look.day)));
+    }
   }
 
   private background = new THREE.Color('#1f1f1f');

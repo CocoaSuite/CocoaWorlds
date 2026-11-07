@@ -145,6 +145,8 @@ export function newStatement(kind: StatementKind, opts: { target?: Ref; variable
       return { id: id(), kind, target };
     case 'setLight':
       return { id: id(), kind, target, prop: 'intensity', value: num(1), seconds: num(0) };
+    case 'setTime':
+      return { id: id(), kind, value: num(12) };
     case 'setGlow':
       return { id: id(), kind, target, strength: num(1), seconds: num(0) };
     case 'playAnim':
@@ -218,6 +220,8 @@ export function newExpr(kind: ExprKind, opts: { variable?: string } = {}): Expr 
       return { id: id(), kind, from: player, to: self };
     case 'holds':
       return { id: id(), kind, what: null };
+    case 'timeOfDay':
+      return { id: id(), kind };
     case 'lightOn':
       return { id: id(), kind, target: self };
     case 'itemCount':

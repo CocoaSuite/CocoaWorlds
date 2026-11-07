@@ -120,6 +120,9 @@ export type Op =
   | { op: 'light'; prop: LightProp }
   /** Pops seconds, a strength and an object: how bright its model glows. */
   | { op: 'glow' }
+  /** Pops hours: the time of day. Pushes the time of day. */
+  | { op: 'settime' }
+  | { op: 'gettime' }
   /** Pops a light; pushes whether it is on. */
   | { op: 'lit' }
   | { op: 'halt' };
@@ -738,6 +741,10 @@ class HandlerCompiler {
         this.expect(s.seconds, 'number', 'The time must be a number of seconds.');
         this.emit({ op: 'light', prop: s.prop });
         break;
+      case 'setTime':
+        this.expect(s.value, 'number', 'The time of day is a number of hours (12 is noon).');
+        this.emit({ op: 'settime' });
+        break;
       case 'setGlow':
         this.actTarget(s.target, s.id);
         this.expect(s.strength, 'number', 'The glow must be a number (0 is none).');
@@ -873,6 +880,9 @@ class HandlerCompiler {
       case 'hiding':
         this.emit({ op: 'hiding' });
         return 'boolean';
+      case 'timeOfDay':
+        this.emit({ op: 'gettime' });
+        return 'number';
       case 'lightOn':
         this.lightTarget(e.target, e.id);
         this.emit({ op: 'lit' });

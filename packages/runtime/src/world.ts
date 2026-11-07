@@ -10,6 +10,7 @@ import RAPIER from '@dimforge/rapier3d-compat';
 import {
   SceneDoc,
   applyMat4,
+  dayOf,
   composeTransform,
   decomposeMat4,
   pivotOf,
@@ -499,6 +500,9 @@ export class GameWorld {
   private fireQueued = false;
   /** Lights while playing: on or off, and their settings (scripts change them, maybe over some seconds). */
   private lights = new Map<string, LiveLight>();
+  /** The time of day (hours) and how many hours pass each second (0: it stands still). */
+  dayHour = 12;
+  private hoursPerSecond = 0;
   /** Models' glow set by scripts (from null: from how the model was made). */
   private glows = new Map<string, Fade>();
   /** Objects scripts turned on (true) or off (false), by body. */
@@ -555,6 +559,9 @@ export class GameWorld {
       const still = (v: number[]): Fade => ({ from: v, to: v, t0: 0, t1: 0 });
       this.lights.set(e.id, { on: l.on !== false, intensity: still([l.intensity]), range: still([l.range]), angle: still([l.angle]), color: still(rgbOf(l.color)) });
     }
+    const day = dayOf(doc.settings);
+    this.dayHour = (((day.startHour % 24) + 24) % 24);
+    this.hoursPerSecond = day.enabled && day.minutes > 0 ? 24 / (day.minutes * 60) : 0;
     const info = { objects, rules, globals: values.map((v) => ({ name: v.name, type: v.type })), signs: new Set(this.signs.keys()), lights: new Set(this.lights.keys()) };
     this.scriptInfo = info;
     const programs: Program[] = [];
@@ -816,6 +823,8 @@ export class GameWorld {
         this.glows.set(target, { from: g ? (g.from === null && this.time < g.t1 ? null : fadeAt(g, this.time)) : null, to: [strength], t0: this.time, t1: this.time + seconds });
       },
       lightOn: (target) => this.lights.get(target)?.on ?? false,
+      timeOfDay: () => this.dayHour,
+      setTimeOfDay: (h) => void (this.dayHour = Number.isFinite(h) ? ((h % 24) + 24) % 24 : this.dayHour),
       setText: (target, text) => {
         if (!this.signs.has(target) || this.signs.get(target) === text) return;
         this.signs.set(target, text);
@@ -1180,6 +1189,7 @@ export class GameWorld {
       this.world.step(this.events);
       this.accumulator -= STEP;
       this.time += STEP;
+      if (this.hoursPerSecond) this.dayHour = (this.dayHour + this.hoursPerSecond * STEP) % 24;
       n++;
       this.events.drainCollisionEvents((h1, h2, started) => this.onContact(h1, h2, started));
       this.runner.tick(STEP);

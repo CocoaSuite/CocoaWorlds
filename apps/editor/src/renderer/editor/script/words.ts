@@ -168,6 +168,9 @@ const W = {
   color: ['colour', 'цвет'],
   setGlow: ['Set the glow of', 'Задать свечение'],
   isOn: ['is on', 'включён'],
+  setTime: ['Set the time of day to', 'Задать время суток'],
+  hoursNoon: ['hours (12 is noon)', 'ч (12 — полдень)'],
+  timeOfDay: ['the time of day', 'время суток'],
   gameValue: ['game', 'игра'],
   health: ['the player’s health', 'здоровье игрока'],
   armour: ['the player’s armour', 'броня игрока'],
@@ -309,6 +312,7 @@ const PALETTE_STMT: Record<StatementKind, Pair> = {
   drop: ['The player drops what they hold', 'Игрок отпускает то, что держит'],
   setLight: ['Change a light (brightness, colour …)', 'Изменить свет (яркость, цвет …)'],
   setGlow: ['Set the glow of a model', 'Задать свечение модели'],
+  setTime: ['Set the time of day', 'Задать время суток'],
 };
 export const statementName = (k: StatementKind) => pick(PALETTE_STMT[k]);
 
@@ -329,7 +333,7 @@ export const STATEMENT_GROUPS: { title: Pair; kinds: StatementKind[] }[] = [
   { title: ['Move', 'Движение'], kinds: ['move', 'turn', 'turnTo', 'return', 'moveTo', 'scale', 'push', 'physical'] },
   { title: ['Show and switch', 'Показ и включение'], kinds: ['show', 'hide', 'turnOn', 'turnOff', 'startTrain', 'stopTrain'] },
   { title: ['Objects', 'Объекты'], kinds: ['spawn', 'remove', 'damage', 'place', 'pickUp', 'drop'] },
-  { title: ['Lights and models', 'Свет и модели'], kinds: ['setLight', 'setGlow', 'playAnim'] },
+  { title: ['Lights, time and models', 'Свет, время и модели'], kinds: ['setLight', 'setGlow', 'setTime', 'playAnim'] },
   { title: ['Sound', 'Звук'], kinds: ['playSound', 'stopSound'] },
   { title: ['Player', 'Игрок'], kinds: ['teleport', 'hurt', 'heal', 'giveArmour', 'freezePlayer', 'unfreezePlayer', 'unhide', 'viewFrom', 'changeScene'] },
   { title: ['Score and items', 'Счёт и предметы'], kinds: ['addScore', 'giveItem', 'takeItem'] },
@@ -365,13 +369,14 @@ const VALUE: Record<ExprKind, Pair> = {
   holds: ['The player holds …', 'Игрок держит …'],
   hiding: ['The player is hiding', 'Игрок прячется'],
   lightOn: ['A light is on', 'Свет включён'],
+  timeOfDay: ['The time of day (hours)', 'Время суток (часы)'],
 };
 export const valueName = (k: ExprKind) => pick(VALUE[k]);
 
 /** Which value blocks fit a slot of a given type. */
 export const VALUES_FOR: Record<'number' | 'boolean' | 'text' | 'any', ExprKind[]> = {
-  number: ['number', 'variable', 'varOf', 'maths', 'random', 'distance', 'time', 'clock', 'health', 'armour', 'score', 'itemCount'],
+  number: ['number', 'variable', 'varOf', 'maths', 'random', 'distance', 'time', 'timeOfDay', 'clock', 'health', 'armour', 'score', 'itemCount'],
   boolean: ['boolean', 'inside', 'holds', 'hiding', 'lightOn', 'variable', 'varOf', 'compare', 'logic', 'not'],
   text: ['text', 'variable', 'varOf', 'join', 'number', 'object', 'score', 'itemCount', 'selectedItem', 'pickedRow'],
-  any: ['number', 'text', 'boolean', 'variable', 'varOf', 'maths', 'compare', 'logic', 'not', 'inside', 'holds', 'hiding', 'lightOn', 'random', 'distance', 'join', 'time', 'clock', 'health', 'armour', 'score', 'itemCount', 'selectedItem', 'pickedRow', 'object', 'copy'],
+  any: ['number', 'text', 'boolean', 'variable', 'varOf', 'maths', 'compare', 'logic', 'not', 'inside', 'holds', 'hiding', 'lightOn', 'random', 'distance', 'join', 'time', 'timeOfDay', 'clock', 'health', 'armour', 'score', 'itemCount', 'selectedItem', 'pickedRow', 'object', 'copy'],
 };

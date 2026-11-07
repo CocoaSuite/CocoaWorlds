@@ -188,6 +188,7 @@ export class GameRunner {
     const bounds = new THREE.Box3().setFromObject(play.group);
     this.lighting.update(this.doc, (id) => this.doc.worldMatrix(id), bounds, this.scene);
     play.driveLights(this.lighting);
+    this.lighting.setDay(play.dayHour);
     this.lighting.applyTo(this.scene);
     this.renderer.shadowMap.enabled = this.lighting.shadows;
     if (play.travel) return void this.go(play.travel);
