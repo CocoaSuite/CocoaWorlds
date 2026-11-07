@@ -77,6 +77,7 @@ export class GameRunner {
     private cb: RunnerEvents,
   ) {
     this.doc = new SceneDoc(expandRepeats(structuredClone(data.scene), brushBounds));
+    this.current = data.scene;
     const r = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
     r.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     r.setClearColor(0x1f1f1f);
@@ -111,12 +112,17 @@ export class GameRunner {
   async start(): Promise<void> {
     setProjectMaterials(this.data.materials ?? []);
     setProjectPlants(this.data.plants ?? []);
-    // A game that keeps the world goes on in the scene it was saved in.
+    await this.begin();
+    this.lockPointer();
+  }
+
+  /** Start (or start again) from what is saved: a game that keeps the world goes on in the scene it was saved in. */
+  private async begin(): Promise<void> {
     const saved = loadProgress(this.data.id);
-    let scene = this.data.scene;
     const resume = this.data.rules.saveWorld && saved?.scene ? this.data.scenes?.[saved.scene] : undefined;
-    if (resume && resume.name !== scene.name) {
-      scene = resume;
+    const scene = resume ?? this.current;
+    if (scene !== this.current) {
+      this.current = scene;
       this.doc = new SceneDoc(expandRepeats(structuredClone(scene), brushBounds));
       this.cb.scene?.(scene);
     }
@@ -126,8 +132,39 @@ export class GameRunner {
     play.setEars(this.cam);
     this.scene.add(play.group);
     this.savedKey = JSON.stringify(play.progress());
-    this.lockPointer();
+    this.last = performance.now();
     this.loop();
+  }
+
+  /** The save menu: save now (false: scripts block it). */
+  saveGame(): boolean {
+    const play = this.play;
+    if (!play || play.savingBlocked || this.going) return false;
+    play.saveNow();
+    this.saveProgress();
+    return true;
+  }
+
+  /** The save menu: back to the save (false: blocked, or there is none). */
+  async loadGame(): Promise<boolean> {
+    const play = this.play;
+    if (!play || play.savingBlocked || this.going || !loadProgress(this.data.id)) return false;
+    this.going = true;
+    cancelAnimationFrame(this.raf);
+    this.scene.remove(play.group);
+    play.dispose();
+    this.play = null;
+    this.keys.clear();
+    await this.begin();
+    this.going = false;
+    if (this.play) this.send();
+    return true;
+  }
+
+  /** When the save was made (ms since 1970), or null. */
+  get savedAt(): number | null {
+    const p = loadProgress(this.data.id);
+    return p ? (p.at ?? 0) || null : null;
   }
 
   get locked(): boolean {
@@ -224,6 +261,8 @@ export class GameRunner {
   };
 
   private going = false;
+  /** The scene being played. */
+  private current!: SceneFile;
   private warmed: PlaySession | null = null;
 
   /** A level change: the same game goes on in the next scene, from where the last one left the player. */
@@ -242,6 +281,7 @@ export class GameRunner {
     old.dispose();
     this.play = null;
     this.doc = new SceneDoc(expandRepeats(structuredClone(next), brushBounds));
+    this.current = next;
     this.cb.scene?.(next);
     const play = await PlaySession.start(next, this.materialFor, this.data.rules, this.data.values, loadProgress(this.data.id), t);
     this.going = false;

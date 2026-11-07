@@ -104,6 +104,7 @@ export type Op =
   /** Kept values and items back to the start. */
   | { op: 'forget' }
   | { op: 'savegame' }
+  | { op: 'saveblock'; on: boolean }
   | { op: 'scene'; scene: string; landmark: string }
   /** Pops text: change what an element says. */
   | { op: 'uitext'; id: string }
@@ -625,6 +626,10 @@ class HandlerCompiler {
         break;
       case 'saveGame':
         this.emit({ op: 'savegame' });
+        break;
+      case 'blockSaving':
+      case 'allowSaving':
+        this.emit({ op: 'saveblock', on: s.kind === 'blockSaving' });
         break;
       case 'changeScene':
         if (!s.scene.trim()) this.problem(s.id, 'Pick the scene to go to.');

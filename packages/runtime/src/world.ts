@@ -96,6 +96,8 @@ export interface SavedProgress {
   world?: Record<string, SavedScene>;
   /** The scene the player was in (a game starts there again). */
   scene?: string;
+  /** When it was saved by asking (the save menu, “Save the game”), in ms since 1970. */
+  at?: number;
 }
 
 /**
@@ -570,7 +572,8 @@ export class GameWorld {
 
   /** Save the game now (a game that saves on sleep keeps this until the next sleep or save). */
   saveNow(): void {
-    this.checkpoint = this.liveProgress();
+    const p = this.liveProgress();
+    this.checkpoint = p && { ...p, at: Math.round(this.clock() * 1000) };
   }
 
   /** Start over: kept values back to their starting values, kept items emptied, the world no longer kept. */
@@ -598,8 +601,10 @@ export class GameWorld {
   private gone = new Set<string>();
   /** “When the game starts” has run. */
   private started = false;
-  /** The game saves only at “Save the game” blocks (a script has one). */
+  /** The game saves only when asked: the save menu, or “Save the game” blocks. */
   private savesWhenAsked = false;
+  /** Scripts blocked the save menu: the player can neither save nor load. */
+  savingBlocked = false;
   /** Saved states and removals waiting for the start blocks (which make their copies again). */
   private waiting: { bodies: Record<string, SavedBody>; removed: string[] } | null = null;
 
@@ -1106,6 +1111,7 @@ export class GameWorld {
       clock: () => this.clock(),
       forgetProgress: () => this.forgetProgress(),
       saveGame: () => this.saveNow(),
+      blockSaving: (on) => void (this.savingBlocked = on),
       changeScene: (scene, landmark) => this.changeScene(scene, landmark),
       setUiText: (id, text) => void this.uiText.set(id, text),
       giveItem: (name, amount) => this.giveItem(name, amount),
@@ -1131,7 +1137,7 @@ export class GameWorld {
       },
     });
     this.usesScore = rules.score && scripts.some(([, s]) => /"kind":"(score|addScore)"/.test(JSON.stringify(s.handlers)));
-    this.savesWhenAsked = scripts.some(([, s]) => JSON.stringify(s.handlers).includes('"kind":"saveGame"'));
+    this.savesWhenAsked = rules.saveMenu || scripts.some(([, s]) => JSON.stringify(s.handlers).includes('"kind":"saveGame"'));
   }
 
   /** An object moved by scripts: a kinematic body at its place, carrying the hulls of every brush inside it. */

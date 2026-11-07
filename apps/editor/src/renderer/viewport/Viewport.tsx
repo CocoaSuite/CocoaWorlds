@@ -1,6 +1,7 @@
 /** React wrapper around ViewportEngine plus the viewport overlays (view switcher, grid/snap pill, stats, selection readout). */
 import { shown } from '../axes';
 import { uiOf, type SceneFile, type Vec3 } from '@cocoaworlds/core';
+import { SaveMenu } from '../ui/SaveMenu';
 import { UiLayer } from '../ui/UiLayer';
 import { HudView } from '../ui/Hud';
 import { ContextMenu, Segmented, type MenuEntry } from '@cocoaworlds/ui';
@@ -383,7 +384,10 @@ export function Viewport() {
       {playing && lock === true && <div className="cw-crosshair" aria-hidden="true" />}
       {playing && hud && playScene && <UiLayer ui={uiOf(playScene.settings)} live={hud.ui} values={hud.allValues} onClick={(id) => engine.current?.clickUi(id)} onRow={(list, row) => engine.current?.pickRow(list, row)} />}
       {playing && hud && <HudView hud={hud} />}
-      {playing && lock === false && !uiMouse && (
+      {playing && lock === false && !uiMouse && hud && playing.rules.saveMenu && (
+        <SaveMenu onResume={() => engine.current?.capturePlayer()} onSave={() => engine.current?.saveGame() ?? false} onLoad={() => engine.current?.loadGame() ?? false} savedAt={engine.current?.savedAt ?? null} />
+      )}
+      {playing && lock === false && !uiMouse && !(hud && playing.rules.saveMenu) && (
         <button type="button" className="cw-ov cw-click-play" data-testid="click-to-play" onClick={() => engine.current?.capturePlayer()}>
           <strong>{t('play.click')}</strong>
           <span>{t('play.keys')}</span>

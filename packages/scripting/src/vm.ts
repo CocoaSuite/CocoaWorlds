@@ -68,6 +68,8 @@ export interface ScriptHost {
   forgetProgress?(): void;
   /** Save the game now (it then saves only at these blocks, and at sleep). */
   saveGame?(): void;
+  /** Block (or allow again) the player's save menu: no saving or loading. */
+  blockSaving?(on: boolean): void;
   /** Go to another scene (a level change). */
   changeScene?(scene: string, landmark: string): void;
   /** Add a row to a list, or remove the first row with this text; empty a list. */
@@ -684,6 +686,9 @@ export class ScriptRunner {
           break;
         case 'savegame':
           this.host.saveGame?.();
+          break;
+        case 'saveblock':
+          this.host.blockSaving?.(op.on);
           break;
         case 'scene':
           this.host.changeScene?.(op.scene, op.landmark);

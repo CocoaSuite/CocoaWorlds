@@ -30,6 +30,8 @@ const W = {
   pickList: ['pick a list', 'выберите список'],
   forgetProgress: ['Forget saved progress (start over)', 'Забыть сохранённый прогресс (начать заново)'],
   saveGame: ['Save the game', 'Сохранить игру'],
+  blockSaving: ['Block saving and loading (the save menu)', 'Запретить сохранение и загрузку (меню сохранения)'],
+  allowSaving: ['Allow saving and loading again', 'Снова разрешить сохранение и загрузку'],
   changeScene: ['Go to the scene', 'Перейти в сцену'],
   landmark: ['by the landmark', 'у ориентира'],
   pickScene: ['pick a scene', 'выберите сцену'],
@@ -310,6 +312,8 @@ const PALETTE_STMT: Record<StatementKind, Pair> = {
   clearList: ['Empty a list', 'Очистить список'],
   forgetProgress: ['Forget saved progress', 'Забыть сохранённый прогресс'],
   saveGame: ['Save the game (it then saves only here)', 'Сохранить игру (тогда она сохраняется только здесь)'],
+  blockSaving: ['Block saving and loading', 'Запретить сохранение и загрузку'],
+  allowSaving: ['Allow saving and loading', 'Разрешить сохранение и загрузку'],
   changeScene: ['Go to another scene (level change)', 'Перейти в другую сцену (смена уровня)'],
   showUi: ['Show something on a screen', 'Показать элемент экрана'],
   hideUi: ['Hide something on a screen', 'Скрыть элемент экрана'],
@@ -339,7 +343,7 @@ export const EVENT_GROUPS: { title: Pair; kinds: EventKind[] }[] = [
 
 export const STATEMENT_GROUPS: { title: Pair; kinds: StatementKind[] }[] = [
   { title: ['Control', 'Управление'], kinds: ['wait', 'if', 'oneOf', 'repeat', 'while', 'forever', 'stop', 'send', 'log'] },
-  { title: ['Variables', 'Переменные'], kinds: ['set', 'change', 'saveGame', 'forgetProgress'] },
+  { title: ['Variables', 'Переменные'], kinds: ['set', 'change', 'saveGame', 'blockSaving', 'allowSaving', 'forgetProgress'] },
   { title: ['Move', 'Движение'], kinds: ['move', 'turn', 'turnTo', 'return', 'moveTo', 'scale', 'push', 'physical'] },
   { title: ['Show and switch', 'Показ и включение'], kinds: ['show', 'hide', 'turnOn', 'turnOff', 'startTrain', 'stopTrain'] },
   { title: ['Objects', 'Объекты'], kinds: ['spawn', 'remove', 'damage', 'place', 'pickUp', 'drop'] },

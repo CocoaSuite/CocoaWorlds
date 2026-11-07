@@ -324,6 +324,9 @@ function GameRulesSection() {
       <Field label={t('insp.saveWorld')}>
         <Switch checked={rules.saveWorld} label={t('insp.saveWorld')} onChange={(on) => !playing && void set('saveWorld', on)} />
       </Field>
+      <Field label={t('insp.saveMenu')}>
+        <Switch checked={rules.saveMenu} label={t('insp.saveMenu')} onChange={(on) => !playing && void set('saveMenu', on)} />
+      </Field>
       <Field label={t('insp.building')}>
         <Switch checked={rules.building} label={t('insp.building')} onChange={(on) => !playing && void set('building', on)} />
       </Field>

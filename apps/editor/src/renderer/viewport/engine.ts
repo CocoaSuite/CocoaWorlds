@@ -558,6 +558,7 @@ export class ViewportEngine {
     const { PlaySession } = await import('./play-session');
     // Saved progress (kept values and items) carries over from the last Play of this project.
     this.saveId = saveId ?? null;
+    this.playArgs = { scene, rules, values };
     const session = await PlaySession.start(scene, (name) => this.world.material(name), rules, values, saveId ? loadProgress(saveId) : null, arrive);
     if (token !== this.playToken || this.disposed) {
       // Stopped while loading.
@@ -636,6 +637,32 @@ export class ViewportEngine {
       return;
     }
     if (this.asPlayer) this.lockPointer();
+  }
+
+  /** What Play was started with (Load in the save menu starts it again). */
+  private playArgs: { scene: SceneFile; rules?: GameRules; values?: GameValue[] } | null = null;
+
+  /** The save menu: save now (false: scripts block it). */
+  saveGame(): boolean {
+    const p = this.play;
+    if (!p || !this.saveId || p.savingBlocked) return false;
+    p.saveNow();
+    this.saveProgress();
+    return true;
+  }
+
+  /** The save menu: back to the save (false: blocked, or there is none). */
+  async loadGame(): Promise<boolean> {
+    const p = this.play, a = this.playArgs;
+    if (!p || !a || !this.saveId || p.savingBlocked || !loadProgress(this.saveId)) return false;
+    await this.startPlay(a.scene, a.rules, a.values, this.saveId);
+    return true;
+  }
+
+  /** When the save was made (ms since 1970), or null. */
+  get savedAt(): number | null {
+    const p = this.saveId ? loadProgress(this.saveId) : null;
+    return p ? (p.at ?? 0) || null : null;
   }
 
   /** Where Play keeps saved progress (the project's id), and what was kept last. */

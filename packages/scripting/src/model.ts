@@ -155,6 +155,8 @@ export type Statement =
   /** Start over: kept game values go back to their starting values (and kept items are emptied). */
   | { id: string; kind: 'forgetProgress' }
   | { id: string; kind: 'saveGame' }
+  | { id: string; kind: 'blockSaving' }
+  | { id: string; kind: 'allowSaving' }
   /**
    * Go to another scene of the game (by its name). With a landmark (an object of that name, with the Landmark
    * component, in both scenes) the player arrives where they stand relative to it; without, at the Player start.

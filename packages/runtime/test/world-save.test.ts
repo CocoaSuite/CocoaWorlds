@@ -153,6 +153,28 @@ describe('keeping the world', () => {
     w2.dispose();
   });
 
+  it('the save menu: the game saves only when asked; scripts can block saving and loading', () => {
+    const { s, door } = scene();
+    const brain = s.entities.find((e) => e.name === 'brain')!;
+    const script = brain.components.script as unknown as Script;
+    script.handlers.push({ id: 'hb', event: { id: 'eb', kind: 'message', message: 'block' }, body: [{ id: 'b1', kind: 'blockSaving' }] });
+    script.handlers.push({ id: 'ha', event: { id: 'ea', kind: 'message', message: 'allow' }, body: [{ id: 'a1', kind: 'allowSaving' }] });
+    const w = GameWorld.create(s, { rules: { saveWorld: true, saveMenu: true }, clock: () => 1000 });
+    run(w, 0.1);
+    expect(w.progress()).toBeNull();
+    w.saveNow();
+    expect(w.progress()!.at).toBe(1_000_000);
+    send(w, 'open');
+    run(w, 0.5);
+    // Not saved again by itself.
+    expect(w.progress()!.world!.yard!.bodies[door.id]).toBeUndefined();
+    send(w, 'block');
+    expect(w.savingBlocked).toBe(true);
+    send(w, 'allow');
+    expect(w.savingBlocked).toBe(false);
+    w.dispose();
+  });
+
   it('a scene left this session comes back as it was left', () => {
     const { s, crate } = scene();
     const other = newScene('cellar');

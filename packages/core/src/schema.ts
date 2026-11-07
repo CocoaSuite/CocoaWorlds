@@ -70,16 +70,18 @@ export interface GameRules {
   building: boolean;
   /** The world is kept between sessions: where every object is, copies, what was taken away, creatures, the player (missing: off). */
   saveWorld: boolean;
+  /** Esc shows a menu to save and load (one save); the game then saves only from there or by blocks (missing: off). */
+  saveMenu: boolean;
 }
 
-export const defaultGameRules = (): GameRules => ({ health: true, score: true, thirdPerson: false, saveItems: false, stamina: false, showFps: false, building: false, saveWorld: false });
+export const defaultGameRules = (): GameRules => ({ health: true, score: true, thirdPerson: false, saveItems: false, stamina: false, showFps: false, building: false, saveWorld: false, saveMenu: false });
 
 /** A project's game rules with defaults filled in. */
 export function gameRules(settings: Pick<ProjectSettings, 'game'> | undefined): GameRules {
   const g = settings?.game ?? {};
   const d = defaultGameRules();
   const pick = (k: keyof GameRules) => (typeof g[k] === 'boolean' ? (g[k] as boolean) : d[k]);
-  return { health: pick('health'), score: pick('score'), thirdPerson: pick('thirdPerson'), saveItems: pick('saveItems'), stamina: pick('stamina'), showFps: pick('showFps'), building: pick('building'), saveWorld: pick('saveWorld') };
+  return { health: pick('health'), score: pick('score'), thirdPerson: pick('thirdPerson'), saveItems: pick('saveItems'), stamina: pick('stamina'), showFps: pick('showFps'), building: pick('building'), saveWorld: pick('saveWorld'), saveMenu: pick('saveMenu') };
 }
 
 export interface ProjectFile {

@@ -808,6 +808,16 @@ export class PlaySession {
     return this.world.progress();
   }
 
+  /** Save the game now (the save menu, when scripts allow it). */
+  saveNow(): void {
+    this.world.saveNow();
+  }
+
+  /** Scripts blocked saving and loading. */
+  get savingBlocked(): boolean {
+    return this.world.savingBlocked;
+  }
+
   /** What the screen UI shows now. */
   uiState(): UiState {
     return this.world.uiState();
