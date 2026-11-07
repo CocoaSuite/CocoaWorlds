@@ -204,4 +204,34 @@ describe('“Make an explosion”', () => {
     expect(w.playerStatus()!.health).toBeLessThan(100);
     w.dispose();
   });
+
+  it('a copy of a bomb: its timer sign is reported to draw, rides the bomb, shows the countdown and goes with it', () => {
+    const n = (value: number) => ({ id: `n${value}`, kind: 'number' as const, value });
+    const bomb = brush('bomb', [-16, 0, -136], [16, 8, -104], { rigidBody: { motion: 'dynamic', mass: 2 } });
+    bomb.visible = false;
+    const timer = newEntity('timer', { sign: { text: '' } }, { position: [0, 10, -120] });
+    timer.parent = bomb.id;
+    bomb.components.script = { version: 1, variables: [{ name: 'left', type: 'number', initial: 3 }], handlers: [{ id: 'h', event: { id: 'e', kind: 'start' }, body: [
+      { id: 'r', kind: 'repeat', times: n(3), body: [
+        { id: 't', kind: 'setText', target: { entity: timer.id }, text: { id: 'v', kind: 'variable', name: 'left' } },
+        { id: 'w', kind: 'wait', seconds: n(1) },
+        { id: 'c', kind: 'change', variable: 'left', by: n(-1) },
+      ] },
+      { id: 'x', kind: 'explode', at: { self: true }, radius: n(128), amount: n(10) },
+      { id: 'g', kind: 'remove', target: { self: true } },
+    ] }] } as never;
+    const maker = newEntity('maker', {});
+    maker.components.script = { version: 1, variables: [], handlers: [{ id: 'm', event: { id: 'em', kind: 'start' }, body: [{ id: 's', kind: 'spawn', template: { entity: bomb.id }, at: { entity: maker.id } }] }] } as never;
+    const w = GameWorld.create(scene([], floor(), bomb, timer, maker, spawn([0, 0, 400])));
+    run(w, 0.2);
+    const sign = `${timer.id}#1`;
+    expect(w.drainChanges().signs.map((s) => s.id)).toEqual([sign]);
+    expect(w.bodyOf(sign)).toBe(`${bomb.id}#1`);
+    expect(w.signText(sign)).toBe('3');
+    run(w, 1.1);
+    expect(w.signText(sign)).toBe('2');
+    run(w, 2.2);
+    expect(w.drainChanges().removed).toContain(sign);
+  });
 });
+

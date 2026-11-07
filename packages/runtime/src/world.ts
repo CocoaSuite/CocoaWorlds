@@ -426,6 +426,8 @@ export class GameWorld {
   /** Object → the unit (moving body) it is part of. */
   private unitOf = new Map<string, string>();
   private spawnedIds: string[] = [];
+  /** Signs in copies made since the last `drainChanges`, and where they stand. */
+  private spawnedSigns: { id: string; matrix: number[] }[] = [];
   private removedIds: string[] = [];
   private copies = 0;
   /** Breakable objects' health. */
@@ -2922,7 +2924,10 @@ export class GameWorld {
         if (e.components.model) u.riders.push({ id, matrix: world });
       } else if (e.components.rigidBody || e.components.collider || this.modelShape(e)) this.addPointBody(copy, world);
       if (e.components.breakable) this.breakHealth.set(id, readComponent<BreakableData>('breakable', e.components.breakable).health);
-      if (e.components.sign) this.signs.set(id, String((e.components.sign as { text?: unknown }).text ?? ''));
+      if (e.components.sign) {
+        this.signs.set(id, String((e.components.sign as { text?: unknown }).text ?? ''));
+        this.spawnedSigns.push({ id, matrix: world });
+      }
       if (e.components.sound) sounds.push([id, readComponent<SoundData>('sound', e.components.sound), world]);
     }
     for (const [u, { brushes, points, riders }] of units) {
@@ -2932,6 +2937,19 @@ export class GameWorld {
       const pivot: [number, number, number] = u === template ? [p[0], p[1], p[2]] : [p[0] + offset[0], p[1] + offset[1], p[2] + offset[2]];
       this.addUnit(id, multiply(shift, this.doc.worldMatrix(u)), brushes, pivot, points, u !== template);
       if (riders.length) this.bodies.get(id)!.riders = riders;
+    }
+    // Point objects without a body of their own ride the nearest body they are inside (a timer on a thrown bomb).
+    for (const e of parts) {
+      const id = ids.get(e.id)!;
+      if (this.bodies.has(id) || this.unitOf.has(id)) continue;
+      for (let p = e.parent; p && ids.has(p); p = this.doc.get(p)?.parent ?? null) {
+        const pid = ids.get(p)!;
+        const body = this.bodies.has(pid) ? pid : this.unitOf.get(pid);
+        if (body) {
+          this.unitOf.set(id, body);
+          break;
+        }
+      }
     }
     for (const id of ids.values()) {
       const b = this.bodies.get(id);
@@ -2968,7 +2986,10 @@ export class GameWorld {
     for (const x of gone) this.gone.add(x);
     for (const x of gone) {
       const b = this.bodies.get(x);
-      if (!b) continue;
+      if (!b) {
+        if (this.signs.has(x)) this.removedIds.push(x);
+        continue;
+      }
       for (let i = 0; i < b.body.numColliders(); i++) {
         const h = b.body.collider(i).handle;
         this.owner.delete(h);
@@ -2998,12 +3019,14 @@ export class GameWorld {
     return this.bodies.get(id)?.riders ?? [];
   }
 
-  drainChanges(): { spawned: BodyInfo[]; removed: string[] } {
+  drainChanges(): { spawned: BodyInfo[]; removed: string[]; signs: { id: string; matrix: number[] }[] } {
     const spawned = this.spawnedIds.map((id) => this.bodies.get(id)?.info).filter((b): b is BodyInfo => !!b);
     const removed = this.removedIds;
+    const signs = this.spawnedSigns;
     this.spawnedIds = [];
     this.removedIds = [];
-    return { spawned, removed };
+    this.spawnedSigns = [];
+    return { spawned, removed, signs };
   }
 
   /** A point object's collision shape and placement (for drawing it). */

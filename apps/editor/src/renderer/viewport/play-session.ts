@@ -254,16 +254,7 @@ export class PlaySession {
     for (const e of doc.entities) {
       if (!e.components.sign || !shown(e.id)) continue;
       const data = readComponent<SignData>('sign', e.components.sign);
-      const holder = new THREE.Group();
-      holder.matrixAutoUpdate = false;
-      holder.matrix.fromArray(doc.worldMatrix(e.id));
-      this.group.add(holder);
-      const sign = buildSign(data);
-      holder.add(sign.object);
-      this.signs.set(e.id, { holder, sign, data });
-      // (A sign on something that moves goes with it: a timer on a thrown bomb.)
-      const body = this.world.bodyOf(e.id);
-      if (body) this.movers.push({ id: body, i: this.world.drawn(body), obj: holder, base: holder.matrix.clone() });
+      this.addSign(e.id, data, doc.worldMatrix(e.id));
     }
 
     // Googly eyes on what draws their object: a creature where it walks, or where the object stands (carried
@@ -651,6 +642,19 @@ export class PlaySession {
     return g;
   }
 
+  /** A text sign where it stands; on something that moves it goes with it (a timer on a thrown bomb). */
+  private addSign(id: string, data: SignData, matrix: number[]): void {
+    const holder = new THREE.Group();
+    holder.matrixAutoUpdate = false;
+    holder.matrix.fromArray(matrix);
+    this.group.add(holder);
+    const sign = buildSign(data);
+    holder.add(sign.object);
+    this.signs.set(id, { holder, sign, data });
+    const body = this.world.bodyOf(id);
+    if (body) this.movers.push({ id: body, i: this.world.drawn(body), obj: holder, base: holder.matrix.clone() });
+  }
+
   /** Draw a body: its brushes, or a point object's collision shape. */
   private addMover(b: BodyInfo): void {
     if (b.kind === 'zone') return;
@@ -761,8 +765,19 @@ export class PlaySession {
         this.attachModel(holder, data, r.id);
       }
     }
+    for (const c of changes.signs) {
+      const e = this.doc.get(c.id.split('#')[0]!);
+      if (e?.components.sign) this.addSign(c.id, readComponent<SignData>('sign', e.components.sign), c.matrix);
+    }
     if (changes.removed.length) {
       const gone = new Set(changes.removed);
+      for (const id of gone) {
+        const s = this.signs.get(id);
+        if (!s) continue;
+        this.group.remove(s.holder);
+        s.sign.dispose();
+        this.signs.delete(id);
+      }
       for (const m of this.movers.filter((m) => gone.has(m.id))) {
         this.group.remove(m.obj);
         if (m.obj instanceof THREE.Mesh) m.obj.geometry.dispose();

@@ -363,3 +363,10 @@ Status: done (2026-11-08). A brush moves by its faces, not its placement, so its
 bomb). `movingTree` (`brush/brushes.ts`): the gizmo drag (`buildDragSet`, move, turn and scale) and the Brush
 Inspector's position fields (`store.moveBrush`) also move what is inside, down through brushes. Test:
 `apps/editor/test/move-brush.test.ts`. Not checked by eye.
+
+### 23. Signs in copies made while playing
+
+Status: done (2026-11-08). Signs in a copy were never drawn (Play only drew the scene's own signs). Now
+`drainChanges().signs` lists them with their place, `PlaySession.addSign` draws them, point objects in a copy ride the
+nearest body they are inside (`unitOf`), and a removed sign is reported in `removed`. Test: `weapons.test.ts` "a copy
+of a bomb".
