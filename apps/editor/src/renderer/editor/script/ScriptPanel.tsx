@@ -837,6 +837,13 @@ function statementWords(s: Statement, set: (patch: Record<string, unknown>, merg
           <ExprSlot expr={s.factor} type="number" label={`${w('scale')} ${w('setTo')}`} /> {w('timesSize')} <ExprSlot expr={s.seconds} type="number" label={`${w('scale')} ${w('over')}`} /> {w('seconds')}
         </>
       );
+    case 'explode':
+      return (
+        <>
+          {w('explode')} <RefSlot value={s.at} allowPlayer allowAim onChange={(at) => at && set({ at })} label={w('explode')} /> {w('blastSize')}{' '}
+          <ExprSlot expr={s.radius} type="number" label={`${w('explode')} ${w('blastSize')}`} /> {w('units')}, {w('damage')} <ExprSlot expr={s.amount} type="number" label={`${w('explode')} ${w('damage')}`} />
+        </>
+      );
     case 'noise':
       return (
         <>

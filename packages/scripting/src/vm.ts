@@ -57,6 +57,7 @@ export interface ScriptHost {
   playSound?(sound: string, place: Value, volume: number, owner: string, loudness?: number): void;
   /** A noise at a place, this loud for hunting creatures. */
   noise?(place: Value, loudness: number, owner: string): void;
+  explode?(place: Value, radius: number, damage: number, owner: string): void;
   /** The Director's hint to hunting creatures. */
   hint?(place: Value, spread: number, sure: number, as: 'sound' | 'sighting' | 'event'): void;
   /** Stop the sounds an object is making. */
@@ -589,6 +590,13 @@ export class ScriptRunner {
           const inst = of && typeof of === 'object' ? this.instances.find((i) => i.program.owner === of.ref) : undefined;
           const slot = inst ? inst.program.variables.findIndex((v) => v.name === op.name) : -1;
           s.push(inst && slot >= 0 ? (inst.vars[slot] ?? null) : null);
+          break;
+        }
+        case 'explode': {
+          const damage = Math.max(0, num(s.pop() ?? 0));
+          const radius = Math.max(0, num(s.pop() ?? 0));
+          const place = s.pop() ?? null;
+          this.host.explode?.(place, radius, damage, t.inst.program.owner);
           break;
         }
         case 'noise': {

@@ -261,6 +261,9 @@ export class PlaySession {
       const sign = buildSign(data);
       holder.add(sign.object);
       this.signs.set(e.id, { holder, sign, data });
+      // (A sign on something that moves goes with it: a timer on a thrown bomb.)
+      const body = this.world.bodyOf(e.id);
+      if (body) this.movers.push({ id: body, i: this.world.drawn(body), obj: holder, base: holder.matrix.clone() });
     }
 
     // Googly eyes on what draws their object: a creature where it walks, or where the object stands (carried

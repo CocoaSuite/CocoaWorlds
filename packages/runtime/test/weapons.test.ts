@@ -179,3 +179,29 @@ describe('weapons', () => {
     expect((worst * 180) / Math.PI).toBeLessThanOrEqual(5.01);
   });
 });
+
+describe('“Make an explosion”', () => {
+  it('a bomb on a timer blows up where it is: breaks and throws what is near, hurts the player when close, and goes', () => {
+    const n = (value: number) => ({ id: `n${value}`, kind: 'number' as const, value });
+    const bomb = newEntity('bomb', { rigidBody: { motion: 'dynamic', mass: 2 }, collider: { shape: 'box', size: [24, 8, 16] } }, { position: [0, 4, -120] });
+    bomb.components.script = { version: 1, variables: [], handlers: [{ id: 'h', event: { id: 'e', kind: 'start' }, body: [
+      { id: 'w', kind: 'wait', seconds: n(0.5) },
+      { id: 'x', kind: 'explode', at: { self: true }, radius: n(256), amount: n(80) },
+      { id: 'r', kind: 'remove', target: { self: true } },
+    ] }] } as Script as never;
+    const crate = brush('crate', [-32, 0, -332], [32, 64, -268], { breakable: { health: 500 } });
+    const ball = newEntity('ball', { rigidBody: { motion: 'dynamic', mass: 10 }, collider: { shape: 'box', size: [32, 32, 32] } }, { position: [80, 16, -120] });
+    const w = GameWorld.create(scene([], floor(), bomb, crate, ball, spawn()));
+    expect(w.hasBlasts).toBe(true);
+    const blasts: unknown[] = [];
+    w.bus.on('explosion', (e) => void blasts.push(e));
+    run(w, 0.8);
+    expect(blasts).toHaveLength(1);
+    expect(w.healthOf(crate.id)!).toBeLessThan(500);
+    expect(w.positionOf(bomb.id)).toBeNull();
+    const p = w.positionOf(ball.id)!;
+    expect(Math.hypot(p[0] - 80, p[2] + 120)).toBeGreaterThan(10);
+    expect(w.playerStatus()!.health).toBeLessThan(100);
+    w.dispose();
+  });
+});

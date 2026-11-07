@@ -14,7 +14,7 @@ export type Ref = { self: true } | { entity: string } | { other: true } | { play
 export type Place = Ref | { aim: true };
 
 /** Statement and event fields that hold a value block (for walking and editing scripts). */
-export const EXPR_KEYS = ['distance', 'seconds', 'degrees', 'text', 'value', 'by', 'condition', 'times', 'amount', 'factor', 'strength', 'gap', 'volume', 'loudness', 'spread', 'sure'] as const;
+export const EXPR_KEYS = ['distance', 'seconds', 'degrees', 'text', 'value', 'by', 'condition', 'times', 'amount', 'factor', 'strength', 'gap', 'volume', 'loudness', 'spread', 'sure', 'radius'] as const;
 
 export type Expr =
   | { id: string; kind: 'number'; value: number }
@@ -139,6 +139,8 @@ export type Statement =
   | { id: string; kind: 'playSound'; sound: string; at: Place | null; volume: Expr; loudness?: Expr }
   /** A noise hunting creatures may hear: loudness 1 carries as far as their Hears you up to. */
   | { id: string; kind: 'noise'; at: Place; loudness: Expr }
+  /** A blast at a place: hurts, breaks and throws what is within `radius`, less towards the edge (walls stop it). */
+  | { id: string; kind: 'explode'; at: Place; radius: Expr; amount: Expr }
   /** The Director: tell hunting creatures the player is roughly at a place (give or take `spread`), this sure (0–1). */
   | { id: string; kind: 'hint'; at: Place; spread: Expr; sure: Expr; as: 'sound' | 'sighting' | 'event' }
   /** Stop the sounds an object is making (its Sound component and what its scripts played). */

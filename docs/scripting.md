@@ -137,6 +137,7 @@ camera. Otherwise it is a flat plaque, read from its front (+Z) side; turn the o
 | Push *object or the player* *direction* with strength *n* | A change of speed in units per second (jump pads, wind, blasts); objects need physics |
 | Put the player at *place* | Teleports the player, facing the way the object faces |
 | Damage *object* by *n* | Takes health from a Breakable object; at 0 it disappears and **When this breaks** runs |
+| Make an explosion at *place* size *r* u, damage *n* | A blast: hurts the player and creatures, breaks Breakable objects and throws physics objects within *r*, less towards the edge; walls stop it (a bomb: then *Remove this object*) |
 
 **Conveyor** (component on a brush): carries physics objects lying on it and the player standing on it, at a
 speed towards north, south, east or west. **Breakable** (component): the object's health.

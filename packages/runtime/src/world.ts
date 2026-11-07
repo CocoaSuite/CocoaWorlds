@@ -250,6 +250,8 @@ type Quat = { x: number; y: number; z: number; w: number };
 
 /** The heaviest thing the player can pick up (kg). */
 const MAX_CARRY = 50;
+/** “Make an explosion”: a blast with no weapon behind it (size, damage and push filled in). */
+const BLAST: WeaponDef = { kind: 'projectile', damage: 0, rate: 1, automatic: false, range: 0, spread: 0, pellets: 1, ammo: '', speed: 0, arc: false, blast: 0, push: 0, sound: '' };
 /** Radians a held object turns per pixel of mouse movement. */
 const HELD_TURN = 0.006;
 /** How far (u) what's held may be pushed from its place before it's dropped. */
@@ -1117,6 +1119,10 @@ export class GameWorld {
         if (at && loudness > 0) this.noise(this.v3(at), loudness, place && typeof place === 'object' && this.spots.has(place.ref as string) ? (place.ref as string) : null);
         const follow = place && typeof place === 'object' && place.ref !== 'player' ? this.bodyOf(place.ref) : null;
         this.bus.emit({ type: 'sound', sound, at, follow, volume, loop: false, range: 2048, source: owner, time: this.time });
+      },
+      explode: (place, radius, damage, owner) => {
+        const at = this.placePoint(place);
+        if (at && radius > 0) this.weapons.explode([at[0], at[1], at[2]], { ...BLAST, blast: radius, damage, push: Math.max(400, radius * 3) }, owner, 'an explosion');
       },
       noise: (place, loudness, owner) => {
         const at = this.placePoint(place);
@@ -3472,7 +3478,7 @@ export class GameWorld {
 
   /** Whether any weapon of the game makes blasts (they light their surroundings for a moment). */
   get hasBlasts(): boolean {
-    return this.ui.items.some((i) => (weaponOf(i.weapon)?.blast ?? 0) > 0);
+    return this.ui.items.some((i) => (weaponOf(i.weapon)?.blast ?? 0) > 0) || this.doc.entities.some((e) => !!e.components.script && JSON.stringify(e.components.script).includes('"kind":"explode"'));
   }
 
   /** Every object that physics can move. */

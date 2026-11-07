@@ -349,3 +349,10 @@ made to fall used to weigh as solid wood, so anything big was too heavy to pick 
 weigh as wood. Test: `models.test.ts` "a fixed Physics object made to fall".
 The Physics component now shows Weight, Gravity, Stay upright and Can be picked up for every motion (they apply once a
 fixed or scripted object is made to fall).
+
+### 21. Explosions from blocks; signs ride what they are on
+
+Status: done (2026-11-08). Statement `explode` (place, radius, amount): `Weapons.explode` with a weapon-less `BLAST`
+(push from the size), so it hurts, breaks, throws and draws like a rocket's blast; `hasBlasts` is also true when a
+script uses it. Text signs inside a moving object are carried by it in Play (a timer on a thrown bomb). Test:
+`weapons.test.ts` "Make an explosion". Not checked by eye.
