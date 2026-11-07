@@ -663,8 +663,13 @@ export class ViewportEngine {
     this.cb.uiMouse(free);
     if (free) {
       if (this.locked) document.exitPointerLock();
+      // (A lock asked for before, still on its way, is let go of when it comes.)
+      else this.dropLock = true;
     } else this.lockPointer();
   }
+
+  /** A pointer lock asked for before a screen freed the mouse: let go of it as soon as it arrives. */
+  private dropLock = false;
 
   /** The player clicked a button on screen. */
   clickUi(id: string): void {
@@ -677,6 +682,7 @@ export class ViewportEngine {
   }
 
   private lockPointer(): void {
+    this.dropLock = false;
     const el = this.renderer.domElement;
     el.focus();
     try {
@@ -691,6 +697,11 @@ export class ViewportEngine {
   private rotating = false;
 
   private onLockChange = (): void => {
+    if (this.locked && this.dropLock) {
+      this.dropLock = false;
+      document.exitPointerLock();
+      return;
+    }
     this.rotating = false;
     if (!this.locked) this.play?.setInput({ fire: false });
     if (!this.asPlayer) return;

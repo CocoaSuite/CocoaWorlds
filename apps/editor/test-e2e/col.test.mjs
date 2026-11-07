@@ -41,7 +41,8 @@ test('COL: invisible collider', async () => {
     await until(() => page.evaluate(() => !!window.__cwViewport.play?.world.player), true, 10000);
     const drawn = await page.evaluate(() => {
       let n = 0;
-      window.__cwViewport.play.group.traverse((o) => {
+      // (What is drawn: hidden objects, such as pooled effects waiting to be used, are not.)
+      window.__cwViewport.play.group.traverseVisible((o) => {
         if (!o.isMesh) return;
         const mats = Array.isArray(o.material) ? o.material : [o.material];
         for (const g of o.geometry.groups.length ? o.geometry.groups : [{ materialIndex: 0, count: o.geometry.index?.count ?? 0 }]) if (mats[g.materialIndex ?? 0]?.visible) n += g.count;

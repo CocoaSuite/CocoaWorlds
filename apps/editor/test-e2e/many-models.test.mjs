@@ -30,8 +30,11 @@ test('many copies of a model: batched in Play', async () => {
     assert.equal(crates, 256);
     await page.getByRole('button', { name: 'Play', exact: true }).click();
     await until(() => page.evaluate(() => window.__cwViewport.play?.batches.copies ?? 0), 256, 15000);
-    await new Promise((r) => setTimeout(r, 500));
-    const draws = await page.evaluate(() => window.__cwViewport.renderer.info.render.calls);
+    // (A settled frame, as the status line counts it: a reflection capture under way draws views of its own, and
+    // the renderer's counter keeps adding up between frames.)
+    await until(() => page.evaluate(() => !window.__cwViewport.reflections?.busy), true, 10000);
+    await new Promise((r) => setTimeout(r, 1000));
+    const draws = Number((await page.getByText(/ draws · /).textContent()).match(/(\d+) draws/)[1]);
     assert.ok(draws < 60, `${draws} draw calls`);
     await shot(page, 'many-models');
   } catch (e) {

@@ -2,7 +2,7 @@
 // script, edited under the screen; in Play, clicking the button runs it.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { drawBrush, launch, newProject, quit, setDraft, shot, tempDirs, until } from './helpers.mjs';
+import { drawBrush, launch, newProject, pickBlock, quit, setDraft, shot, tempDirs, until } from './helpers.mjs';
 
 test('screen blocks: a button click handled in the Screens workspace', async () => {
   const { userData, projectsDir } = await tempDirs();
@@ -32,7 +32,7 @@ test('screen blocks: a button click handled in the Screens workspace', async () 
     await stack.waitFor();
     assert.equal(await stack.getByLabel('When the player clicks', { exact: true }).locator('option:checked').textContent(), 'Screen › Coin');
     await stack.getByRole('button', { name: '+ Add a block' }).click();
-    await page.getByRole('menuitem', { name: 'Player and score › Change the score' }).click();
+    await pickBlock(page, 'Player and score › Change the score');
     await shot(page, 'sb01-screens');
 
     await page.getByRole('button', { name: 'Play', exact: true }).click();

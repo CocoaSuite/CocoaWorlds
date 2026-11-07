@@ -1,7 +1,7 @@
 // End-to-end: the blocks for putting held things at spots: “while holding” stack, Put … at the spot, holds.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { launch, newProject, quit, shot, tempDirs } from './helpers.mjs';
+import { launch, newProject, pickBlock, quit, shot, tempDirs } from './helpers.mjs';
 
 test('place-at-spot blocks', async () => {
   const { userData, projectsDir } = await tempDirs();
@@ -17,14 +17,14 @@ test('place-at-spot blocks', async () => {
     });
     const panel = page.getByRole('region', { name: /Visual script/ }).or(page.locator('.cw-script')).first();
     await page.getByRole('button', { name: '+ When…' }).click();
-    await page.getByRole('menuitem', { name: 'When the player uses this while holding something' }).click();
+    await pickBlock(page, 'When the player uses this while holding something');
     const stack = page.getByRole('group', { name: 'When the player uses this while holding something' });
     await stack.getByRole('button', { name: '+ Add a block' }).click();
-    await page.getByRole('menuitem', { name: 'Objects › Put an object at a spot' }).click();
+    await pickBlock(page, 'Objects › Put an object at a spot');
     await stack.getByRole('button', { name: '+ Add a block' }).last().click();
-    await page.getByRole('menuitem', { name: 'Control › If … otherwise' }).click();
+    await pickBlock(page, 'Control › If … otherwise');
     await page.getByRole('button', { name: '+ When…' }).click();
-    await page.getByRole('menuitem', { name: 'When the player uses this (E)' }).click();
+    await pickBlock(page, 'When the player uses this (E)');
     const script = await page.evaluate(() => {
       const st = window.__cwStore.getState();
       return st.doc.get(st.selection[0]).components.script;

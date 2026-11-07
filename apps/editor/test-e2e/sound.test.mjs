@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
-import { launch, newProject, quit, shot, tempDirs, until } from './helpers.mjs';
+import { launch, newProject, pickBlock, quit, shot, tempDirs, until } from './helpers.mjs';
 
 /** A short sine tone as a 16-bit mono WAV. */
 function toneWav(seconds = 0.5, hz = 440, rate = 22050) {
@@ -51,10 +51,10 @@ test('sounds: import, Sound component, play sound block', async () => {
     await page.getByRole('menuitem', { name: /^Script/ }).click();
     const panel = page.getByRole('region', { name: 'Script of object' });
     await panel.getByRole('button', { name: '+ When…' }).click();
-    await page.getByRole('menuitem', { name: 'When the game starts' }).click();
+    await pickBlock(page, 'When the game starts');
     const stack = panel.getByRole('group', { name: 'When the game starts' });
     await stack.getByRole('button', { name: '+ Add a block' }).click();
-    await page.getByRole('menuitem', { name: 'Sound › Play a sound' }).click();
+    await pickBlock(page, 'Sound › Play a sound');
     await stack.getByLabel('Play sound', { exact: true }).selectOption({ label: 'ding' });
     assert.equal(await page.getByRole('tab', { name: /Problems \d/ }).count(), 0, 'no problems');
     await shot(page, 'snd01-blocks');

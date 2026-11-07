@@ -4,7 +4,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
-import { drawBrush, launch, newProject, quit, setDraft, shot, tempDirs, until } from './helpers.mjs';
+import { drawBrush, launch, newProject, pickBlock, quit, setDraft, shot, tempDirs, until } from './helpers.mjs';
 
 test('game values, messages and text signs', async () => {
   const { tmp, userData, projectsDir } = await tempDirs();
@@ -47,21 +47,21 @@ test('game values, messages and text signs', async () => {
     await panel().getByLabel('Game value name').waitFor();
     assert.equal(await panel().getByLabel('Game value name').inputValue(), 'Cash');
     await panel().getByRole('button', { name: '+ When…' }).click();
-    await page.getByRole('menuitem', { name: 'When the game starts' }).click();
+    await pickBlock(page, 'When the game starts');
     const stack = panel().getByRole('group', { name: 'When the game starts' });
     await stack.getByRole('button', { name: '+ Add a block' }).click();
-    await page.getByRole('menuitem', { name: 'Variables › Change a variable' }).click();
+    await pickBlock(page, 'Variables › Change a variable');
     await stack.getByLabel('Change', { exact: true }).selectOption({ label: 'Cash (game)' });
     const by = stack.getByLabel('Change by', { exact: true });
     await by.fill('25');
     await by.press('Enter');
     await stack.getByRole('button', { name: '+ Add a block' }).last().click();
-    await page.getByRole('menuitem', { name: 'Screen and signs › Show a message on screen' }).click();
+    await pickBlock(page, 'Screen and signs › Show a message on screen');
     const say = stack.getByLabel('Show on screen', { exact: true });
     await say.fill('Welcome to your tycoon');
     await say.press('Enter');
     await stack.getByRole('button', { name: '+ Add a block' }).last().click();
-    await page.getByRole('menuitem', { name: 'Screen and signs › Set the text of a sign' }).click();
+    await pickBlock(page, 'Screen and signs › Set the text of a sign');
     await stack.getByLabel('Set the text of', { exact: true }).selectOption({ label: 'sign' });
     const to = stack.getByLabel('Set the text of to', { exact: true });
     await to.fill('Sold out');

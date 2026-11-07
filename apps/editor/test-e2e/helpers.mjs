@@ -8,6 +8,11 @@ import { _electron as electron } from 'playwright-core';
 
 export const appDir = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const shots = process.env.CW_SHOTS_DIR;
+/**
+ * How much longer than usual waits may take: `CW_E2E_SLOW=6` on a machine whose GPU is software (SwiftShader runs
+ * Play at a few frames a second there, so the game itself goes slower than real time).
+ */
+export const SLOW = Math.max(1, Number(process.env.CW_E2E_SLOW) || 1);
 
 export async function tempDirs() {
   const tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'cw-e2e-'));
@@ -29,7 +34,7 @@ export async function launch(userData, projectsDir, { zUp = false } = {}) {
   }
   page.on('pageerror', (e) => console.error('[page error]', e.stack));
   if (process.env.CW_DEBUG) page.on('console', (m) => m.type() === 'error' && console.error('[console]', m.text().slice(0, 6000)));
-  page.setDefaultTimeout(15000);
+  page.setDefaultTimeout(15000 * SLOW);
   return { app, page };
 }
 
@@ -45,7 +50,7 @@ export const shot = async (page, name) => {
 };
 
 export async function until(fn, expected, ms = 4000) {
-  const end = Date.now() + ms;
+  const end = Date.now() + ms * SLOW;
   let v;
   while (Date.now() < end) {
     v = await fn();
@@ -140,4 +145,31 @@ export function boxGlb({ still = false } = {}) {
     return Buffer.concat([h, data]);
   };
   return Buffer.concat([header, chunk(jsonBuf, 'JSON'), chunk(bin, 'BIN\0')]);
+}
+
+/** The block picker (events and blocks of a script), once it is open. */
+const picker = (page) => page.getByRole('dialog').filter({ has: page.getByLabel('Search blocks', { exact: true }) });
+
+/**
+ * Pick in the open block picker: an event by its name, a block as 'Group › Block' (the group is only what the
+ * menu used to show), or the paste button ('Paste the copied …'). Found by searching, as a person would.
+ */
+export async function pickBlock(page, name) {
+  const p = picker(page);
+  await p.waitFor();
+  if (name.startsWith('Paste the copied')) return p.getByRole('button', { name }).click();
+  await (await blockOption(page, name)).click();
+}
+
+/** Wait until the open block picker offers `name` (as in pickBlock), searching for it. */
+export async function findBlock(page, name) {
+  await picker(page).waitFor();
+  await (await blockOption(page, name)).waitFor();
+}
+
+async function blockOption(page, name) {
+  const label = name.includes(' › ') ? name.slice(name.indexOf(' › ') + 3) : name;
+  const p = picker(page);
+  await p.getByLabel('Search blocks', { exact: true }).fill(label);
+  return p.getByRole('option').filter({ has: page.getByText(label, { exact: true }) }).first();
 }

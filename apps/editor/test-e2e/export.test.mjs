@@ -6,7 +6,7 @@ import { promises as fs } from 'node:fs';
 import http from 'node:http';
 import path from 'node:path';
 import { _electron as electron, chromium } from 'playwright-core';
-import { drawBrush, launch, newProject, quit, setDraft, shot, tempDirs, until } from './helpers.mjs';
+import { drawBrush, launch, newProject, pickBlock, quit, setDraft, shot, tempDirs, until } from './helpers.mjs';
 
 const exists = (p) =>
   fs
@@ -69,10 +69,10 @@ test('export: web and desktop games, with saved progress', async () => {
     await panel.getByRole('checkbox', { name: 'Cash: kept' }).click();
     await until(() => panel.getByRole('checkbox', { name: 'Cash: kept' }).isChecked(), true);
     await panel.getByRole('button', { name: '+ When…' }).click();
-    await page.getByRole('menuitem', { name: 'When the game starts' }).click();
+    await pickBlock(page, 'When the game starts');
     const stack = panel.getByRole('group', { name: 'When the game starts' });
     await stack.getByRole('button', { name: '+ Add a block' }).click();
-    await page.getByRole('menuitem', { name: 'Variables › Change a variable' }).click();
+    await pickBlock(page, 'Variables › Change a variable');
     await stack.getByLabel('Change', { exact: true }).selectOption({ label: 'Cash (game)' });
     const ws = page.getByRole('tablist', { name: 'Workspace' });
     await ws.getByRole('tab', { name: 'Screens' }).click();

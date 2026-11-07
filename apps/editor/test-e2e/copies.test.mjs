@@ -3,7 +3,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { promises as fs } from 'node:fs';
-import { drawBrush, launch, newProject, quit, setDraft, shot, tempDirs, until } from './helpers.mjs';
+import { drawBrush, launch, newProject, pickBlock, quit, setDraft, shot, tempDirs, until } from './helpers.mjs';
 
 async function addBrush(page, size, corner) {
   await page.keyboard.press('b');
@@ -51,10 +51,10 @@ test('copies while playing: dropper, conveyor, third person', async () => {
     await addComponent('Script');
     const panel = page.getByRole('region', { name: 'Script of object' });
     await panel.getByRole('button', { name: '+ When…' }).click();
-    await page.getByRole('menuitem', { name: 'Every few seconds' }).click();
+    await pickBlock(page, 'Every few seconds');
     const stack = panel.getByRole('group', { name: 'Every few seconds' });
     await stack.getByRole('button', { name: '+ Add a block' }).click();
-    await page.getByRole('menuitem', { name: 'Objects › Make a copy' }).click();
+    await pickBlock(page, 'Objects › Make a copy');
     await stack.getByLabel('Make a copy of', { exact: true }).selectOption({ label: 'block_2' });
     assert.equal(await stack.getByLabel('Make a copy of at', { exact: true }).inputValue(), 'self');
     assert.equal(await page.getByRole('tab', { name: /Problems \d/ }).count(), 0, 'no problems');

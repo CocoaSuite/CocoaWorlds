@@ -5,7 +5,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
-import { drawBrush, launch, newProject, quit, setDraft, shot, tempDirs, until } from './helpers.mjs';
+import { drawBrush, findBlock, launch, newProject, pickBlock, quit, setDraft, shot, tempDirs, until } from './helpers.mjs';
 
 test('fixes: sphere selection, brush height, copy and paste, hinged doors, model collision', async () => {
   const { tmp, userData, projectsDir } = await tempDirs();
@@ -69,18 +69,18 @@ test('fixes: sphere selection, brush height, copy and paste, hinged doors, model
     await page.getByRole('menuitem', { name: /^Script/ }).click();
     const script = page.getByRole('region', { name: 'Script of block' });
     await script.getByRole('button', { name: '+ When…' }).click();
-    await page.getByRole('menuitem', { name: 'When a message stops coming' }).waitFor();
-    await page.getByRole('menuitem', { name: 'When the game starts' }).click();
+    await findBlock(page, 'When a message stops coming');
+    await pickBlock(page, 'When the game starts');
     const stack = () => script.getByRole('group', { name: 'When the game starts' });
     await stack().getByRole('button', { name: '+ Add a block' }).click();
-    await page.getByRole('menuitem', { name: 'Control › Repeat while …' }).waitFor();
-    await page.getByRole('menuitem', { name: 'Do › Turn to an angle (doors)' }).waitFor();
-    await page.getByRole('menuitem', { name: 'Control › Wait' }).click();
+    await findBlock(page, 'Control › Repeat while …');
+    await findBlock(page, 'Do › Turn to an angle (doors)');
+    await pickBlock(page, 'Control › Wait');
     const waits = () => script.getByRole('group', { name: 'Wait' }).count();
     assert.equal(await waits(), 1);
     await script.getByRole('group', { name: 'Wait' }).getByRole('button', { name: 'Copy this block' }).click();
     await stack().getByRole('button', { name: '+ Add a block' }).last().click();
-    await page.getByRole('menuitem', { name: 'Paste the copied blocks (1)' }).click();
+    await pickBlock(page, 'Paste the copied blocks (1)');
     await until(waits, 2);
     // Keyboard: click the words of the first Wait, Ctrl+C, Ctrl+V pastes after it.
     await script.getByRole('group', { name: 'Wait' }).first().locator('.cw-blk-words').click({ position: { x: 4, y: 6 } });
@@ -90,7 +90,7 @@ test('fixes: sphere selection, brush height, copy and paste, hinged doors, model
     // A whole stack: copy it with its button, paste it from “+ When…”.
     await stack().getByRole('button', { name: 'Copy this stack' }).click();
     await script.getByRole('button', { name: '+ When…' }).click();
-    await page.getByRole('menuitem', { name: 'Paste the copied stack' }).click();
+    await pickBlock(page, 'Paste the copied stack');
     await until(() => script.getByRole('group', { name: 'When the game starts' }).count(), 2);
     await until(waits, 6);
     // Ctrl+Z takes the paste back.
@@ -99,7 +99,7 @@ test('fixes: sphere selection, brush height, copy and paste, hinged doors, model
     await until(waits, 3);
     // A “while” block with “is inside a zone”.
     await stack().getByRole('button', { name: '+ Add a block' }).last().click();
-    await page.getByRole('menuitem', { name: 'Control › Repeat while …' }).click();
+    await pickBlock(page, 'Control › Repeat while …');
     await script.getByRole('group', { name: 'Repeat while …' }).waitFor();
     await shot(page, 'fx02-blocks');
 

@@ -11,6 +11,8 @@ test('the chicken: enemy and friend', async () => {
   const { userData, projectsDir } = await tempDirs();
   const { app, page } = await launch(userData, projectsDir);
   const insp = page.getByRole('complementary', { name: 'Inspector' });
+  // (Googly eyes have a Position of their own: the object's comes first.)
+  const transform = { getByLabel: (label, o) => insp.getByLabel(label, o).first() };
   const addMenu = async (label) => {
     await page.getByRole('menubar').getByRole('button', { name: 'Add' }).click();
     await page.getByRole('menuitem', { name: label }).click();
@@ -27,7 +29,7 @@ test('the chicken: enemy and friend', async () => {
     // An enemy chicken ahead, facing the player; a friendly one off to the side.
     await addMenu('Chicken (enemy)');
     await page.getByRole('tree').getByRole('treeitem', { name: 'chicken', exact: true }).waitFor();
-    await setField(insp, 'Position Z', -140);
+    await setField(transform, 'Position Z', -140);
     await setField(insp, 'Rotation Y', 180);
     assert.equal(await insp.getByLabel('Scale X', { exact: true }).inputValue(), '0.5');
     await insp.getByRole('group', { name: 'Creature' }).waitFor();
@@ -51,7 +53,7 @@ test('the chicken: enemy and friend', async () => {
     await until(async () => { const s = await boxSize(); return !!s && s[1] > s[0]; }, true, 10000);
     await addMenu('Chicken (friend)');
     await page.getByRole('tree').getByRole('treeitem', { name: 'chicken_friend' }).waitFor();
-    await setField(insp, 'Position X', 300);
+    await setField(transform, 'Position X', 300);
     const glb = await fs.stat(path.join(projectsDir, 'farm', 'assets', 'models', 'chicken_rigged.glb'));
     assert.ok(glb.size > 100000);
     await page.keyboard.press('1');

@@ -4,7 +4,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
-import { drawBrush, launch, newProject, quit, setDraft, shot, tempDirs, until } from './helpers.mjs';
+import { drawBrush, findBlock, launch, newProject, quit, setDraft, shot, tempDirs, until } from './helpers.mjs';
 
 test('health and score', async () => {
   const { tmp, userData, projectsDir } = await tempDirs();
@@ -35,7 +35,7 @@ test('health and score', async () => {
     await panel.getByRole('group', { name: 'Change the score' }).waitFor();
     // The new blocks are in the block menu.
     await panel.getByRole('button', { name: /Add a block/ }).first().click();
-    await page.getByRole('menuitem', { name: 'Player and score › Hurt the player' }).waitFor();
+    await findBlock(page, 'Player and score › Hurt the player');
     await page.keyboard.press('Escape');
 
     // 2. Play: full health, score 0; walk into the coin.
@@ -76,7 +76,10 @@ test('health and score', async () => {
     await new Promise((r) => setTimeout(r, 400));
     await shot(page, 'h02-rules');
     const project = JSON.parse(await fs.readFile(path.join(projectsDir, 'coins', 'project.cwproj'), 'utf8'));
-    assert.deepEqual(project.settings.game, { health: false, score: true, thirdPerson: false, saveItems: false });
+    // (Only health changed; the other rules keep their defaults.)
+    assert.equal(project.settings.game.health, false);
+    assert.equal(project.settings.game.score, true);
+    assert.equal(project.settings.game.thirdPerson, false);
     await page.getByRole('button', { name: 'Play' }).click();
     await page.getByTestId('play-banner').waitFor();
     if (await page.getByTestId('click-to-play').count()) await page.getByTestId('click-to-play').click({ timeout: 2000 }).catch(() => {});

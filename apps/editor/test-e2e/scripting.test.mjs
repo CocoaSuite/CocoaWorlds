@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
-import { drawBrush, launch, newProject, quit, setDraft, shot, tempDirs, until } from './helpers.mjs';
+import { drawBrush, launch, newProject, pickBlock, quit, setDraft, shot, tempDirs, until } from './helpers.mjs';
 
 async function addBrush(page, size, corner, trigger = false) {
   if (trigger) await page.getByRole('toolbar', { name: 'Tools' }).getByRole('button', { name: 'Trigger zone' }).click();
@@ -48,17 +48,17 @@ test('a door script made from blocks', async () => {
 
     // 2. When something enters this zone → move the door up, then write in the console.
     await panel().getByRole('button', { name: '+ When…' }).click();
-    await page.getByRole('menuitem', { name: 'When something enters a zone' }).click();
+    await pickBlock(page, 'When something enters a zone');
     const stack = panel().getByRole('group', { name: 'When something enters a zone' });
     await stack.getByRole('button', { name: '+ Add a block' }).click();
-    await page.getByRole('menuitem', { name: 'Do › Move' }).click();
+    await pickBlock(page, 'Do › Move');
     const move = stack.getByRole('group', { name: 'Move' });
     await move.getByLabel('Move', { exact: true }).selectOption({ label: 'block_2' });
     const over = move.getByLabel('Move over', { exact: true });
     await over.fill('0.5');
     await over.press('Enter');
     await stack.getByRole('button', { name: '+ Add a block' }).last().click();
-    await page.getByRole('menuitem', { name: 'Do › Write in the console' }).click();
+    await pickBlock(page, 'Do › Write in the console');
     const write = stack.getByRole('group', { name: 'Write in the console' });
     await write.getByLabel('Write', { exact: true }).fill('Door opened');
     await write.getByLabel('Write', { exact: true }).press('Enter');
@@ -66,7 +66,7 @@ test('a door script made from blocks', async () => {
 
     // 3. A block with a problem says so under itself and in the Problems tab.
     await stack.getByRole('button', { name: '+ Add a block' }).last().click();
-    await page.getByRole('menuitem', { name: 'Variables › Change a variable' }).click();
+    await pickBlock(page, 'Variables › Change a variable');
     await stack.getByText('Pick a variable.').waitFor();
     await page.getByRole('tab', { name: /Problems 1/ }).waitFor();
     await stack.getByRole('group', { name: 'Change a variable' }).hover();

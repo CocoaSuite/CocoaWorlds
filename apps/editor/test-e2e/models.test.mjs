@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
-import { boxGlb, launch, newProject, quit, shot, tempDirs, until } from './helpers.mjs';
+import { boxGlb, launch, newProject, pickBlock, quit, shot, tempDirs, until } from './helpers.mjs';
 
 test('models: import, Model component, animation block', async () => {
   const { tmp, userData, projectsDir } = await tempDirs();
@@ -59,10 +59,10 @@ test('models: import, Model component, animation block', async () => {
     await page.getByRole('menuitem', { name: /^Script/ }).click();
     const panel = page.getByRole('region', { name: 'Script of object' });
     await panel.getByRole('button', { name: '+ When…' }).click();
-    await page.getByRole('menuitem', { name: 'When the game starts' }).click();
+    await pickBlock(page, 'When the game starts');
     const stack = panel.getByRole('group', { name: 'When the game starts' });
     await stack.getByRole('button', { name: '+ Add a block' }).click();
-    await page.getByRole('menuitem', { name: 'Models › Play an animation' }).click();
+    await pickBlock(page, 'Models › Play an animation');
     const name = stack.getByLabel('Play animation', { exact: true });
     await name.fill('Spin');
     await name.press('Enter');
