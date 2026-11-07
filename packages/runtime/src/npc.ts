@@ -111,6 +111,12 @@ export class Npc implements HunterBody {
   private route: V[] | null = null;
   private routeTo: V | null = null;
   private routeAt = -Infinity;
+  /**
+   * How often the way is worked out again (s): about every second and a half, a little different for each creature
+   * (from its id, so the game's random numbers are untouched), so that many creatures don't all look for their way
+   * on the same frame.
+   */
+  private readonly repathEvery: number;
 
   constructor(
     private w: NpcWorld,
@@ -120,6 +126,9 @@ export class Npc implements HunterBody {
     yaw: number,
   ) {
     this.health = data.health;
+    let h = 0;
+    for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) | 0;
+    this.repathEvery = 1.5 + ((h >>> 0) % 40) / 100;
     this.yaw = yaw;
     this.height = Math.max(8, Number(data.height) || NPC_SIZE.height);
     this.radius = Math.min(this.height / 2, Math.max(2, Number(data.radius) || NPC_SIZE.radius));
@@ -521,7 +530,7 @@ export class Npc implements HunterBody {
     }
     // (Again when the target has moved a good part of the way off: a quarter of the distance, at least 48 u.)
     const moved = !this.routeTo || Math.hypot(to.x - this.routeTo.x, to.z - this.routeTo.z) > Math.max(48, this.flatDistance(to) / 4);
-    if (moved || now - this.routeAt > 1.5) {
+    if (moved || now - this.routeAt > this.repathEvery) {
       this.route = this.w.route(this.feet, to);
       this.routeTo = { ...to };
       this.routeAt = now;

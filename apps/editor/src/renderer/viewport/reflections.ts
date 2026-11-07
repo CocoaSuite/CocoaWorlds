@@ -4,8 +4,8 @@
  *
  * Slot 0 follows the camera (captured again when it has moved a fair way or the level changed, at most twice a
  * second): what's reflected outdoors. Box probes (rooms found from the level, and placed Reflection probes) are
- * captured once each, one a frame, and again when the level changes; surfaces in their boxes reflect them fitted
- * to the box.
+ * captured once each, one after another, and again when the level changes; surfaces in their boxes reflect them
+ * fitted to the box. A capture is spread over four frames (two views a frame, then the blur), so none stutters.
  */
 import { applyMat4, type SceneDoc } from '@cocoaworlds/core';
 import { autoProbes, type Brush } from '@cocoaworlds/geometry';
@@ -15,6 +15,9 @@ import { setSceneReflection } from './project-materials';
 
 /** How far (u) the camera may move before the scene is captured again. */
 const MOVE = 192;
+
+/** Views of a capture drawn a frame (six make a capture; the blur is the frame after the last). */
+const FACES_PER_FRAME = 2;
 
 export interface Probe {
   min: [number, number, number];
@@ -114,16 +117,23 @@ export class SceneReflections {
 
   /** Captures still to do (render again soon). */
   get busy(): boolean {
-    return this.on && this.queue.length > 0;
+    return !!this.job || (this.on && this.queue.length > 0);
   }
 
   get boxes(): readonly Probe[] {
     return this.probes;
   }
 
+  /**
+   * A capture under way. Its six views are drawn over the next frames (a few a frame) and then blurred into its
+   * row of the atlas, so a capture never holds one frame up for six drawings of the whole scene and the blur.
+   */
+  private job: { slot: number; from: THREE.Vector3; face: number } | null = null;
+
   /** Capture if due (camera at `eye`); `helpers` are editor aids left out of the picture. */
   update(scene: THREE.Scene, eye: THREE.Vector3, enabled: boolean, helpers: THREE.Object3D[] = []): void {
     if (!enabled) {
+      this.job = null;
       if (this.on) {
         this.on = false;
         PROBES.cwProbeOn.value = 0;
@@ -132,53 +142,114 @@ export class SceneReflections {
       return;
     }
     if (this.dirty) this.queue = this.probes.map((_, i) => i);
+    if (this.job) return this.go(scene, helpers);
     const now = performance.now();
     const outdoor = !this.on || this.dirty || this.at.distanceTo(eye) >= MOVE;
     if (outdoor && now - this.last >= 500) {
       this.last = now;
       this.dirty = false;
       this.at.copy(eye);
-      this.capture(scene, eye, 0, helpers);
-      if (!this.on) {
-        this.on = true;
-        PROBES.cwProbeAtlas.value = this.atlas.texture;
-        PROBES.cwProbeOn.value = 1;
-        // (The materials need an environment map to reflect at all: the camera's capture.)
-        setSceneReflection(this.env!.texture);
-      }
-      return;
+      this.job = { slot: 0, from: eye.clone(), face: 0 };
+      return this.go(scene, helpers);
     }
-    // One room a frame.
+    // One room after another.
     const i = this.queue.shift();
     if (i === undefined || !this.on) return;
     const p = this.probes[i]!;
-    this.capture(scene, new THREE.Vector3(...p.at), i + 1, helpers);
-    if (!this.queue.length) PROBES.cwProbeCount.value = this.probes.length;
+    this.job = { slot: i + 1, from: new THREE.Vector3(...p.at), face: 0 };
+    this.go(scene, helpers);
   }
 
-  private capture(scene: THREE.Scene, from: THREE.Vector3, slot: number, helpers: THREE.Object3D[]): void {
+  /**
+   * Before a game's first frame: switch reflections on and capture where the camera is, all at once. Materials
+   * reflect a captured cube from then on, so the shaders compiled for the game's first frame are the ones it keeps
+   * (turning reflections on later would compile every shiny material again in the middle of playing).
+   */
+  prime(scene: THREE.Scene, eye: THREE.Vector3, enabled: boolean, helpers: THREE.Object3D[] = []): void {
+    if (!enabled || this.on) return;
+    // (An empty capture to reflect while the first one is drawn: the same kind of map as every later one.)
+    this.env ??= this.pmrem.fromCubemap(this.cube.texture);
+    setSceneReflection(this.env.texture);
+    this.job = null;
+    this.dirty = false;
+    this.last = performance.now();
+    this.at.copy(eye);
+    this.draw(scene, { from: eye, face: 0 }, 6, helpers);
+    this.store(0);
+    this.on = true;
+    PROBES.cwProbeAtlas.value = this.atlas.texture;
+    PROBES.cwProbeOn.value = 1;
+  }
+
+  /** Go on with the capture under way: the next views, then (once all six are drawn) its blur. */
+  private go(scene: THREE.Scene, helpers: THREE.Object3D[]): void {
+    const job = this.job!;
+    if (job.face < 6) {
+      this.draw(scene, job, FACES_PER_FRAME, helpers);
+      return;
+    }
+    this.job = null;
+    this.store(job.slot);
+    if (job.slot === 0 && !this.on) {
+      this.on = true;
+      PROBES.cwProbeAtlas.value = this.atlas.texture;
+      PROBES.cwProbeOn.value = 1;
+      // (The materials need an environment map to reflect at all: the camera's capture.)
+      setSceneReflection(this.env!.texture);
+    }
+    if (job.slot > 0 && !this.queue.length) PROBES.cwProbeCount.value = this.probes.length;
+  }
+
+  /** Draw up to `n` more of the six views of the capture under way into the cube. */
+  private draw(scene: THREE.Scene, job: { from: THREE.Vector3; face: number }, n: number, helpers: THREE.Object3D[]): void {
     const r = this.r;
     // (No editor aids, no second shadow pass.)
     const aids: THREE.Object3D[] = [...helpers.filter((h) => h.visible)];
-    scene.traverseVisible((o) => {
-      if ((o as THREE.Line).isLine || (o as THREE.Points).isPoints || (o as THREE.Sprite).isSprite || (o as THREE.Object3D & { isTransformControlsRoot?: boolean }).isTransformControlsRoot) aids.push(o);
-    });
-    for (const o of aids) o.visible = false;
     // (Glass is left out of the capture: it would draw the scene behind it again for each of the six views.)
     const glass = new Set<THREE.Material>();
     scene.traverseVisible((o) => {
+      if ((o as THREE.Line).isLine || (o as THREE.Points).isPoints || (o as THREE.Sprite).isSprite || (o as THREE.Object3D & { isTransformControlsRoot?: boolean }).isTransformControlsRoot) aids.push(o);
       const m = (o as THREE.Mesh).material;
       if (m) for (const x of Array.isArray(m) ? m : [m]) if ((x as THREE.MeshPhysicalMaterial).transmission > 0 && x.visible) glass.add(x);
     });
+    for (const o of aids) o.visible = false;
     for (const m of glass) m.visible = false;
     const auto = r.shadowMap.autoUpdate;
     r.shadowMap.autoUpdate = false;
-    this.cam.position.copy(from);
-    this.cam.updateMatrixWorld(true);
-    this.cam.update(r, scene);
+    const cam = this.cam;
+    if (job.face === 0) {
+      cam.position.copy(job.from);
+      cam.updateMatrixWorld(true);
+    }
+    // (As CubeCamera.update does it, a view at a time.)
+    if (cam.coordinateSystem !== r.coordinateSystem) {
+      cam.coordinateSystem = r.coordinateSystem;
+      cam.updateCoordinateSystem();
+    }
+    const target = r.getRenderTarget(), face = r.getActiveCubeFace(), mip = r.getActiveMipmapLevel();
+    const xr = r.xr.enabled;
+    r.xr.enabled = false;
+    const tex = this.cube.texture as THREE.Texture & { mipmapsAutoUpdate: boolean };
+    const mips = tex.mipmapsAutoUpdate;
+    const reversed = (r.state.buffers.depth as { getReversed?: () => boolean }).getReversed?.() ?? false;
+    for (let k = 0; k < n && job.face < 6; k++, job.face++) {
+      // (Mipmaps are made with the last view, once the whole cube is drawn.)
+      tex.mipmapsAutoUpdate = job.face === 5 ? mips : false;
+      r.setRenderTarget(this.cube, job.face, cam.activeMipmapLevel);
+      if (reversed && r.autoClear === false) r.clearDepth();
+      r.render(scene, cam.children[job.face] as THREE.Camera);
+    }
+    tex.mipmapsAutoUpdate = mips;
+    r.setRenderTarget(target, face, mip);
+    r.xr.enabled = xr;
     r.shadowMap.autoUpdate = auto;
     for (const o of aids) o.visible = true;
     for (const m of glass) m.visible = true;
+  }
+
+  /** Blur the drawn cube and write it into the atlas row `slot`. */
+  private store(slot: number): void {
+    const r = this.r;
     this.env = this.pmrem.fromCubemap(this.cube.texture, this.env ?? undefined);
     // Into the atlas row.
     const prev = r.getRenderTarget();

@@ -30,18 +30,38 @@ function decalTexture(): THREE.Texture {
 
 type V3 = [number, number, number];
 
-interface Fading {
-  obj: THREE.Object3D;
+/** Tracers and blasts drawn at once at most (the oldest is reused). */
+const MAX_TRACERS = 24;
+const MAX_BLASTS = 8;
+
+interface Tracer {
+  line: THREE.Line;
+  pos: THREE.BufferAttribute;
+  mat: THREE.LineBasicMaterial;
   age: number;
-  life: number;
-  update(k: number): void;
 }
 
+interface Blast {
+  ball: THREE.Mesh;
+  mat: THREE.MeshBasicMaterial;
+  light: THREE.PointLight | null;
+  radius: number;
+  age: number;
+}
+
+/**
+ * Everything is made once and reused, so firing never makes or throws away a material (which would compile a
+ * shader, or drop one that the next shot compiles again) and never adds or removes a light (which would compile
+ * every lit material again).
+ */
 export class Effects {
   readonly group = new THREE.Group();
-  private fading: Fading[] = [];
   private projectiles = new Map<number, THREE.Mesh>();
-  private tracerMat = new THREE.LineBasicMaterial({ color: 0xffe2a0, transparent: true, opacity: 0.9 });
+  private seen = new Set<number>();
+  private tracers: Tracer[] = [];
+  private tracerNext = 0;
+  private blasts: Blast[] = [];
+  private blastNext = 0;
   private ballGeo = new THREE.SphereGeometry(1, 16, 12);
   private projGeo = new THREE.SphereGeometry(4, 10, 8);
   private projMat = new THREE.MeshStandardMaterial({ color: 0x3d4239, roughness: 0.6, metalness: 0.3 });
@@ -50,10 +70,39 @@ export class Effects {
   private decals: THREE.Mesh[] = [];
   private decalGeo = new THREE.PlaneGeometry(1, 1);
   private decalMat = new THREE.MeshBasicMaterial({ map: decalTexture(), transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 });
+  private v = new THREE.Vector3();
+  private n = new THREE.Vector3();
+  private m4 = new THREE.Matrix4();
 
-  constructor() {
+  /** `blastLights`: how many blasts can light their surroundings at once (lights always there, dark when unused). */
+  constructor(blastLights = 0) {
     this.group.name = 'effects';
     this.group.add(this.particles.group);
+    for (let i = 0; i < MAX_TRACERS; i++) {
+      const pos = new THREE.BufferAttribute(new Float32Array(6), 3).setUsage(THREE.DynamicDrawUsage);
+      const g = new THREE.BufferGeometry();
+      g.setAttribute('position', pos);
+      const mat = new THREE.LineBasicMaterial({ color: 0xffe2a0, transparent: true, opacity: 0.9 });
+      const line = new THREE.Line(g, mat);
+      // (Its ends change each shot: never culled by a stale bounding sphere.)
+      line.frustumCulled = false;
+      line.visible = false;
+      this.group.add(line);
+      this.tracers.push({ line, pos, mat, age: Infinity });
+    }
+    for (let i = 0; i < MAX_BLASTS; i++) {
+      const mat = new THREE.MeshBasicMaterial({ color: 0xffa340, transparent: true, opacity: 0.9, depthWrite: false, blending: THREE.AdditiveBlending });
+      const ball = new THREE.Mesh(this.ballGeo, mat);
+      ball.visible = false;
+      this.group.add(ball);
+      this.blasts.push({ ball, mat, light: null, radius: 1, age: Infinity });
+    }
+    for (let i = 0; i < Math.min(blastLights, MAX_BLASTS); i++) {
+      const light = new THREE.PointLight(0xffa04a, 0, 1, 1);
+      light.name = 'blast-light';
+      this.group.add(light);
+      this.blasts[i]!.light = light;
+    }
   }
 
   /**
@@ -61,11 +110,17 @@ export class Effects {
    * level.
    */
   decal(at: V3, normal: V3, size: number, parent: THREE.Object3D | null): void {
-    const m = new THREE.Mesh(this.decalGeo, this.decalMat);
-    const n = new THREE.Vector3(...normal).normalize();
-    const p = new THREE.Vector3(...at).addScaledVector(n, 0.3);
+    // (The oldest mark is moved here once there are enough.)
+    const m = this.decals.length >= MAX_DECALS ? this.decals.shift()! : new THREE.Mesh(this.decalGeo, this.decalMat);
+    m.removeFromParent();
+    m.position.set(0, 0, 0);
+    m.quaternion.identity();
+    m.scale.set(1, 1, 1);
+    m.updateMatrix();
+    const n = this.n.set(...normal).normalize();
+    const p = this.v.set(...at).addScaledVector(n, 0.3);
     m.position.copy(p);
-    m.lookAt(p.clone().add(n));
+    m.lookAt(p.x + n.x, p.y + n.y, p.z + n.z);
     m.rotateZ(Math.random() * Math.PI * 2);
     m.scale.setScalar(size);
     m.renderOrder = 5;
@@ -73,10 +128,9 @@ export class Effects {
       parent.updateMatrixWorld();
       parent.add(m);
       // (Placed in world space: into the parent's own space.)
-      m.applyMatrix4(parent.matrixWorld.clone().invert());
+      m.applyMatrix4(this.m4.copy(parent.matrixWorld).invert());
     } else this.group.add(m);
     this.decals.push(m);
-    if (this.decals.length > MAX_DECALS) this.decals.shift()!.removeFromParent();
   }
 
   /** A bullet or a swing hitting a surface: a mark, sparks and a puff of dust. */
@@ -89,10 +143,16 @@ export class Effects {
 
   /** A bullet's path: a bright line that lasts a moment, starting a little below and right of the eye. */
   tracer(from: V3, to: V3, fromEye: boolean, right: V3 | null): void {
-    const start = fromEye && right ? new THREE.Vector3(from[0] + right[0] * 6, from[1] - 6, from[2] + right[2] * 6) : new THREE.Vector3(...from);
-    const g = new THREE.BufferGeometry().setFromPoints([start, new THREE.Vector3(...to)]);
-    const line = new THREE.Line(g, this.tracerMat.clone());
-    this.add(line, 0.06, (k) => ((line.material as THREE.LineBasicMaterial).opacity = 0.9 * (1 - k)));
+    const t = this.tracers[this.tracerNext]!;
+    this.tracerNext = (this.tracerNext + 1) % this.tracers.length;
+    const a = t.pos.array as Float32Array;
+    if (fromEye && right) a.set([from[0] + right[0] * 6, from[1] - 6, from[2] + right[2] * 6], 0);
+    else a.set(from, 0);
+    a.set(to, 3);
+    t.pos.needsUpdate = true;
+    t.age = 0;
+    t.mat.opacity = 0.9;
+    t.line.visible = true;
   }
 
   /** A blast: a fireball growing and fading, with a flash of light, then smoke; a scorch on what was hit. */
@@ -103,21 +163,35 @@ export class Effects {
     this.particles.burst({ kind: 'smoke', at: p, dir: up, spread: 70, speed: radius * 0.5, size: radius * 0.25, life: 2.5 }, 14);
     this.particles.burst({ kind: 'sparks', at: p, dir: up, spread: 80, speed: radius * 3, size: 3, life: 0.7 }, 20);
     if (normal) this.decal(at, normal, radius * 0.6, null);
-    const mat = new THREE.MeshBasicMaterial({ color: 0xffa340, transparent: true, opacity: 0.9, depthWrite: false, blending: THREE.AdditiveBlending });
-    const ball = new THREE.Mesh(this.ballGeo, mat);
-    ball.position.set(...at);
-    const light = new THREE.PointLight(0xffa04a, 6, radius * 4, 1);
-    ball.add(light);
-    this.add(ball, 0.45, (k) => {
-      ball.scale.setScalar(radius * (0.25 + 0.5 * Math.sqrt(k)));
-      mat.opacity = 0.9 * (1 - k);
-      light.intensity = 6 * (1 - k) * (1 - k);
-    });
+    // (A blast that has a light, if one is free; else the next ball.)
+    let b = this.blasts.find((x) => x.light && x.age >= BLAST_LIFE);
+    if (!b) {
+      b = this.blasts[this.blastNext]!;
+      this.blastNext = (this.blastNext + 1) % this.blasts.length;
+    }
+    b.ball.position.set(...at);
+    b.light?.position.set(...at);
+    b.radius = radius;
+    b.age = 0;
+    this.showBlast(b, 0);
+  }
+
+  private showBlast(b: Blast, k: number): void {
+    const on = k < 1;
+    b.ball.visible = on;
+    b.ball.scale.setScalar(b.radius * (0.25 + 0.5 * Math.sqrt(k)));
+    b.mat.opacity = 0.9 * (1 - k);
+    if (b.light) {
+      b.light.distance = b.radius * 4;
+      b.light.intensity = on ? 6 * (1 - k) * (1 - k) : 0;
+    }
   }
 
   /** Where projectiles are now (new ones appear, gone ones vanish). */
   syncProjectiles(list: { id: number; at: V3; arc: boolean }[]): void {
-    const seen = new Set<number>();
+    if (!list.length && !this.projectiles.size) return;
+    const seen = this.seen;
+    seen.clear();
     for (const p of list) {
       seen.add(p.id);
       let m = this.projectiles.get(p.id);
@@ -138,23 +212,18 @@ export class Effects {
   /** Age everything by `dt` seconds. */
   tick(dt: number): void {
     this.particles.step(dt);
-    for (let i = this.fading.length - 1; i >= 0; i--) {
-      const f = this.fading[i]!;
-      f.age += dt;
-      const k = Math.min(1, f.age / f.life);
-      f.update(k);
-      if (k >= 1) {
-        this.group.remove(f.obj);
-        dispose(f.obj);
-        this.fading.splice(i, 1);
-      }
+    for (const t of this.tracers) {
+      if (t.age >= TRACER_LIFE) continue;
+      t.age += dt;
+      const k = Math.min(1, t.age / TRACER_LIFE);
+      t.mat.opacity = 0.9 * (1 - k);
+      if (k >= 1) t.line.visible = false;
     }
-  }
-
-  private add(obj: THREE.Object3D, life: number, update: (k: number) => void): void {
-    update(0);
-    this.group.add(obj);
-    this.fading.push({ obj, age: 0, life, update });
+    for (const b of this.blasts) {
+      if (b.age >= BLAST_LIFE) continue;
+      b.age += dt;
+      this.showBlast(b, Math.min(1, b.age / BLAST_LIFE));
+    }
   }
 
   dispose(): void {
@@ -163,20 +232,17 @@ export class Effects {
     this.decals = [];
     this.decalGeo.dispose();
     this.decalMat.dispose();
-    for (const f of this.fading) dispose(f.obj);
-    this.fading = [];
+    for (const t of this.tracers) {
+      t.line.geometry.dispose();
+      t.mat.dispose();
+    }
+    for (const b of this.blasts) b.mat.dispose();
     this.ballGeo.dispose();
     this.projGeo.dispose();
     this.projMat.dispose();
     this.rocketMat.dispose();
-    this.tracerMat.dispose();
   }
 }
 
-function dispose(o: THREE.Object3D): void {
-  o.traverse((x) => {
-    if (x instanceof THREE.Line) x.geometry.dispose();
-    const m = (x as THREE.Mesh).material as THREE.Material | undefined;
-    m?.dispose?.();
-  });
-}
+const TRACER_LIFE = 0.06;
+const BLAST_LIFE = 0.45;

@@ -120,6 +120,8 @@ export class PlaySession {
   private constructor(scene: SceneFile, material: (name: string) => THREE.Material, rules: GameRules | undefined, values: GameValue[] | undefined, models: Map<string, ModelMesh>, terrains: Map<string, ModelMesh[]>, trunks: Map<string, { width: number; height: number }>, saved: SavedProgress | null, arrive: Travel | null) {
     this.group.name = 'play';
     this.world = GameWorld.create(scene, { rules, values, models, terrains, trunks, saved, arrive });
+    // (Blasts light their surroundings with lights made now: adding lights later would compile every material again.)
+    this.effects = new Effects(this.world.hasBlasts ? 2 : 0);
     // The same copies the game world made (Repeat groups).
     const doc = new SceneDoc(expandRepeats(structuredClone(scene), brushBounds));
     const bodies = new Set(this.world.movingBodies().map((b) => b.id));
@@ -333,7 +335,7 @@ export class PlaySession {
       let world: THREE.Matrix4 | null = null;
       let on = s.on;
       if (at.body) {
-        const m = this.world.motionOf(at.body);
+        const m = this.world.drawnMotionOf(at.body);
         if (!m || !this.world.isVisible(at.body)) on = false;
         else world = this.lightNow.fromArray(m).multiply(at.start);
       }
@@ -396,9 +398,17 @@ export class PlaySession {
     return m.model ? m : null;
   }
 
+  /**
+   * Gets an object ready to draw before it is shown (its shaders compiled in the background, so a model that
+   * loads while playing doesn't hold a frame up). Set by what draws the game; by default it is shown at once.
+   */
+  warm: (obj: THREE.Object3D) => Promise<unknown> = () => Promise.resolve();
+
   private attachModel(holder: THREE.Group, data: ModelData, id: string): void {
     void modelInstance(data)
-      .then((inst) => {
+      .then(async (inst) => {
+        if (this.disposed) return inst.dispose();
+        await this.warm(inst.object).catch(() => {});
         if (this.disposed) return inst.dispose();
         holder.add(inst.object);
         // (Googly eyes ride on its head bone now, while it still stands in its rest pose.)
@@ -497,11 +507,13 @@ export class PlaySession {
     s.audio.disconnect?.();
   }
 
+  private ears = new THREE.Vector3();
+
   /** Each frame: the effect and background sound for where the ears are now. */
   private hear(): void {
     const listener = this.listener;
     if (!listener?.parent || !this.stage) return;
-    const h = this.world.hearing(listener.getWorldPosition(new THREE.Vector3()));
+    const h = this.world.hearing(listener.getWorldPosition(this.ears));
     this.hearingNow = h;
     this.stage.set(h.effect, h.mix);
     const key = h.background ? `${h.background.sound}|${h.background.volume}` : '';
@@ -628,6 +640,8 @@ export class PlaySession {
     return base.clone().invert().multiply(new THREE.Matrix4().fromArray(this.doc.worldMatrix(id)));
   }
 
+  private motion = new THREE.Matrix4();
+
   /** Advance the game and move what moved. Returns what happened this frame. */
   tick(dt: number): PlayFrame {
     this.world.step(dt);
@@ -651,10 +665,11 @@ export class PlaySession {
       }
       this.eyes = this.eyes.filter((x) => !gone.has(x.id));
     }
-    const motion = new THREE.Matrix4();
+    const motion = this.motion;
     for (const m of this.movers) {
       m.obj.visible = this.world.isVisible(m.id);
-      const mm = this.world.motionOf(m.id);
+      // (Drawn between the last two physics steps, as the player's view is: smooth at any frame rate.)
+      const mm = this.world.drawnMotionOf(m.id);
       if (!mm) continue;
       m.obj.matrix.copy(motion.fromArray(mm).multiply(m.base));
       m.obj.matrixWorldNeedsUpdate = true;
@@ -665,10 +680,8 @@ export class PlaySession {
         const text = this.world.signText(id) ?? s.data.text;
         if (text === s.data.text) continue;
         s.data = { ...s.data, text };
-        s.holder.remove(s.sign.object);
-        s.sign.dispose();
-        s.sign = buildSign(s.data);
-        s.holder.add(s.sign.object);
+        // (Drawn again in place: the same material, so nothing compiles.)
+        s.sign.retext(text);
       }
     }
     for (const m of this.mixers) m.update(dt);
@@ -786,13 +799,13 @@ export class PlaySession {
     this.world.rotateHeld(dx, dy);
   }
 
-  private effects = new Effects();
+  private effects: Effects;
   private missingAnims = new Set<string>();
   private npcViews = new Map<string, { holder: THREE.Group; inner: THREE.Group; figure: boolean }>();
 
   /** Creatures where they are now; plain figures lie down when dead (models play their dying animation). */
   private placeNpcs(): void {
-    for (const n of this.world.npcStates()) {
+    for (const n of this.world.npcStates(true)) {
       const v = this.npcViews.get(n.id);
       if (!v) continue;
       v.holder.position.set(...n.feet);
@@ -806,9 +819,14 @@ export class PlaySession {
   }
   private emitters: { data: ParticlesData; holder: THREE.Group; body: string | null; owed: number }[] = [];
 
+  private emitAt = new THREE.Vector3();
+  private emitQ = new THREE.Quaternion();
+  private emitS = new THREE.Vector3();
+  private emitDir = new THREE.Vector3();
+
   /** Emitters put out their particles for this frame (where they are now, if on and shown). */
   private emit(dt: number): void {
-    const at = new THREE.Vector3(), q = new THREE.Quaternion(), s = new THREE.Vector3();
+    const at = this.emitAt, q = this.emitQ, s = this.emitS;
     for (const em of this.emitters) {
       const on = em.body ? (this.world.switchedOn(em.body) ?? em.data.on) && this.world.isVisible(em.body) : em.data.on;
       if (!on || em.data.rate <= 0) continue;
@@ -820,10 +838,34 @@ export class PlaySession {
       em.holder.matrixWorld.decompose(at, q, s);
       const d = EMITTER_DEFAULTS[em.data.kind] ?? EMITTER_DEFAULTS.smoke;
       this.effects.particles.burst(
-        { kind: em.data.kind, at: at.clone(), dir: new THREE.Vector3(0, 1, 0).applyQuaternion(q), spread: d.spread, speed: d.speed * em.data.speed, size: d.size * em.data.size, life: d.life },
+        // (A burst's place and direction are copied into each particle.)
+        { kind: em.data.kind, at, dir: this.emitDir.set(0, 1, 0).applyQuaternion(q), spread: d.spread, speed: d.speed * em.data.speed, size: d.size * em.data.size, life: d.life },
         Math.min(n, 50),
       );
     }
+  }
+
+  private bounds = new THREE.Box3();
+  private boundsBox = new THREE.Box3();
+  private boundsNow = new THREE.Box3();
+  private boundsCalls = 0;
+
+  /**
+   * The extent of what stays put (for the sun's shadows). Measured about once a second (models and batches load
+   * in), and never from what moves: a crate falling off the edge, a creature or a blast must not make the lights
+   * be built again, which would make their shadow maps again.
+   */
+  levelBounds(): THREE.Box3 {
+    if (this.boundsCalls++ % 60) return this.bounds;
+    const moving = new Set<THREE.Object3D>(this.movers.map((m) => m.obj));
+    for (const v of this.npcViews.values()) moving.add(v.holder);
+    moving.add(this.effects.group);
+    if (this.body) moving.add(this.body);
+    const now = this.boundsNow.makeEmpty();
+    for (const o of this.group.children) if (!moving.has(o)) now.union(this.boundsBox.setFromObject(o));
+    // (Taken only when it grew by more than a little: each new extent builds the lights and their shadow maps again.)
+    if (this.bounds.isEmpty() || !this.boundsBox.copy(this.bounds).expandByScalar(64).containsBox(now)) this.bounds.copy(now);
+    return this.bounds;
   }
 
   /** What draws the moving object `id` is part of (null: it doesn't move, or it isn't an object). */

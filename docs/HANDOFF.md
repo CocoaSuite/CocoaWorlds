@@ -161,3 +161,21 @@ recompile), `PlaySession.driveLights` (called after `lighting.update` in `engine
 
 Next, if wanted: an e2e test with a real carried floodlight; copies keeping their lights; brushes riding too.
 
+### 8. Frame stutters: optimisation sweep
+
+Status: done, but not yet run: that session had no installed packages (no Three.js, Rapier, Vitest or Electron), so
+only a type check of the project's own code and a side-by-side check of the path search (old and new give the same
+paths) were possible. First thing next session: `npm test`, the e2e tests, and a look in Play on a real GPU. What and where: docs/rendering.md,
+“Smooth frames”. In short: shaders compiled before Play's first frame and models compiled in the background
+(`warmPlay` in `engine.ts`, `game/runner.ts`, `PlaySession.warm`); reflections switched on first and captured over
+four frames (`SceneReflections.prime`, `job`); pooled tracers, fireballs, marks and blast lights (`effects.ts`,
+`GameWorld.hasBlasts`); signs redrawn in place (`sign.ts` `retext`); lights built from what stays put
+(`PlaySession.levelBounds`, `SceneLighting.update(…, still)`, the cached `shadows`, `WorldRenderer.shapeVersion`);
+moving objects, creatures and camera views drawn between physics steps (`GameWorld.drawnMotionOf`,
+`npcStates(true)`); path search without fresh memory (`NavGrid.scratch`) and staggered (`Npc.repathEvery`);
+particles upload only their live part; the status line at most four times a second (`sendStats`). Tests:
+`packages/runtime/test/smooth.test.ts`.
+
+Next, if wanted: measure on a real GPU with a busy level (frame times in the status line); skip the ground-blend
+and occlusion scene walks when nothing needs them; cheaper bulb shadows (each is six renders a frame).
+

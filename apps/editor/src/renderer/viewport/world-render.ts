@@ -73,6 +73,8 @@ export class WorldRenderer {
   private piecesById = new Map<string, Brush[]>();
   /** Counts level builds (what reflection probes are found from changed). */
   version = 0;
+  /** Counts changes to what the level's extent is measured from (builds and subtract volumes). */
+  shapeVersion = 0;
   /** Every solid piece of the level as built (after live subtract). */
   get solidPieces(): Brush[] {
     return [...this.piecesById.values()].flat();
@@ -136,6 +138,7 @@ export class WorldRenderer {
       this.apply(buildLevel({ seq: this.seq, brushes }));
     }
     this.rebuildSubtracts(brushes);
+    this.shapeVersion++;
   }
 
   private ensureWorker(): Worker | null {
@@ -178,6 +181,7 @@ export class WorldRenderer {
   private apply(r: WorldResult): void {
     this.piecesById = new Map(r.pieces);
     this.version++;
+    this.shapeVersion++;
     this.stats = { ...r.stats, buildMs: Math.round(r.ms) };
     if (this.solidMesh) {
       this.group.remove(this.solidMesh);

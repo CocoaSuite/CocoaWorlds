@@ -65,6 +65,8 @@ if (THREE.ShaderChunk.lights_fragment_begin.includes(SUN_LINE))
     }`,
   );
 
+const AHEAD = new THREE.Vector3();
+
 /** A bulb of brightness 1 lights a wall this far away about as much as the sun does (units). */
 const FALLOFF = 96;
 
@@ -88,9 +90,13 @@ export class SceneLighting {
 
   /**
    * Rebuild from the scene when its lights or settings changed. `worldOf` gives an entity's world matrix,
-   * `levelBounds` the level's extent (for the sun's shadows).
+   * `levelBounds` the level's extent (for the sun's shadows). `still`: the doc never changes (an exported game), so
+   * once built for it only a change of the bounds builds again (nothing is compared each frame).
    */
-  update(doc: SceneDoc, worldOf: (id: string) => number[], levelBounds: THREE.Box3, scene: THREE.Scene): void {
+  update(doc: SceneDoc, worldOf: (id: string) => number[], levelBounds: THREE.Box3, scene: THREE.Scene, still = false): void {
+    const bKey = levelBounds.isEmpty() ? '' : [...levelBounds.min.toArray(), ...levelBounds.max.toArray()].map(Math.round).join(',');
+    if (still && doc === this.stillDoc && bKey === this.boundsKey && this.key) return;
+    this.stillDoc = still ? doc : null;
     const shown = (e: EntityData) => {
       for (let x: EntityData | undefined = e; x; x = x.parent ? doc.get(x.parent) : undefined) if (!x.visible) return false;
       return true;
@@ -98,7 +104,6 @@ export class SceneLighting {
     const lights = doc.entities.filter((e) => e.components.light && shown(e));
     const settings = sceneSettings(doc.settings);
     const key = JSON.stringify([settings, lights.map((e) => [e.components.light, worldOf(e.id)])]);
-    const bKey = levelBounds.isEmpty() ? '' : [...levelBounds.min.toArray(), ...levelBounds.max.toArray()].map(Math.round).join(',');
     if (key === this.key && bKey === this.boundsKey) return;
     this.key = key;
     this.boundsKey = bKey;
@@ -212,7 +217,14 @@ export class SceneLighting {
     this.background = new THREE.Color(settings.backgroundColor);
     this.fog = settings.fog.enabled ? new THREE.Fog(fromSky ? skyLight.fog : settings.fog.color, settings.fog.near, settings.fog.far) : null;
     this.applyTo(scene);
+    this.anyShadows = false;
+    this.group.traverse((o) => {
+      if ((o as THREE.Light).isLight && (o as THREE.Light).castShadow) this.anyShadows = true;
+    });
   }
+
+  private stillDoc: SceneDoc | null = null;
+  private anyShadows = false;
 
   /** Show the hour (null: the hour the game starts at) when day and night is on. */
   setDay(hour: number | null): void {
@@ -255,11 +267,7 @@ export class SceneLighting {
 
   /** Whether any light casts shadows (the renderer only draws shadow maps then). */
   get shadows(): boolean {
-    let any = false;
-    this.group.traverse((o) => {
-      if ((o as THREE.Light).isLight && (o as THREE.Light).castShadow) any = true;
-    });
-    return any;
+    return this.anyShadows;
   }
 
   /** Force a rebuild on the next update (for example when the level bounds changed a lot). */
@@ -290,7 +298,7 @@ export class SceneLighting {
     if (l instanceof THREE.SpotLight) l.angle = THREE.MathUtils.degToRad(Math.min(170, Math.max(1, s.angle)) / 2);
     if (world && !(l instanceof THREE.DirectionalLight)) {
       l.position.setFromMatrixPosition(world);
-      if (l instanceof THREE.SpotLight) l.target.position.copy(l.position).add(new THREE.Vector3(0, 0, -1).transformDirection(world));
+      if (l instanceof THREE.SpotLight) l.target.position.copy(l.position).add(AHEAD.set(0, 0, -1).transformDirection(world));
     }
   }
 

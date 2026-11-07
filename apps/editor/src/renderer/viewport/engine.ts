@@ -346,6 +346,9 @@ export class ViewportEngine {
     this.invalidate();
   }
 
+  private boundsKey = '';
+  private editBounds = new THREE.Box3();
+
   /** Scene lighting in Play and with “Game lighting”; flat preview lighting otherwise. */
   private updateLighting(): void {
     const on = !!this.play || this.gameLighting;
@@ -356,8 +359,17 @@ export class ViewportEngine {
       this.scene.fog = null;
       return;
     }
-    const level = this.play ? this.play.group : this.world.group;
-    const bounds = new THREE.Box3().setFromObject(level);
+    // (The extent is measured again only when the level changed; in Play, from what stays put.)
+    let bounds: THREE.Box3;
+    if (this.play) bounds = this.play.levelBounds();
+    else {
+      const key = `${this.world.shapeVersion}|${this.world.group.children.length}`;
+      if (key !== this.boundsKey) {
+        this.boundsKey = key;
+        this.editBounds.setFromObject(this.world.group);
+      }
+      bounds = this.editBounds;
+    }
     this.lighting.update(this.doc, (id) => this.mats.get(id) ?? this.doc!.worldMatrix(id), bounds, this.scene);
     this.play?.driveLights(this.lighting);
     this.lighting.setDay(this.play ? this.play.dayHour : null);
@@ -580,6 +592,7 @@ export class ViewportEngine {
     if (!p) return;
     this.saveProgress();
     this.play = null;
+    this.warmed = null;
     this.queueNav(0);
     this.hudKey = '';
     this.cb.hud(null);
@@ -1606,7 +1619,7 @@ export class ViewportEngine {
     const t0 = performance.now();
     this.renderer.info.reset();
     this.render();
-    this.cb.stats({
+    this.sendStats({
       frameMs: performance.now() - t0,
       draws: this.renderer.info.render.calls,
       triangles: this.renderer.info.render.triangles,
@@ -1615,6 +1628,33 @@ export class ViewportEngine {
       buildMs: this.world.stats.buildMs,
     });
   };
+
+  private stats: ViewportStats | null = null;
+  private statsAt = -Infinity;
+  private statsTimer = 0;
+
+  /**
+   * The status line's numbers, at most four times a second (each sends the view's panel through React again, which
+   * every frame of Play would make stutter), always with the latest once it settles, and at once when what it says
+   * changes (a build starts or ends, another view).
+   */
+  private sendStats(s: ViewportStats): void {
+    const last = this.stats;
+    this.stats = s;
+    const now = performance.now();
+    if (!last || last.building !== s.building || last.view !== s.view || last.buildMs !== s.buildMs || now - this.statsAt >= 250) {
+      this.statsAt = now;
+      this.cb.stats(s);
+      return;
+    }
+    if (this.statsTimer) return;
+    this.statsTimer = window.setTimeout(() => {
+      this.statsTimer = 0;
+      if (this.disposed || !this.stats) return;
+      this.statsAt = performance.now();
+      this.cb.stats(this.stats);
+    }, Math.max(0, 250 - (now - this.statsAt)));
+  }
 
   /** Draw with ambient occlusion when the scene's lighting is shown and it is on. False: draw plainly. */
   private groundBlend = new GroundBlend();
@@ -1686,6 +1726,25 @@ export class ViewportEngine {
     return (this.ao ??= new AoRenderer(this.renderer)).render(this.scene, cam, this.doc?.settings);
   }
 
+  /** The session whose shaders were compiled (all at once, before its first frame). */
+  private warmed: PlaySession | null = null;
+
+  /**
+   * Before Play's first frame, compile the shaders of everything in the game, shown or not (levels of detail, blasts,
+   * objects scripts show later), under the game's own lights and reflections: then nothing compiles in the middle of
+   * playing.
+   */
+  private warmPlay(cam: THREE.Camera, eye: THREE.Vector3): void {
+    const play = this.play;
+    if (!play || this.warmed === play) return;
+    this.warmed = play;
+    // (Reflections first: switching them on changes the shaders of shiny materials.)
+    this.reflections?.prime(this.scene, eye, this.reflectOn(), [this.grid.object]);
+    this.renderer.compile(play.group, cam, this.scene);
+    // Models that load later are compiled in the background before they appear.
+    play.warm = (o) => this.renderer.compileAsync(o, cam, this.scene);
+  }
+
   private render(): void {
     FOLIAGE_TIME.value = performance.now() / 1000;
     const r = this.renderer;
@@ -1704,6 +1763,7 @@ export class ViewportEngine {
       this.waterDepth.prepare(r, this.scene, this.fpCam);
       this.reflections ??= new SceneReflections(r);
       if (this.reflectOn()) this.syncProbes();
+      this.warmPlay(this.fpCam, this.fpCam.getWorldPosition(new THREE.Vector3()));
       (this.reflections ??= new SceneReflections(r)).update(this.scene, this.fpCam.getWorldPosition(new THREE.Vector3()), this.reflectOn(), [this.grid.object]);
       if (this.reflections.busy) this.invalidate();
       this.groundBlend.prepare(r, this.scene, this.fpCam, [this.grid.object]);
@@ -1720,6 +1780,7 @@ export class ViewportEngine {
     // reflect sky.)
     this.reflections ??= new SceneReflections(r);
     if (this.reflectOn()) this.syncProbes();
+    this.warmPlay(this.rig.camera, this.rig.target.clone().add(new THREE.Vector3(0, 64, 0)));
     (this.reflections ??= new SceneReflections(r)).update(this.scene, this.rig.target.clone().add(new THREE.Vector3(0, 64, 0)), this.reflectOn(), [this.grid.object]);
     if (this.reflections.busy) this.invalidate();
     this.groundBlend.prepare(r, this.scene, this.rig.camera, [this.grid.object]);

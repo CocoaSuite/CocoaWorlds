@@ -212,7 +212,12 @@ interface Body {
   model?: { data: ModelData; mesh: ModelMesh; matrix: number[] };
   /** Physics settings, when it has a Physics component. */
   rb?: RigidBodyData;
+  /** Where it was before the last physics step (x, y, z, then the rotation x, y, z, w), for drawing in between. */
+  prev?: Float64Array;
 }
+
+/** A body that moved further than this in one step was put there (teleported): drawn there at once (u). */
+const SNAP = 128;
 
 /**
  * The model animation a creature plays for a role, from its list (“idle, walk, attack, die, run, busy, hurt”).
@@ -1165,6 +1170,7 @@ export class GameWorld {
       this.runner.start();
     }
     while (this.accumulator >= STEP) {
+      this.rememberPoses();
       this.applyTweens(this.time + STEP);
       this.moveTrains();
       if (this.player && this.hiding) {
@@ -1210,6 +1216,38 @@ export class GameWorld {
   }
 
   private startedScripts = false;
+
+  /** Creatures' feet and facing before the last step (x, y, z, yaw), for drawing in between. */
+  private npcPrev = new Map<string, Float64Array>();
+
+  /** Keep where everything that moves is, before a physics step moves it (see `drawnMotionOf`). */
+  private rememberPoses(): void {
+    for (const b of this.bodies.values()) {
+      if (b.info.motion === 'fixed' || b.info.kind === 'zone') continue;
+      const t = b.body.translation(), q = b.body.rotation();
+      const p = (b.prev ??= new Float64Array(7));
+      p[0] = t.x;
+      p[1] = t.y;
+      p[2] = t.z;
+      p[3] = q.x;
+      p[4] = q.y;
+      p[5] = q.z;
+      p[6] = q.w;
+    }
+    for (const n of this.npcs.values()) {
+      let p = this.npcPrev.get(n.id);
+      if (!p) this.npcPrev.set(n.id, (p = new Float64Array(4)));
+      p[0] = n.feet.x;
+      p[1] = n.feet.y;
+      p[2] = n.feet.z;
+      p[3] = n.yaw;
+    }
+  }
+
+  /** How far the time now is between the last two physics steps (0…1): what is drawn sits that far along. */
+  private get alpha(): number {
+    return Math.max(0, Math.min(1, this.accumulator / STEP));
+  }
 
   // ── The player ──
 
@@ -1483,7 +1521,8 @@ export class GameWorld {
     const e = this.doc.get(c.id);
     if (!e) return null;
     const start = this.doc.worldMatrix(c.id);
-    const motion = this.motionOf(c.id) ?? this.motionOf(this.unitOf.get(c.id) ?? '');
+    // (Drawn: where the object is between the last two steps, as the player's own view is.)
+    const motion = this.drawnMotionOf(c.id) ?? this.drawnMotionOf(this.unitOf.get(c.id) ?? '');
     const m = motion ? multiply(motion, start) : start;
     // Forward is −Z.
     const f = [-m[8]!, -m[9]!, -m[10]!];
@@ -1641,8 +1680,21 @@ export class GameWorld {
   }
 
   /** Creatures now, for drawing: where their feet are, which way they face, whether alive. */
-  npcStates(): { id: string; feet: V3; yaw: number; alive: boolean; state: string; health: number }[] {
-    return [...this.npcs.values()].map((n) => ({ id: n.id, feet: [n.feet.x, n.feet.y, n.feet.z], yaw: n.yaw, alive: n.alive, state: n.state, health: n.health }));
+  npcStates(drawn = false): { id: string; feet: V3; yaw: number; alive: boolean; state: string; health: number }[] {
+    const a = this.alpha;
+    return [...this.npcs.values()].map((n) => {
+      const p = drawn ? this.npcPrev.get(n.id) : undefined;
+      let feet: V3 = [n.feet.x, n.feet.y, n.feet.z], yaw = n.yaw;
+      // (Drawn: between the last two steps, unless it was put somewhere else.)
+      if (p && a < 1 && Math.abs(feet[0] - p[0]!) + Math.abs(feet[1] - p[1]!) + Math.abs(feet[2] - p[2]!) < SNAP) {
+        feet = [p[0]! + (feet[0] - p[0]!) * a, p[1]! + (feet[1] - p[1]!) * a, p[2]! + (feet[2] - p[2]!) * a];
+        let d = yaw - p[3]!;
+        while (d > Math.PI) d -= Math.PI * 2;
+        while (d < -Math.PI) d += Math.PI * 2;
+        yaw = p[3]! + d * a;
+      }
+      return { id: n.id, feet, yaw, alive: n.alive, state: n.state, health: n.health };
+    });
   }
 
   /** A hit by a weapon or a blast: “When this is hit” runs on it and what it is inside; breakables lose health. */
@@ -2601,7 +2653,8 @@ export class GameWorld {
   /** Put every moving object's stand-ins where it will be after this step (see `standIns`). */
   private syncStandIns(): void {
     this.standInBody ??= this.world.createRigidBody(RAPIER.RigidBodyDesc.fixed());
-    const seen = new Set<number>();
+    const seen = this.standInSeen;
+    seen.clear();
     for (const b of this.bodies.values()) {
       const body = b.body;
       if (b.info.kind === 'zone' || !body.isKinematic()) continue;
@@ -2634,6 +2687,8 @@ export class GameWorld {
       this.standIns.delete(h);
     }
   }
+
+  private standInSeen = new Set<number>();
 
   /** Where a point riding on the object of collider `h` (a stand-in) will be after this step; null if it stays put. */
   private carry(h: number, at: { x: number; y: number; z: number }): { x: number; y: number; z: number } | null {
@@ -2777,6 +2832,11 @@ export class GameWorld {
     return out;
   }
 
+  /** Whether any weapon of the game makes blasts (they light their surroundings for a moment). */
+  get hasBlasts(): boolean {
+    return this.ui.items.some((i) => (weaponOf(i.weapon)?.blast ?? 0) > 0);
+  }
+
   /** Every object that physics can move. */
   movingBodies(): BodyInfo[] {
     return [...this.bodies.values()].filter((b) => b.info.motion !== 'fixed').map((b) => b.info);
@@ -2790,6 +2850,32 @@ export class GameWorld {
     const b = this.bodies.get(id);
     if (!b) return null;
     const pose = poseMatrix(b.body);
+    if (b.scale === 1) return multiply(pose, b.startInverse);
+    const k = b.scale;
+    return multiply(multiply(pose, [k, 0, 0, 0, 0, k, 0, 0, 0, 0, k, 0, 0, 0, 0, 1]), b.startInverse);
+  }
+
+  /**
+   * `motionOf` for drawing: where the body is between the last two physics steps (as far along as the time now
+   * is), so moving things glide on screens faster than the physics (60 steps a second) and never judder against
+   * the player's view, which is drawn the same way.
+   */
+  drawnMotionOf(id: string): number[] | null {
+    const b = this.bodies.get(id);
+    if (!b) return null;
+    const p = b.prev, a = this.alpha;
+    if (!p || a >= 1) return this.motionOf(id);
+    const t = b.body.translation(), q = b.body.rotation();
+    if (Math.abs(t.x - p[0]!) + Math.abs(t.y - p[1]!) + Math.abs(t.z - p[2]!) > SNAP) return this.motionOf(id);
+    // (The shorter way round between the two turns, normalised.)
+    const s = p[3]! * q.x + p[4]! * q.y + p[5]! * q.z + p[6]! * q.w < 0 ? -1 : 1;
+    let qx = p[3]! * s + (q.x - p[3]! * s) * a, qy = p[4]! * s + (q.y - p[4]! * s) * a, qz = p[5]! * s + (q.z - p[5]! * s) * a, qw = p[6]! * s + (q.w - p[6]! * s) * a;
+    const len = Math.hypot(qx, qy, qz, qw) || 1;
+    qx /= len;
+    qy /= len;
+    qz /= len;
+    qw /= len;
+    const pose = poseFrom(p[0]! + (t.x - p[0]!) * a, p[1]! + (t.y - p[1]!) * a, p[2]! + (t.z - p[2]!) * a, qx, qy, qz, qw);
     if (b.scale === 1) return multiply(pose, b.startInverse);
     const k = b.scale;
     return multiply(multiply(pose, [k, 0, 0, 0, 0, k, 0, 0, 0, 0, k, 0, 0, 0, 0, 1]), b.startInverse);
@@ -2830,13 +2916,17 @@ export class GameWorld {
 
 function poseMatrix(b: RAPIER.RigidBody): number[] {
   const t = b.translation(), q = b.rotation();
-  const { x, y, z, w } = q;
+  return poseFrom(t.x, t.y, t.z, q.x, q.y, q.z, q.w);
+}
+
+/** A rotation (unit quaternion x, y, z, w) and then a move to (tx, ty, tz), as a column-major matrix. */
+function poseFrom(tx: number, ty: number, tz: number, x: number, y: number, z: number, w: number): number[] {
   const xx = x * x, yy = y * y, zz = z * z, xy = x * y, xz = x * z, yz = y * z, wx = w * x, wy = w * y, wz = w * z;
   return [
     1 - 2 * (yy + zz), 2 * (xy + wz), 2 * (xz - wy), 0,
     2 * (xy - wz), 1 - 2 * (xx + zz), 2 * (yz + wx), 0,
     2 * (xz + wy), 2 * (yz - wx), 1 - 2 * (xx + yy), 0,
-    t.x, t.y, t.z, 1,
+    tx, ty, tz, 1,
   ];
 }
 

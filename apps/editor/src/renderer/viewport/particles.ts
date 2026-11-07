@@ -102,6 +102,7 @@ class Pool {
     this.geo.setAttribute('size', new THREE.BufferAttribute(this.size, 1).setUsage(THREE.DynamicDrawUsage));
     this.geo.setAttribute('tint', new THREE.BufferAttribute(this.tint, 3).setUsage(THREE.DynamicDrawUsage));
     this.geo.setDrawRange(0, 0);
+    this.attrs = ['position', 'alpha', 'size', 'tint'].map((name) => this.geo.getAttribute(name) as THREE.BufferAttribute);
     this.mat = new THREE.ShaderMaterial({
       vertexShader: VERT,
       fragmentShader: FRAG,
@@ -171,8 +172,19 @@ class Pool {
       i++;
     }
     this.geo.setDrawRange(0, this.n);
-    for (const name of ['position', 'alpha', 'size', 'tint']) (this.geo.getAttribute(name) as THREE.BufferAttribute).needsUpdate = true;
+    // (Only the live part goes up to the graphics card, and nothing at all while there are none.)
+    if (!this.n && !this.shown) return;
+    this.shown = this.n;
+    for (const a of this.attrs) {
+      a.clearUpdateRanges();
+      if (this.n) a.addUpdateRange(0, this.n * a.itemSize);
+      a.needsUpdate = this.n > 0;
+    }
   }
+
+  /** Particles uploaded last step. */
+  private shown = 0;
+  private attrs: THREE.BufferAttribute[] = [];
 
   get count(): number {
     return this.n;

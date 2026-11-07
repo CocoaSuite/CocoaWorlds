@@ -250,8 +250,10 @@ shader takes that picture's colour where the surface behind is within reach (`vi
 
 Shiny and metal project materials reflect the actual level: a reflection probe captures the scene into a cube
 map (6 small renders, blurred by roughness) at eye height (in Play the player's eye; in the editor above what the
-view orbits), again when the camera has moved ~192 u or the level changed, at most twice a second. Sky tab ›
-Reflect the scene (on by default); off, they reflect the sky gradient as before. `viewport/reflections.ts`.
+view orbits), again when the camera has moved ~192 u or the level changed, at most twice a second. A capture is
+spread over four frames (two of its six views a frame, then the blur), so it never holds one frame up; in Play the
+first one is taken all at once before the first frame (see Smooth frames). Sky tab › Reflect the scene (on by
+default); off, they reflect the sky gradient as before. `viewport/reflections.ts`.
 
 ### Reflection probes (rooms)
 
@@ -269,3 +271,30 @@ strength up to 8 u outside, fading over 24 u) with the reflection direction fitt
 leaves the box, seen from the capture point), two boxes blended near doorways, the camera's capture elsewhere.
 The ambient (irradiance) look-up uses it too, so rooms take their light colour from their own walls. Sky tab ›
 Probes for rooms (on by default); View › Show reflection probes draws the boxes.
+
+## Smooth frames
+
+What keeps Play (and exported games) from stuttering:
+
+- **Nothing compiles while playing.** Before the first frame every shader of the game is compiled under its own
+  lights and reflections, shown or not (levels of detail, blasts, objects scripts show later):
+  `WebGLRenderer.compile` in `engine.ts` (`warmPlay`) and `game/runner.ts`, after `SceneReflections.prime` has
+  switched reflections on (switching them on later would compile every shiny material again). Models that load
+  later are compiled in the background (`compileAsync`, `PlaySession.warm`) before they appear.
+- **The number of lights never changes.** Three.js compiles every lit material again when a light is added or
+  removed, so blasts use lights made with the game (two, only when a weapon makes blasts; dark when unused),
+  and turned-off lights are dark rather than removed.
+- **Nothing is made or thrown away per shot.** Tracers, fireballs and marks are pooled (`viewport/effects.ts`);
+  a material thrown away can take its compiled shader with it. Signs a script changes are drawn again into the
+  same canvas and material (`SignObject.retext`). Particles send only their live part to the graphics card.
+- **The lights are built once.** The sun's shadow covers what stays put (`PlaySession.levelBounds`), measured
+  about once a second and taken only when it grew by more than 64 u: a falling crate, a creature, a tracer
+  into the sky or a blast no longer rebuild the lights and their shadow maps.
+- **Drawn between physics steps.** Physics runs at 60 steps a second; moving objects, creatures and camera views
+  are drawn between the last two steps (`GameWorld.drawnMotionOf`, `npcStates(true)`), as the player's view
+  always was, so they glide at any frame rate and don't judder against the view (things put somewhere else, more
+  than 128 u in a step, are drawn there at once).
+- **Spread out.** Reflection captures take four frames; creatures look for their way at slightly different
+  times (every 1.5–1.9 s) and the path search reuses its memory; the editor's status line is sent at most four
+  times a second.
+

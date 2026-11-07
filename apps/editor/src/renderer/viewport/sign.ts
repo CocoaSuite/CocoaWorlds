@@ -14,12 +14,16 @@ export interface SignObject {
   /** Size in world units (width, height). */
   width: number;
   height: number;
+  /**
+   * Show new text (same look) in place: drawn into the same canvas, texture and material, so changing a sign while
+   * playing (a countdown, a price) makes no new material and compiles nothing.
+   */
+  retext(text: string): void;
   dispose(): void;
 }
 
-function draw(data: SignData): { canvas: HTMLCanvasElement; lines: number } {
+function draw(data: SignData, canvas = document.createElement('canvas')): { canvas: HTMLCanvasElement; lines: number } {
   const lines = (data.text || ' ').split('\n');
-  const canvas = document.createElement('canvas');
   const ctx = canvas.getContext('2d')!;
   const font = `600 ${LINE_PX * 0.8}px system-ui, -apple-system, "Segoe UI", sans-serif`;
   ctx.font = font;
@@ -54,8 +58,8 @@ export function buildSign(data: SignData): SignObject {
   texture.anisotropy = 4;
   // World size: one line of text is `size` units tall (padding included proportionally).
   const k = Math.max(1, data.size) / (LINE_PX * 0.8);
-  const width = canvas.width * k;
-  const height = canvas.height * k;
+  let width = canvas.width * k;
+  let height = canvas.height * k;
   let object: THREE.Object3D;
   let material: THREE.Material;
   if (data.faceCamera) {
@@ -68,14 +72,31 @@ export function buildSign(data: SignData): SignObject {
     object = new THREE.Mesh(new THREE.PlaneGeometry(width, height), material);
   }
   object.name = 'sign';
-  return {
+  const sign: SignObject = {
     object,
     width,
     height,
+    retext: (text: string) => {
+      const w0 = canvas.width, h0 = canvas.height;
+      draw({ ...data, text }, canvas);
+      // (A texture keeps the size it was first sent to the graphics card with: a new size needs a new one.)
+      if (canvas.width !== w0 || canvas.height !== h0) {
+        texture.dispose();
+        width = sign.width = canvas.width * k;
+        height = sign.height = canvas.height * k;
+        if (object instanceof THREE.Sprite) object.scale.set(width, height, 1);
+        else if (object instanceof THREE.Mesh) {
+          object.geometry.dispose();
+          object.geometry = new THREE.PlaneGeometry(width, height);
+        }
+      }
+      texture.needsUpdate = true;
+    },
     dispose: () => {
       texture.dispose();
       material.dispose();
       if (object instanceof THREE.Mesh) object.geometry.dispose();
     },
   };
+  return sign;
 }

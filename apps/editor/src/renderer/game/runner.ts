@@ -185,8 +185,8 @@ export class GameRunner {
       this.saveTimer = now + 500;
       this.saveProgress();
     }
-    const bounds = new THREE.Box3().setFromObject(play.group);
-    this.lighting.update(this.doc, (id) => this.doc.worldMatrix(id), bounds, this.scene);
+    // (The game's scene never changes: the lights are built again only if what stays put grew.)
+    this.lighting.update(this.doc, (id) => this.doc.worldMatrix(id), play.levelBounds(), this.scene, true);
     play.driveLights(this.lighting);
     this.lighting.setDay(play.dayHour);
     this.lighting.applyTo(this.scene);
@@ -199,6 +199,14 @@ export class GameRunner {
         this.probesFor = play;
         this.reflections.setProbes(sceneProbes(this.doc, play.levelPieces, this.doc.settings.autoProbes !== false));
       }
+      // Before its first frame, every shader of the scene is compiled under its lights and reflections (shown or
+      // not), and models that load later are compiled in the background before they appear: nothing compiles mid-game.
+      if (this.warmed !== play) {
+        this.warmed = play;
+        this.reflections.prime(this.scene, this.cam.getWorldPosition(new THREE.Vector3()), play.doc.settings.reflections !== false);
+        this.renderer.compile(play.group, this.cam, this.scene);
+        play.warm = (o) => this.renderer.compileAsync(o, this.cam, this.scene);
+      }
       this.reflections.update(this.scene, this.cam.getWorldPosition(new THREE.Vector3()), this.play?.doc.settings.reflections !== false);
       (this.groundBlend ??= new GroundBlend()).prepare(this.renderer, this.scene, this.cam);
       if (!(this.ao ??= new AoRenderer(this.renderer)).render(this.scene, this.cam, this.play?.doc.settings)) this.renderer.render(this.scene, this.cam);
@@ -206,6 +214,7 @@ export class GameRunner {
   };
 
   private going = false;
+  private warmed: PlaySession | null = null;
 
   /** A level change: the same game goes on in the next scene, from where the last one left the player. */
   private async go(t: Travel): Promise<void> {

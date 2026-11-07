@@ -229,21 +229,25 @@ export class NavGrid {
     const start = this.nearest(from), goal = this.nearest(to);
     if (start < 0 || goal < 0) return null;
     if (start === goal || this.straight(start, goal)) return [{ ...to }];
-    const n = this.count;
-    const g = new Float32Array(n).fill(Infinity);
-    const came = new Int32Array(n).fill(-1);
-    const closed = new Uint8Array(n);
-    const heap = new MinHeap();
+    // (Scratch kept between searches: a spot's cost and where it was reached from count only once the spot is
+    // stamped by this search, so nothing the size of the grid is made or cleared each time a creature looks for a
+    // way. Stamped `run`: reached, its cost set; `closedRun`: done with.)
+    const { g, came, stamp, heap } = this.scratch();
+    const run = ++this.search;
+    const closedRun = ++this.search;
+    const seen = (s: number) => stamp[s] === run || stamp[s] === closedRun;
     const gp = this.at(goal);
     const h = (s: number) => Math.hypot(this.xyz[s * 3]! - gp.x, this.xyz[s * 3 + 2]! - gp.z);
     // (Weighted A*: leaning towards the goal visits far fewer spots; the straightening below hides the difference.)
     g[start] = 0;
+    came[start] = -1;
+    stamp[start] = run;
     heap.push(start, 1.5 * h(start));
     let best = start, bestH = h(start), visits = 0;
     while (heap.size && visits++ < maxVisits) {
       const a = heap.pop();
-      if (closed[a]) continue;
-      closed[a] = 1;
+      if (stamp[a] === closedRun) continue;
+      stamp[a] = closedRun;
       if (a === goal) {
         best = a;
         break;
@@ -255,16 +259,18 @@ export class NavGrid {
       }
       for (let k = 0; k < 8; k++) {
         const b = this.nb[a * 8 + k]!;
-        if (b < 0 || closed[b]) continue;
+        if (b < 0 || stamp[b] === closedRun) continue;
         const step = k < 4 ? this.cell : this.cell * Math.SQRT2;
         const ng = g[a]! + step + Math.max(0, this.xyz[b * 3 + 1]! - this.xyz[a * 3 + 1]!);
-        if (ng < g[b]!) {
+        if (!seen(b) || ng < g[b]!) {
           g[b] = ng;
           came[b] = a;
+          stamp[b] = run;
           heap.push(b, ng + 1.5 * h(b));
         }
       }
     }
+    heap.clear();
     if (best === start && start !== goal) return null;
     const chain: number[] = [];
     for (let s = best; s >= 0; s = came[s]!) chain.push(s);
@@ -293,6 +299,19 @@ export class NavGrid {
     }
     if (best === goal) out[out.length - 1] = { ...to };
     return out.length ? out : [{ ...to }];
+  }
+
+  private search = 0;
+  private scratchOf: { g: Float32Array; came: Int32Array; stamp: Uint32Array; heap: MinHeap } | null = null;
+
+  private scratch(): { g: Float32Array; came: Int32Array; stamp: Uint32Array; heap: MinHeap } {
+    // (Stamps wrap after about two billion searches: start them again from clear.)
+    if (this.search > 0xfffffff0) {
+      this.scratchOf?.stamp.fill(0);
+      this.search = 0;
+    }
+    const n = this.count;
+    return (this.scratchOf ??= { g: new Float32Array(n), came: new Int32Array(n), stamp: new Uint32Array(n), heap: new MinHeap() });
   }
 
   /** Whether a straight walk from spot a to spot b stays on joined spots all the way. */
@@ -329,6 +348,10 @@ class MinHeap {
   private keys: number[] = [];
   get size(): number {
     return this.ids.length;
+  }
+  clear(): void {
+    this.ids.length = 0;
+    this.keys.length = 0;
   }
   push(id: number, key: number): void {
     const ids = this.ids, keys = this.keys;
