@@ -2,7 +2,7 @@
  * Editor-only visuals for entities that have no geometry of their own yet (spawn points, lights, empties).
  * Each marker has an invisible pick volume so it can be clicked.
  */
-import { posterScrollRadius, readComponent, type EntityData, type GooglyEyesData, type ModelData, type PosterData, type SignData } from '@cocoaworlds/core';
+import { posterOf, posterScrollRadius, readComponent, type EntityData, type GooglyEyesData, type ModelData, type SignData } from '@cocoaworlds/core';
 import { modelInstance, onModelMaterialChange } from './models';
 
 /** Called when a marker's model has loaded (the view needs a redraw). */
@@ -97,7 +97,16 @@ export function buildMarker(e: EntityData): Marker {
   const light = e.components.light as { kind?: string; range?: number; angle?: number } | undefined;
 
   const model = e.components.model ? readComponent<ModelData>('model', e.components.model) : null;
-  if (model?.model) {
+  if (e.components.poster) {
+    // The poster as it starts (rolled, or flat on its wall), plus a small cross at its origin for selection colour.
+    const data = posterOf(e.components);
+    const poster = buildPoster(data, () => markerLoaded());
+    group.add(poster.object);
+    group.userData.dispose = poster.dispose;
+    lines.push(segs([[-6, 0, 0], [6, 0, 0], [0, -6, 0], [0, 6, 0], [0, 0, 0], [0, 0, 8]], baseColor));
+    const d = poster.flat.visible ? data.thickness : posterScrollRadius(data) * 2;
+    pick = new THREE.Mesh(new THREE.BoxGeometry(Math.max(8, data.width), Math.max(8, poster.flat.visible ? data.height : d), Math.max(8, d)), pickMat);
+  } else if (model?.model) {
     // The model itself (once loaded), a small cross at the origin for selection colour, and a pick box that
     // grows to fit the model.
     lines.push(
@@ -140,15 +149,6 @@ export function buildMarker(e: EntityData): Marker {
         group.add(box);
         markerLoaded();
       });
-  } else if (e.components.poster) {
-    // The poster as it starts (rolled, or flat on its wall), plus a small cross at its origin for selection colour.
-    const data = readComponent<PosterData>('poster', e.components.poster);
-    const poster = buildPoster(data, () => markerLoaded());
-    group.add(poster.object);
-    group.userData.dispose = poster.dispose;
-    lines.push(segs([[-6, 0, 0], [6, 0, 0], [0, -6, 0], [0, 6, 0], [0, 0, 0], [0, 0, 8]], baseColor));
-    const d = poster.flat.visible ? data.thickness : posterScrollRadius(data) * 2;
-    pick = new THREE.Mesh(new THREE.BoxGeometry(Math.max(8, data.width), Math.max(8, poster.flat.visible ? data.height : d), Math.max(8, d)), pickMat);
   } else if (e.components.sign) {
     // The sign itself, plus a small cross at the object's origin for selection colour.
     const sign = buildSign(readComponent<SignData>('sign', e.components.sign));

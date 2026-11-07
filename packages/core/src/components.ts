@@ -76,6 +76,12 @@ export type PosterData = {
   hungAtStart: boolean;
 };
 /** How thick a rolled poster's scroll is (its radius, u), the same for the physics and the drawing. */
+/** A poster's data with its scroll model filled in from the object's Model when it has none of its own. */
+export function posterOf(components: Record<string, unknown>): PosterData {
+  const data = readComponent<PosterData>('poster', components.poster as Record<string, unknown>);
+  const model = (components.model as { model?: unknown } | undefined)?.model;
+  return !data.scrollModel && typeof model === 'string' && model ? { ...data, scrollModel: model } : data;
+}
 export const posterScrollRadius = (p: Pick<PosterData, 'height'>): number => Math.max(1.5, Math.min(6, p.height / 24));
 export type Text = Record<Lang, string>;
 
@@ -623,11 +629,11 @@ export const COMPONENTS: ComponentDef[] = [
     name: 'poster',
     label: e('Poster or painting', 'Постер или картина'),
     description: e(
-      'A picture the player picks up and hangs: carried against a wall, it sticks there flat (Use takes it down again). A poster that rolls is a scroll until it is hung; a painting stays flat.',
-      'Картинка, которую игрок берёт и вешает: если прижать к стене, она прилипает плоско («Использовать» снимает). Сворачивающийся постер — свиток, пока не повешен; картина остаётся плоской.',
+      'A picture the player picks up and hangs: carried against a wall, it sticks there flat (Use takes it down again). A poster that rolls is a scroll until it is hung (its Model, if it has one, is the scroll); a painting stays flat. It brings its own physics: Physics and Collision shape on it are not used.',
+      'Картинка, которую игрок берёт и вешает: если прижать к стене, она прилипает плоско («Использовать» снимает). Сворачивающийся постер — свиток, пока не повешен (его Модель, если есть, и есть свиток); картина остаётся плоской. Физика своя: компоненты Физика и Форма столкновений на нём не используются.',
     ),
     appliesTo: 'point',
-    conflicts: ['rigidBody', 'collider', 'model', 'npc', 'seat', 'hidingSpot', 'light'],
+    conflicts: ['npc', 'seat', 'hidingSpot', 'light'],
     fields: [
       { key: 'picture', label: e('Picture', 'Изображение'), type: { kind: 'material' }, default: '' },
       { key: 'width', label: e('Width', 'Ширина'), type: { kind: 'number', min: 4, step: 4, unit: 'u' }, default: 32 },
@@ -636,7 +642,7 @@ export const COMPONENTS: ComponentDef[] = [
       {
         key: 'scrollModel',
         label: e('Scroll model', 'Модель свитка'),
-        hint: e('How it looks rolled up: a model lying along X, centred, scaled to the width. Empty: a plain cylinder. It still collides as a cylinder.', 'Как выглядит свёрнутым: модель вдоль X, по центру, подгоняется под ширину. Пусто — простой цилиндр. Сталкивается всё равно как цилиндр.'),
+        hint: e('How it looks rolled up: a model lying along X, centred, scaled to the width. Empty: the object’s Model, or else a plain cylinder. It still collides as a cylinder.', 'Как выглядит свёрнутым: модель вдоль X, по центру, подгоняется под ширину. Пусто — Модель объекта, иначе простой цилиндр. Сталкивается всё равно как цилиндр.'),
         type: { kind: 'asset', asset: 'models' },
         default: '',
         when: { key: 'rolls', is: [true] },

@@ -39,6 +39,7 @@ import {
   type ModelData,
   type PosterData,
   posterScrollRadius,
+  posterOf,
   type UiSettings,
   type WeaponDef,
   weaponOf,
@@ -1328,7 +1329,7 @@ export class GameWorld {
 
   /** A poster or painting: a light physics object, a scroll (rolls) or a flat sheet; hung at start, fixed in place. */
   private addPoster(e: EntityData, world: number[]): void {
-    const data = readComponent<PosterData>('poster', e.components.poster);
+    const data = posterOf(e.components);
     const t = decomposeMat4(world);
     const placement = composeTransform({ position: t.position, rotation: t.rotation, scale: [1, 1, 1] });
     const rb: RigidBodyData = { ...readComponent<RigidBodyData>('rigidBody', {}), motion: 'dynamic', mass: Math.min(MAX_CARRY, Math.max(0.01, data.mass)), friction: 0.8, pickUp: true };
