@@ -62,16 +62,20 @@ export interface GameRules {
   thirdPerson: boolean;
   /** The player's items are kept between sessions (saved progress). */
   saveItems: boolean;
+  /** Shift sprints; sprinting and jumping use up stamina, shown as a bar, which comes back when resting. */
+  stamina: boolean;
+  /** Frames per second in a corner while playing. */
+  showFps: boolean;
 }
 
-export const defaultGameRules = (): GameRules => ({ health: true, score: true, thirdPerson: false, saveItems: false });
+export const defaultGameRules = (): GameRules => ({ health: true, score: true, thirdPerson: false, saveItems: false, stamina: false, showFps: false });
 
 /** A project's game rules with defaults filled in. */
 export function gameRules(settings: Pick<ProjectSettings, 'game'> | undefined): GameRules {
   const g = settings?.game ?? {};
   const d = defaultGameRules();
   const pick = (k: keyof GameRules) => (typeof g[k] === 'boolean' ? (g[k] as boolean) : d[k]);
-  return { health: pick('health'), score: pick('score'), thirdPerson: pick('thirdPerson'), saveItems: pick('saveItems') };
+  return { health: pick('health'), score: pick('score'), thirdPerson: pick('thirdPerson'), saveItems: pick('saveItems'), stamina: pick('stamina'), showFps: pick('showFps') };
 }
 
 export interface ProjectFile {

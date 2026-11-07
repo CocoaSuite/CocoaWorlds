@@ -33,7 +33,7 @@ export function validateProject(data: unknown): Result<ProjectFile> {
   need(p, isObj(s) && isNum(s.unitsPerMetre) && s.unitsPerMetre > 0, 'settings.unitsPerMetre', 'Units per metre must be positive.');
   if (isObj(s) && s.game !== undefined) {
     const g = s.game;
-    need(p, isObj(g) && ['health', 'score', 'thirdPerson', 'saveItems'].every((k) => g[k] === undefined || typeof g[k] === 'boolean'), 'settings.game', 'Game rules must be on or off (true or false).');
+    need(p, isObj(g) && ['health', 'score', 'thirdPerson', 'saveItems', 'stamina', 'showFps'].every((k) => g[k] === undefined || typeof g[k] === 'boolean'), 'settings.game', 'Game rules must be on or off (true or false).');
   }
   if (isObj(s) && s.values !== undefined) {
     const vs = s.values;

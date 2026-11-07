@@ -22,6 +22,27 @@ const run = (w: GameWorld, seconds: number) => {
 };
 
 describe('Player', () => {
+  it('with stamina, Shift sprints until it runs out, then runs; jumping costs some; it comes back after a rest', () => {
+    const w = GameWorld.create(scene(brush('field', [-4096, -16, -4096], [4096, 0, 4096]), spawn()), { rules: { stamina: true } });
+    run(w, 0.3);
+    w.setPlayerInput({ forward: 1, walk: true });
+    run(w, 1);
+    expect(w.player!.velocity.z).toBeLessThan(-PLAYER.runSpeed - 40);
+    run(w, 4.4);
+    expect(w.player!.stamina).toBeLessThan(5);
+    expect(w.player!.sprinting).toBe(false);
+    expect(Math.abs(w.player!.velocity.z)).toBeLessThan(PLAYER.runSpeed + 5);
+    w.setPlayerInput({ forward: 0, walk: false });
+    run(w, 3);
+    expect(w.player!.stamina).toBeGreaterThan(40);
+    const before = w.player!.stamina;
+    w.setPlayerInput({ jump: true });
+    run(w, 0.1);
+    expect(w.player!.stamina).toBeLessThan(before - 8);
+    expect(w.playerStatus()!.stamina).not.toBeNull();
+    w.dispose();
+  });
+
   it('stands on the floor at the Player start, eyes at 64', () => {
     const w = GameWorld.create(scene(floor(), spawn([0, 0, 0])));
     run(w, 0.5);

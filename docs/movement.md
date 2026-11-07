@@ -53,6 +53,13 @@ it gives **Health** or **Armour** at **Per second** (10 by default), until the p
 has given all it **Holds** (50 by default, Half-Life's health charger). The use prompt shows while it has some
 left.
 
+# Stamina
+
+With the **Stamina** game rule on, Shift sprints (290 u/s) instead of walking. Sprinting uses 20 a second and each
+jump 12 (no jump without 12); after 0.8 s without either, it comes back at 28 a second. Run out and the player
+can't sprint again until it is back to 30. A thin bar at the bottom of the screen shows it while it isn't full.
+Code: `Player.tires`, `stamina`, `sprinting` (`player.ts`).
+
 # Picking things up
 
 Use on a physics object (Physics › Moves: Falls and tumbles) of 50 kg or less picks it up: it's held in front

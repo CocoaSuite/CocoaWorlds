@@ -262,6 +262,10 @@ export interface PlayerStatus {
   /** Seconds since the player was last hurt (Infinity if never), for a red flash. */
   sinceHurt: number;
   deaths: number;
+  /** Stamina 0–100, or null when the game has none. */
+  stamina: number | null;
+  /** Frames per second shown while playing. */
+  showFps: boolean;
 }
 
 export interface WorldStats {
@@ -706,6 +710,7 @@ export class GameWorld {
       const m = doc.worldMatrix(spawn.id);
       const yaw = Math.atan2(m[8]!, m[10]!);
       const p = new Player(this.world, { x: m[12]!, y: m[13]!, z: m[14]! }, yaw, doc.settings.gravity ?? 800);
+      p.tires = rules.stamina;
       this.owner.set(p.collider.handle, 'player');
       p.beltOf = (h) => this.belts.get(h) ?? null;
       p.surroundings = {
@@ -1962,7 +1967,7 @@ export class GameWorld {
 
   playerStatus(): PlayerStatus | null {
     if (!this.player) return null;
-    return { showHealth: this.rules.health, health: this.health, maxHealth: PLAYER.maxHealth, armour: this.armour, weapon: this.weaponStatus(), score: this.score, showScore: this.usesScore, sinceHurt: this.time - this.hurtAt, deaths: this.deaths };
+    return { showHealth: this.rules.health, health: this.health, maxHealth: PLAYER.maxHealth, armour: this.armour, weapon: this.weaponStatus(), score: this.score, showScore: this.usesScore, sinceHurt: this.time - this.hurtAt, deaths: this.deaths, stamina: this.rules.stamina ? this.player!.stamina : null, showFps: this.rules.showFps };
   }
 
   // ── What scripts can do ──

@@ -311,6 +311,12 @@ function GameRulesSection() {
       <Field label={t('insp.thirdPerson')}>
         <Switch checked={rules.thirdPerson} label={t('insp.thirdPerson')} onChange={(on) => !playing && void set('thirdPerson', on)} />
       </Field>
+      <Field label={t('insp.stamina')}>
+        <Switch checked={rules.stamina} label={t('insp.stamina')} onChange={(on) => !playing && void set('stamina', on)} />
+      </Field>
+      <Field label={t('insp.showFps')}>
+        <Switch checked={rules.showFps} label={t('insp.showFps')} onChange={(on) => !playing && void set('showFps', on)} />
+      </Field>
       <Field label={t('insp.saveItems')}>
         <Switch checked={rules.saveItems} label={t('insp.saveItems')} onChange={(on) => !playing && void set('saveItems', on)} />
       </Field>

@@ -48,6 +48,15 @@ export const PLAYER = {
   waterJumpSpeed: 300,
   /** Letting go of a ladder by jumping: pushed back this fast. */
   ladderJumpSpeed: 200,
+  /** Stamina (a game rule): Shift sprints this fast while there is some; sprinting and jumping use it up. */
+  sprintSpeed: 290,
+  maxStamina: 100,
+  /** Per second of sprinting; per jump; got back per second after resting a moment; needed to sprint again once out. */
+  sprintCost: 20,
+  jumpCost: 12,
+  staminaBack: 28,
+  restBeforeBack: 0.8,
+  staminaToSprint: 30,
 };
 
 /** Damage from landing at `speed` (units per second, downwards). */
@@ -244,10 +253,35 @@ export class Player {
     this.body.setTranslation({ x: this.feet.x, y: this.feet.y + this.height / 2, z: this.feet.z }, true);
   }
 
+  /** Stamina on (a game rule): Shift sprints rather than walks, and sprinting and jumping tire the player. */
+  tires = false;
+  stamina: number = PLAYER.maxStamina;
+  /** Ran out: no sprinting until there is enough again. */
+  private outOfBreath = false;
+  private rested = 0;
+
+  /** Whether the player is sprinting now. */
+  get sprinting(): boolean {
+    const i = this.input;
+    return this.tires && i.walk && !this.crouched && !this.outOfBreath && this.stamina > 0 && (i.forward !== 0 || i.right !== 0);
+  }
+
+  private tire(cost: number): void {
+    this.stamina = Math.max(0, this.stamina - cost);
+    this.rested = 0;
+    if (this.stamina <= 0) this.outOfBreath = true;
+  }
+
   /** One fixed physics step. */
   step(dt: number): void {
     const inp = this.input;
     this.setCrouch(inp.crouch);
+    const sprint = this.sprinting;
+    if (this.tires) {
+      if (sprint) this.tire(PLAYER.sprintCost * dt);
+      else if ((this.rested += dt) >= PLAYER.restBeforeBack) this.stamina = Math.min(PLAYER.maxStamina, this.stamina + PLAYER.staminaBack * dt);
+      if (this.outOfBreath && this.stamina >= PLAYER.staminaToSprint) this.outOfBreath = false;
+    }
 
     // Wished direction on the ground plane from the view yaw.
     const fx = -Math.sin(inp.yaw), fz = -Math.cos(inp.yaw);
@@ -258,7 +292,7 @@ export class Player {
       wx /= len;
       wz /= len;
     }
-    const maxSpeed = this.crouched ? PLAYER.crouchSpeed : inp.walk ? PLAYER.walkSpeed : PLAYER.runSpeed;
+    const maxSpeed = this.crouched ? PLAYER.crouchSpeed : sprint ? PLAYER.sprintSpeed : inp.walk && !this.tires ? PLAYER.walkSpeed : PLAYER.runSpeed;
     const wishSpeed = len > 1e-6 ? maxSpeed : 0;
     const s = this.surroundings;
     this.sense(s);
@@ -361,7 +395,8 @@ export class Player {
   private walkMove(inp: PlayerInput, wx: number, wz: number, wishSpeed: number, dt: number): void {
     if (this.onGround) {
       // Jump (pressing again each time; holding doesn't repeat).
-      if (inp.jump && !this.jumpHeld && !this.riding) {
+      if (inp.jump && !this.jumpHeld && !this.riding && (!this.tires || this.stamina >= PLAYER.jumpCost)) {
+        if (this.tires) this.tire(PLAYER.jumpCost);
         this.velocity.y = PLAYER.jumpSpeed;
         this.onGround = false;
       } else {

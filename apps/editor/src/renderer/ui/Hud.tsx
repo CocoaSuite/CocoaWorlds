@@ -1,5 +1,6 @@
 /** The in-game display (health, score, game values, messages, the use prompt), for Play and exported games. */
 import type { UiState } from '@cocoaworlds/runtime';
+import { useEffect, useState } from 'react';
 import { t } from '../i18n';
 import type { PlaySession } from '../viewport/play-session';
 
@@ -10,6 +11,9 @@ export interface Hud {
   maxHealth: number;
   /** Shown once the player has any. */
   armour: number;
+  /** Stamina 0–100 (null: the game has none). */
+  stamina: number | null;
+  showFps: boolean;
   /** The weapon in hand and its ammo (null when it needs none). */
   weapon: { name: string; ammo: number | null; ammoName: string } | null;
   score: number;
@@ -31,6 +35,30 @@ export interface Hud {
 
 const keyName = (code: string) => code.replace(/^Key|^Digit/, '');
 
+/** Frames drawn each second (counted over half a second). */
+function Fps() {
+  const [fps, setFps] = useState(0);
+  useEffect(() => {
+    let frames = 0, from = performance.now(), raf = 0;
+    const tick = (now: number) => {
+      frames++;
+      if (now - from >= 500) {
+        setFps(Math.round((frames * 1000) / (now - from)));
+        frames = 0;
+        from = now;
+      }
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, []);
+  return (
+    <div className="cw-ov cw-fps" data-testid="fps">
+      {fps} FPS
+    </div>
+  );
+}
+
 function formatValue(v: unknown): string {
   if (typeof v === 'number') return String(Math.round(v * 1000) / 1000);
   if (typeof v === 'boolean') return v ? 'yes' : 'no';
@@ -46,6 +74,8 @@ export function hudOf(play: PlaySession, locked: boolean): Hud {
     health: Math.ceil(status?.health ?? 0),
     maxHealth: status?.maxHealth ?? 100,
     armour: Math.floor(status?.armour ?? 0),
+    stamina: status?.stamina === null || status?.stamina === undefined ? null : Math.round(status.stamina),
+    showFps: !!status?.showFps,
     weapon: status?.weapon ?? null,
     score: status?.score ?? 0,
     showScore: !!status?.showScore,
@@ -100,6 +130,12 @@ export function HudView({ hud }: { hud: Hud }) {
               </span>
             )}
           </div>
+        </div>
+      )}
+      {hud.showFps && <Fps />}
+      {hud.stamina !== null && hud.stamina < 100 && (
+        <div className={`cw-ov cw-stamina${hud.stamina < 30 ? ' low' : ''}`} role="meter" aria-label={t('hud.stamina')} aria-valuemin={0} aria-valuemax={100} aria-valuenow={hud.stamina}>
+          <span style={{ width: `${hud.stamina}%` }} />
         </div>
       )}
       {(hud.showHealth || hud.showScore || hud.values.length > 0) && (
