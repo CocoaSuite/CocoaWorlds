@@ -6,7 +6,6 @@
  * Units: brightness 1 is a plain light; bulbs and spotlights fade with distance (1/d, so rooms stay readable)
  * and stop at their reach.
  */
-import { seesPlants, skipsPlants } from './plants';
 import { dayOf, readComponent, sceneSettings, skyOf, type DayCycle, type EntityData, type SceneDoc, type SceneSettings } from '@cocoaworlds/core';
 import { MOON, dayLook } from './day';
 import * as THREE from 'three';
@@ -142,7 +141,7 @@ export class SceneLighting {
         sun.target.position.copy(center);
         this.group.add(sun.target);
         if (l.castShadows) {
-          const cam = seesPlants(sun.shadow.camera);
+          const cam = sun.shadow.camera;
           cam.left = cam.bottom = -radius;
           cam.right = cam.top = radius;
           cam.near = 1;
@@ -163,7 +162,6 @@ export class SceneLighting {
         this.group.add(spot.target);
         if (l.castShadows) {
           spot.shadow.mapSize.set(1024, 1024);
-          skipsPlants(spot.shadow.camera);
           spot.shadow.camera.near = 4;
           spot.shadow.camera.far = l.range;
           spot.shadow.bias = -0.0003;
@@ -175,7 +173,6 @@ export class SceneLighting {
         bulb.position.copy(pos);
         if (l.castShadows) {
           bulb.shadow.mapSize.set(512, 512);
-          skipsPlants(bulb.shadow.camera);
           bulb.shadow.camera.near = 4;
           bulb.shadow.camera.far = l.range;
           bulb.shadow.bias = -0.001;
@@ -198,7 +195,7 @@ export class SceneLighting {
         sun = new THREE.DirectionalLight('#fff4e0', 2);
         sun.target.position.copy(center);
         this.group.add(sun.target, sun);
-        const cam = seesPlants(sun.shadow.camera);
+        const cam = sun.shadow.camera;
         cam.left = cam.bottom = -radius;
         cam.right = cam.top = radius;
         cam.near = 1;

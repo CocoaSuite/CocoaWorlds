@@ -14,7 +14,7 @@ import { glassCastsNoShadow } from '../viewport/glass-shadows';
 import type { Travel } from '@cocoaworlds/runtime';
 import { SceneLighting } from '../viewport/scene-lighting';
 import { setProjectMaterials, tickMaterials } from '../viewport/project-materials';
-import { seesPlants, setProjectPlants } from '../viewport/plants';
+import { setProjectPlants } from '../viewport/plants';
 import { sceneMaterial } from '../viewport/world-render';
 import { hudOf, type Hud } from '../ui/Hud';
 import { GAME_KEYS, inputFromKeys, isScriptKey, lookFromMouse } from './controls';
@@ -51,7 +51,7 @@ export interface RunnerEvents {
 export class GameRunner {
   private renderer: THREE.WebGLRenderer;
   private scene = new THREE.Scene();
-  private cam = seesPlants(new THREE.PerspectiveCamera(74, 1, 2, 65536));
+  private cam = new THREE.PerspectiveCamera(74, 1, 2, 65536);
   private lighting = new SceneLighting();
   private doc: SceneDoc;
   private play: PlaySession | null = null;
