@@ -156,3 +156,25 @@ describe('Auto: collision meshes from the file', () => {
     expect(walk([part([DOOR], true)], (w, id) => w.movePart(id, 0, open))).toBeLessThan(-300);
   });
 });
+
+describe('a model that scripts move', () => {
+  it('collides as its unit (a box when it has no collision of its own), falls, tumbles and lands', () => {
+    const giftBox = newEntity('gift box', { brush: { role: 'solid', faces: toData(box([-16, 0, -16], [16, 24, 16])).faces } as never });
+    const lid = newEntity('lid', { model: { model: 'assets/models/lid.glb', units: 'metres', animation: '', castShadows: true, collision: 'auto' } as never }, { position: [0, 24, 0] });
+    lid.parent = giftBox.id;
+    const n = (value: number) => ({ id: `n${value}`, kind: 'number' as const, value });
+    giftBox.components.script = { version: 1, variables: [], handlers: [{ id: 'h', event: { id: 'e', kind: 'start' }, body: [
+      { id: 'w', kind: 'wait', seconds: n(0.5) },
+      { id: 'p', kind: 'physical', target: { entity: lid.id } },
+      { id: 'q', kind: 'push', target: { entity: lid.id }, direction: 'up', strength: n(250) },
+    ] }] } as never;
+    const w = GameWorld.create(scene(floor(), giftBox, lid, newEntity('start', { playerSpawn: {} }, { position: [300, 0, 0] })), { models: new Map([['assets/models/lid.glb', boxes([[[-0.45, 0, -0.45], [0.45, 0.1, 0.45]]])]]) });
+    expect(w.movingBodies().find((b) => b.id === lid.id)?.kind).toBe('unit');
+    run(w, 0.4);
+    const start = w.positionOf(lid.id)![1];
+    run(w, 0.3);
+    expect(w.positionOf(lid.id)![1]).toBeGreaterThan(start);
+    run(w, 3);
+    expect(w.positionOf(lid.id)![1]).toBeGreaterThan(-4);
+  });
+});

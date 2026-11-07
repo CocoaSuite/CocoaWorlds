@@ -321,3 +321,13 @@ moved 192 u or the level changed, so at dusk they stayed day-bright and then jum
 which captures every probe again, each blended half over what it held. Rooms waiting their turn keep it (no
 starving). Cost: captures run on and off through dawn and dusk (2 extra views a frame while one is under way),
 none at noon or night. Test: `apps/editor/test/day.test.ts`. Not checked by eye in the app.
+
+### 18. Models moved by scripts were invisible in Play
+
+Status: fixed (2026-11-08). A model named by a script (e.g. *Make Lid fall and tumble*) became a unit with no brushes:
+Play skipped drawing it, it had no collision, and a fixed collider stayed where it started. Now models and Collision
+shapes inside a unit put their shapes on the unit's body (`addUnit` `points`; a model with no collision of its own
+gets a box), and `play-session.ts` draws a model that is its own unit. Test: `models.test.ts` "a model that scripts
+move". Not checked by eye in the app.
+
+Still so: in a copy made while playing, the whole copy is one unit, so making a part of it fall drops the whole copy.

@@ -131,6 +131,7 @@ export class PlaySession {
     // The same copies the game world made (Repeat groups).
     const doc = new SceneDoc(expandRepeats(structuredClone(scene), brushBounds));
     const bodies = new Set(this.world.movingBodies().map((b) => b.id));
+    const units = new Set(this.world.movingBodies().filter((b) => b.kind === 'unit').map((b) => b.id));
 
     // The level as players see it: only still brushes (no trigger zones, no subtract volumes, nothing that moves).
     const still: WorldBrush[] = worldBrushes(doc).filter((b) => this.world.levelIds.has(b.id) || (b.role === 'subtract' && !bodies.has(b.id)));
@@ -177,7 +178,8 @@ export class PlaySession {
     const stillModels = new Map<string, { data: ModelData; copies: { id: string; matrix: THREE.Matrix4 }[] }>();
     for (const e of doc.entities) {
       // (Creatures draw their own model, where they walk.)
-      if (!e.components.model || bodies.has(e.id) || e.components.npc) continue;
+      // (A model moved by scripts is a unit of its own: drawn here, carried by its body.)
+      if (!e.components.model || (bodies.has(e.id) && !units.has(e.id)) || e.components.npc) continue;
       let shownE = true;
       for (let x = doc.get(e.id); x; x = x.parent ? doc.get(x.parent) : undefined) if (!x.visible) shownE = false;
       const data = this.modelOf(e.id);

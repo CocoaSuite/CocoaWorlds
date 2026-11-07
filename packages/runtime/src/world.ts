@@ -943,6 +943,7 @@ export class GameWorld {
     const unitOf = this.unitOf;
     for (const root of unitRoots) for (const e of doc.subtree(root)) if (!own(e) || e.id === root) unitOf.set(e.id, root);
     const unitBrushes = new Map<string, Brush[]>(unitRoots.map((r) => [r, []]));
+    const unitPoints = new Map<string, EntityData[]>(unitRoots.map((r) => [r, []]));
     const scriptedZones = new Set(scriptTargets(scripts).filter((id) => doc.get(id)?.components.trigger));
 
     const level: WorldBrush[] = [];
@@ -990,6 +991,9 @@ export class GameWorld {
         this.npcEntities.push(e);
       } else if (e.components.poster) {
         this.addPoster(e, doc.worldMatrix(e.id));
+      } else if (unitOf.has(e.id)) {
+        // (A model or Collision shape moved by scripts collides as part of its unit.)
+        if (e.components.model || e.components.collider) unitPoints.get(unitOf.get(e.id)!)!.push(e);
       } else if (e.components.rigidBody || e.components.collider || this.modelShape(e)) {
         // (A Collision shape or a colliding model without Physics stays put.)
         this.addPointBody(e, doc.worldMatrix(e.id));
@@ -1016,7 +1020,7 @@ export class GameWorld {
       const d = x.components.brush as unknown as BrushData | undefined;
       return d?.faces ? bounds(fromData({ faces: d.faces, mesh: d.mesh })) : null;
     };
-    for (const root of unitRoots) this.addUnit(root, doc.worldMatrix(root), unitBrushes.get(root)!, pivotOf(doc, root, boundsOf));
+    for (const root of unitRoots) this.addUnit(root, doc.worldMatrix(root), unitBrushes.get(root)!, pivotOf(doc, root, boundsOf), unitPoints.get(root)!);
 
     // Paths and the trains on them, at their first points.
     for (const e of doc.entities) {
@@ -1185,7 +1189,7 @@ export class GameWorld {
   }
 
   /** An object moved by scripts: a kinematic body at its place, carrying the hulls of every brush inside it. */
-  private addUnit(id: string, world: number[], brushes: Brush[], pivot: [number, number, number]): void {
+  private addUnit(id: string, world: number[], brushes: Brush[], pivot: [number, number, number], points: EntityData[] = []): void {
     const t = decomposeMat4(world);
     const placement = composeTransform({ position: pivot, rotation: t.rotation, scale: [1, 1, 1] });
     const toLocal = invertRigid(placement);
@@ -1196,6 +1200,31 @@ export class GameWorld {
       if (!desc) continue;
       const c = this.world.createCollider(desc.setFriction(0.6), body);
       this.owner.set(c.handle, id);
+    }
+    // Models and Collision shapes inside: their shapes, placed on the unit's body. A model with no collision of
+    // its own gets a box, so it can still be knocked about once it falls and tumbles.
+    for (const e of points) {
+      const m = this.doc.worldMatrix(e.id);
+      const p = decomposeMat4(m);
+      const scale = p.scale.map(Math.abs) as Q3;
+      const rel = multiply(toLocal, composeTransform({ position: p.position, rotation: p.rotation, scale: [1, 1, 1] }));
+      const rq = quatFromMatrix(rel);
+      const model = this.modelShape(e);
+      let descs: RAPIER.ColliderDesc[];
+      if (model) descs = modelColliders(model.data, model.mesh, scale, true).map((d) => d.desc);
+      else if (e.components.collider) descs = [pointCollider(readComponent<ColliderData>('collider', e.components.collider), scale)];
+      else {
+        const data = readComponent<ModelData>('model', e.components.model);
+        const mesh = data.collision !== 'none' ? this.models.get(data.model) : undefined;
+        descs = mesh && mesh.positions.length >= 9 ? modelColliders({ ...data, collision: 'box' }, { ...mesh, parts: undefined }, scale, true).map((d) => d.desc) : [];
+      }
+      for (const desc of descs) {
+        const t = desc.translation, r = desc.rotation;
+        desc.setTranslation(...transformPoint(rel, [t.x, t.y, t.z]));
+        desc.setRotation(quatMul(rq, r));
+        const c = this.world.createCollider(desc.setFriction(0.6), body);
+        this.owner.set(c.handle, e.id);
+      }
     }
     this.track(id, 'unit', 'kinematic', body, brushes);
   }
@@ -3802,6 +3831,15 @@ function multiply(a: number[], b: number[]): number[] {
       o[col * 4 + row] = s;
     }
   return o;
+}
+
+function quatMul(a: { x: number; y: number; z: number; w: number }, b: { x: number; y: number; z: number; w: number }) {
+  return {
+    x: a.w * b.x + a.x * b.w + a.y * b.z - a.z * b.y,
+    y: a.w * b.y - a.x * b.z + a.y * b.w + a.z * b.x,
+    z: a.w * b.z + a.x * b.y - a.y * b.x + a.z * b.w,
+    w: a.w * b.w - a.x * b.x - a.y * b.y - a.z * b.z,
+  };
 }
 
 function quatFromMatrix(m: number[]): { x: number; y: number; z: number; w: number } {
