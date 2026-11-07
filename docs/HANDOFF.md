@@ -210,7 +210,7 @@ and occlusion scene walks when nothing needs them; cheaper bulb shadows (each is
 
 ### 9. Performance architecture, step 0: one frame snapshot
 
-Proposal (waiting for approval, nothing else built): [proposals/performance-architecture.md](proposals/performance-architecture.md)
+Proposal (**approved** 2026-11-07, DECISIONS.md P2–P5; next: step 1, the frame as messages): [proposals/performance-architecture.md](proposals/performance-architecture.md)
 (keep Electron; the frame as messages; the world in a Web Worker; instancing; Rust/WASM for navigation, voxel
 meshing and maybe the VM; WebGPU later; each with order, risks and tests).
 

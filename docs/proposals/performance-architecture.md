@@ -1,7 +1,6 @@
 # Proposal: performance architecture
 
-Status: **proposed** (2026-11-07), for approval. Nothing here is built except step 0 (see below), which changes
-no behaviour.
+Status: **approved** (2026-11-07; DECISIONS.md P2–P5). Step 0 is done (HANDOFF item 9); step 1 is next.
 
 ## Where it stands
 

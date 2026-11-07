@@ -32,10 +32,16 @@ Status values: **Approved** (signed off by the product owner), **Proposed** (rec
 | C4 | Edge wear and other mesh-aware effects | A wear layer per material, masked in the shader by Edge, Crease and Up; brush faces carry exact edge distances in a thin inset ring of triangles, models an approximation | Screen-space edge detection (works on anything, but shifts with the view); baked curvature per object | **Approved** (2026-11-02) |
 | C5 | Where `.cocoamat` files are put together | In `packages/materials` (a small ZIP writer and reader and a PNG encoder on the standard `CompressionStream`), built in the editor UI, which has the graph, the images and the GPU; the main process only saves and opens files through dialogs | A ZIP writer in the main process on `zlib` (the handoff's suggestion): needs every image and baked map sent across IPC first, and can't be tested or reused outside Electron | **Proposed** (2026-11-04) |
 | R1 | Procedural meshes | Parts plus a rule on a Procedural component (first rule: Repeat along an axis with caps and fit modes); copies are rebuilt from the rule, not saved; brush parts stay brushes | Bake generated meshes into the scene; a separate mesh-modelling tool | **Approved** (2026-11-02) |
+| P2 | Where the game world runs in Play | A Web Worker, behind a `WorldPort`; the main thread draws the newest frame snapshot (steps 0–2 of the [proposal](docs/proposals/performance-architecture.md)) | Keep everything on the UI thread | **Approved** (2026-11-07) |
+| P3 | Hot code | Rust → WebAssembly: navigation, then voxel meshing; the scripting VM only if measured; TypeScript kept until the Rust matches it | Stay in TypeScript | **Approved** (2026-11-07) |
+| P4 | Repeated draws | Instancing for Plant objects, copies made while playing, pooled effects | One mesh per object | **Approved** (2026-11-07) |
+| P5 | WebGPU | A second renderer (Three `WebGPURenderer`, node materials) after steps 1–4, WebGL2 kept as fallback, only if measurements show the draw is the limit | WebGL2 only | **Approved** (2026-11-07) |
 
 Details and trade-offs for each: [ARCHITECTURE.md](ARCHITECTURE.md).
 
 ## Log
+
+- **2026-11-07** — Approved the performance architecture (P2–P5, [proposal](docs/proposals/performance-architecture.md)); Electron kept (D1). Order: frame snapshot (done) → frame as messages → world in a worker → instancing → WASM navigation, then voxel meshing → VM if measured → WebGPU. A bench scene and real-GPU frame times come before the worker step.
 
 - **2026-11-02** — Routine choices for the chicken (reversible): the model came unrigged, so a script (`tools/chicken/rig.py`) rigs it. It turns the model to face −Z with its feet on the origin, finds the legs and beak from the orange mask in the model's second vertex colour, weights 11 bones by region with smooth blends, and authors the animations from curves (jerky head snaps, an off-beat waddle, flailing wings, so it's clumsy). The result passes the Khronos validator. Ready-made assets the editor ships with live in `apps/editor/samples` and are copied into a project when first added. Wandering, running away, clumsiness and size are general Creature settings rather than chicken code, so the chicken is only a preset of them. A block changes a creature's side, so a nest's guard can be scripted later.
 
