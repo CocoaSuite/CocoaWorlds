@@ -8,7 +8,7 @@ Scripts are plain-language blocks on the object they control (decision S1): a do
 |---|---|
 | When… | the game starts · something enters a zone · something leaves a zone · the player uses this (E, within reach; also fires on the groups it is in) · this gets a message · every N seconds |
 | Do | move (up/down/north/south/east/west by a distance over a time) · turn (degrees around an axis over a time) · return to where it started · show · hide · turn on · turn off · send a message (to everyone or one object) · write in the console |
-| Control | wait · if … otherwise · repeat N times · repeat forever · stop this stack |
+| Control | wait · if … otherwise · do one of these at random (each choice as likely; + Another choice) · repeat N times · repeat forever · stop this stack |
 | Variables | set · change by (per object; number, yes/no or text) |
 | Values | number · text · yes/no · variable · maths (+ − × ÷ mod) · compare (= ≠ < > ≤ ≥) · and/or · not · random (whole numbers give whole results) · join text · an object · “the thing that entered” · seconds since start |
 

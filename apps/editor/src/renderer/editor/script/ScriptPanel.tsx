@@ -38,7 +38,7 @@ import {
 import { CREATURE_MOMENTS, UI_SCRIPT_OWNER, uiOf, type GameValue } from '@cocoaworlds/core';
 import { Button, ContextMenu, IconButton, type MenuEntry } from '@cocoaworlds/ui';
 import { Picker, type PickGroup, type PickItem } from './Picker';
-import { createContext, useContext, useEffect, useMemo, useState, type KeyboardEvent, type ReactNode } from 'react';
+import { Fragment, createContext, useContext, useEffect, useMemo, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { getLang, t } from '../../i18n';
 import { useEditor } from '../../store';
 import { sceneInfo } from './scene-info';
@@ -612,6 +612,23 @@ function StatementRow({ s, listKey }: { s: Statement; listKey: string }) {
           </button>
         )}
       </>
+    ) : s.kind === 'oneOf' ? (
+      <>
+        {s.options.map((list, i) => (
+          <Fragment key={i}>
+            {i > 0 && (
+              <div className="cw-blk-else">
+                {w('orElse')}
+                {s.options.length > 1 && <IconButton icon="close" label={t('script.removeChoice')} onClick={() => set({ options: s.options.filter((_, j) => j !== i) })} />}
+              </div>
+            )}
+            <List listKey={`${s.id}:o${i}`} list={list} />
+          </Fragment>
+        ))}
+        <button type="button" className="cw-add-blk" onClick={() => set({ options: [...s.options, []] })}>
+          {w('addChoice')}
+        </button>
+      </>
     ) : s.kind === 'repeat' || s.kind === 'forever' || s.kind === 'while' ? (
       <List listKey={`${s.id}:body`} list={s.body} />
     ) : null;
@@ -645,7 +662,7 @@ function StatementRow({ s, listKey }: { s: Statement; listKey: string }) {
   void listKey;
 }
 
-const kindClass = (k: StatementKind) => (k === 'if' || k === 'repeat' || k === 'forever' || k === 'while' || k === 'wait' || k === 'stop' ? 'control' : k === 'set' || k === 'change' ? 'data' : 'action');
+const kindClass = (k: StatementKind) => (k === 'if' || k === 'oneOf' || k === 'repeat' || k === 'forever' || k === 'while' || k === 'wait' || k === 'stop' ? 'control' : k === 'set' || k === 'change' ? 'data' : 'action');
 
 function statementWords(s: Statement, set: (patch: Record<string, unknown>, mergeKey?: string) => void): ReactNode {
   switch (s.kind) {
@@ -755,6 +772,8 @@ function statementWords(s: Statement, set: (patch: Record<string, unknown>, merg
       );
     case 'forever':
       return w('forever');
+    case 'oneOf':
+      return w('oneOf');
     case 'forgetProgress':
       return w('forgetProgress');
     case 'changeScene':

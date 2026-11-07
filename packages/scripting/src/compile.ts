@@ -526,6 +526,36 @@ class HandlerCompiler {
         }
         break;
       }
+      case 'oneOf': {
+        const n = s.options.length;
+        if (!n) {
+          this.problem(s.id, 'Add at least one choice.');
+          break;
+        }
+        const slot = this.temps++;
+        this.emit({ op: 'push', v: 0 });
+        this.emit({ op: 'push', v: n - 1 });
+        this.emit({ op: 'random' });
+        this.emit({ op: 'settemp', slot });
+        const ends: number[] = [];
+        s.options.forEach((list, i) => {
+          let jf = -1;
+          if (i < n - 1) {
+            this.emit({ op: 'temp', slot });
+            this.emit({ op: 'push', v: i });
+            this.emit({ op: 'compare', f: '=' });
+            jf = this.emit({ op: 'jmpf', to: -1 });
+          }
+          this.statements(list);
+          this.stmt = s.id;
+          if (i < n - 1) {
+            ends.push(this.emit({ op: 'jmp', to: -1 }));
+            (this.code[jf] as { to: number }).to = this.code.length;
+          }
+        });
+        for (const j of ends) (this.code[j] as { to: number }).to = this.code.length;
+        break;
+      }
       case 'repeat': {
         const count = this.temps++, i = this.temps++;
         this.expect(s.times, 'number', 'Repeat needs a number of times.');

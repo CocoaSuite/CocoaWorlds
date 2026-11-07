@@ -477,3 +477,14 @@ describe('creatures: the player coming near and going away', () => {
     expect(compileScript('hen', sum, scene).problems).toEqual([]);
   });
 });
+
+describe('do one of these at random', () => {
+  it('runs exactly one choice, picked by the random number, then carries on', () => {
+    const log = (t: string) => ({ id: t, kind: 'log', text: text(t) }) as Statement;
+    const s = script([handler(newEvent('start'), { id: 'r', kind: 'oneOf', options: [[log('a')], [log('b')], [log('c')]] }, log('after'))]);
+    // (The fake's random is 0.5: the middle of three.)
+    const { host, runFor } = run([['me', s]]);
+    runFor(0.2);
+    expect(host.log.map((l) => l.split(' ')[1])).toEqual(['b', 'after']);
+  });
+});

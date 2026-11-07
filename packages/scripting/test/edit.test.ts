@@ -49,3 +49,13 @@ describe('editing scripts', () => {
     expect(JSON.stringify(out)).not.toContain('"score"');
   });
 });
+
+describe('one of these at random', () => {
+  it('its choices are lists that can be edited and found', async () => {
+    const { editList, locate, insertStatement } = await import('../src');
+    const s = { version: 1 as const, variables: [], handlers: [{ id: 'h', event: { id: 'e', kind: 'start' as const }, body: [{ id: 'r', kind: 'oneOf' as const, options: [[], []] }] }] };
+    const one = insertStatement(s, 'r:o1', 0, { id: 'x', kind: 'stop' });
+    expect(locate(one, 'x')).toEqual({ key: 'r:o1', index: 0 });
+    expect(editList(one, 'r:o0', () => [{ id: 'y', kind: 'stop' }]).handlers[0]!.body[0]).toMatchObject({ options: [[{ id: 'y' }], [{ id: 'x' }]] });
+  });
+});

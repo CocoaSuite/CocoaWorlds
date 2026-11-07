@@ -23,6 +23,7 @@ export function replaceBlock(script: Script, id: string, fn: (b: Node) => Node):
       c.otherwise = s.otherwise ? s.otherwise.map(st) : null;
     }
     if (s.kind === 'repeat' || s.kind === 'forever' || s.kind === 'while') c.body = s.body.map(st);
+    if (s.kind === 'oneOf') c.options = s.options.map((l) => l.map(st));
     return c as Statement;
   };
   return {
@@ -45,6 +46,10 @@ export function editList(script: Script, key: string, fn: (list: Statement[]) =>
     if (s.kind === 'if' && branch === 'then') return { ...s, then: fn(s.then) };
     if (s.kind === 'if' && branch === 'otherwise') return { ...s, otherwise: fn(s.otherwise ?? []) };
     if ((s.kind === 'repeat' || s.kind === 'forever' || s.kind === 'while') && branch === 'body') return { ...s, body: fn(s.body) };
+    if (s.kind === 'oneOf' && /^o\d+$/.test(branch)) {
+      const i = Number(branch.slice(1));
+      return { ...s, options: s.options.map((l, j) => (j === i ? fn(l) : l)) };
+    }
     return s;
   });
 }

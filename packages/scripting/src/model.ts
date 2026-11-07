@@ -85,6 +85,8 @@ export type Statement =
   | { id: string; kind: 'if'; condition: Expr; then: Statement[]; otherwise: Statement[] | null }
   | { id: string; kind: 'repeat'; times: Expr; body: Statement[] }
   | { id: string; kind: 'forever'; body: Statement[] }
+  /** Run one of the lists, picked at random (each as likely). */
+  | { id: string; kind: 'oneOf'; options: Statement[][] }
   /** Run the blocks inside again and again while the condition holds (once per frame at most). */
   | { id: string; kind: 'while'; condition: Expr; body: Statement[] }
   | { id: string; kind: 'stop' }
@@ -297,6 +299,7 @@ export function* walk(script: Script): Generator<{ id: string; kind: string }> {
 export function innerLists(s: Statement): [string, Statement[]][] {
   if (s.kind === 'if') return s.otherwise ? [['then', s.then], ['otherwise', s.otherwise]] : [['then', s.then]];
   if (s.kind === 'repeat' || s.kind === 'forever' || s.kind === 'while') return [['body', s.body]];
+  if (s.kind === 'oneOf') return s.options.map((l, i) => [`o${i}`, l]);
   return [];
 }
 

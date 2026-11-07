@@ -88,6 +88,8 @@ export function newStatement(kind: StatementKind, opts: { target?: Ref; variable
       return { id: id(), kind, condition: newExpr('compare'), then: [], otherwise: null };
     case 'repeat':
       return { id: id(), kind, times: num(3), body: [] };
+    case 'oneOf':
+      return { id: id(), kind, options: [[], []] };
     case 'forever':
       return { id: id(), kind, body: [] };
     case 'while':
