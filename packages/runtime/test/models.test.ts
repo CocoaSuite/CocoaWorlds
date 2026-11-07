@@ -142,6 +142,14 @@ describe('Auto: collision meshes from the file', () => {
     w.dispose();
   });
 
+  it('a model with Physics weighs its Mass however many collision meshes it has', () => {
+    const e = newEntity('crate', { model: { model: 'assets/models/arch.glb', units: 'metres', animation: '', castShadows: true, collision: 'auto' } as never, rigidBody: { motion: 'dynamic', mass: 20 } as never });
+    const w = GameWorld.create(scene(floor(), e, spawn()), { models: new Map([['assets/models/arch.glb', { ...ARCH, parts: [part([DOOR]), part([[[2, 0, 0], [3, 1, 1]]]), part([[[4, 0, 0], [5, 1, 1]]])] }]]) });
+    const b = (w as unknown as { bodies: Map<string, { body: RAPIER.RigidBody }> }).bodies.get(e.id)!.body;
+    expect(b.mass()).toBeCloseTo(20);
+    w.dispose();
+  });
+
   it('a collision mesh the animation moves takes the collider with it', () => {
     const open = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 3, 0, 0, 1];
     expect(walk([part([DOOR], true)])).toBeGreaterThan(-160 + 10 - 30);

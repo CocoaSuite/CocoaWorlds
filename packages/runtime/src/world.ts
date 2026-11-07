@@ -1202,10 +1202,11 @@ export class GameWorld {
     return d;
   }
 
-  private material(desc: RAPIER.ColliderDesc, rb: RigidBodyData): RAPIER.ColliderDesc {
+  /** `share`: how many colliders the body has (they split its mass). */
+  private material(desc: RAPIER.ColliderDesc, rb: RigidBodyData, share = 1): RAPIER.ColliderDesc {
     // An object's own Bounce wins over the floor's, so the Inspector value means what it says.
     desc.setFriction(rb.friction).setRestitution(rb.bounciness).setRestitutionCombineRule(RAPIER.CoefficientCombineRule.Max);
-    if (rb.motion === 'dynamic') desc.setMass(Math.max(0.01, rb.mass));
+    if (rb.motion === 'dynamic') desc.setMass(Math.max(0.01, rb.mass) / share);
     return desc;
   }
 
@@ -1341,7 +1342,7 @@ export class GameWorld {
     const body = this.world.createRigidBody(this.bodyDesc(rb).setTranslation(...t.position).setRotation(q));
     const parts = new Map<number, MovingPart>();
     for (const { desc, part } of descs) {
-      const col = this.world.createCollider(this.material(desc, rb), body);
+      const col = this.world.createCollider(this.material(desc, rb, descs.length), body);
       this.owner.set(col.handle, e.id);
       if (part !== undefined && model!.mesh.parts![part]!.moves) parts.set(part, movingPart(col, desc, model!.data, scale));
     }
@@ -3009,9 +3010,9 @@ export class GameWorld {
     const old: RAPIER.Collider[] = [];
     for (let i = 0; i < b.body.numColliders(); i++) old.push(b.body.collider(i));
     const groups = old[0]?.collisionGroups() ?? 0xffffffff;
-    const make = (desc: RAPIER.ColliderDesc | null) => {
+    const make = (desc: RAPIER.ColliderDesc | null, share = 1) => {
       if (!desc) return;
-      if (b.rb) this.material(desc, b.rb);
+      if (b.rb) this.material(desc, b.rb, share);
       else desc.setFriction(0.6);
       const c = this.world.createCollider(desc.setCollisionGroups(groups), b.body);
       this.owner.set(c.handle, b.info.id);
@@ -3025,8 +3026,9 @@ export class GameWorld {
     } else if (b.model) {
       const scale = decomposeMat4(b.model.matrix).scale.map((x) => Math.abs(x) * k) as Q3;
       const parts = new Map<number, MovingPart>();
-      for (const { desc, part } of modelColliders(b.model.data, b.model.mesh, scale, b.body.isDynamic())) {
-        const c = make(desc)!;
+      const descs = modelColliders(b.model.data, b.model.mesh, scale, b.body.isDynamic());
+      for (const { desc, part } of descs) {
+        const c = make(desc, descs.length)!;
         if (part !== undefined && b.model.mesh.parts![part]!.moves) parts.set(part, movingPart(c, desc, b.model.data, scale));
       }
       b.parts = parts.size ? parts : undefined;
