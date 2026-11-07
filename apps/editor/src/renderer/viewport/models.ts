@@ -15,6 +15,83 @@ export const UNITS_PER_METRE = 39.37;
 export interface LoadedModel {
   scene: THREE.Group;
   animations: THREE.AnimationClip[];
+  /** Its collision meshes, taken out of the scene (an empty node keeps each one's place). */
+  collision: CollisionPart[];
+}
+
+/** A collision mesh: model space; `path` finds its node again in a copy of the scene. */
+export interface CollisionPart {
+  positions: Float32Array;
+  indices: Uint32Array;
+  exact: boolean;
+  moves: boolean;
+  rest: THREE.Matrix4;
+  path: number[];
+}
+
+const COLLISION_NAME = /^(collision|hitbox|col_|ucx_)/i;
+const EXACT_NAME = /^(collision|hitbox|col)_?mesh/i;
+
+const chain = (o: THREE.Object3D, root: THREE.Object3D): THREE.Object3D[] => {
+  const out: THREE.Object3D[] = [];
+  for (let x: THREE.Object3D | null = o; x && x !== root; x = x.parent) out.push(x);
+  return out;
+};
+
+/** Takes the meshes named collision, hitbox or col_ (or under a node named so) out of a model's scene. */
+export function splitCollision(scene: THREE.Object3D, animations: THREE.AnimationClip[]): CollisionPart[] {
+  scene.updateMatrixWorld(true);
+  const animated = new Set(animations.flatMap((a) => a.tracks.map((t) => THREE.PropertyBinding.parseTrackName(t.name).nodeName)));
+  const found: THREE.Mesh[] = [];
+  scene.traverse((o) => {
+    if ((o as THREE.Mesh).isMesh && chain(o, scene).some((x) => COLLISION_NAME.test(x.name))) found.push(o as THREE.Mesh);
+  });
+  const parts = found.map((mesh) => {
+    const names = chain(mesh, scene);
+    const g = mesh.geometry, p = g.attributes.position!;
+    const positions = new Float32Array(p.count * 3);
+    const v = new THREE.Vector3();
+    for (let i = 0; i < p.count; i++) {
+      v.fromBufferAttribute(p, i).applyMatrix4(mesh.matrixWorld);
+      positions.set([v.x, v.y, v.z], i * 3);
+    }
+    const indices = g.index ? Uint32Array.from({ length: g.index.count }, (_, i) => g.index!.getX(i)) : Uint32Array.from({ length: p.count }, (_, i) => i);
+    return {
+      positions,
+      indices,
+      exact: names.some((x) => EXACT_NAME.test(x.name)),
+      moves: names.some((x) => (x as THREE.Bone).isBone || animated.has(x.name) || animated.has(x.uuid)),
+      rest: mesh.matrixWorld.clone(),
+      path: [] as number[],
+    };
+  });
+  const stands = found.map((mesh) => {
+    const stand = new THREE.Object3D();
+    stand.name = mesh.name;
+    stand.position.copy(mesh.position);
+    stand.quaternion.copy(mesh.quaternion);
+    stand.scale.copy(mesh.scale);
+    const parent = mesh.parent!;
+    parent.children[parent.children.indexOf(mesh)] = stand;
+    stand.parent = parent;
+    mesh.parent = null;
+    while (mesh.children.length) stand.add(mesh.children[0]!);
+    return stand;
+  });
+  stands.forEach((stand, i) => {
+    for (let x: THREE.Object3D = stand; x !== scene; x = x.parent!) parts[i]!.path.unshift(x.parent!.children.indexOf(x));
+  });
+  return parts.filter((p) => p.indices.length >= 3);
+}
+
+const follow = (root: THREE.Object3D, path: number[]): THREE.Object3D | null => path.reduce<THREE.Object3D | null>((o, i) => o?.children[i] ?? null, root);
+
+/** Drawn over collision meshes when View › Show collisions is on. */
+const wireMaterial = new THREE.LineBasicMaterial({ color: 0x4fd1c5, depthTest: false, transparent: true, opacity: 0.85, visible: false });
+
+/** Show collision meshes as outlines on every model, or not (View menu). */
+export function setCollisionsVisible(v: boolean): void {
+  wireMaterial.visible = v;
 }
 
 const cache = new Map<string, Promise<LoadedModel>>();
@@ -28,7 +105,7 @@ export function loadModel(path: string): Promise<LoadedModel> {
       const url = await assetUrl(path);
       const bytes = await (await fetch(url)).arrayBuffer();
       const gltf = await loader.parseAsync(bytes, '');
-      return { scene: gltf.scene, animations: gltf.animations };
+      return { scene: gltf.scene, animations: gltf.animations, collision: splitCollision(gltf.scene, gltf.animations) };
     })();
     p.catch(() => cache.delete(path));
     cache.set(path, p);
@@ -40,7 +117,7 @@ export function loadModel(path: string): Promise<LoadedModel> {
  * A model's triangles in the file's own units (every mesh, placed as the file places it), for collisions.
  * Cached with the model.
  */
-export async function modelGeometry(path: string): Promise<{ positions: Float32Array; indices: Uint32Array }> {
+export async function modelGeometry(path: string): Promise<ModelGeometry> {
   const m = await loadModel(path);
   const hit = geometryCache.get(m);
   if (hit) return hit;
@@ -60,11 +137,13 @@ export async function modelGeometry(path: string): Promise<{ positions: Float32A
     if (g.index) for (let i = 0; i < g.index.count; i++) idx.push(base + g.index.getX(i));
     else for (let i = 0; i < p.count; i++) idx.push(base + i);
   });
-  const out = { positions: new Float32Array(pos), indices: new Uint32Array(idx) };
+  const parts = m.collision.map(({ positions, indices, exact, moves }) => ({ positions, indices, exact, moves }));
+  const out = { positions: new Float32Array(pos), indices: new Uint32Array(idx), parts };
   geometryCache.set(m, out);
   return out;
 }
-const geometryCache = new WeakMap<LoadedModel, { positions: Float32Array; indices: Uint32Array }>();
+type ModelGeometry = { positions: Float32Array; indices: Uint32Array; parts: { positions: Float32Array; indices: Uint32Array; exact: boolean; moves: boolean }[] };
+const geometryCache = new WeakMap<LoadedModel, ModelGeometry>();
 
 /**
  * The model's material slots, by name, in the order they come in the file. A material with no name is called
@@ -117,6 +196,8 @@ export interface ModelInstance {
   center: THREE.Vector3;
   /** Let go of the project materials it was given. */
   dispose(): void;
+  /** Collision meshes its animation moved since last asked: how far from the file's pose (model space). */
+  movedParts(): { part: number; d: number[] }[];
 }
 
 /** A copy of a model for one object, scaled to game units, with its animation playing if one is set. */
@@ -157,6 +238,33 @@ export async function modelInstance(data: ModelData): Promise<ModelInstance> {
   // (Skinned meshes are measured through their bones, so the bones' world matrices must be up to date first.)
   root.updateMatrixWorld(true);
   const box = new THREE.Box3().setFromObject(root, true);
+  const rel = new THREE.Matrix4();
+  const moving = m.collision.flatMap((p, part) => {
+    const node = follow(inner, p.path);
+    if (node) {
+      const local = new THREE.Matrix4().copy(p.rest).invert();
+      const geo = new THREE.BufferGeometry().setAttribute('position', new THREE.BufferAttribute(p.positions, 3)).setIndex(new THREE.BufferAttribute(p.indices, 1));
+      geo.applyMatrix4(local);
+      const wire = new THREE.LineSegments(new THREE.EdgesGeometry(geo, 20), wireMaterial);
+      geo.dispose();
+      wire.renderOrder = 999;
+      wire.raycast = () => {};
+      node.add(wire);
+    }
+    return p.moves && node ? [{ part, node, restInv: new THREE.Matrix4().copy(p.rest).invert(), last: [] as number[] }] : [];
+  });
+  const movedParts = () =>
+    moving.flatMap((x) => {
+      rel.identity();
+      for (let o: THREE.Object3D | null = x.node; o && o !== inner; o = o.parent) {
+        o.updateMatrix();
+        rel.premultiply(o.matrix);
+      }
+      const d = rel.multiply(x.restInv).toArray();
+      if (d.every((v, i) => Math.abs(v - (x.last[i] ?? NaN)) < 1e-6)) return [];
+      x.last = d;
+      return [{ part: x.part, d }];
+    });
   const mixer = m.animations.length ? new THREE.AnimationMixer(inner) : null;
   // One animation at a time, blending from the last over a moment (a walk eases into a peck).
   let current: THREE.AnimationAction | null = null;
@@ -186,5 +294,5 @@ export async function modelInstance(data: ModelData): Promise<ModelInstance> {
     }
     given.clear();
   };
-  return { object: root, mixer, play, dispose, size: box.isEmpty() ? new THREE.Vector3(16, 16, 16) : box.getSize(new THREE.Vector3()), center: box.isEmpty() ? new THREE.Vector3() : box.getCenter(new THREE.Vector3()) };
+  return { object: root, mixer, play, dispose, movedParts, size: box.isEmpty() ? new THREE.Vector3(16, 16, 16) : box.getSize(new THREE.Vector3()), center: box.isEmpty() ? new THREE.Vector3() : box.getCenter(new THREE.Vector3()) };
 }

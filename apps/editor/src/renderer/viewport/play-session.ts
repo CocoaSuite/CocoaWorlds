@@ -90,7 +90,7 @@ export class PlaySession {
     const wanted = new Set<string>();
     for (const e of scene.entities) {
       const m = e.components.model as Partial<ModelData> | undefined;
-      if (m?.model && m.collision && m.collision !== 'none') wanted.add(m.model);
+      if (m?.model && m.collision !== 'none') wanted.add(m.model);
     }
     await Promise.all(
       [...wanted].map((path) =>
@@ -401,6 +401,8 @@ export class PlaySession {
   // ── Models ──
 
   private mixers: THREE.AnimationMixer[] = [];
+  /** Models whose animation moves collision meshes. */
+  private carried: [string, ModelInstance][] = [];
   /** Model copies by the object that shows them (for “Play animation”). */
   readonly models = new Map<string, ModelInstance>();
 
@@ -429,6 +431,7 @@ export class PlaySession {
         this.eyesById.get(id)?.rideModel(inst.object);
         if (inst.mixer) this.mixers.push(inst.mixer);
         this.models.set(id, inst);
+        if (inst.mixer && inst.movedParts().length) this.carried.push([id, inst]);
       })
       .catch(() => this.notes.push(`Could not load the model ${data.model}`));
   }
@@ -783,6 +786,7 @@ export class PlaySession {
     }
     if (this.baseView) this.baseView.sync(this.world.base!);
     for (const m of this.mixers) m.update(dt);
+    for (const [id, inst] of this.carried) for (const p of inst.movedParts()) this.world.movePart(id, p.part, p.d);
     // Googly eyes' pupils roll about as their objects moved this frame.
     for (const { eyes } of this.eyes) eyes.update(dt);
     this.hear();

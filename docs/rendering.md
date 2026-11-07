@@ -104,9 +104,18 @@ Models (GLB, glTF) can be imported the same way; see Models below.
 - **Animation**: the name of an animation in the file to play from the start, looping.
 - **Shadows**: whether it casts them (with Lighting: Game and in Play).
 
-- **Collision**: how it collides. **None** (looks only); **Box**, its bounding box (the cheapest); **Hull**, the
+- **Collision**: how it collides. **Auto** (the default), by the collision meshes in the file, see below; **None** (looks only); **Box**, its bounding box (the cheapest); **Hull**, the
   model shrink-wrapped with no hollows (good for things that move); **Exact**, every triangle, for still scenery
   the player walks through or under, like arches and rooms (with Physics it uses the hull instead).
+
+**Collision meshes.** In Blender, add simple meshes named `collision`, `hitbox` or `col_` (any case; `.001` endings
+are fine; meshes under an object named so count too). They are never drawn, and with Auto they are the model's whole
+collision: a chair can be two boxes instead of every leg. Each mesh that is a box (8 corners, square sides, turned or
+not) becomes a box; anything else is shrink-wrapped (a hull, so an L shape needs two meshes). Names starting
+`collision_mesh`, `hitbox_mesh` or `col_mesh` use their exact triangles (still objects only). A collision mesh that the
+animation moves (animated itself, under an animated object, or parented to a bone) carries its collider along in
+Play; parent it to the bone rather than weighting it. View › Show collisions draws them as outlines. A model with no
+collision meshes doesn't collide on Auto.
 
 A model with a collision and no Physics stays put; add **Physics** to make it move: a crate model with Hull and
 Physics falls and tumbles. A **Collision shape** component, if the object has one, is used instead of the model's

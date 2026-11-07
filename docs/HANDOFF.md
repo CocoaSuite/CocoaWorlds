@@ -266,3 +266,16 @@ not known to be bad; it is waiting for a bench run on mains power to decide. Its
 a whole, so every plant in an area on screen is drawn, behind the camera too; if it comes back, cull plants one by
 one for the view and keep separate shadow-only batches (a layer only the sun's shadow camera sees). Measure on the
 user's project, plugged in, not only the bench. `npm run bench -- --breakdown` (draws per pass) stays.
+
+### 13. Custom collision shapes (collision meshes in model files)
+
+Status: done. Meshes named `collision` / `hitbox` / `col_` / `ucx_` (or under a node named so) are taken out of the
+loaded scene (an empty node keeps each place, so animation still binds) and become the model's colliders with the
+new Model Collision value **Auto** (the default). Box meshes → cuboid (turned too), others → hull, `*_mesh` names →
+trimesh on still bodies. Animated ones (track on the node or an ancestor, or under a bone) follow via
+`ModelInstance.movedParts()` → `GameWorld.movePart()` each Play tick. View › Show collisions: outlines on one shared
+material. Code: `viewport/models.ts` (`splitCollision`), `packages/runtime/src/world.ts` (`ModelPart`, `modelColliders`,
+`boxOf`, `movePart`), `viewport/play-session.ts`. Tests: `apps/editor/test/collision-meshes.test.ts`,
+`packages/runtime/test/models.test.ts` (Auto). Not checked yet with a real Blender file in the app.
+
+Next, if wanted: `trigger` meshes in files (zones); outlines on batched copies.

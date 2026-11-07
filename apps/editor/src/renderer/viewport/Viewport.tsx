@@ -60,6 +60,7 @@ export function Viewport() {
   const showNav = useEditor((s) => s.showNav);
   const showGrass = useEditor((s) => s.showGrass);
   const showProbes = useEditor((s) => s.showProbes);
+  const showCollisions = useEditor((s) => s.showCollisions);
   const terrainBrush = useEditor((s) => s.terrainBrush);
   const gameLighting = useEditor((s) => s.gameLighting);
   const showStats = useEditor((s) => s.showStats);
@@ -250,6 +251,9 @@ export function Viewport() {
   useEffect(() => {
     engine.current?.setProbesVisible(showProbes);
   }, [showProbes]);
+  useEffect(() => {
+    engine.current?.setCollisionsVisible(showCollisions);
+  }, [showCollisions]);
   const zUp = useEditor((s) => s.zUp);
   useEffect(() => {
     engine.current?.setZUp(zUp);

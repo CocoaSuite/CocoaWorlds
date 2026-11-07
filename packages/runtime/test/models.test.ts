@@ -1,6 +1,7 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import { newEntity, newScene, type EntityData, type SceneFile, type Vec3 } from '@cocoaworlds/core';
 import { box, toData } from '@cocoaworlds/geometry';
+import RAPIER from '@dimforge/rapier3d-compat';
 import { GameWorld, initPhysics, type ModelMesh } from '../src';
 
 beforeAll(async () => {
@@ -92,5 +93,52 @@ describe('models collide by their own shape', () => {
     run(w, 2);
     expect(w.player!.feetPosition.z).toBeGreaterThan(-140);
     w.dispose();
+  });
+});
+
+describe('Auto: collision meshes from the file', () => {
+  const part = (list: [Vec3, Vec3][], moves = false) => ({ ...boxes(list), exact: false, moves });
+  const walk = (parts: ReturnType<typeof part>[], before?: (w: GameWorld, id: string) => void) => {
+    const e = arch('auto');
+    const w = GameWorld.create(scene(floor(), e, spawn()), { models: new Map([['assets/models/arch.glb', { ...ARCH, parts }]]) });
+    before?.(w, e.id);
+    run(w, 0.3);
+    w.setPlayerInput({ forward: 1 });
+    run(w, 2);
+    const z = w.player!.feetPosition.z;
+    w.dispose();
+    return z;
+  };
+  const DOOR: [Vec3, Vec3] = [[-1, 0, -0.1], [1, 2.5, 0.1]];
+
+  it('no collision meshes: no collision', () => {
+    expect(walk([])).toBeLessThan(-300);
+  });
+
+  it('collides by its collision meshes only', () => {
+    expect(walk([part([[[-1.5, 0, -0.25], [-1, 3, 0.25]]]), part([[[1, 0, -0.25], [1.5, 3, 0.25]]])])).toBeLessThan(-300);
+    expect(walk([part([DOOR])])).toBeGreaterThan(-160 + 10 - 30);
+  });
+
+  it('a box mesh becomes a box, turned ones too; anything else a hull', () => {
+    const turn = (p: ReturnType<typeof part>) => {
+      const c = Math.SQRT1_2;
+      const q = new Float32Array(p.positions);
+      for (let i = 0; i < q.length; i += 3) [q[i], q[i + 2]] = [c * q[i]! - c * q[i + 2]!, c * q[i]! + c * q[i + 2]!];
+      return { ...p, positions: q };
+    };
+    const wedge = part([DOOR]);
+    wedge.positions[1] = 0.5;
+    const w = GameWorld.create(scene(arch('auto'), spawn()), { models: new Map([['assets/models/arch.glb', { ...ARCH, parts: [part([DOOR]), turn(part([DOOR])), wedge] }]]) });
+    const kinds: number[] = [];
+    (w as unknown as { world: RAPIER.World }).world.forEachCollider((c) => void (c.parent()?.isFixed() && c.shape.type !== RAPIER.ShapeType.Cylinder && c.shape.type !== RAPIER.ShapeType.Capsule && kinds.push(c.shape.type)));
+    expect(kinds.sort()).toEqual([RAPIER.ShapeType.Cuboid, RAPIER.ShapeType.Cuboid, RAPIER.ShapeType.ConvexPolyhedron].sort());
+    w.dispose();
+  });
+
+  it('a collision mesh the animation moves takes the collider with it', () => {
+    const open = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 3, 0, 0, 1];
+    expect(walk([part([DOOR], true)])).toBeGreaterThan(-160 + 10 - 30);
+    expect(walk([part([DOOR], true)], (w, id) => w.movePart(id, 0, open))).toBeLessThan(-300);
   });
 });

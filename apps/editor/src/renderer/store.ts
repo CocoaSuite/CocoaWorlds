@@ -142,6 +142,7 @@ interface State {
   /** View › Show grass (the editor only; the game always shows it). */
   showGrass: boolean;
   showProbes: boolean;
+  showCollisions: boolean;
   /** Z is up in what the editor shows (as in Blender); the engine stays Y-up. */
   zUp: boolean;
   /** The UV editor open beside the 3D view. */
@@ -208,7 +209,7 @@ interface Actions {
   /** A finished terrain stroke, already made: recorded so it can be undone. */
   terrainEdit(cmd: { label: string; apply(): void; revert(): void }): void;
   setView(v: ViewMode): void;
-  toggle(k: 'showGrid' | 'showNav' | 'showGrass' | 'showProbes' | 'zUp' | 'uvPane' | 'showStats' | 'showBottom' | 'snap' | 'vertexSnap' | 'pivotEdit' | 'gameLighting'): void;
+  toggle(k: 'showGrid' | 'showNav' | 'showGrass' | 'showProbes' | 'showCollisions' | 'zUp' | 'uvPane' | 'showStats' | 'showBottom' | 'snap' | 'vertexSnap' | 'pivotEdit' | 'gameLighting'): void;
   /** Put an object's pivot at a world position (null: back to the default, its middle). */
   setPivot(id: string, world: Vec3 | null, mergeKey?: string): void;
   execute(cmd: Command): void;
@@ -369,6 +370,7 @@ export const useEditor = create<State & Actions>()((set, get) => ({
   showNav: false,
   showGrass: true,
   showProbes: false,
+  showCollisions: false,
   zUp: savedZUp(),
   uvPane: false,
   gameLighting: false,

@@ -158,6 +158,15 @@ export interface UiState {
 export interface ModelMesh {
   positions: Float32Array;
   indices: Uint32Array;
+  /** The file's collision meshes (Auto collision), model space. */
+  parts?: ModelPart[];
+}
+/** One collision mesh: `exact` collides by its triangles; `moves` follows the model's animation. */
+export interface ModelPart {
+  positions: Float32Array;
+  indices: Uint32Array;
+  exact: boolean;
+  moves: boolean;
 }
 /** Physics runs at a fixed rate whatever the frame rate. */
 export const STEP = 1 / 60;
@@ -262,6 +271,8 @@ interface Body {
   shape?: { collider: ColliderData; matrix: number[] };
   /** Point objects that collide by their model's shape. */
   model?: { data: ModelData; mesh: ModelMesh; matrix: number[] };
+  /** Collision meshes the model's animation moves: their colliders and resting place on the body. */
+  parts?: Map<number, MovingPart>;
   /** Posters and paintings: their data and where they were placed (without scale). */
   poster?: { data: PosterData; matrix: number[] };
   /** Physics settings, when it has a Physics component. */
@@ -1220,7 +1231,23 @@ export class GameWorld {
     if (!e.components.model || e.components.collider) return null;
     const data = readComponent<ModelData>('model', e.components.model);
     const mesh = data.collision !== 'none' ? this.models.get(data.model) : undefined;
+    if (data.collision === 'auto') return mesh?.parts?.length ? { data, mesh } : null;
     return mesh && mesh.positions.length >= 9 ? { data, mesh } : null;
+  }
+
+  /**
+   * A collision mesh that its model's animation carries along: `d` is how its node moved from where the file
+   * has it (model space, file units; column-major 4×4).
+   */
+  movePart(id: string, part: number, d: ArrayLike<number>): void {
+    const p = this.bodies.get(id)?.parts?.get(part);
+    if (!p) return;
+    const n = (i: number) => Math.hypot(d[i]!, d[i + 1]!, d[i + 2]!) || 1;
+    const a = n(0), b = n(4), c = n(8);
+    const q = quatFromMatrix([d[0]! / a, d[1]! / a, d[2]! / a, 0, d[4]! / b, d[5]! / b, d[6]! / b, 0, d[8]! / c, d[9]! / c, d[10]! / c, 0, 0, 0, 0, 1]);
+    const r = qrot(q, p.t);
+    p.collider.setTranslationWrtParent({ x: r[0] + d[12]! * p.s[0], y: r[1] + d[13]! * p.s[1], z: r[2] + d[14]! * p.s[2] });
+    p.collider.setRotationWrtParent(qmul(q, p.q));
   }
 
   /**
@@ -1306,17 +1333,20 @@ export class GameWorld {
     const shape = model ? null : readComponent<ColliderData>('collider', e.components.collider);
     // A model that stays put wholly inside a COL brush: the COL does its colliding.
     const covered = !!model && !e.components.rigidBody && !e.components.collider && this.insideCol(sampled(model.mesh.positions, world));
-    const descs = covered ? [] : model ? modelColliders(model.data, model.mesh, scale, rb.motion === 'dynamic') : [pointCollider(shape!, scale)];
+    const descs = covered ? [] : model ? modelColliders(model.data, model.mesh, scale, rb.motion === 'dynamic') : [{ desc: pointCollider(shape!, scale) }];
     // Body placement: position and rotation only (scale went into the shape).
     const placement = composeTransform({ position: t.position, rotation: t.rotation, scale: [1, 1, 1] });
     const q = quatFromMatrix(placement);
     const body = this.world.createRigidBody(this.bodyDesc(rb).setTranslation(...t.position).setRotation(q));
-    for (const desc of descs) {
+    const parts = new Map<number, MovingPart>();
+    for (const { desc, part } of descs) {
       const col = this.world.createCollider(this.material(desc, rb), body);
       this.owner.set(col.handle, e.id);
+      if (part !== undefined && model!.mesh.parts![part]!.moves) parts.set(part, movingPart(col, desc, model!.data, scale));
     }
     this.track(e.id, 'point', rb.motion, body);
     const b = this.bodies.get(e.id)!;
+    if (parts.size) b.parts = parts;
     if (model) b.model = { ...model, matrix: world };
     else b.shape = { collider: shape!, matrix: world };
     b.rb = rb;
@@ -2984,6 +3014,7 @@ export class GameWorld {
       else desc.setFriction(0.6);
       const c = this.world.createCollider(desc.setCollisionGroups(groups), b.body);
       this.owner.set(c.handle, b.info.id);
+      return c;
     };
     if (b.poster) {
       const p = this.posters.get(b.info.id);
@@ -2992,7 +3023,12 @@ export class GameWorld {
       make(pointCollider(b.shape.collider, decomposeMat4(b.shape.matrix).scale.map((x) => Math.abs(x) * k) as Q3));
     } else if (b.model) {
       const scale = decomposeMat4(b.model.matrix).scale.map((x) => Math.abs(x) * k) as Q3;
-      for (const d of modelColliders(b.model.data, b.model.mesh, scale, b.body.isDynamic())) make(d);
+      const parts = new Map<number, MovingPart>();
+      for (const { desc, part } of modelColliders(b.model.data, b.model.mesh, scale, b.body.isDynamic())) {
+        const c = make(desc)!;
+        if (part !== undefined && b.model.mesh.parts![part]!.moves) parts.set(part, movingPart(c, desc, b.model.data, scale));
+      }
+      b.parts = parts.size ? parts : undefined;
     } else {
       for (const br of b.brushes) {
         const pts = new Float32Array(vertices(br).flatMap((v) => transformPoint(b.startInverse, v).map((x) => x * k)));
@@ -3788,10 +3824,23 @@ function pointCollider(shape: ColliderData, s: Q3): RAPIER.ColliderDesc {
  * A model's colliders at an object's scale (and the model's units): its bounding box, its convex hull, or its
  * triangles. Things that move use the hull instead of the triangles (moving triangle meshes collide badly).
  */
-function modelColliders(data: ModelData, mesh: ModelMesh, scale: Q3, moves: boolean): RAPIER.ColliderDesc[] {
-  const k = data.units === 'units' ? 1 : UNITS_PER_METRE;
-  const pts = new Float32Array(mesh.positions.length);
-  for (let i = 0; i < pts.length; i++) pts[i] = mesh.positions[i]! * k * scale[i % 3]!;
+function modelColliders(data: ModelData, mesh: ModelMesh, scale: Q3, moves: boolean): { desc: RAPIER.ColliderDesc; part?: number }[] {
+  const k = unitsOf(data);
+  const sized = (src: Float32Array) => {
+    const pts = new Float32Array(src.length);
+    for (let i = 0; i < pts.length; i++) pts[i] = src[i]! * k * scale[i % 3]!;
+    return pts;
+  };
+  if (data.collision === 'auto') {
+    const out: { desc: RAPIER.ColliderDesc; part: number }[] = [];
+    (mesh.parts ?? []).forEach((p, part) => {
+      const pts = sized(p.positions);
+      const desc = p.exact && !moves && p.indices.length >= 3 ? RAPIER.ColliderDesc.trimesh(pts, p.indices) : (boxOf(pts) ?? hull(pts));
+      if (desc) out.push({ desc, part });
+    });
+    return out;
+  }
+  const pts = sized(mesh.positions);
   if (data.collision === 'box') {
     const min = [Infinity, Infinity, Infinity], max = [-Infinity, -Infinity, -Infinity];
     for (let i = 0; i < pts.length; i++) {
@@ -3799,11 +3848,65 @@ function modelColliders(data: ModelData, mesh: ModelMesh, scale: Q3, moves: bool
       max[i % 3] = Math.max(max[i % 3]!, pts[i]!);
     }
     const half = [0, 1, 2].map((a) => Math.max(0.25, (max[a]! - min[a]!) / 2));
-    return [RAPIER.ColliderDesc.cuboid(half[0]!, half[1]!, half[2]!).setTranslation((min[0]! + max[0]!) / 2, (min[1]! + max[1]!) / 2, (min[2]! + max[2]!) / 2)];
+    return [{ desc: RAPIER.ColliderDesc.cuboid(half[0]!, half[1]!, half[2]!).setTranslation((min[0]! + max[0]!) / 2, (min[1]! + max[1]!) / 2, (min[2]! + max[2]!) / 2) }];
   }
-  if (data.collision === 'exact' && !moves && mesh.indices.length >= 3) return [RAPIER.ColliderDesc.trimesh(pts, mesh.indices)];
+  if (data.collision === 'exact' && !moves && mesh.indices.length >= 3) return [{ desc: RAPIER.ColliderDesc.trimesh(pts, mesh.indices) }];
   const h = hull(pts);
-  return h ? [h] : [];
+  return h ? [{ desc: h }] : [];
+}
+
+const unitsOf = (data: ModelData) => (data.units === 'units' ? 1 : UNITS_PER_METRE);
+
+/** A collision mesh that the model's animation moves: `s` turns the file's units into the body's. */
+interface MovingPart {
+  collider: RAPIER.Collider;
+  t: Q3;
+  q: Quat;
+  s: Q3;
+}
+
+function movingPart(collider: RAPIER.Collider, desc: RAPIER.ColliderDesc, data: ModelData, scale: Q3): MovingPart {
+  const k = unitsOf(data);
+  const { x, y, z } = desc.translation;
+  const r = desc.rotation;
+  return { collider, t: [x, y, z], q: { x: r.x, y: r.y, z: r.z, w: r.w }, s: [scale[0] * k, scale[1] * k, scale[2] * k] };
+}
+
+/** A collision mesh that is a box (8 corners, square sides): a box collider, cheaper and steadier than a hull. */
+function boxOf(pts: Float32Array): RAPIER.ColliderDesc | null {
+  const corners: Q3[] = [];
+  for (let i = 0; i < pts.length; i += 3) {
+    const p: Q3 = [pts[i]!, pts[i + 1]!, pts[i + 2]!];
+    if (corners.some((c) => (c[0] - p[0]) ** 2 + (c[1] - p[1]) ** 2 + (c[2] - p[2]) ** 2 < 1e-4)) continue;
+    corners.push(p);
+    if (corners.length > 8) return null;
+  }
+  if (corners.length !== 8) return null;
+  const o = corners[0]!;
+  const sub = (p: Q3): Q3 => [p[0] - o[0], p[1] - o[1], p[2] - o[2]];
+  const dot = (a: Q3, b: Q3) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+  const square = (a: Q3, b: Q3) => Math.abs(dot(a, b)) <= 1e-3 * Math.sqrt(dot(a, a) * dot(b, b));
+  const edges = corners.slice(1).map(sub).sort((a, b) => dot(a, a) - dot(b, b));
+  const a = edges[0]!, b = edges[1]!;
+  const c = edges.find((e) => square(e, a) && square(e, b));
+  if (!c || !square(a, b) || dot(a, a) < 1e-4) return null;
+  const axes = [a, b, c];
+  for (const p of corners) {
+    const d = sub(p);
+    const f = axes.map((e) => dot(d, e) / dot(e, e));
+    if (f.some((x) => Math.abs(x) > 1e-3 && Math.abs(x - 1) > 1e-3)) return null;
+    const back = axes.reduce((acc, e, i) => acc.map((v, k) => v + e[k]! * f[i]!) as Q3, [0, 0, 0] as Q3);
+    if (dot([back[0] - d[0], back[1] - d[1], back[2] - d[2]], [back[0] - d[0], back[1] - d[1], back[2] - d[2]]) > 1e-4) return null;
+  }
+  const len = axes.map((e) => Math.sqrt(dot(e, e)));
+  const u = axes.map((e, i) => e.map((v) => v / len[i]!) as Q3);
+  // (A right-handed turn: the third axis is the cross of the first two.)
+  const w: Q3 = [u[0]![1] * u[1]![2] - u[0]![2] * u[1]![1], u[0]![2] * u[1]![0] - u[0]![0] * u[1]![2], u[0]![0] * u[1]![1] - u[0]![1] * u[1]![0]];
+  const q = quatFromMatrix([...u[0]!, 0, ...u[1]!, 0, ...w, 0, 0, 0, 0, 1]);
+  const centre = [0, 1, 2].map((k) => o[k]! + (a[k]! + b[k]! + c[k]!) / 2);
+  return RAPIER.ColliderDesc.cuboid(Math.max(0.25, len[0]! / 2), Math.max(0.25, len[1]! / 2), Math.max(0.25, len[2]! / 2))
+    .setTranslation(centre[0]!, centre[1]!, centre[2]!)
+    .setRotation(q);
 }
 
 /**

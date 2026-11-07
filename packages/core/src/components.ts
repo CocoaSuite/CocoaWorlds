@@ -13,8 +13,11 @@ export type SoundEffect = 'none' | 'room' | 'hall' | 'cave' | 'underwater' | 'ou
 /** A brush that changes how everything sounds while the player's ears are inside it. */
 export type SoundAreaData = { effect: SoundEffect; mix: number; sound: string; volume: number };
 export const SOUND_EFFECTS: SoundEffect[] = ['none', 'room', 'hall', 'cave', 'underwater', 'outdoors'];
-/** How a model collides: not at all, by its bounding box, by its convex hull, or by its exact triangles. */
-export type ModelCollision = 'none' | 'box' | 'hull' | 'exact';
+/**
+ * How a model collides: by the collision meshes in its file (none if it has none), not at all, by its bounding
+ * box, by its convex hull, or by its exact triangles.
+ */
+export type ModelCollision = 'auto' | 'none' | 'box' | 'hull' | 'exact';
 export type ModelData = {
   model: string;
   units: 'metres' | 'units';
@@ -231,19 +234,20 @@ export const COMPONENTS: ComponentDef[] = [
         key: 'collision',
         label: e('Collision', 'Столкновения'),
         hint: e(
-          'Box: its bounding box (cheapest). Hull: shrink-wrapped, no hollows (good for things that move). Exact: every triangle, for still scenery like arches and rooms (moving objects use the hull).',
-          'Коробка: габаритный короб (дешевле всего). Оболочка: «обтянутая» форма без впадин (хорошо для движущихся). Точно: каждый треугольник — для неподвижных арок и комнат (движущиеся используют оболочку).',
+          'Auto: the meshes named collision, hitbox or col_ in the file (no collision if it has none). Box: its bounding box (cheapest). Hull: shrink-wrapped, no hollows (good for things that move). Exact: every triangle, for still scenery like arches and rooms (moving objects use the hull).',
+          'Авто: меши с именами collision, hitbox или col_ в файле (без столкновений, если их нет). Коробка: габаритный короб (дешевле всего). Оболочка: «обтянутая» форма без впадин (хорошо для движущихся). Точно: каждый треугольник — для неподвижных арок и комнат (движущиеся используют оболочку).',
         ),
         type: {
           kind: 'enum',
           options: [
+            { value: 'auto', label: e('Auto', 'Авто') },
             { value: 'none', label: e('None', 'Нет') },
             { value: 'box', label: e('Box', 'Коробка') },
             { value: 'hull', label: e('Hull', 'Оболочка') },
             { value: 'exact', label: e('Exact', 'Точно') },
           ],
         },
-        default: 'none',
+        default: 'auto',
       },
     ],
   },

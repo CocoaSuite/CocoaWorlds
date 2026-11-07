@@ -8,6 +8,7 @@ import { GroundBlend } from './ground-blend';
 import { SceneDoc, expandRepeats, ownerOf, type EntityData, type Transform, type Vec3 } from '@cocoaworlds/core';
 import { bevelEdges, bounds, faceAt, loopCut, nearestEdge, transform as transformBrush, translate, vertices, type Brush, type Plane, type V3 } from '@cocoaworlds/geometry';
 import * as THREE from 'three';
+import { setCollisionsVisible } from './models';
 import { AoRenderer } from './ao';
 import { glassCastsNoShadow } from './glass-shadows';
 import { TransformControls } from 'three/addons/controls/TransformControls.js';
@@ -1719,6 +1720,12 @@ export class ViewportEngine {
   private probeAt = 0;
   private probeLines: THREE.LineSegments | null = null;
   private showProbes = false;
+
+  /** Show models' collision meshes as outlines (View menu). */
+  setCollisionsVisible(v: boolean): void {
+    setCollisionsVisible(v);
+    this.invalidate();
+  }
 
   /** Show the reflection probes' boxes (View menu). */
   setProbesVisible(v: boolean): void {
