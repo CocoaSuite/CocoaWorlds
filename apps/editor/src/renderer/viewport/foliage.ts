@@ -4,7 +4,7 @@
  * or its settings change. Shared by the editor and play mode.
  */
 import { SceneDoc, readComponent, type ScatterData } from '@cocoaworlds/core';
-import { COLLIDER_MATERIAL, TUFT_STRIDE, bounds as brushBoxOf, buildMesh, coverMinUp, isNoGrassBrush, scatterOnMesh, seededRandom, type Tufts } from '@cocoaworlds/geometry';
+import { COLLIDER_MATERIAL, TUFT_STRIDE, bounds as brushBoxOf, buildMesh, coverAt, coverMinUp, isNoGrassBrush, scatterOnMesh, seededRandom, type Tufts } from '@cocoaworlds/geometry';
 import { onTerrainChange, terrainChunks, terrainField, terrainVersion } from './terrains';
 import { onPlantsChange, plantById, plantGeometry } from './plants';
 import { applyMat4, type EntityData, type ModelData, type TerrainData } from '@cocoaworlds/core';
@@ -40,12 +40,12 @@ const CHUNK = 256;
  * bright at the tips, wide enough that neighbouring tufts overlap and hide the ground. One unit tall, one wide.
  * Further levels have fewer, wider blades, each a single triangle.
  */
-function tuftGeometry(level: number): THREE.BufferGeometry {
+function tuftGeometry(level: number, part: 'all' | 'blades' | 'disc' = 'all'): THREE.BufferGeometry {
   const L = LEVELS[level]!;
   const pos: number[] = [];
   const col: number[] = [];
   const rnd = seededRandom(17);
-  for (let i = 0; i < L.blades; i++) {
+  for (let i = 0; i < (part === 'disc' ? 0 : L.blades); i++) {
     const a = i * 2.39996 + rnd() * 0.4; // golden angle: evenly round
     // (The first few stand up in the middle; the rest fan out low, covering the ground round the clump.)
     const upright = i < Math.max(1, Math.round(L.blades / 5));
@@ -77,8 +77,9 @@ function tuftGeometry(level: number): THREE.BufferGeometry {
     }
   }
   // A root-coloured disc on the ground under the clump: neighbouring discs overlap, so no bare ground shows
-  // between tufts, yet where grass is cleared (or the field ends) the floor shows as it is.
-  const sides = level === 0 ? 8 : 6, R = 0.72, lift = 0.03;
+  // between tufts, yet where grass is cleared (or the field ends) the floor shows as it is. With the grass layer
+  // under them, only tufts at the edge of the field have one (a disc of its own geometry).
+  const sides = part === 'blades' ? 0 : level === 0 ? 8 : 6, R = 0.72, lift = 0.03;
   for (let k = 0; k < sides; k++) {
     const a0 = (k / sides) * Math.PI * 2, a1 = ((k + 1) / sides) * Math.PI * 2;
     pos.push(0, lift, 0, Math.cos(a1) * R, lift, Math.sin(a1) * R, Math.cos(a0) * R, lift, Math.sin(a0) * R);
@@ -90,6 +91,42 @@ function tuftGeometry(level: number): THREE.BufferGeometry {
   // (Replaced by the floor's normal in the shader.)
   g.setAttribute('normal', new THREE.Float32BufferAttribute(new Array(pos.length).fill(0).map((_, k) => (k % 3 === 1 ? 1 : 0)), 3));
   return g;
+}
+
+/**
+ * Which tufts stand at the edge of the field (1) rather than inside it (0). Inside: the grass layer shows fully all
+ * round its disc, and there are other tufts within three spacings on every side (each quarter round it).
+ */
+function edgeTufts(t: Tufts, sc: ScatterData): Uint8Array {
+  const cell = Math.max(1, sc.spacing * 3, sc.size), r2 = cell * cell;
+  const grid = new Map<string, number[]>();
+  const key = (x: number, z: number) => `${Math.floor(x / cell)},${Math.floor(z / cell)}`;
+  for (let i = 0; i < t.count; i++) {
+    const k = key(t.data[i * TUFT_STRIDE]!, t.data[i * TUFT_STRIDE + 2]!);
+    const list = grid.get(k);
+    if (list) list.push(i);
+    else grid.set(k, [i]);
+  }
+  const out = new Uint8Array(t.count);
+  for (let i = 0; i < t.count; i++) {
+    const o = i * TUFT_STRIDE, x = t.data[o]!, y = t.data[o + 1]!, z = t.data[o + 2]!;
+    const cx = Math.floor(x / cell), cz = Math.floor(z / cell);
+    let sides = 0;
+    for (let gx = cx - 1; gx <= cx + 1; gx++)
+      for (let gz = cz - 1; gz <= cz + 1; gz++)
+        for (const j of grid.get(`${gx},${gz}`) ?? []) {
+          if (j === i) continue;
+          const p = j * TUFT_STRIDE, dx = t.data[p]! - x, dz = t.data[p + 2]! - z;
+          // (Grass on a floor above or below is not a neighbour.)
+          if (dx * dx + dz * dz > r2 || Math.abs(t.data[p + 1]! - y) > cell) continue;
+          sides |= 1 << ((dx >= 0 ? 1 : 0) + (dz >= 0 ? 2 : 0));
+        }
+    const r = 0.72 * t.data[o + 4]!, ny = t.data[o + 6]!;
+    let full = sides === 15;
+    for (let k = 0; k < 4 && full; k++) full = coverAt(ny, x + r * Math.cos(k * 1.571), z + r * Math.sin(k * 1.571), sc) > 0.95;
+    out[i] = full ? 0 : 1;
+  }
+  return out;
 }
 
 /**
@@ -154,6 +191,8 @@ interface Chunk {
   radius: number;
   meshes: THREE.InstancedMesh[];
   count: number;
+  /** How many tufts have a root disc (the first ones). */
+  edges: number;
 }
 
 interface Entry {
@@ -469,6 +508,8 @@ export class FoliageRenderer {
   readonly group = new THREE.Group();
   private entries = new Map<string, Entry>();
   private geometries = LEVELS.map((_, l) => tuftGeometry(l));
+  private blades = LEVELS.map((_, l) => tuftGeometry(l, 'blades'));
+  private discs = LEVELS.map((_, l) => tuftGeometry(l, 'disc'));
   private dummy = new THREE.Object3D();
 
   private lastDoc: SceneDoc | null = null;
@@ -637,6 +678,8 @@ export class FoliageRenderer {
     const plant = def ? [0, 1, 2].map((l) => unitPlant(def, l)) : null;
     const tint = new THREE.Color();
     const rnd = seededRandom(Math.round(sc.seed) + 99);
+    // (Grass with the layer under it: only tufts at the edge of the field get a root disc.)
+    const edge = !plant && entry.cover ? edgeTufts(t, sc) : null;
     // Tufts by chunk.
     const byChunk = new Map<string, number[]>();
     for (let i = 0; i < t.count; i++) {
@@ -647,7 +690,10 @@ export class FoliageRenderer {
       else byChunk.set(k, [i]);
     }
     for (const list of byChunk.values()) {
+      // (Edge tufts first: the disc meshes draw only those.)
+      if (edge) list.sort((a, b) => edge[b]! - edge[a]!);
       const count = list.length;
+      const edges = edge ? list.filter((i) => edge[i]).length : count;
       const matrices = new THREE.InstancedBufferAttribute(new Float32Array(count * 16), 16);
       const colours = new THREE.InstancedBufferAttribute(new Float32Array(count * 3), 3);
       const floor = new THREE.InstancedBufferAttribute(new Float32Array(count * 3), 3);
@@ -671,10 +717,24 @@ export class FoliageRenderer {
         patchTint(t.data[o]!, t.data[o + 2]!, sc.seed, tint).multiplyScalar(0.97 + rnd() * 0.06);
         colours.setXYZ(k, tint.r, tint.g, tint.b);
       });
-      const meshes = (plant ?? this.geometries).map((g, l) => {
+      const meshes = (plant ?? (edge ? this.blades : this.geometries)).map((g, l) => {
         const geo = g.clone();
         geo.setAttribute('aFloor', floor);
         const mesh = new THREE.InstancedMesh(geo, this.material(plant ? '#ffffff' : sc.colour, def?.wind ?? 1), count);
+        if (edge && edges) {
+          // The discs ride on the level's blades: shown, hidden and blended with them.
+          const dg = this.discs[l]!.clone();
+          dg.setAttribute('aFloor', floor);
+          const disc = new THREE.InstancedMesh(dg, mesh.material, edges);
+          disc.name = `foliage:${id}:disc${l}`;
+          disc.instanceMatrix = matrices;
+          disc.instanceColor = colours;
+          disc.castShadow = false;
+          disc.receiveShadow = true;
+          disc.userData.noAo = true;
+          disc.computeBoundingSphere();
+          mesh.add(disc);
+        }
         mesh.name = `foliage:${id}:lod${l}`;
         mesh.instanceMatrix = matrices;
         mesh.instanceColor = colours;
@@ -688,7 +748,7 @@ export class FoliageRenderer {
         return mesh;
       });
       const sphere = meshes[0]!.boundingSphere!;
-      entry.chunks.push({ centre: sphere.center.clone(), radius: sphere.radius, meshes, count });
+      entry.chunks.push({ centre: sphere.center.clone(), radius: sphere.radius, meshes, count, edges });
     }
   }
 
@@ -712,6 +772,10 @@ export class FoliageRenderer {
     for (const c of e.chunks) {
       for (const m of c.meshes) {
         this.group.remove(m);
+        for (const d of m.children as THREE.InstancedMesh[]) {
+          d.geometry.dispose();
+          d.dispose();
+        }
         m.geometry.dispose();
         (m.material as THREE.Material).dispose();
         m.dispose();
@@ -761,7 +825,7 @@ export class FoliageRenderer {
 
   dispose(): void {
     for (const id of [...this.entries.keys()]) this.remove(id);
-    for (const g of this.geometries) g.dispose();
+    for (const g of [...this.geometries, ...this.blades, ...this.discs]) g.dispose();
     modelWaiters.delete(this.resync);
     this.offTerrain();
     this.offPlants();

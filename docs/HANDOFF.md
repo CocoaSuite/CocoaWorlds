@@ -303,3 +303,10 @@ wall), else the ground plane within that reach, else 512 u ahead; 2D views keep 
 "Add here" still uses the clicked spot. Code: `viewport/engine.ts`, `viewport/Viewport.tsx` (`placementPoint`),
 `store.ts` (defaults). Not run: e2e (the default camera looks at the origin, so tests that add into an empty scene
 should still get the origin).
+
+### 16. Grass root discs only at the edges
+
+Status: done. See docs/rendering.md, Grass on top. A 2048 u lawn (20,000 tufts): 1,645 keep a disc (was all); with
+bare patches about a fifth. Saves 8 of 50 triangles a tuft up close, 6 of 14 and 6 of 10 further out. Code:
+`viewport/foliage.ts` (`tuftGeometry` parts, `edgeTufts`, `add`). Test: `apps/editor/test/foliage-discs.test.ts`.
+Not checked by eye in the app.

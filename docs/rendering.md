@@ -238,6 +238,10 @@ it faces world up: fading out over **Edge softness** degrees round **Steepest**,
 **Patch size** across, mottled like blades seen from above. Tufts grow only where the layer mostly shows (the same
 `coverAt` mask in `packages/geometry/src/scatter.ts`, mirrored in the layer's shader in `foliage.ts`). Foliage now
 works on models as well as brushes and terrains (the model's posed shape, placed once: it doesn't follow animation).
+Each tuft can have a root-coloured disc under it. With the layer on, only tufts at the edge of the field keep it
+(where the layer fades, or with no tufts nearby on some side, `edgeTufts`); inside, the layer is the ground. The discs
+are their own instanced mesh per chunk and level (a child of the blades, drawing only the edge tufts, which come
+first). With the layer off, every tuft keeps its disc.
 
 ## Z is up (editor only)
 
