@@ -2,6 +2,11 @@
 
 Read this first in a new session. Commit rules: see the notes in the last session (commit with the CocoaSuite identity, no attribution lines, run the attribution grep for the assistant name and vendor name before pushing, push with `git push -q origin main`).
 
+Speed rules (user asked): clone with `--depth 1`, install with `npm ci --ignore-scripts --no-audit --no-fund`. For a
+change, run `npx tsc -b` and only the tests next to what changed (`npx vitest run <files>`, or `vitest related
+<changed files> --run`). Run the full suite only for big or wide changes (core/components, world.ts structure,
+shared helpers) or before a large push.
+
 ## Open tasks
 
 ### 1. Glass should not cast shadow
