@@ -229,3 +229,11 @@ lines of text (**Show a message on screen**), open doors with messages, and wait
 - **Look through an object (camera)** shows the game from an object (looking along its −Z) for a number of
   seconds; the stack waits. An empty object placed and turned where the camera should be is enough. If the
   object moves (on a train, or moved by blocks), the view goes with it.
+
+## Seats
+
+The **Seat** component (a chair, a bench, a sofa) works like a hiding spot that doesn't hide: E sits down (the view
+moves to *Look from* / *Eyes at*, with limited looking around) and E gets up again. The player's body goes under
+the eyes, so creatures see them and can hurt them, and hunters never search seats. Blocks: **When the player sits
+on this**, **When the player gets up from this**; **Make the player come out of hiding** also gets them up.
+

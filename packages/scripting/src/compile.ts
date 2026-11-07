@@ -145,7 +145,7 @@ export type CompiledEvent =
   | { kind: 'breaks' }
   | { kind: 'hit' }
   | { kind: 'dies' }
-  | { kind: 'hides' | 'unhides' | 'found' }
+  | { kind: 'hides' | 'unhides' | 'found' | 'sits' | 'stands' }
   | { kind: 'every'; seconds: number }
   | { kind: 'near' | 'far'; distance: number }
   | { kind: 'uiClick'; element: string }
@@ -263,7 +263,7 @@ class HandlerCompiler {
     else if (ev.kind === 'breaks') event = { kind: 'breaks' };
     else if (ev.kind === 'hit') event = { kind: 'hit' };
     else if (ev.kind === 'dies') event = { kind: 'dies' };
-    else if (ev.kind === 'hides' || ev.kind === 'unhides' || ev.kind === 'found') event = { kind: ev.kind };
+    else if (ev.kind === 'hides' || ev.kind === 'unhides' || ev.kind === 'found' || ev.kind === 'sits' || ev.kind === 'stands') event = { kind: ev.kind };
     else if (ev.kind === 'die') {
       event = { kind: 'die' };
       this.ruleOff('health', ev.id);

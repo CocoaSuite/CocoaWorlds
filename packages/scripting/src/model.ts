@@ -206,6 +206,8 @@ export type EventBlock =
   | { id: string; kind: 'dies' }
   /** The player got into this hiding spot, came out of it, or was found in it by a creature (pulled out). */
   | { id: string; kind: 'hides' | 'unhides' | 'found' }
+  /** The player sat down on this seat, or got up. */
+  | { id: string; kind: 'sits' | 'stands' }
   /** The player came within `distance` units of this object (`far`: went further away than that). */
   | { id: string; kind: 'near' | 'far'; distance: Expr }
   /** The player clicked a button of the screen UI (by id). */

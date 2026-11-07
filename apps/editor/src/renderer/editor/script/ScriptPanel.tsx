@@ -447,7 +447,7 @@ function EventRow({ ev, onRemove, onCopy, pick }: { ev: EventBlock; onRemove: ()
   else if (ev.kind === 'breaks') content = w('breaks');
   else if (ev.kind === 'hit') content = w('hit');
   else if (ev.kind === 'dies') content = w('dies');
-  else if (ev.kind === 'hides' || ev.kind === 'unhides' || ev.kind === 'found') content = w(ev.kind);
+  else if (ev.kind === 'hides' || ev.kind === 'unhides' || ev.kind === 'found' || ev.kind === 'sits' || ev.kind === 'stands') content = w(ev.kind);
   else if (ev.kind === 'enter' || ev.kind === 'leave')
     content = (
       <>

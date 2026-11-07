@@ -124,4 +124,28 @@ describe('hiding spots', () => {
     expect(w.playerStatus()!.health).toBeLessThan(100);
     w.dispose();
   });
+
+  it('a seat: E sits (the view moves there, the body under it), creatures still see the player, E gets up', () => {
+    const chair = brush('chair', [-30, 0, -70], [30, 40, -40], {
+      seat: {},
+      script: { version: 1, variables: [], handlers: [{ id: 'h', event: { id: 'e', kind: 'sits' }, body: [{ id: 's', kind: 'addScore', amount: { id: 'n', kind: 'number', value: 1 } }] }] } as never,
+    });
+    const w = GameWorld.create(scene(floor(), spawn(), chair));
+    w.setPlayerInput({ pitch: -0.6 });
+    run(w, 0.1);
+    expect(w.usePrompt()).toBe('Sit');
+    w.use();
+    run(w, 0.6);
+    expect(w.hidingIn).toBe(chair.id);
+    expect(w.player!.feetPosition.z).toBeLessThan(-40);
+    expect(w.playerStatus()!.score).toBe(1);
+    const p = (w as never as { npcWorld(): { player(): { hidden: string | null } } }).npcWorld().player();
+    expect(p.hidden).toBeNull();
+    w.use();
+    run(w, 0.6);
+    expect(w.hidingIn).toBeNull();
+    expect(Math.abs(w.player!.feetPosition.z)).toBeLessThan(2);
+    w.dispose();
+  });
 });
+

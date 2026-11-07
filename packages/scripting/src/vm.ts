@@ -146,7 +146,7 @@ export type RunnerEvent =
   /** A creature died. */
   | { type: 'dies'; target: string }
   /** The player got into a hiding spot, came out, or was found in it (`targets`: the spot and what it is inside). */
-  | { type: 'hides' | 'unhides' | 'found'; targets: string[] }
+  | { type: 'hides' | 'unhides' | 'found' | 'sits' | 'stands'; targets: string[] }
   /** The player clicked a button on screen. */
   | { type: 'uiClick'; element: string }
   /** The player used an item from the hotbar. */
@@ -274,7 +274,7 @@ export class ScriptRunner {
           if (ev.kind === 'dies' && inst.program.owner === e.target) this.spawn(inst, h, null);
         } else if (e.type === 'does') {
           if (ev.kind === 'does' && (!ev.what || ev.what === e.what) && e.targets.includes(inst.program.owner)) this.spawn(inst, h, null);
-        } else if (e.type === 'hides' || e.type === 'unhides' || e.type === 'found') {
+        } else if (e.type === 'hides' || e.type === 'unhides' || e.type === 'found' || e.type === 'sits' || e.type === 'stands') {
           if (ev.kind === e.type && e.targets.includes(inst.program.owner)) this.spawn(inst, h, null);
         } else if (e.type === 'hit') {
           if (ev.kind === 'hit' && e.targets.includes(inst.program.owner)) this.spawn(inst, h, null);

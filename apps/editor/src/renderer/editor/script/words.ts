@@ -108,6 +108,8 @@ const W = {
   hit: ['When this is hit (shot, struck or blasted)', 'Когда в это попадают (выстрел, удар, взрыв)'],
   dies: ['When this creature dies', 'Когда это существо погибает'],
   hides: ['When the player hides in this', 'Когда игрок прячется здесь'],
+  sits: ['When the player sits on this', 'Когда игрок садится сюда'],
+  stands: ['When the player gets up from this', 'Когда игрок встаёт отсюда'],
   unhides: ['When the player comes out of this', 'Когда игрок вылезает отсюда'],
   found: ['When a creature finds the player in this', 'Когда существо находит здесь игрока'],
   does: ['When a creature', 'Когда существо'],
@@ -240,6 +242,8 @@ const PALETTE_EVENT: Record<EventKind, Pair> = {
   hit: ['When this is hit (shot, struck or blasted)', 'Когда в это попадают (выстрел, удар, взрыв)'],
   dies: ['When this creature dies', 'Когда это существо погибает'],
   hides: ['When the player hides in this', 'Когда игрок прячется здесь'],
+  sits: ['When the player sits on this', 'Когда игрок садится сюда'],
+  stands: ['When the player gets up from this', 'Когда игрок встаёт отсюда'],
   unhides: ['When the player comes out of this', 'Когда игрок вылезает отсюда'],
   found: ['When a creature finds the player in this', 'Когда существо находит здесь игрока'],
   does: ['When a hunting creature does something', 'Когда охотник что-то делает'],
@@ -327,7 +331,7 @@ export const EVENT_GROUPS: { title: Pair; kinds: EventKind[] }[] = [
   { title: ['Messages', 'Сообщения'], kinds: ['message', 'messageStop'] },
   { title: ['Objects', 'Объекты'], kinds: ['hit', 'breaks'] },
   { title: ['Creatures', 'Существа'], kinds: ['dies', 'does'] },
-  { title: ['Hiding spots', 'Укрытия'], kinds: ['hides', 'unhides', 'found'] },
+  { title: ['Hiding spots and seats', 'Укрытия и сиденья'], kinds: ['hides', 'unhides', 'found', 'sits', 'stands'] },
   { title: ['Screen', 'Экран'], kinds: ['uiClick', 'listPick'] },
 ];
 

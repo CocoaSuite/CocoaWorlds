@@ -538,7 +538,7 @@ export const COMPONENTS: ComponentDef[] = [
       'Шкафчик, шкаф, щель под доской: E — залезть и вылезти. Существа не видят игрока внутри, если не видели, как он туда залез.',
     ),
     appliesTo: 'any',
-    conflicts: ['rigidBody', 'trigger', 'soundArea', 'water', 'ladder', 'npc'],
+    conflicts: ['seat', 'rigidBody', 'trigger', 'soundArea', 'water', 'ladder', 'npc'],
     fields: [
       {
         key: 'kind',
@@ -570,6 +570,28 @@ export const COMPONENTS: ComponentDef[] = [
       { key: 'side', label: e('Look left and right', 'Смотреть влево-вправо'), hint: e('0: the view is fixed (looking through slats).', '0 — взгляд неподвижен (сквозь щели).'), type: { kind: 'number', min: 0, max: 180, step: 5, unit: '°' }, default: 0 },
       { key: 'upDown', label: e('Look up and down', 'Смотреть вверх-вниз'), type: { kind: 'number', min: 0, max: 89, step: 5, unit: '°' }, default: 0 },
       { key: 'time', label: e('Getting in takes', 'Залезает за'), type: { kind: 'number', min: 0, max: 2, step: 0.05, unit: 's' }, default: 0.25 },
+    ],
+  },
+  {
+    name: 'seat',
+    label: e('Seat', 'Сиденье'),
+    description: e('A chair, a bench, a sofa: E sits down and gets up. Creatures still see the player.', 'Стул, скамья, диван: E — сесть и встать. Существа видят игрока.'),
+    appliesTo: 'any',
+    conflicts: ['hidingSpot', 'rigidBody', 'trigger', 'soundArea', 'water', 'ladder', 'npc'],
+    fields: [
+      { key: 'prompt', label: e('Prompt', 'Подсказка'), type: { kind: 'text' }, default: 'Sit' },
+      { key: 'reach', label: e('Reach', 'Дотянуться'), type: { kind: 'number', min: 16, step: 8, unit: 'u' }, default: 96 },
+      {
+        key: 'view',
+        label: e('Look from', 'Смотреть из'),
+        hint: e('An object placed and turned where the eyes go (looking along its −Z). Empty: this object.', 'Объект, поставленный и повёрнутый туда, где глаза (смотрит по −Z). Пусто — этот объект.'),
+        type: { kind: 'object' },
+        default: '',
+      },
+      { key: 'offset', label: e('Eyes at', 'Глаза в'), hint: e('From that object, in its own axes.', 'От этого объекта, в его осях.'), type: { kind: 'vec3', step: 4 }, default: [0, 48, 0] },
+      { key: 'side', label: e('Look left and right', 'Смотреть влево-вправо'), type: { kind: 'number', min: 0, max: 180, step: 5, unit: '°' }, default: 70 },
+      { key: 'upDown', label: e('Look up and down', 'Смотреть вверх-вниз'), type: { kind: 'number', min: 0, max: 89, step: 5, unit: '°' }, default: 50 },
+      { key: 'time', label: e('Sitting down takes', 'Садится за'), type: { kind: 'number', min: 0, max: 2, step: 0.05, unit: 's' }, default: 0.4 },
     ],
   },
   {

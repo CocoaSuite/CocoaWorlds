@@ -700,6 +700,12 @@ export class GameWorld {
       this.npcs.set(e.id, npc);
     }
     for (const e of doc.entities) if (e.components.hidingSpot) this.spots.set(e.id, readComponent<HidingSpotData>('hidingSpot', e.components.hidingSpot));
+    // Seats work like hiding spots that don't hide.
+    for (const e of doc.entities)
+      if (e.components.seat && !e.components.hidingSpot) {
+        this.spots.set(e.id, { ...readComponent<HidingSpotData>('seat', e.components.seat), kind: 'other' });
+        this.seats.add(e.id);
+      }
     for (const id of this.spots.keys()) this.spotReach = Math.max(this.spotReach, this.reachOf(id));
     // Measured now (while loading) rather than on the first creature's first walk.
     if (this.npcs.size) this.navigation();
@@ -785,7 +791,7 @@ export class GameWorld {
       playAnimation: (target, name, loop) => this.bus.emit({ type: 'anim', target, name, loop, time: this.time }),
       spawn: (template, place) => this.spawn(template, place),
       held: () => this.held?.id ?? null,
-      hiding: () => this.hidingIn !== null,
+      hiding: () => this.hidingIn !== null && !this.seats.has(this.hidingIn),
       holds: (what) => !!this.held && (what === null || this.heldIds().includes(what)),
       isInside: (zone, what) => this.isInside(zone, what),
       distance: (a, b) => {
@@ -1218,6 +1224,8 @@ export class GameWorld {
   // ── Hiding spots ──
 
   private spots = new Map<string, HidingSpotData>();
+  /** Spots that are seats: the player sits in plain view. */
+  private seats = new Set<string>();
   /** The furthest any hiding spot can be used from. */
   private spotReach = 0;
 
@@ -1264,10 +1272,16 @@ export class GameWorld {
     const view = this.spotView(id, data);
     this.hiding = { id, data, feet: p.feetPosition, from: { eye: p.eye(), yaw: p.input.yaw, pitch: p.input.pitch }, view, at: this.time, out: null, heldUntil: 0 };
     Object.assign(p.input, { forward: 0, right: 0, jump: false, crouch: false, fire: false, use: false, yaw: view.yaw, pitch: view.pitch });
-    p.collider.setEnabled(false);
-    this.spotUsed.set(id, this.time);
-    this.noise(this.v3(this.spotView(id, data).eye), NOISE.hiding, id);
-    this.runner.dispatch({ type: 'hides', targets: [id, ...this.ancestorsOf(id)] });
+    if (this.seats.has(id)) {
+      // (Sitting: the body goes under the eyes and can still be hit.)
+      p.placeAt({ x: view.eye[0], y: view.eye[1] - PLAYER.eye, z: view.eye[2] });
+      this.runner.dispatch({ type: 'sits', targets: [id, ...this.ancestorsOf(id)] });
+    } else {
+      p.collider.setEnabled(false);
+      this.spotUsed.set(id, this.time);
+      this.noise(this.v3(this.spotView(id, data).eye), NOISE.hiding, id);
+      this.runner.dispatch({ type: 'hides', targets: [id, ...this.ancestorsOf(id)] });
+    }
     this.bus.emit({ type: 'use', target: id, by: 'player', time: this.time });
   }
 
@@ -1296,6 +1310,7 @@ export class GameWorld {
     }
     p.teleport(feet, yaw);
     p.input.pitch = 0;
+    if (this.seats.has(h.id)) return this.runner.dispatch({ type: 'stands', targets: [h.id, ...this.ancestorsOf(h.id)] });
     this.spotUsed.set(h.id, this.time);
     this.noise(this.v3(h.view.eye), NOISE.hiding, h.id);
     this.runner.dispatch({ type: 'unhides', targets: [h.id, ...this.ancestorsOf(h.id)] });
@@ -1311,7 +1326,7 @@ export class GameWorld {
   private spotInfo(): SpotInfo[] {
     const out: SpotInfo[] = [];
     for (const [id, data] of this.spots) {
-      if (!this.doc.get(id) || !this.isVisible(id)) continue;
+      if (!this.doc.get(id) || !this.isVisible(id) || this.seats.has(id)) continue;
       let place = this.spotPlaces.get(id);
       if (!place) {
         const v = this.spotView(id, data);
@@ -1358,7 +1373,7 @@ export class GameWorld {
   private stopHiding(): void {
     if (!this.hiding) return;
     const out = this.hiding.out === null;
-    if (out) this.runner.dispatch({ type: 'unhides', targets: [this.hiding.id, ...this.ancestorsOf(this.hiding.id)] });
+    if (out) this.runner.dispatch({ type: this.seats.has(this.hiding.id) ? 'stands' : 'unhides', targets: [this.hiding.id, ...this.ancestorsOf(this.hiding.id)] });
     this.hiding = null;
     this.player?.collider.setEnabled(true);
   }
@@ -1557,7 +1572,7 @@ export class GameWorld {
         if (!p) return null;
         const [x, y, z] = p.eye();
         const h = this.hiding;
-        const hidden = h && h.out === null ? h.id : null;
+        const hidden = h && h.out === null && !this.seats.has(h.id) ? h.id : null;
         return { feet: hidden ? { ...h!.feet } : p.feetPosition, eye: { x, y, z }, collider: p.collider.handle, hidden, entering: !!hidden && this.time - h!.at <= Math.max(this.moveTime(), STEP) };
       },
       pullOut: (npc, spot) => {

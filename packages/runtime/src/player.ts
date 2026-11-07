@@ -208,6 +208,14 @@ export class Player {
    * Put the player's feet at a place, lifted until they fit (so a pad's middle or the inside of a floor works),
    * optionally facing a new way.
    */
+  /** Put the feet exactly here (no looking for room), keeping speed and view (sitting down). */
+  placeAt(feet: V): void {
+    this.feet = { ...feet };
+    this.prevFeet = { ...feet };
+    this.velocity = { x: 0, y: 0, z: 0 };
+    this.body.setTranslation({ x: feet.x, y: feet.y + this.height / 2, z: feet.z }, true);
+  }
+
   teleport(feet: V, yaw?: number): void {
     const shape = playerShape(this.height);
     let y = feet.y + 1;
