@@ -255,3 +255,27 @@ sample knock, saved in progress. Design and API: `docs/building.md`. Tests: `pac
 
 Next, if wanted: blocks for the base events (When a room is sealed, When something knocks); model files per piece;
 a second storey; an e2e test of placing in Play.
+
+### 12. Fewer draw calls: Plant objects batched
+
+Status: done (2026-11-07), waiting for the user's bench run. The user's first bench (RTX 5060 laptop, i7-13620H,
+commit 1e69ed3): **16.4 fps**, frame 60.9 ms of which drawing 56.6 ms (CPU side) and the world 3.4 ms; 5,992 draw
+calls, 1.03 M triangles. So drawing, not the world, is the limit: instancing (step 3) before the worker (step 2).
+`npm run bench -- --breakdown` (new) counted per pass (software GPU, same counts): the sun's shadow 3,417, the main
+view ~1,050, each of the 4 shadow bulbs ~200; plants were most of each.
+
+Done: `PlantRenderer` batches plants by recipe, seed, level and 2048 u area (`InstancedMesh`, per-instance fade,
+wind phase from the instance's place); batches made at load so Play's warm-up compiles them; plants on
+`PLANT_LAYER`, seen by views, reflections and the sun's shadow, not by bulb and spot shadows (three r187 uses a
+shadow camera's own layers only when it has one besides 0: `skipsPlants` adds layer 31). Picking by an invisible
+mesh per plant. Draw calls on the bench: ~5,400 → ~1,360 (software count). Tests: e2e `plants-batched.test.mjs`
+(six willows: at most one draw per level in use, picked one by one, shown in Play), plants, foliage, lighting,
+probes, export, smooth-frames, many-models, COL.
+
+Side effects to know: bulbs and spotlights no longer cast plant shadows; a batch is culled as a whole, so more
+triangles reach the GPU (plants behind the camera in a visible area). The software GPU here loses its WebGL context
+under the bench's load now (a watchdog), so speed must be measured on a real GPU.
+
+Next, from the user's numbers: moving crates (copies of one brush) drawn together, creatures' parts, bulb shadows
+rendered only when something near them moved.
+

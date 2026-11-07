@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // The frame-time bench: plays the bench scene (scene.ts) in the editor for a while and writes frame times.
-// How to use it: README.md in this folder. Usage: npm run bench [-- --seconds 30] [-- --software] [-- --build]
+// How to use it: README.md in this folder. Usage: npm run bench [-- --seconds 30] [--software] [--build] [--breakdown]
 import { spawnSync } from 'node:child_process';
 import { existsSync, promises as fs } from 'node:fs';
 import os from 'node:os';
@@ -113,6 +113,10 @@ try {
   await until(() => page.evaluate(() => !!window.__cwViewport && !window.__cwViewport.world.building), 120000, 'the level to build');
   await sleep(1000);
   log('playing…');
+  if (process.env.CW_BENCH_DEBUG) {
+    page.on('console', (m) => log('page:', m.text().slice(0, 600)));
+    await page.evaluate(() => window.__cwViewport.renderer.domElement.addEventListener('webglcontextlost', () => console.log('CONTEXT LOST at', performance.now().toFixed(0), 'play:', !!window.__cwViewport.play, 'warmed:', window.__cwViewport.warmed === window.__cwViewport.play)));
+  }
   await page.getByTestId('viewport').click({ position: { x: 20, y: 20 } }).catch(() => {});
   await page.keyboard.press('Escape');
   await page.keyboard.press('F5');
@@ -151,6 +155,48 @@ try {
   });
   log(`warming up ${WARMUP} s…`);
   await sleep(WARMUP * 1000);
+  // Where the draw calls come from, over a few frames (--breakdown): each shadow-casting light, each render.
+  let breakdown = null;
+  if (flag('breakdown')) {
+    log('counting draw calls per pass…');
+    breakdown = await page.evaluate(async (frames) => {
+      window.__benchDebug = true;
+      const r = window.__cwViewport.renderer, info = r.info.render, sm = r.shadowMap;
+      const counts = {};
+      const add = (k, n) => (counts[k] = (counts[k] ?? 0) + n);
+      const smRender = sm.render;
+      let inShadow = 0;
+      sm.render = function (lights, scene, camera) {
+        for (const l of lights) {
+          if (!l.castShadow) continue;
+          const c0 = info.calls;
+          smRender.call(this, [l], scene, camera);
+          add(`shadow: ${l.type}${l.name ? ` ${l.name}` : ''}`, info.calls - c0);
+          inShadow += info.calls - c0;
+        }
+      };
+      const render = r.render;
+      r.render = function (scene, camera) {
+        const c0 = info.calls, s0 = inShadow, t = r.getRenderTarget();
+        render.call(this, scene, camera);
+        const where = t ? (t.isWebGLCubeRenderTarget ? 'reflection capture' : 'to a texture') : 'screen';
+        add(`${where}: ${scene.name || scene.type} (${camera.type})`, info.calls - c0 - (inShadow - s0));
+      };
+      // (Frames from before the counting are dropped; then wait for frames drawn with it, two minutes at most.)
+      window.__cwViewport.frames.take();
+      let n = 0;
+      const until = performance.now() + 120000;
+      while (n < frames && performance.now() < until) {
+        await new Promise((res) => setTimeout(res, 100));
+        n += window.__cwViewport.frames.take().interval.length;
+      }
+      sm.render = smRender;
+      r.render = render;
+      if (window.__benchDebug) console.log('breakdown', n, JSON.stringify(counts), 'lost:', r.getContext().isContextLost());
+      n = Math.max(1, n);
+      return { frames: n, perFrame: Object.fromEntries(Object.entries(counts).sort((a, b) => b[1] - a[1]).map(([k, v]) => [k, Math.round(v / n)])) };
+    }, SOFTWARE ? 3 : 120);
+  }
   await page.evaluate(() => window.__cwViewport.frames.take());
   log(`measuring ${SECONDS} s (leave the window alone)…`);
   const frames = { interval: [], tick: [], world: [], draw: [], draws: [], triangles: [] };
@@ -162,7 +208,7 @@ try {
   }
   await page.evaluate(() => clearInterval(window.__benchDrive));
   await fs.mkdir(resultsDir, { recursive: true });
-  await page.screenshot({ path: path.join(resultsDir, 'last-run.png') });
+  await page.screenshot({ path: path.join(resultsDir, 'last-run.png'), timeout: 180000 }).catch(() => log('(no picture of the last frame: it took too long)'));
   await quit(app);
   app = null;
 
@@ -190,6 +236,7 @@ try {
     ms: { frame: stat(frames.interval), tick: stat(frames.tick), world: stat(frames.world), draw: stat(frames.draw) },
     drawCalls: stat(frames.draws),
     triangles: stat(frames.triangles),
+    ...(breakdown ? { breakdown } : {}),
   };
   const stamp = summary.date.slice(0, 19).replace(/[:T]/g, '-');
   const base = path.join(resultsDir, `${stamp}-${commit}`);
@@ -212,6 +259,7 @@ try {
     '',
     `Draw calls: median ${summary.drawCalls.median}, worst ${summary.drawCalls.worst}. Triangles: median ${Math.round(summary.triangles.median).toLocaleString('en')}.`,
     '',
+    ...(breakdown ? ['| Draw calls per frame, by pass | |', '|---|---|', ...Object.entries(breakdown.perFrame).map(([k, v]) => `| ${k} | ${v} |`), ''] : []),
   ].join('\n');
   await fs.writeFile(`${base}.md`, md);
   console.log(`\n${md}`);

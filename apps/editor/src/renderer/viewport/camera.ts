@@ -4,6 +4,7 @@
  *               middle-drag or Space+left-drag pans, the wheel dollies.
  *  Top/Front/Side: orthographic; middle/right-drag or Space+left-drag pans, the wheel zooms at the cursor.
  */
+import { seesPlants } from './plants';
 import * as THREE from 'three';
 
 export type ViewKind = 'perspective' | 'top' | 'front' | 'side';
@@ -15,8 +16,8 @@ const ORTHO_DIRS: Record<Exclude<ViewKind, 'perspective'>, { dir: THREE.Vector3;
 };
 
 export class CameraRig {
-  readonly persp = new THREE.PerspectiveCamera(70, 1, 1, 65536);
-  readonly ortho = new THREE.OrthographicCamera(-1, 1, 1, -1, -65536, 65536);
+  readonly persp = seesPlants(new THREE.PerspectiveCamera(70, 1, 1, 65536));
+  readonly ortho = seesPlants(new THREE.OrthographicCamera(-1, 1, 1, -1, -65536, 65536));
   kind: ViewKind = 'perspective';
 
   // Perspective state

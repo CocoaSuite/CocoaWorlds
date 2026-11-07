@@ -31,7 +31,7 @@ import { loadProgress, storeProgress } from '../game/progress';
 import { SceneLighting } from './scene-lighting';
 import { FOLIAGE_TIME, FoliageRenderer } from './foliage';
 import { WaterDepth, waterLookOf } from './water-look';
-import { PlantRenderer } from './plants';
+import { PlantRenderer, seesPlants } from './plants';
 import { TerrainRenderer, changed as terrainChanged, remeshTerrain, terrainField } from './terrains';
 import { editTiles, tileOf } from './terrain-tiles';
 import type { VoxelBox, VoxelTile } from '@cocoaworlds/geometry';
@@ -229,7 +229,7 @@ export class ViewportEngine {
   private hudKey = '';
   private gridWasVisible = true;
   /** First-person camera while playing as the player. */
-  private fpCam = new THREE.PerspectiveCamera(74, 1, 2, 65536);
+  private fpCam = seesPlants(new THREE.PerspectiveCamera(74, 1, 2, 65536));
   private gameKeys = new Set<string>();
   private shapeOpts: ShapeOptions = { shape: 'box', sides: 16, steps: 8, facing: 0 };
   private brushRole: DrawRole = 'solid';

@@ -7,6 +7,7 @@
  * captured once each, one after another, and again when the level changes; surfaces in their boxes reflect them
  * fitted to the box. A capture is spread over four frames (two views a frame, then the blur), so none stutters.
  */
+import { seesPlants } from './plants';
 import { applyMat4, type SceneDoc } from '@cocoaworlds/core';
 import { autoProbes, type Brush } from '@cocoaworlds/geometry';
 import { MAX_BOX_PROBES, OCT_GLSL, PROBE_LEVELS, PROBE_SLOTS, PROBE_TILE, PROBES } from './probe-shader';
@@ -79,7 +80,11 @@ function atlasPass(): { scene: THREE.Scene; cam: THREE.Camera; mat: THREE.Shader
 
 export class SceneReflections {
   private cube = new THREE.WebGLCubeRenderTarget(256, { type: THREE.HalfFloatType });
-  private cam = new THREE.CubeCamera(1, 40000, this.cube);
+  private cam = (() => {
+    const c = new THREE.CubeCamera(1, 40000, this.cube);
+    for (const v of c.children) seesPlants(v as THREE.Camera);
+    return c;
+  })();
   private pmrem: THREE.PMREMGenerator;
   private env: THREE.WebGLCubeRenderTarget | null = null;
   private atlas = new THREE.WebGLRenderTarget(PROBE_LEVELS * PROBE_TILE, PROBE_SLOTS * PROBE_TILE, { type: THREE.HalfFloatType, depthBuffer: false, generateMipmaps: false, minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter });

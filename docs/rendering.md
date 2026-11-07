@@ -238,6 +238,13 @@ Play, exported games and the workspace's preview.
 
 Plants are backlit by the sun: a soft glow looking into it and a thin rim along their silhouette (`plants.ts`).
 
+Plant objects are batched: those of the same recipe and seed, at the same detail level, in the same 2048 u area
+(`PLANT_CELL`) are one `InstancedMesh`, one draw call a pass. Each keeps its own place, wind rhythm and dissolve
+between levels (per-instance `aFade`, `CW_INSTANCED` in the plant shader). Batches are culled as a whole, so they
+live on their own layer (`PLANT_LAYER`): views, reflections and the sun's shadow see it (`seesPlants`), bulbs' and
+spotlights' shadows don't (`skipsPlants`), or each of a bulb's six shadow views would draw whole areas of plants.
+The editor picks plants by an invisible full-detail mesh each (`PlantRenderer.meshes`).
+
 ## Blend into ground
 
 A material's **Blend into ground (u)** makes everything painted with it fade into whatever it's sunk into (a
