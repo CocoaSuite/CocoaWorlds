@@ -178,8 +178,10 @@ export interface DayCycle {
   night: number;
   /** The day the game starts on (the count goes up at midnight). */
   startDay: number;
+  /** Show the day count on screen while playing. */
+  showDay: boolean;
 }
-export const DEFAULT_DAY: DayCycle = { enabled: false, minutes: 12, startHour: 9, night: 0.25, startDay: 1 };
+export const DEFAULT_DAY: DayCycle = { enabled: false, minutes: 12, startHour: 9, night: 0.25, startDay: 1, showDay: false };
 export const dayOf = (s: { day?: DayCycle } | undefined): DayCycle => ({ ...DEFAULT_DAY, ...(s?.day ?? {}) });
 export const aoOf = (s: { ao?: AoSettings } | undefined): AoSettings => ({ ...DEFAULT_AO, ...(s?.ao ?? {}) });
 

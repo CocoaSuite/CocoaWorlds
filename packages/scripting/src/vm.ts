@@ -165,8 +165,8 @@ export type RunnerEvent =
   | { type: 'press'; key: string; targets: string[]; distance: number }
   /** A hunting creature made a move (`targets`: it, and the hiding spot it is at with what that is inside). */
   | { type: 'does'; what: string; targets: string[] }
-  /** Midnight passed. */
-  | { type: 'newDay' }
+  /** Day `day` started (`first`: the game starts on it, which isn't a new day). */
+  | { type: 'newDay'; day: number; first?: boolean }
   /** The clock went forward from `from` to `to` (hours counted from day 0, so it never wraps). */
   | { type: 'hours'; from: number; to: number };
 
@@ -290,7 +290,7 @@ export class ScriptRunner {
         } else if (e.type === 'hit') {
           if (ev.kind === 'hit' && e.targets.includes(inst.program.owner)) this.spawn(inst, h, null);
         } else if (e.type === 'newDay') {
-          if (ev.kind === 'newDay') this.spawn(inst, h, null);
+          if ((ev.kind === 'newDay' && !e.first) || (ev.kind === 'dayStarts' && ev.day === e.day)) this.spawn(inst, h, null);
         } else if (e.type === 'hours') {
           if (ev.kind === 'atHour' && Math.floor((e.to - ev.hour) / 24) > Math.floor((e.from - ev.hour) / 24)) this.spawn(inst, h, null);
         } else if (e.type === 'die') {
@@ -645,6 +645,9 @@ export class ScriptRunner {
           break;
         case 'getday':
           s.push(this.host.day?.() ?? 1);
+          break;
+        case 'isday':
+          s.push((this.host.day?.() ?? 1) === Math.round(num(s.pop() ?? 0)));
           break;
         case 'lit': {
           const target = s.pop();

@@ -511,6 +511,11 @@ function EventRow({ ev, onRemove, onCopy, pick }: { ev: EventBlock; onRemove: ()
     </>
   );
   else if (ev.kind === 'newDay') content = w('newDay');
+  else if (ev.kind === 'dayStarts') content = (
+    <>
+      {w('dayStarts')} <ExprSlot expr={ev.day} type="number" label={w('dayStarts')} /> {w('starts')}
+    </>
+  );
   else if (ev.kind === 'atHour') content = (
     <>
       {w('atHour')} <ExprSlot expr={ev.hour} type="number" label={w('atHour')} /> {w('oClock')}
@@ -1416,6 +1421,13 @@ function ExprSlot({ expr, type, label }: { expr: Expr; type: 'number' | 'boolean
         <>
           <RefSlot value={expr.what} allowPlayer onChange={(what) => set({ what })} label={`${label} ${w('isInside')}`} /> {w('isInside')}{' '}
           <RefSlot value={expr.zone} zonesOnly onChange={(zone) => set({ zone })} label={`${label} ${w('isInside')} zone`} />
+        </>
+      );
+      break;
+    case 'isDay':
+      body = (
+        <>
+          {w('isDay')} <ExprSlot expr={expr.a} type="number" label={`${label} ${w('isDay')}`} />
         </>
       );
       break;

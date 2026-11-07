@@ -59,7 +59,9 @@ export type Expr =
   /** The time of day in hours (0–24; 12 is noon). */
   | { id: string; kind: 'timeOfDay' }
   /** The day count (goes up at midnight). */
-  | { id: string; kind: 'day' };
+  | { id: string; kind: 'day' }
+  /** Whether today is day `a`. */
+  | { id: string; kind: 'isDay'; a: Expr };
 
 export type LightProp = 'intensity' | 'range' | 'angle' | 'color';
 
@@ -204,6 +206,8 @@ export type EventBlock =
   | { id: string; kind: 'every'; seconds: Expr }
   /** Midnight passed: the day count went up. */
   | { id: string; kind: 'newDay' }
+  /** Day `day` started (at midnight, set by a block, or the game starts on it). */
+  | { id: string; kind: 'dayStarts'; day: Expr }
   /** The clock passed `hour` (0–24), once a day. */
   | { id: string; kind: 'atHour'; hour: Expr }
   /** The player's health reached 0 (they start again at the Player start). */
@@ -302,6 +306,7 @@ export function* walk(script: Script): Generator<{ id: string; kind: string }> {
     yield h.event;
     if (h.event.kind === 'every') yield* expr(h.event.seconds);
     if (h.event.kind === 'atHour') yield* expr(h.event.hour);
+    if (h.event.kind === 'dayStarts') yield* expr(h.event.day);
     if (h.event.kind === 'near' || h.event.kind === 'far') yield* expr(h.event.distance);
     if ((h.event.kind === 'use' || h.event.kind === 'useHolding' || h.event.kind === 'press') && h.event.reach) yield* expr(h.event.reach);
     yield* stmts(h.body);

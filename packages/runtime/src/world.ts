@@ -336,6 +336,8 @@ export interface PlayerStatus {
   score: number;
   /** Whether any script uses the score (otherwise the screen doesn't show it). */
   showScore: boolean;
+  /** The day count, when the scene shows it on screen (else null). */
+  day: number | null;
   /** Seconds since the player was last hurt (Infinity if never), for a red flash. */
   sinceHurt: number;
   deaths: number;
@@ -514,7 +516,10 @@ export class GameWorld {
     this.inventory = new Map(t.inventory);
     this.slot = t.slot;
     for (const [k, v] of Object.entries(t.values)) if (this.globals.has(k)) this.globals.set(k, v);
-    if (typeof t.day === 'number') this.day = t.day;
+    if (typeof t.day === 'number') {
+      this.day = t.day;
+      this.dayFresh = false;
+    }
     const p = this.player;
     if (!p) return;
     const lm = t.landmark ? this.landmarkAt(t.landmark) : null;
@@ -558,7 +563,10 @@ export class GameWorld {
       // (The player is put back only when the game is resumed here, not when arriving from another scene.)
       if (mine) this.loadScene(mine, !arrive && saved.scene === this.sceneName);
     }
-    if (typeof saved.day === 'number' && Number.isFinite(saved.day)) this.day = Math.max(0, Math.round(saved.day));
+    if (typeof saved.day === 'number' && Number.isFinite(saved.day)) {
+      this.day = Math.max(0, Math.round(saved.day));
+      this.dayFresh = false;
+    }
     // (After the world: a chair wedged under a door is pinned there again.)
     if (saved.base && typeof saved.base === 'object') {
       this.otherBases = { ...saved.base };
@@ -821,6 +829,9 @@ export class GameWorld {
   day = 1;
   private firstDay = 1;
   private dayOn = false;
+  private showDay = false;
+  /** The game starts on its first day (not a saved or carried one): “When day n starts” runs for it. */
+  private dayFresh = true;
   /** Models' glow set by scripts (from null: from how the model was made). */
   private glows = new Map<string, Fade>();
   /** Objects scripts turned on (true) or off (false), by body. */
@@ -882,6 +893,7 @@ export class GameWorld {
     this.hoursPerSecond = day.enabled && day.minutes > 0 ? 24 / (day.minutes * 60) : 0;
     this.day = this.firstDay = Math.max(0, Math.round(day.startDay));
     this.dayOn = day.enabled;
+    this.showDay = day.showDay;
     const info = { objects, rules, globals: values.map((v) => ({ name: v.name, type: v.type })), signs: new Set(this.signs.keys()), lights: new Set(this.lights.keys()) };
     this.scriptInfo = info;
     const programs: Program[] = [];
@@ -1157,7 +1169,7 @@ export class GameWorld {
       timeOfDay: () => this.dayHour,
       setTimeOfDay: (h) => void (this.dayHour = Number.isFinite(h) ? ((h % 24) + 24) % 24 : this.dayHour),
       day: () => this.day,
-      setDay: (d) => void (Number.isFinite(d) && (this.day = Math.max(0, Math.round(d)))),
+      setDay: (d) => this.setDay(d),
       setText: (target, text) => {
         if (!this.signs.has(target) || this.signs.get(target) === text) return;
         this.signs.set(target, text);
@@ -1649,6 +1661,7 @@ export class GameWorld {
       // “When the game starts” runs on the first frame, and sounds that play from the start begin.
       this.startedScripts = true;
       for (const e of this.doc.entities) if (e.components.sound && this.isShown(e)) this.startSound(e.id, readComponent<SoundData>('sound', e.components.sound), null);
+      if (this.dayFresh) this.runner.dispatch({ type: 'newDay', day: this.day, first: true });
       this.runner.start();
       this.started = true;
       this.restoreAfterStart();
@@ -2579,7 +2592,7 @@ export class GameWorld {
 
   playerStatus(): PlayerStatus | null {
     if (!this.player) return null;
-    return { showHealth: this.rules.health, health: this.health, maxHealth: PLAYER.maxHealth, armour: this.armour, weapon: this.weaponStatus(), score: this.score, showScore: this.usesScore, sinceHurt: this.time - this.hurtAt, deaths: this.deaths, stamina: this.rules.stamina ? this.player!.stamina : null, showFps: this.rules.showFps };
+    return { showHealth: this.rules.health, health: this.health, maxHealth: PLAYER.maxHealth, armour: this.armour, weapon: this.weaponStatus(), score: this.score, showScore: this.usesScore, day: this.showDay ? this.day : null, sinceHurt: this.time - this.hurtAt, deaths: this.deaths, stamina: this.rules.stamina ? this.player!.stamina : null, showFps: this.rules.showFps };
   }
 
   // ── What scripts can do ──
@@ -3698,6 +3711,13 @@ export class GameWorld {
     return true;
   }
 
+  /** A block set the day: a different one starts. */
+  setDay(d: number): void {
+    if (!Number.isFinite(d) || Math.max(0, Math.round(d)) === this.day) return;
+    this.day = Math.max(0, Math.round(d));
+    this.runner.dispatch({ type: 'newDay', day: this.day });
+  }
+
   /** The clock goes forward: past midnight the day count goes up, and “When the clock reaches” stacks start. */
   passHours(hours: number): void {
     if (!(hours > 0)) return;
@@ -3705,7 +3725,7 @@ export class GameWorld {
     this.dayHour = to % 24;
     for (let d = Math.floor(to / 24); d > 0; d--) {
       this.day++;
-      this.runner.dispatch({ type: 'newDay' });
+      this.runner.dispatch({ type: 'newDay', day: this.day });
     }
     this.runner.dispatch({ type: 'hours', from, to });
   }

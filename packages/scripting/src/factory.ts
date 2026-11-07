@@ -35,6 +35,8 @@ export function newEvent(kind: EventKind, zone: Ref = self): EventBlock {
       return { id: id(), kind };
     case 'atHour':
       return { id: id(), kind, hour: num(22) };
+    case 'dayStarts':
+      return { id: id(), kind, day: num(2) };
     case 'enter':
     case 'leave':
       return { id: id(), kind, zone };
@@ -211,6 +213,8 @@ export function newExpr(kind: ExprKind, opts: { variable?: string } = {}): Expr 
       return { id: id(), kind, op: 'and', a: bool(true), b: bool(true) };
     case 'not':
       return { id: id(), kind, a: bool(true) };
+    case 'isDay':
+      return { id: id(), kind, a: num(1) };
     case 'random':
       return { id: id(), kind, min: num(1), max: num(6) };
     case 'join':

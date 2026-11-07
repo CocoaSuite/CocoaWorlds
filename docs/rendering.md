@@ -37,9 +37,11 @@ time of day**. Code: `viewport/day.ts`, `SceneLighting.setDay`, `GameWorld.dayHo
 half hour of game time.
 
 **Days.** The day count starts at **First day** and goes up each time the clock passes midnight (also while
-sleeping in a base). Events: **When a new day starts**, **When the clock reaches h o'clock** (once each time that
-hour passes, also while sleeping). Statement **Set the day to n**, value **the day**. Setting the time of day
-doesn't change the day. The day goes with the player to other scenes and is kept in saved progress (when the cycle is
+sleeping in a base). **Show the day on screen** puts a Day counter with the health and score (`{day}` also works
+in screen texts). Events: **When a new day starts**; **When day n starts** (at midnight, when a block sets that day,
+or at the start when the game starts on it, not when resumed from a save); **When the clock reaches h o'clock**
+(once each time that hour passes, also while sleeping). Statement **Set the day to n** (a different day starts:
+both day events run), values **the day** and **today is day n**. Setting the time of day doesn't change the day. The day goes with the player to other scenes and is kept in saved progress (when the cycle is
 on or a block changed it); “Forget saved progress” puts it back to the first day. Code: `GameWorld.passHours`,
 `day`. Tests: `packages/runtime/test/days.test.ts`.
 

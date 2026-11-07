@@ -54,6 +54,9 @@ const W = {
   newDay: ['When a new day starts', 'Когда начинается новый день'],
   atHour: ['When the clock reaches', 'Когда часы дойдут до'],
   oClock: ['o’clock', 'ч'],
+  dayStarts: ['When day', 'Когда начинается день'],
+  starts: ['starts', ''],
+  isDay: ['today is day', 'сегодня день'],
   die: ['When the player dies', 'Когда игрок погибает'],
   seconds: ['seconds', 'с'],
   // actions
@@ -246,6 +249,7 @@ const PALETTE_EVENT: Record<EventKind, Pair> = {
   press: ['When the player presses a key at this (with a prompt)', 'Когда игрок нажимает клавишу на этом (с подсказкой)'],
   every: ['Every few seconds', 'Каждые несколько секунд'],
   newDay: ['When a new day starts (midnight)', 'Когда начинается новый день (полночь)'],
+  dayStarts: ['When a certain day starts', 'Когда начинается определённый день'],
   atHour: ['When the clock reaches an hour', 'Когда часы дойдут до часа'],
   die: ['When the player dies', 'Когда игрок погибает'],
   breaks: ['When this breaks', 'Когда это ломается'],
@@ -342,7 +346,7 @@ export const EVENT_GROUPS: { title: Pair; kinds: EventKind[] }[] = [
   { title: ['Game', 'Игра'], kinds: ['start', 'every', 'die'] },
   { title: ['Player actions', 'Действия игрока'], kinds: ['use', 'press', 'useHolding', 'key', 'useItem'] },
   { title: ['Distance and zones', 'Расстояние и зоны'], kinds: ['near', 'far', 'enter', 'leave'] },
-  { title: ['Time', 'Время'], kinds: ['newDay', 'atHour'] },
+  { title: ['Time', 'Время'], kinds: ['newDay', 'dayStarts', 'atHour'] },
   { title: ['Messages', 'Сообщения'], kinds: ['message', 'messageStop'] },
   { title: ['Objects', 'Объекты'], kinds: ['hit', 'breaks'] },
   { title: ['Creatures', 'Существа'], kinds: ['dies', 'does'] },
@@ -394,13 +398,14 @@ const VALUE: Record<ExprKind, Pair> = {
   lightOn: ['A light is on', 'Свет включён'],
   timeOfDay: ['The time of day (hours)', 'Время суток (часы)'],
   day: ['The day', 'День'],
+  isDay: ['Today is day …', 'Сегодня день …'],
 };
 export const valueName = (k: ExprKind) => pick(VALUE[k]);
 
 /** Which value blocks fit a slot of a given type. */
 export const VALUES_FOR: Record<'number' | 'boolean' | 'text' | 'any', ExprKind[]> = {
   number: ['number', 'variable', 'varOf', 'maths', 'random', 'distance', 'time', 'timeOfDay', 'day', 'clock', 'health', 'armour', 'score', 'itemCount'],
-  boolean: ['boolean', 'inside', 'holds', 'hiding', 'lightOn', 'variable', 'varOf', 'compare', 'logic', 'not'],
+  boolean: ['boolean', 'inside', 'holds', 'hiding', 'lightOn', 'isDay', 'variable', 'varOf', 'compare', 'logic', 'not'],
   text: ['text', 'variable', 'varOf', 'join', 'number', 'object', 'day', 'score', 'itemCount', 'selectedItem', 'pickedRow'],
-  any: ['number', 'text', 'boolean', 'variable', 'varOf', 'maths', 'compare', 'logic', 'not', 'inside', 'holds', 'hiding', 'lightOn', 'random', 'distance', 'join', 'time', 'timeOfDay', 'day', 'clock', 'health', 'armour', 'score', 'itemCount', 'selectedItem', 'pickedRow', 'object', 'copy'],
+  any: ['number', 'text', 'boolean', 'variable', 'varOf', 'maths', 'compare', 'logic', 'not', 'inside', 'holds', 'hiding', 'lightOn', 'isDay', 'random', 'distance', 'join', 'time', 'timeOfDay', 'day', 'clock', 'health', 'armour', 'score', 'itemCount', 'selectedItem', 'pickedRow', 'object', 'copy'],
 };

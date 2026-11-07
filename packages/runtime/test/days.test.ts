@@ -64,6 +64,29 @@ describe('days', () => {
     expect(w.playerStatus()!.score).toBe(1);
   });
 
+  it('“When day n starts” runs on that day: the first, at midnight, or set by a block (not again for the same day)', () => {
+    const on = (day: number, amount: number): Handler => ({ id: `h${day}`, event: { id: `e${day}`, kind: 'dayStarts', day: n(day) }, body: [score(`s${day}`, amount)] });
+    const set9 = { id: 'm', event: { id: 'em', kind: 'start' as const }, body: [{ id: 'w', kind: 'wait' as const, seconds: n(1) }, { id: 'd', kind: 'setDay' as const, value: n(9) }, { id: 'd2', kind: 'setDay' as const, value: n(9) }] };
+    const w = world([on(3, 1), on(9, 100), on(10, 10), set9]);
+    run(w, 0.1);
+    expect(w.playerStatus()!.score).toBe(1);
+    run(w, 1.1);
+    expect(w.playerStatus()!.score).toBe(101);
+    run(w, 2);
+    expect(w.playerStatus()!.score).toBe(111);
+  });
+
+  it('“today is day n” and the day on screen', () => {
+    const w = world([{ id: 'h', event: { id: 'e', kind: 'every', seconds: n(0.5) }, body: [{ id: 'i', kind: 'if', condition: { id: 'c', kind: 'isDay', a: n(4) }, then: [score('s', 1)], otherwise: [] }] }], { showDay: true });
+    expect(w.playerStatus()!.day).toBe(3);
+    run(w, 2);
+    expect(w.playerStatus()!.score).toBe(0);
+    run(w, 1.5);
+    expect(w.playerStatus()!.day).toBe(4);
+    expect(w.playerStatus()!.score).toBeGreaterThan(0);
+    expect(world([]).playerStatus()!.day).toBeNull();
+  });
+
   it('an hour outside 0–24 is a problem', () => {
     const w = world([{ id: 'h', event: { id: 'e', kind: 'atHour', hour: n(30) }, body: [] }]);
     expect(w.scriptProblems.some((p) => /0 to 24/.test(p.message))).toBe(true);

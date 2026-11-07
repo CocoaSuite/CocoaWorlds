@@ -19,6 +19,8 @@ export interface Hud {
   weapon: { name: string; ammo: number | null; ammoName: string } | null;
   score: number;
   showScore: boolean;
+  /** The day count (null: not shown). */
+  day: number | null;
   /** Just hurt: flash red. */
   hurt: boolean;
   /** Game values shown on screen. */
@@ -82,6 +84,7 @@ export function hudOf(play: PlaySession, locked: boolean): Hud {
     weapon: status?.weapon ?? null,
     score: status?.score ?? 0,
     showScore: !!status?.showScore,
+    day: status?.day ?? null,
     hurt: (status?.sinceHurt ?? Infinity) < 0.35,
     values: screen.values.filter((v) => v.show).map((v) => ({ name: v.name, value: formatValue(v.value) })),
     messages: screen.messages,
@@ -89,7 +92,7 @@ export function hudOf(play: PlaySession, locked: boolean): Hud {
     build: locked ? play.buildPrompt() : null,
     keys: locked ? play.keyPrompts() : [],
     ui: play.uiState(),
-    allValues: { ...Object.fromEntries(screen.values.map((v) => [v.name, v.value])), health: Math.ceil(status?.health ?? 0), armour: Math.floor(status?.armour ?? 0), score: status?.score ?? 0 },
+    allValues: { ...Object.fromEntries(screen.values.map((v) => [v.name, v.value])), health: Math.ceil(status?.health ?? 0), armour: Math.floor(status?.armour ?? 0), score: status?.score ?? 0, day: play.day },
   };
 }
 
@@ -159,7 +162,7 @@ export function HudView({ hud }: { hud: Hud }) {
           <span style={{ width: `${hud.stamina}%` }} />
         </div>
       )}
-      {(hud.showHealth || hud.showScore || hud.values.length > 0) && (
+      {(hud.showHealth || hud.showScore || hud.day !== null || hud.values.length > 0) && (
       <div className="cw-ov cw-hud" data-testid="hud">
         {hud.showHealth && (
           <div className={`cw-hud-item${low ? ' low' : ''}`} role="meter" aria-label={t('hud.health')} aria-valuemin={0} aria-valuemax={hud.maxHealth} aria-valuenow={hud.health}>
@@ -180,6 +183,14 @@ export function HudView({ hud }: { hud: Hud }) {
             </span>
             <span className="cw-hud-bar">
               <span style={{ width: `${hud.armour}%` }} />
+            </span>
+          </div>
+        )}
+        {hud.day !== null && (
+          <div className="cw-hud-item">
+            <span className="cw-hud-label">{t('hud.day')}</span>
+            <span className="cw-hud-value" data-testid="hud-day">
+              {hud.day}
             </span>
           </div>
         )}

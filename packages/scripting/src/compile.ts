@@ -128,6 +128,8 @@ export type Op =
   /** Pops a day number: the day count. Pushes the day count. */
   | { op: 'setday' }
   | { op: 'getday' }
+  /** Pops a day number; pushes whether today is that day. */
+  | { op: 'isday' }
   /** Pops a light; pushes whether it is on. */
   | { op: 'lit' }
   | { op: 'halt' };
@@ -153,6 +155,7 @@ export type CompiledEvent =
   | { kind: 'hides' | 'unhides' | 'found' | 'sits' | 'stands' }
   | { kind: 'every'; seconds: number }
   | { kind: 'newDay' }
+  | { kind: 'dayStarts'; day: number }
   | { kind: 'atHour'; hour: number }
   | { kind: 'near' | 'far'; distance: number }
   | { kind: 'uiClick'; element: string }
@@ -299,6 +302,10 @@ class HandlerCompiler {
       if (ev.seconds.kind !== 'number' || !(ev.seconds.value > 0)) this.problem(ev.seconds.id, '“Every” needs a number of seconds above 0.');
       else event = { kind: 'every', seconds: Math.max(0.05, ev.seconds.value) };
     } else if (ev.kind === 'newDay') event = { kind: 'newDay' };
+    else if (ev.kind === 'dayStarts') {
+      if (ev.day.kind !== 'number' || !(ev.day.value >= 0)) this.problem(ev.day.id, 'The day needs to be a number from 0 up.');
+      else event = { kind: 'dayStarts', day: Math.round(ev.day.value) };
+    }
     else if (ev.kind === 'atHour') {
       if (ev.hour.kind !== 'number' || !(ev.hour.value >= 0 && ev.hour.value <= 24)) this.problem(ev.hour.id, 'The hour needs to be a number from 0 to 24.');
       else event = { kind: 'atHour', hour: ev.hour.value % 24 };
@@ -938,6 +945,10 @@ class HandlerCompiler {
       case 'day':
         this.emit({ op: 'getday' });
         return 'number';
+      case 'isDay':
+        this.expect(e.a, 'number', 'The day is a number.');
+        this.emit({ op: 'isday' });
+        return 'boolean';
       case 'lightOn':
         this.lightTarget(e.target, e.id);
         this.emit({ op: 'lit' });

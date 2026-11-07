@@ -902,6 +902,10 @@ export class PlaySession {
     this.world.use();
   }
 
+  /** The day count. */
+  get day(): number {
+    return this.world.day;
+  }
   /** The time of day (hours). */
   get dayHour(): number {
     return this.world.dayHour;
