@@ -259,11 +259,10 @@ a second storey; an e2e test of placing in Play.
 ### 12. Plant batching: tried and taken back
 
 On 2026-11-07, Plant objects were drawn as instanced batches (by recipe, seed, level and 2048 u area; bulb shadows
-skipping them by a layer), commit 1d298d3. The bench's draw calls fell from ~5,400 to ~1,360, but the user's real
-project went from 60+ fps to 15: reverted. The likely reason: a batch is culled as a whole, so every plant in an
-area on screen (and its full-detail level near the camera) was drawn, behind the camera too, where before each plant
-was culled on its own. If tried again: per-plant culling against the view for the drawn batches, and separate
-shadow-only batches (a layer only the sun's shadow camera sees), so the view keeps its culling and the shadow its
-casters; measure on the user's project, not only the bench. `npm run bench -- --breakdown` (counting draws per
-pass) stays.
-
+skipping them by a layer), commit 1d298d3. The bench's draw calls fell from ~5,400 to ~1,360. It was reverted
+(c111d47) when the user's project ran at 15 fps instead of 60+, but that turned out not to be the batching: the
+11-04 version lagged the same, and the laptop was on battery (its graphics card slowed down). So the batching is
+not known to be bad; it is waiting for a bench run on mains power to decide. Its known weakness: a batch is culled as
+a whole, so every plant in an area on screen is drawn, behind the camera too; if it comes back, cull plants one by
+one for the view and keep separate shadow-only batches (a layer only the sun's shadow camera sees). Measure on the
+user's project, plugged in, not only the bench. `npm run bench -- --breakdown` (draws per pass) stays.
