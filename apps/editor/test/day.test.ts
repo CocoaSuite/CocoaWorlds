@@ -40,5 +40,7 @@ describe('day and night', () => {
     const bright = sun.intensity;
     l.setDay(0);
     expect(sun.intensity).toBeLessThan(bright / 3);
+    const u = (l as never as { skyMat: THREE.ShaderMaterial }).skyMat.uniforms;
+    expect((u.cloudColour!.value as THREE.Color).getHSL({ h: 0, s: 0, l: 0 }).l).toBeLessThan(0.25);
   });
 });

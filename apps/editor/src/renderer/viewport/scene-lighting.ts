@@ -67,6 +67,10 @@ if (THREE.ShaderChunk.lights_fragment_begin.includes(SUN_LINE))
 
 const AHEAD = new THREE.Vector3();
 
+/** A cloud colour at an hour: as set by day, warmed at dawn and dusk, dark at night. */
+const cloudAt = (day: string, night: string, dusk: string, look: { day: number; dusk: number }) =>
+  new THREE.Color(night).lerp(new THREE.Color(day), look.day).lerp(new THREE.Color(dusk), look.dusk * 0.5);
+
 /** A bulb of brightness 1 lights a wall this far away about as much as the sun does (units). */
 const FALLOFF = 96;
 
@@ -245,7 +249,7 @@ export class SceneLighting {
     d.hemi.groundColor.copy(fromSky ? new THREE.Color(sky.ground).multiplyScalar(0.4 + 0.6 * look.day).lerp(above, 0.25) : above.clone().multiplyScalar(0.35));
     d.hemi.intensity = st.ambientIntensity * 2.2 * look.ambientScale;
     const sunSeen = sunSkyColour(hex(look.sunColour), d.sunIntensity).multiplyScalar(look.sun);
-    applySky(this.skyMat, { ...sky, top: hex(look.top), horizon: hex(look.horizon), ground: hex(new THREE.Color(sky.ground).multiplyScalar(0.3 + 0.7 * look.day)), stars: Math.max(sky.stars, look.night) }, { dir: look.toward, colour: sunSeen });
+    applySky(this.skyMat, { ...sky, top: hex(look.top), horizon: hex(look.horizon), ground: hex(new THREE.Color(sky.ground).multiplyScalar(0.3 + 0.7 * look.day)), stars: Math.max(sky.stars, look.night), cloudColour: hex(cloudAt(sky.cloudColour, '#2a3246', '#ffb48c', look)), cloudShade: hex(cloudAt(sky.cloudShade, '#121724', '#8a5a6e', look)) }, { dir: look.toward, colour: sunSeen });
     if (this.fog) this.fog.color.copy(fromSky ? look.horizon : new THREE.Color(st.fog.color).lerp(look.horizon, 1 - look.day));
     this.background.copy(look.horizon);
     // (Reflections are drawn again only every half hour of game time: drawing them is slow.)
