@@ -90,6 +90,44 @@ export interface SavedProgress {
   items?: [string, number][];
   /** Base building (when the game has it): each scene's build sites, by scene name. */
   base?: Record<string, unknown>;
+  /** The world (when the game keeps it, `saveWorld`): where everything is in each scene played, by scene name. */
+  world?: Record<string, SavedScene>;
+  /** The scene the player was in (a game starts there again). */
+  scene?: string;
+}
+
+/**
+ * One scene's world as it was saved: everything that moved or changed since the scene started, copies made while
+ * playing, what was taken away, creatures and the player. Places are in world units, turns as quaternions.
+ */
+export interface SavedScene {
+  v: 1;
+  /** Objects that moved or changed, by id (copies' parts too). */
+  bodies: Record<string, SavedBody>;
+  /** Copies made while playing that are still there: the object copied, the copy's number (its id is `template#n`) and where it was made. */
+  copies: [template: string, n: number, at: [number, number, number]][];
+  /** Objects taken out of the game. */
+  removed: string[];
+  /** Creatures: where they stand, which way they face, their health (0: dead). */
+  npcs: Record<string, { at: [number, number, number]; yaw: number; health: number }>;
+  /** The player (left out when the scene was only passed through). */
+  player?: { at: [number, number, number]; yaw: number; pitch: number; health: number; armour: number; score: number };
+  /** Lights switched on or off, broken objects' health, signs' texts (only what changed). */
+  lights?: Record<string, boolean>;
+  broken?: Record<string, number>;
+  signs?: Record<string, string>;
+  /** The time of day (hours). */
+  hour?: number;
+}
+
+/** An object's saved state: place, turn, and only what differs from how it started. */
+export interface SavedBody {
+  p: [number, number, number];
+  q: [number, number, number, number];
+  motion?: BodyInfo['motion'];
+  hidden?: true;
+  off?: true;
+  scale?: number;
 }
 
 /** What the screen UI shows at a moment (see GameWorld.uiState). */
@@ -221,6 +259,8 @@ interface Body {
   rb?: RigidBodyData;
   /** Where it was before the last physics step (x, y, z, then the rotation x, y, z, w), for drawing in between. */
   prev?: Float64Array;
+  /** How it moved when the world started (scripts and picking up can change `info.motion`). */
+  startMotion: BodyInfo['motion'];
 }
 
 /** A body that moved further than this in one step was put there (teleported): drawn there at once (u). */
@@ -256,6 +296,8 @@ export interface Travel {
   inventory: [string, number][];
   slot: number;
   values: Record<string, Value>;
+  /** The worlds of scenes played this session, as they were left (games that keep the world). */
+  worlds?: Record<string, SavedScene>;
 }
 
 /** The player's state for the screen (health bar, score). */
@@ -392,8 +434,8 @@ export class GameWorld {
     if (options.clock) w.clock = options.clock;
     w.sceneName = scene.name;
     if (w.rules.building) w.initBase(options.building ?? (scene.settings as { building?: { pieces?: unknown[]; base?: unknown } }).building);
-    if (options.saved) w.loadProgress(options.saved);
-    if (w.base) w.checkpoint = options.saved ?? null;
+    if (options.saved || options.arrive?.worlds) w.loadProgress(options.saved ?? { values: {} }, options.arrive ?? null);
+    if (w.base || w.savesWhenAsked) w.checkpoint = options.saved ?? null;
     if (options.arrive) w.arrive(options.arrive);
     return w;
   }
@@ -427,6 +469,7 @@ export class GameWorld {
       slot: this.slot,
       values: Object.fromEntries(this.globals),
     };
+    if (this.keepsWorld) this.travel.worlds = { ...this.otherWorlds, [this.sceneName]: this.saveScene(false) };
     this.bus.emit({ type: 'travel', scene, landmark, time: this.time });
   }
 
@@ -473,8 +516,8 @@ export class GameWorld {
   /** The real time in seconds since 1970 (replaceable for tests). */
   private clock = () => Date.now() / 1000;
 
-  /** Start from saved progress: kept values (of the right type) and, if the game keeps them, items. */
-  private loadProgress(saved: SavedProgress): void {
+  /** Start from saved progress: kept values (of the right type), if the game keeps them items, and the world. */
+  private loadProgress(saved: SavedProgress, arrive: Travel | null): void {
     for (const d of this.valueDefs) {
       if (!d.saved || !(d.name in (saved.values ?? {}))) continue;
       const v = saved.values[d.name];
@@ -482,6 +525,15 @@ export class GameWorld {
     }
     if (this.rules.saveItems && Array.isArray(saved.items))
       for (const [name, n] of saved.items) if (typeof name === 'string' && typeof n === 'number' && n > 0) this.inventory.set(name, Math.round(n));
+    if (this.rules.saveWorld) {
+      // (Scenes left this session, as they were left, over what was last saved.)
+      const worlds = { ...(saved.world && typeof saved.world === 'object' ? saved.world : {}), ...(arrive?.worlds ?? {}) };
+      this.otherWorlds = worlds;
+      const mine = worlds[this.sceneName];
+      // (The player is put back only when the game is resumed here, not when arriving from another scene.)
+      if (mine) this.loadScene(mine, !arrive && saved.scene === this.sceneName);
+    }
+    // (After the world: a chair wedged under a door is pinned there again.)
     if (saved.base && typeof saved.base === 'object') {
       this.otherBases = { ...saved.base };
       if (this.base && this.sceneName in saved.base) this.base.load(saved.base[this.sceneName]);
@@ -491,27 +543,221 @@ export class GameWorld {
   /** What is kept between sessions right now, or null when the game keeps nothing. */
   progress(): SavedProgress | null {
     // (A base that saves on sleep: what was kept at the last sleep, not what is now.)
-    if (this.base && this.base.config.sleep.saveOn === 'sleep') return this.checkpoint;
+    // (A game with “Save the game” blocks: what was kept at the last of them.)
+    if ((this.base && this.base.config.sleep.saveOn === 'sleep') || this.savesWhenAsked) return this.checkpoint;
     return this.liveProgress();
   }
 
   /** What would be kept if it were saved right now. */
   private liveProgress(): SavedProgress | null {
     const kept = this.valueDefs.filter((d) => d.saved);
-    if (!kept.length && !this.rules.saveItems && !this.base) return null;
+    if (!kept.length && !this.rules.saveItems && !this.base && !this.rules.saveWorld) return null;
     const out: SavedProgress = { values: Object.fromEntries(kept.map((d) => [d.name, this.globals.get(d.name) ?? d.initial])) };
     if (this.rules.saveItems) out.items = [...this.inventory];
     if (this.base) out.base = { ...this.otherBases, [this.sceneName]: this.base.save() };
+    if (this.keepsWorld) {
+      out.world = { ...this.otherWorlds, [this.sceneName]: this.saveScene(true) };
+      out.scene = this.sceneName;
+    }
     return out;
   }
 
-  /** Start over: kept values back to their starting values, kept items emptied. */
+  /** Save the game now (a game that saves on sleep keeps this until the next sleep or save). */
+  saveNow(): void {
+    this.checkpoint = this.liveProgress();
+  }
+
+  /** Start over: kept values back to their starting values, kept items emptied, the world no longer kept. */
   forgetProgress(): void {
+    this.otherWorlds = {};
+    this.worldForgotten = true;
     for (const d of this.valueDefs) if (d.saved) this.globals.set(d.name, d.initial);
     if (this.rules.saveItems) {
       this.inventory.clear();
       this.slot = 0;
     }
+  }
+
+  // ── Keeping the world (saveWorld) ──
+
+  /** Other scenes' saved worlds (kept as they were, or as they were left this session). */
+  private otherWorlds: Record<string, SavedScene> = {};
+  /** “Forget saved progress” ran: the world isn't kept again this session. */
+  private worldForgotten = false;
+  /** Copies made while playing, by copy id: what of, its number, where, and whether the start blocks made it. */
+  private made = new Map<string, { template: string; n: number; at: Q3; atStart: boolean; parts: string[] }>();
+  /** The highest copy number a saved copy came back with (later copies are numbered past it). */
+  private restoredCopies = 0;
+  /** Everything taken out of the game (and what was inside it). */
+  private gone = new Set<string>();
+  /** “When the game starts” has run. */
+  private started = false;
+  /** The game saves only at “Save the game” blocks (a script has one). */
+  private savesWhenAsked = false;
+  /** Saved states and removals waiting for the start blocks (which make their copies again). */
+  private waiting: { bodies: Record<string, SavedBody>; removed: string[] } | null = null;
+
+  private get keepsWorld(): boolean {
+    return this.rules.saveWorld && !this.worldForgotten;
+  }
+
+  /** This scene's world now (`withPlayer`: where the player is too). */
+  private saveScene(withPlayer: boolean): SavedScene {
+    const r = (x: number, k = 1000) => Math.round(x * k) / k;
+    const out: SavedScene = { v: 1, bodies: {}, copies: [], removed: [], npcs: {}, hour: r(this.dayHour) };
+    const trains = new Set(this.trains.map((t) => t.id));
+    for (const [id, b] of this.bodies) {
+      if (b.info.kind === 'zone' || trains.has(id)) continue;
+      // (Halfway through a scripted move: where it is headed.)
+      const t = b.body.translation(), q = b.body.rotation();
+      const goal = this.goalOf(id, { p: [t.x, t.y, t.z], q: { x: q.x, y: q.y, z: q.z, w: q.w } });
+      const s = b.start;
+      const moved = Math.abs(goal.p[0] - s.p[0]) + Math.abs(goal.p[1] - s.p[1]) + Math.abs(goal.p[2] - s.p[2]) > 0.01 || Math.abs(goal.q.x * s.q.x + goal.q.y * s.q.y + goal.q.z * s.q.z + goal.q.w * s.q.w) < 1 - 1e-7;
+      const tw = this.tweens.get(id);
+      const scale = tw?.to.s ?? b.scale;
+      const off = this.switched.get(id) === false;
+      if (!moved && b.visible && !off && scale === 1 && b.info.motion === b.startMotion && !b.info.copy) continue;
+      const sb: SavedBody = { p: [r(goal.p[0]), r(goal.p[1]), r(goal.p[2])], q: [r(goal.q.x, 1e6), r(goal.q.y, 1e6), r(goal.q.z, 1e6), r(goal.q.w, 1e6)] };
+      if (b.info.motion !== b.startMotion) sb.motion = b.info.motion;
+      if (!b.visible) sb.hidden = true;
+      if (off) sb.off = true;
+      if (scale !== 1) sb.scale = r(scale);
+      out.bodies[id] = sb;
+    }
+    for (const [id, c] of this.made) if (!c.atStart && !this.gone.has(id)) out.copies.push([c.template, c.n, c.at.map((x) => r(x)) as Q3]);
+    // (Parts of copies the start blocks make again count; other copies taken away are simply not made again.)
+    const again = new Set<string>();
+    for (const c of this.made.values()) if (c.atStart) for (const x of c.parts) again.add(x);
+    for (const id of this.gone) if (!this.copyOf.has(id) || again.has(id)) out.removed.push(id);
+    for (const n of this.npcs.values()) out.npcs[n.id] = { at: [r(n.feet.x), r(n.feet.y), r(n.feet.z)], yaw: r(n.yaw, 1e4), health: n.alive ? n.health : 0 };
+    const p = this.player;
+    if (withPlayer && p) {
+      const f = p.feetPosition;
+      out.player = { at: [r(f.x), r(f.y), r(f.z)], yaw: r(p.input.yaw, 1e4), pitch: r(p.input.pitch, 1e4), health: this.health, armour: this.armour, score: this.score };
+    }
+    const lights: Record<string, boolean> = {};
+    for (const [id, l] of this.lights) {
+      const e = this.doc.get(id);
+      if (e && l.on !== (readComponent<LightData>('light', e.components.light).on !== false)) lights[id] = l.on;
+    }
+    if (Object.keys(lights).length) out.lights = lights;
+    const broken: Record<string, number> = {};
+    for (const [id, h] of this.breakHealth) {
+      const e = this.doc.get(this.copyOf.get(id) ?? id);
+      if (e && h !== readComponent<BreakableData>('breakable', e.components.breakable).health) broken[id] = h;
+    }
+    if (Object.keys(broken).length) out.broken = broken;
+    const signs: Record<string, string> = {};
+    for (const [id, text] of this.signs) {
+      const e = this.doc.get(this.copyOf.get(id) ?? id);
+      if (e && text !== String((e.components.sign as { text?: unknown } | undefined)?.text ?? '')) signs[id] = text;
+    }
+    if (Object.keys(signs).length) out.signs = signs;
+    return out;
+  }
+
+  /** Put a saved scene back: copies made again, everything where it was, and (`withPlayer`) the player. */
+  private loadScene(save: SavedScene, withPlayer: boolean): void {
+    if (!save || save.v !== 1) return;
+    const num = (x: unknown, d = 0) => (typeof x === 'number' && Number.isFinite(x) ? x : d);
+    const v3 = (a: unknown): Q3 | null => (Array.isArray(a) && a.length === 3 && a.every((x) => typeof x === 'number' && Number.isFinite(x)) ? (a as Q3) : null);
+    for (const c of Array.isArray(save.copies) ? save.copies : []) {
+      const [template, n, at] = Array.isArray(c) ? c : [];
+      const p = v3(at);
+      if (typeof template !== 'string' || !this.doc.get(template) || !p || !Number.isInteger(n) || n! < 1 || this.names.has(`${template}#${n}`)) continue;
+      const id = this.makeCopy(template, p, n);
+      this.made.get(id)!.atStart = false;
+      this.restoredCopies = Math.max(this.restoredCopies, n!);
+    }
+    // (The start blocks number their copies from 1 again, as they did when the game was saved.)
+    this.copies = 0;
+    // (Changes to what the start blocks make wait for them; the rest are put back now.)
+    const bodies = save.bodies && typeof save.bodies === 'object' ? save.bodies : {};
+    const later: Record<string, SavedBody> = {};
+    for (const [id, sb] of Object.entries(bodies)) if (!this.restoreBody(id, sb)) later[id] = sb;
+    this.waiting = { bodies: later, removed: Array.isArray(save.removed) ? save.removed.filter((x): x is string => typeof x === 'string') : [] };
+    for (const [id, st] of Object.entries(save.npcs ?? {})) {
+      const n = this.npcs.get(id), at = v3(st?.at);
+      if (n && at) n.restore({ x: at[0], y: at[1], z: at[2] }, num(st.yaw, n.yaw), num(st.health, n.health));
+    }
+    for (const [id, on] of Object.entries(save.lights ?? {})) {
+      const l = this.lights.get(id);
+      if (l && typeof on === 'boolean') l.on = on;
+    }
+    for (const [id, h] of Object.entries(save.broken ?? {})) if (this.breakHealth.has(id) && typeof h === 'number') this.breakHealth.set(id, Math.max(0, h));
+    for (const [id, text] of Object.entries(save.signs ?? {}))
+      if (this.signs.has(id) && typeof text === 'string') {
+        this.signs.set(id, text);
+        this.signVersion++;
+      }
+    if (typeof save.hour === 'number' && Number.isFinite(save.hour)) this.dayHour = ((save.hour % 24) + 24) % 24;
+    const pl = save.player, p = this.player, at = v3(pl?.at);
+    if (withPlayer && p && pl && at) {
+      p.teleport({ x: at[0], y: at[1], z: at[2] }, num(pl.yaw, p.input.yaw));
+      p.input.pitch = num(pl.pitch);
+      this.health = Math.max(1, Math.min(PLAYER.maxHealth, num(pl.health, this.health)));
+      this.armour = Math.max(0, Math.min(MAX_ARMOUR, num(pl.armour)));
+      this.score = num(pl.score, this.score);
+    }
+  }
+
+  /** Put one object back as it was saved (false: there is no such object yet). */
+  private restoreBody(id: string, sb: SavedBody): boolean {
+    const b = this.bodies.get(id);
+    if (!b || b.info.kind === 'zone') return false;
+    const p = Array.isArray(sb?.p) && sb.p.length === 3 && sb.p.every(Number.isFinite) ? sb.p : null;
+    const q0 = Array.isArray(sb?.q) && sb.q.length === 4 && sb.q.every(Number.isFinite) ? sb.q : null;
+    const motion = sb?.motion;
+    if (motion && motion !== b.info.motion) {
+      if (motion === 'dynamic') {
+        if (b.rb) {
+          b.body.setBodyType(RAPIER.RigidBodyType.Dynamic, true);
+          b.info.motion = 'dynamic';
+        } else this.makePhysical(b);
+      } else if (motion === 'kinematic' || motion === 'fixed') {
+        b.body.setBodyType(motion === 'kinematic' ? RAPIER.RigidBodyType.KinematicPositionBased : RAPIER.RigidBodyType.Fixed, true);
+        b.info.motion = motion;
+      }
+    }
+    // (Moved, but it started as still: it is drawn as something that moves.)
+    if (p && b.info.motion === 'fixed' && b.startMotion === 'fixed') {
+      const s = b.start.p;
+      if (Math.abs(p[0] - s[0]) + Math.abs(p[1] - s[1]) + Math.abs(p[2] - s[2]) > 0.01) {
+        b.body.setBodyType(RAPIER.RigidBodyType.KinematicPositionBased, true);
+        b.info.motion = 'kinematic';
+      }
+    }
+    if (p && q0) {
+      const len = Math.hypot(...q0) || 1;
+      const q = { x: q0[0] / len, y: q0[1] / len, z: q0[2] / len, w: q0[3] / len };
+      const t = { x: p[0], y: p[1], z: p[2] };
+      b.body.setTranslation(t, true);
+      b.body.setRotation(q, true);
+      if (b.body.isKinematic()) {
+        b.body.setNextKinematicTranslation(t);
+        b.body.setNextKinematicRotation(q);
+      }
+      b.body.setLinvel({ x: 0, y: 0, z: 0 }, true);
+      b.body.setAngvel({ x: 0, y: 0, z: 0 }, true);
+    }
+    if (typeof sb?.scale === 'number' && Number.isFinite(sb.scale) && sb.scale > 0 && sb.scale !== 1) {
+      b.scale = sb.scale;
+      this.rebuildColliders(b);
+    }
+    if (sb?.hidden) b.visible = false;
+    if (sb?.off) this.switched.set(id, false);
+    if (sb?.hidden || sb?.off) this.setColliders(b, false);
+    return true;
+  }
+
+  /** After the start blocks: what they made again goes back as it was saved, and what was taken away goes. */
+  private restoreAfterStart(): void {
+    const w = this.waiting;
+    if (!w) return;
+    this.waiting = null;
+    this.copies = Math.max(this.copies, this.restoredCopies);
+    for (const [id, sb] of Object.entries(w.bodies)) this.restoreBody(id, sb);
+    for (const id of w.removed) if (this.parentOf.has(id) && !this.gone.has(id)) this.remove(id);
   }
 
   // ── Screen UI and the inventory (B5) ──
@@ -847,6 +1093,7 @@ export class GameWorld {
       clearList: (id) => void this.uiRows.get(id)?.splice(0),
       clock: () => this.clock(),
       forgetProgress: () => this.forgetProgress(),
+      saveGame: () => this.saveNow(),
       changeScene: (scene, landmark) => this.changeScene(scene, landmark),
       setUiText: (id, text) => void this.uiText.set(id, text),
       giveItem: (name, amount) => this.giveItem(name, amount),
@@ -872,6 +1119,7 @@ export class GameWorld {
       },
     });
     this.usesScore = rules.score && scripts.some(([, s]) => /"kind":"(score|addScore)"/.test(JSON.stringify(s.handlers)));
+    this.savesWhenAsked = scripts.some(([, s]) => JSON.stringify(s.handlers).includes('"kind":"saveGame"'));
   }
 
   /** An object moved by scripts: a kinematic body at its place, carrying the hulls of every brush inside it. */
@@ -1065,6 +1313,7 @@ export class GameWorld {
       brushes,
       visible: true,
       scale: 1,
+      startMotion: motion,
     });
     if (kind !== 'zone') this.stats.bodies++;
   }
@@ -1194,6 +1443,8 @@ export class GameWorld {
       this.startedScripts = true;
       for (const e of this.doc.entities) if (e.components.sound && this.isShown(e)) this.startSound(e.id, readComponent<SoundData>('sound', e.components.sound), null);
       this.runner.start();
+      this.started = true;
+      this.restoreAfterStart();
     }
     while (this.accumulator >= STEP) {
       this.rememberPoses();
@@ -2339,14 +2590,22 @@ export class GameWorld {
    * with references inside the copy pointing at the copy. The original can be hidden: a template.
    */
   spawn(template: string, place: Value): string | null {
-    const root = this.doc.get(template);
-    if (!root) throw new Error(`${this.names.get(template) ?? 'That object'} can't be copied: only objects placed in the scene can.`);
+    if (!this.doc.get(template)) throw new Error(`${this.names.get(template) ?? 'That object'} can't be copied: only objects placed in the scene can.`);
     const at = this.placePoint(place);
-    if (!at) return null;
+    return at ? this.makeCopy(template, at) : null;
+  }
+
+  /** A copy of `template` with its pivot at `at`: copy number `n` (a saved copy coming back), else the next free one. */
+  private makeCopy(template: string, at: Q3, n?: number): string {
+    const root = this.doc.get(template)!;
     const anchor = pivotOf(this.doc, template, boundsOfEntity);
     const offset: Q3 = [at[0] - anchor[0], at[1] - anchor[1], at[2] - anchor[2]];
     const shift = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, offset[0], offset[1], offset[2], 1];
-    const n = ++this.copies;
+    // (Never a number a copy already has: saved copies come back with theirs.)
+    if (n === undefined) {
+      n = ++this.copies;
+      while (this.names.has(`${template}#${n}`)) n = ++this.copies;
+    } else this.copies = Math.max(this.copies, n);
     const ids = new Map<string, string>();
     // Everything inside that is shown (the original itself may be hidden).
     const shownIn = (e: EntityData) => {
@@ -2403,6 +2662,8 @@ export class GameWorld {
       this.runner.addProgram(r.program);
     }
     for (const [from, to] of ids) this.copyOf.set(to, from);
+    // (Copies made when the game starts are made again by the same blocks when a saved game starts.)
+    this.made.set(copyId, { template, n, at: [at[0], at[1], at[2]], atStart: !this.started, parts: [...ids.values()] });
     this.bus.emit({ type: 'spawn', template, copy: copyId, time: this.time });
     for (const [id, s, w] of sounds) this.startSound(id, s, this.bodyOf(id) ? null : [w[12]!, w[13]!, w[14]!]);
     return copyId;
@@ -2415,6 +2676,7 @@ export class GameWorld {
       for (let y: string | null | undefined = x; y; y = this.parentOf.get(y)) if (y === id) gone.add(x);
     }
     gone.add(id);
+    for (const x of gone) this.gone.add(x);
     for (const x of gone) {
       const b = this.bodies.get(x);
       if (!b) continue;

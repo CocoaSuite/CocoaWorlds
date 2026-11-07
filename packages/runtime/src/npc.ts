@@ -223,6 +223,22 @@ export class Npc implements HunterBody {
     return true;
   }
 
+  /** Back where a saved game left it: standing (or lying dead) there, facing that way, with that much health. */
+  restore(feet: V, yaw: number, health: number): void {
+    this.feet = { ...feet };
+    this.yaw = yaw;
+    this.vy = 0;
+    this.body.setTranslation({ x: feet.x, y: feet.y + this.height / 2, z: feet.z }, true);
+    if (health > 0) this.health = health;
+    else {
+      this.health = 0;
+      this.state = 'dead';
+      this.goal = null;
+      this.collider.setEnabled(false);
+      this.play('die', false);
+    }
+  }
+
   /** Change sides (a script's “Make a creature …”): a new enemy notices the player at once if it can see them. */
   setSide(side: NpcData['side']): void {
     this.data.side = side;

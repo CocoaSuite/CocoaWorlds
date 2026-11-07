@@ -776,6 +776,8 @@ function statementWords(s: Statement, set: (patch: Record<string, unknown>, merg
       return w('oneOf');
     case 'forgetProgress':
       return w('forgetProgress');
+    case 'saveGame':
+      return w('saveGame');
     case 'changeScene':
       return (
         <>

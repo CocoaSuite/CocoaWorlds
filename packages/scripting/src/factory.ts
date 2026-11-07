@@ -167,6 +167,7 @@ export function newStatement(kind: StatementKind, opts: { target?: Ref; variable
     case 'changeScene':
       return { id: id(), kind, scene: '', landmark: '' };
     case 'forgetProgress':
+    case 'saveGame':
       return { id: id(), kind };
     case 'showUi':
     case 'hideUi':

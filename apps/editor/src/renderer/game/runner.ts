@@ -111,7 +111,16 @@ export class GameRunner {
   async start(): Promise<void> {
     setProjectMaterials(this.data.materials ?? []);
     setProjectPlants(this.data.plants ?? []);
-    const play = await PlaySession.start(this.data.scene, this.materialFor, this.data.rules, this.data.values, loadProgress(this.data.id));
+    // A game that keeps the world goes on in the scene it was saved in.
+    const saved = loadProgress(this.data.id);
+    let scene = this.data.scene;
+    const resume = this.data.rules.saveWorld && saved?.scene ? this.data.scenes?.[saved.scene] : undefined;
+    if (resume && resume.name !== scene.name) {
+      scene = resume;
+      this.doc = new SceneDoc(expandRepeats(structuredClone(scene), brushBounds));
+      this.cb.scene?.(scene);
+    }
+    const play = await PlaySession.start(scene, this.materialFor, this.data.rules, this.data.values, saved);
     if (this.disposed) return play.dispose();
     this.play = play;
     play.setEars(this.cam);

@@ -103,6 +103,7 @@ export type Op =
   | { op: 'clock' }
   /** Kept values and items back to the start. */
   | { op: 'forget' }
+  | { op: 'savegame' }
   | { op: 'scene'; scene: string; landmark: string }
   /** Pops text: change what an element says. */
   | { op: 'uitext'; id: string }
@@ -621,6 +622,9 @@ class HandlerCompiler {
         break;
       case 'forgetProgress':
         this.emit({ op: 'forget' });
+        break;
+      case 'saveGame':
+        this.emit({ op: 'savegame' });
         break;
       case 'changeScene':
         if (!s.scene.trim()) this.problem(s.id, 'Pick the scene to go to.');

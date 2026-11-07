@@ -29,6 +29,7 @@ const W = {
   pickedRow: ['the picked row', 'выбранная строка'],
   pickList: ['pick a list', 'выберите список'],
   forgetProgress: ['Forget saved progress (start over)', 'Забыть сохранённый прогресс (начать заново)'],
+  saveGame: ['Save the game', 'Сохранить игру'],
   changeScene: ['Go to the scene', 'Перейти в сцену'],
   landmark: ['by the landmark', 'у ориентира'],
   pickScene: ['pick a scene', 'выберите сцену'],
@@ -308,6 +309,7 @@ const PALETTE_STMT: Record<StatementKind, Pair> = {
   removeRow: ['Remove a row from a list', 'Убрать строку из списка'],
   clearList: ['Empty a list', 'Очистить список'],
   forgetProgress: ['Forget saved progress', 'Забыть сохранённый прогресс'],
+  saveGame: ['Save the game (it then saves only here)', 'Сохранить игру (тогда она сохраняется только здесь)'],
   changeScene: ['Go to another scene (level change)', 'Перейти в другую сцену (смена уровня)'],
   showUi: ['Show something on a screen', 'Показать элемент экрана'],
   hideUi: ['Hide something on a screen', 'Скрыть элемент экрана'],
@@ -337,7 +339,7 @@ export const EVENT_GROUPS: { title: Pair; kinds: EventKind[] }[] = [
 
 export const STATEMENT_GROUPS: { title: Pair; kinds: StatementKind[] }[] = [
   { title: ['Control', 'Управление'], kinds: ['wait', 'if', 'oneOf', 'repeat', 'while', 'forever', 'stop', 'send', 'log'] },
-  { title: ['Variables', 'Переменные'], kinds: ['set', 'change', 'forgetProgress'] },
+  { title: ['Variables', 'Переменные'], kinds: ['set', 'change', 'saveGame', 'forgetProgress'] },
   { title: ['Move', 'Движение'], kinds: ['move', 'turn', 'turnTo', 'return', 'moveTo', 'scale', 'push', 'physical'] },
   { title: ['Show and switch', 'Показ и включение'], kinds: ['show', 'hide', 'turnOn', 'turnOff', 'startTrain', 'stopTrain'] },
   { title: ['Objects', 'Объекты'], kinds: ['spawn', 'remove', 'damage', 'place', 'pickUp', 'drop'] },

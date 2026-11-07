@@ -66,6 +66,8 @@ export interface ScriptHost {
   clock?(): number;
   /** Kept game values and items back to the start. */
   forgetProgress?(): void;
+  /** Save the game now (it then saves only at these blocks, and at sleep). */
+  saveGame?(): void;
   /** Go to another scene (a level change). */
   changeScene?(scene: string, landmark: string): void;
   /** Add a row to a list, or remove the first row with this text; empty a list. */
@@ -679,6 +681,9 @@ export class ScriptRunner {
           break;
         case 'forget':
           this.host.forgetProgress?.();
+          break;
+        case 'savegame':
+          this.host.saveGame?.();
           break;
         case 'scene':
           this.host.changeScene?.(op.scene, op.landmark);
