@@ -237,3 +237,7 @@ moves to *Look from* / *Eyes at*, with limited looking around) and E gets up aga
 the eyes, so creatures see them and can hurt them, and hunters never search seats. Blocks: **When the player sits
 on this**, **When the player gets up from this**; **Make the player come out of hiding** also gets them up.
 
+A seat can have Physics (a chair the player carries). Its **Key** picks what sits: with E, E sits; with another
+key (F, G …), E picks it up and that key sits, shown under the crosshair as a key prompt. It can't be sat on while
+held, it holds still while sat on, and the seat is wherever the chair is now.
+

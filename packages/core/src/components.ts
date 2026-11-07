@@ -577,8 +577,15 @@ export const COMPONENTS: ComponentDef[] = [
     label: e('Seat', 'Сиденье'),
     description: e('A chair, a bench, a sofa: E sits down and gets up. Creatures still see the player.', 'Стул, скамья, диван: E — сесть и встать. Существа видят игрока.'),
     appliesTo: 'any',
-    conflicts: ['hidingSpot', 'rigidBody', 'trigger', 'soundArea', 'water', 'ladder', 'npc'],
+    conflicts: ['hidingSpot', 'trigger', 'soundArea', 'water', 'ladder', 'npc'],
     fields: [
+      {
+        key: 'key',
+        label: e('Key', 'Клавиша'),
+        hint: e('Another key than E lets E pick it up (with Physics) and this key sit on it.', 'Не E: тогда E берёт его (с физикой), а эта клавиша сажает.'),
+        type: { kind: 'enum', options: ['E', 'F', 'G', 'Q', 'X', 'Z'].map((k) => ({ value: `Key${k}`, label: e(k, k) })) },
+        default: 'KeyE',
+      },
       { key: 'prompt', label: e('Prompt', 'Подсказка'), type: { kind: 'text' }, default: 'Sit' },
       { key: 'reach', label: e('Reach', 'Дотянуться'), type: { kind: 'number', min: 16, step: 8, unit: 'u' }, default: 96 },
       {

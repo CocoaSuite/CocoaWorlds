@@ -1226,6 +1226,12 @@ export class GameWorld {
   private spots = new Map<string, HidingSpotData>();
   /** Spots that are seats: the player sits in plain view. */
   private seats = new Set<string>();
+  /** A physics seat held still while sat on. */
+  private stilled: RAPIER.RigidBody | null = null;
+  private unstill(): void {
+    if (this.stilled && this.world.getRigidBody(this.stilled.handle)) this.stilled.setBodyType(RAPIER.RigidBodyType.Dynamic, true);
+    this.stilled = null;
+  }
   /** The furthest any hiding spot can be used from. */
   private spotReach = 0;
 
@@ -1256,8 +1262,15 @@ export class GameWorld {
   /** Where the eyes go in a spot and the way they face (−Z of its Look from object, or of the spot). */
   private spotView(id: string, data: HidingSpotData): { eye: [number, number, number]; yaw: number; pitch: number } {
     const at = data.view && this.doc.get(data.view) ? data.view : id;
-    const m = this.doc.worldMatrix(at);
-    const base = pivotOf(this.doc, at, boundsOfEntity);
+    let m = this.doc.worldMatrix(at);
+    let base = pivotOf(this.doc, at, boundsOfEntity);
+    // (Where it is now, if it has moved: a chair that was carried somewhere.)
+    const body = this.bodyOf(at);
+    const mo = body ? this.motionOf(body) : null;
+    if (mo) {
+      m = multiply(mo, m);
+      base = transformPoint(mo, base);
+    }
     const o = Array.isArray(data.offset) ? data.offset.map((v) => Number(v) || 0) : [0, 0, 0];
     const eye: [number, number, number] = [0, 1, 2].map((k) => base[k]! + m[k]! * o[0]! + m[4 + k]! * o[1]! + m[8 + k]! * o[2]!) as never;
     const f = [-m[8]!, -m[9]!, -m[10]!];
@@ -1275,6 +1288,12 @@ export class GameWorld {
     if (this.seats.has(id)) {
       // (Sitting: the body goes under the eyes and can still be hit.)
       p.placeAt({ x: view.eye[0], y: view.eye[1] - PLAYER.eye, z: view.eye[2] });
+      // (A physics seat holds still under the player.)
+      const b = this.bodies.get(this.bodyOf(id) ?? '');
+      if (b?.body.isDynamic()) {
+        b.body.setBodyType(RAPIER.RigidBodyType.KinematicPositionBased, true);
+        this.stilled = b.body;
+      }
       this.runner.dispatch({ type: 'sits', targets: [id, ...this.ancestorsOf(id)] });
     } else {
       p.collider.setEnabled(false);
@@ -1310,7 +1329,10 @@ export class GameWorld {
     }
     p.teleport(feet, yaw);
     p.input.pitch = 0;
-    if (this.seats.has(h.id)) return this.runner.dispatch({ type: 'stands', targets: [h.id, ...this.ancestorsOf(h.id)] });
+    if (this.seats.has(h.id)) {
+      this.unstill();
+      return this.runner.dispatch({ type: 'stands', targets: [h.id, ...this.ancestorsOf(h.id)] });
+    }
     this.spotUsed.set(h.id, this.time);
     this.noise(this.v3(h.view.eye), NOISE.hiding, h.id);
     this.runner.dispatch({ type: 'unhides', targets: [h.id, ...this.ancestorsOf(h.id)] });
@@ -1373,6 +1395,7 @@ export class GameWorld {
   private stopHiding(): void {
     if (!this.hiding) return;
     const out = this.hiding.out === null;
+    this.unstill();
     if (out) this.runner.dispatch({ type: this.seats.has(this.hiding.id) ? 'stands' : 'unhides', targets: [this.hiding.id, ...this.ancestorsOf(this.hiding.id)] });
     this.hiding = null;
     this.player?.collider.setEnabled(true);
@@ -1478,7 +1501,7 @@ export class GameWorld {
     if (!hit) return null;
     const { id, targets, distance } = hit;
     if (this.held) return this.runner.usesHolding(targets, this.heldIds(), distance) ? '' : null;
-    const spot = targets.find((t) => this.spots.has(t));
+    const spot = targets.find((t) => this.spots.has(t) && this.keyOf(t) === 'KeyE');
     if (spot && distance <= this.reachOf(spot)) return String(this.spots.get(spot)!.prompt ?? '');
     const prompt = this.runner.usePrompt(targets, distance);
     if (prompt !== null) return prompt;
@@ -1773,7 +1796,7 @@ export class GameWorld {
     const hit = this.useAim();
     if (!hit) return;
     const { id, targets, distance } = hit;
-    const spot = targets.find((t) => this.spots.has(t));
+    const spot = targets.find((t) => this.spots.has(t) && this.keyOf(t) === 'KeyE');
     if (spot && distance <= this.reachOf(spot)) return this.enterHiding(spot);
     if (distance <= PLAYER.useReach) {
       if (this.grab(id)) return;
@@ -2677,6 +2700,11 @@ export class GameWorld {
   /** The player pressed a key the game doesn't use itself (letters, Tab): “When the player presses” starts. */
   pressKey(code: string): void {
     this.runner.dispatch({ type: 'key', key: code });
+    // Seats sat on with their own key (E is Use's): the same key gets up again.
+    const h = this.hiding;
+    if (h && h.out === null && !this.frozen && this.keyOf(h.id) === code) return this.leaveHiding();
+    const seat = this.seatAt(code);
+    if (seat) return this.enterHiding(seat);
     for (const { targets, distance } of this.pressAims()) this.runner.dispatch({ type: 'press', key: code, targets, distance });
   }
 
@@ -2693,9 +2721,24 @@ export class GameWorld {
   /** Keys that do something at what the player holds or looks at, with their prompts (held first, one per key). */
   keyPrompts(): { key: string; prompt: string }[] {
     const out: { key: string; prompt: string }[] = [];
+    const hit = !this.hiding && !this.held && !this.frozen ? this.useAim() : null;
+    const seat = hit?.targets.find((t) => this.seats.has(t) && this.keyOf(t) !== 'KeyE' && hit.distance <= this.reachOf(t));
+    if (seat) out.push({ key: this.keyOf(seat), prompt: String(this.spots.get(seat)!.prompt ?? '') });
     for (const { targets, distance } of this.pressAims())
       for (const p of this.runner.keyPrompts(targets, distance)) if (!out.some((x) => x.key === p.key)) out.push(p);
     return out;
+  }
+
+  /** The key that gets into a spot (hiding spots: E). */
+  private keyOf(spot: string): string {
+    return this.seats.has(spot) ? String(this.spots.get(spot)?.key || 'KeyE') : 'KeyE';
+  }
+
+  /** A seat looked at within reach that this key sits on (never while holding something). */
+  private seatAt(code: string): string | null {
+    if (!this.player || this.hiding || this.held || this.frozen || code === 'KeyE') return null;
+    const hit = this.useAim();
+    return hit?.targets.find((t) => this.seats.has(t) && this.keyOf(t) === code && hit.distance <= this.reachOf(t)) ?? null;
   }
 
   /** The player clicked with the item in the picked hotbar slot. */

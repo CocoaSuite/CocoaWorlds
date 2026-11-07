@@ -147,5 +147,33 @@ describe('hiding spots', () => {
     expect(Math.abs(w.player!.feetPosition.z)).toBeLessThan(2);
     w.dispose();
   });
+
+  it('a physics seat with its own key: E picks it up, F sits (it holds still) and gets up; no sitting while held', () => {
+    const chair = brush('chair', [-30, 0, -90], [30, 40, -50], { seat: { key: 'KeyF' }, rigidBody: { motion: 'dynamic', mass: 10 } });
+    const w = GameWorld.create(scene(floor(), spawn(), chair));
+    w.setPlayerInput({ pitch: -0.6 });
+    run(w, 0.3);
+    expect(w.usePrompt()).toBe('');
+    expect(w.keyPrompts()).toEqual([{ key: 'KeyF', prompt: 'Sit' }]);
+    w.pressKey('KeyF');
+    run(w, 0.6);
+    expect(w.hidingIn).toBe(chair.id);
+    const body = (w as never as { bodies: Map<string, { body: { isDynamic(): boolean } }> }).bodies.get(chair.id)!.body;
+    expect(body.isDynamic()).toBe(false);
+    w.pressKey('KeyF');
+    run(w, 0.6);
+    expect(w.hidingIn).toBeNull();
+    expect(body.isDynamic()).toBe(true);
+    w.setPlayerInput({ pitch: -0.6, yaw: 0 });
+    run(w, 0.2);
+    w.use();
+    run(w, 0.5);
+    expect(w.holding).toBe(chair.id);
+    expect(w.keyPrompts()).toEqual([]);
+    w.pressKey('KeyF');
+    run(w, 0.3);
+    expect(w.hidingIn).toBeNull();
+    w.dispose();
+  });
 });
 
