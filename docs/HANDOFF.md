@@ -293,7 +293,9 @@ and sleep both go through it) and `setDay`, events `newDay`, `dayStarts` and `at
 `day` and `isDay`. Saved as `SavedProgress.day`, carried as `Travel.day`. Tests:
 `packages/runtime/test/days.test.ts`.
 
-Next, if wanted: weekday names; a day shown on screen without blocks.
+Clock (2026-11-07): Inspector › Show the clock on screen (`DayCycle.showClock`, `PlayerStatus.clock`, HUD `clockText`, 24-hour HH:MM). **Set the time of day** to an earlier hour now passes midnight (`GameWorld.setHour`: day up, `newDay` runs).
+
+Next, if wanted: weekday names; a 12-hour clock option.
 
 ### 15. New objects where the view aims
 

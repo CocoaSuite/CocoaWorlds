@@ -21,6 +21,8 @@ export interface Hud {
   showScore: boolean;
   /** The day count (null: not shown). */
   day: number | null;
+  /** The time of day in hours (null: not shown). */
+  clock: number | null;
   /** Just hurt: flash red. */
   hurt: boolean;
   /** Game values shown on screen. */
@@ -36,6 +38,12 @@ export interface Hud {
   /** The screen UI now, and every value texts and bars can show ({Cash}, health, score). */
   ui: UiState;
   allValues: Record<string, unknown>;
+}
+
+/** 13.5 → "13:30". */
+export function clockText(hours: number): string {
+  const m = Math.floor((((hours % 24) + 24) % 24) * 60);
+  return `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
 }
 
 const keyName = (code: string) => code.replace(/^Key|^Digit/, '');
@@ -85,6 +93,7 @@ export function hudOf(play: PlaySession, locked: boolean): Hud {
     score: status?.score ?? 0,
     showScore: !!status?.showScore,
     day: status?.day ?? null,
+    clock: status?.clock ?? null,
     hurt: (status?.sinceHurt ?? Infinity) < 0.35,
     values: screen.values.filter((v) => v.show).map((v) => ({ name: v.name, value: formatValue(v.value) })),
     messages: screen.messages,
@@ -162,7 +171,7 @@ export function HudView({ hud }: { hud: Hud }) {
           <span style={{ width: `${hud.stamina}%` }} />
         </div>
       )}
-      {(hud.showHealth || hud.showScore || hud.day !== null || hud.values.length > 0) && (
+      {(hud.showHealth || hud.showScore || hud.day !== null || hud.clock !== null || hud.values.length > 0) && (
       <div className="cw-ov cw-hud" data-testid="hud">
         {hud.showHealth && (
           <div className={`cw-hud-item${low ? ' low' : ''}`} role="meter" aria-label={t('hud.health')} aria-valuemin={0} aria-valuemax={hud.maxHealth} aria-valuenow={hud.health}>
@@ -191,6 +200,14 @@ export function HudView({ hud }: { hud: Hud }) {
             <span className="cw-hud-label">{t('hud.day')}</span>
             <span className="cw-hud-value" data-testid="hud-day">
               {hud.day}
+            </span>
+          </div>
+        )}
+        {hud.clock !== null && (
+          <div className="cw-hud-item">
+            <span className="cw-hud-label">{t('hud.clock')}</span>
+            <span className="cw-hud-value" data-testid="hud-clock">
+              {clockText(hud.clock)}
             </span>
           </div>
         )}

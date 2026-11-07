@@ -338,6 +338,8 @@ export interface PlayerStatus {
   showScore: boolean;
   /** The day count, when the scene shows it on screen (else null). */
   day: number | null;
+  /** The time of day in hours, when the scene shows the clock (else null). */
+  clock: number | null;
   /** Seconds since the player was last hurt (Infinity if never), for a red flash. */
   sinceHurt: number;
   deaths: number;
@@ -830,6 +832,7 @@ export class GameWorld {
   private firstDay = 1;
   private dayOn = false;
   private showDay = false;
+  private showClock = false;
   /** The game starts on its first day (not a saved or carried one): “When day n starts” runs for it. */
   private dayFresh = true;
   /** Models' glow set by scripts (from null: from how the model was made). */
@@ -894,6 +897,7 @@ export class GameWorld {
     this.day = this.firstDay = Math.max(0, Math.round(day.startDay));
     this.dayOn = day.enabled;
     this.showDay = day.showDay;
+    this.showClock = !!day.showClock;
     const info = { objects, rules, globals: values.map((v) => ({ name: v.name, type: v.type })), signs: new Set(this.signs.keys()), lights: new Set(this.lights.keys()) };
     this.scriptInfo = info;
     const programs: Program[] = [];
@@ -1167,7 +1171,7 @@ export class GameWorld {
       },
       lightOn: (target) => this.lights.get(target)?.on ?? false,
       timeOfDay: () => this.dayHour,
-      setTimeOfDay: (h) => void (this.dayHour = Number.isFinite(h) ? ((h % 24) + 24) % 24 : this.dayHour),
+      setTimeOfDay: (h) => this.setHour(h),
       day: () => this.day,
       setDay: (d) => this.setDay(d),
       setText: (target, text) => {
@@ -2592,7 +2596,7 @@ export class GameWorld {
 
   playerStatus(): PlayerStatus | null {
     if (!this.player) return null;
-    return { showHealth: this.rules.health, health: this.health, maxHealth: PLAYER.maxHealth, armour: this.armour, weapon: this.weaponStatus(), score: this.score, showScore: this.usesScore, day: this.showDay ? this.day : null, sinceHurt: this.time - this.hurtAt, deaths: this.deaths, stamina: this.rules.stamina ? this.player!.stamina : null, showFps: this.rules.showFps };
+    return { showHealth: this.rules.health, health: this.health, maxHealth: PLAYER.maxHealth, armour: this.armour, weapon: this.weaponStatus(), score: this.score, showScore: this.usesScore, day: this.showDay ? this.day : null, clock: this.showClock ? this.dayHour : null, sinceHurt: this.time - this.hurtAt, deaths: this.deaths, stamina: this.rules.stamina ? this.player!.stamina : null, showFps: this.rules.showFps };
   }
 
   // ── What scripts can do ──
@@ -3716,6 +3720,18 @@ export class GameWorld {
     if (!Number.isFinite(d) || Math.max(0, Math.round(d)) === this.day) return;
     this.day = Math.max(0, Math.round(d));
     this.runner.dispatch({ type: 'newDay', day: this.day });
+  }
+
+  /** A block set the clock: an earlier hour is tomorrow, so the day goes up. */
+  setHour(h: number): void {
+    if (!Number.isFinite(h)) return;
+    const to = ((h % 24) + 24) % 24;
+    const past = to < this.dayHour;
+    this.dayHour = to;
+    if (past) {
+      this.day++;
+      this.runner.dispatch({ type: 'newDay', day: this.day });
+    }
   }
 
   /** The clock goes forward: past midnight the day count goes up, and “When the clock reaches” stacks start. */

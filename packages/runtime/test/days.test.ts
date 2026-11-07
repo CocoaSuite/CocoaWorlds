@@ -87,6 +87,26 @@ describe('days', () => {
     expect(world([]).playerStatus()!.day).toBeNull();
   });
 
+  it('the clock on screen', () => {
+    const w = world([], { showClock: true });
+    expect(w.playerStatus()!.clock).toBe(23);
+    run(w, 3);
+    expect(w.playerStatus()!.clock).toBeLessThan(1);
+    expect(world([]).playerStatus()!.clock).toBeNull();
+  });
+
+  it('setting the clock to an earlier hour passes midnight: a new day', () => {
+    const at = (h: number, seconds: number): Handler => ({ id: `t${h}`, event: { id: `et${h}`, kind: 'start' }, body: [{ id: `w${h}`, kind: 'wait', seconds: n(seconds) }, { id: `s${h}`, kind: 'setTime', value: n(h) }] });
+    const w = world([at(6, 0.5), at(23.5, 1), { id: 'h', event: { id: 'e', kind: 'newDay' }, body: [score('s', 1)] }], { minutes: 0 });
+    run(w, 0.7);
+    expect(w.day).toBe(4);
+    expect(w.dayHour).toBe(6);
+    run(w, 0.5);
+    expect(w.day).toBe(4);
+    expect(w.dayHour).toBe(23.5);
+    expect(w.playerStatus()!.score).toBe(1);
+  });
+
   it('an hour outside 0–24 is a problem', () => {
     const w = world([{ id: 'h', event: { id: 'e', kind: 'atHour', hour: n(30) }, body: [] }]);
     expect(w.scriptProblems.some((p) => /0 to 24/.test(p.message))).toBe(true);

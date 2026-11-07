@@ -223,6 +223,9 @@ function SceneSettings() {
             <Field label={t('insp.dayShow')}>
               <Switch label={t('insp.dayShow')} checked={day.showDay} onChange={(v) => set({ day: { ...day, showDay: v } }, v ? 'Day shown' : 'Day hidden')} />
             </Field>
+            <Field label={t('insp.clockShow')}>
+              <Switch label={t('insp.clockShow')} checked={!!day.showClock} onChange={(v) => set({ day: { ...day, showClock: v } }, v ? 'Clock shown' : 'Clock hidden')} />
+            </Field>
             <Field label={t('insp.dayLength')}>{num(t('insp.dayLength'), day.minutes, 1, (v) => set({ day: { ...day, minutes: Math.max(0, v) } }, 'Day length', 'scene-day-m'), 'min')}</Field>
             <Field label={t('insp.dayNight')}>{num(t('insp.dayNight'), day.night, 0.05, (v) => set({ day: { ...day, night: Math.max(0, Math.min(1, v)) } }, 'Night brightness', 'scene-day-n'))}</Field>
             <p className="cw-hint">{t('insp.dayHint')}</p>

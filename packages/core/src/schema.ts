@@ -180,8 +180,10 @@ export interface DayCycle {
   startDay: number;
   /** Show the day count on screen while playing. */
   showDay: boolean;
+  /** Show the clock on screen while playing. */
+  showClock?: boolean;
 }
-export const DEFAULT_DAY: DayCycle = { enabled: false, minutes: 12, startHour: 9, night: 0.25, startDay: 1, showDay: false };
+export const DEFAULT_DAY: DayCycle = { enabled: false, minutes: 12, startHour: 9, night: 0.25, startDay: 1, showDay: false, showClock: false };
 export const dayOf = (s: { day?: DayCycle } | undefined): DayCycle => ({ ...DEFAULT_DAY, ...(s?.day ?? {}) });
 export const aoOf = (s: { ao?: AoSettings } | undefined): AoSettings => ({ ...DEFAULT_AO, ...(s?.ao ?? {}) });
 
