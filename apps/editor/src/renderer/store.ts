@@ -112,7 +112,7 @@ export type ViewMode = 'perspective' | 'top' | 'front' | 'side';
 /** Grid sizes to snap to (u). */
 export const GRID_SIZES = [1, 2, 4, 8, 16, 32, 64, 128, 256, 512];
 
-export type AddKind = 'empty' | 'pointLight' | 'spotLight' | 'sun' | 'spawn' | 'sign' | 'reflectionProbe';
+export type AddKind = 'empty' | 'pointLight' | 'spotLight' | 'sun' | 'spawn' | 'sign' | 'reflectionProbe' | 'poster' | 'painting';
 export interface LogEntry {
   at: string;
   level: 'info' | 'warn' | 'error';
@@ -532,6 +532,8 @@ export const useEditor = create<State & Actions>()((set, get) => ({
       spawn: () => base('player_spawn', { playerSpawn: {} }),
       reflectionProbe: () => base('reflection_probe', { reflectionProbe: { size: [256, 128, 256] } }, 64),
       sign: () => base('sign', { sign: { text: 'Text', size: 16, color: '#ffffff', background: true, faceCamera: false } }, 64),
+      poster: () => base('poster', { poster: { picture: '', width: 32, height: 48, rolls: true, thickness: 0.5, frame: '#e8e2d4', mass: 0.5, hungAtStart: false } }, 8),
+      painting: () => base('painting', { poster: { picture: '', width: 48, height: 36, rolls: false, thickness: 3, frame: '#5a3d25', mass: 4, hungAtStart: false } }, 24),
     }[kind]();
     get().execute(addEntitiesCmd(doc, [e], `Add ${e.name}`));
     set({ selection: [e.id] });

@@ -11,6 +11,9 @@ export type GameEvent =
   | { type: 'use'; target: string; by: string; time: number }
   | { type: 'pickup'; target: string; by: string; time: number }
   | { type: 'drop'; target: string; by: string; time: number }
+  /** A poster or painting stuck to a wall, or was taken down. */
+  | { type: 'poster.hang'; target: string; time: number }
+  | { type: 'poster.takeDown'; target: string; time: number }
   | { type: 'player.hurt'; amount: number; health: number; cause: string; time: number }
   | { type: 'player.die'; cause: string; time: number }
   | { type: 'score'; score: number; by: number; time: number }

@@ -23,6 +23,7 @@ import { BATCH_MIN, ModelBatches, batchKey } from './model-batches';
 import { WEAR_RING, buildLevel } from './world-build';
 import { toGeometry } from './world-render';
 import { buildSign, type SignObject } from './sign';
+import { buildPoster, type PosterObject } from './poster';
 import { buildGooglyEyes, type GooglyEyes } from './googly-eyes';
 import { Effects } from './effects';
 import { EMITTER_DEFAULTS } from './particles';
@@ -657,6 +658,20 @@ export class PlaySession {
       // A point object with a collision shape: draw its model if it has one, else the shape, placed like the
       // entity (scale in the shape).
       // (A model colliding by its own mesh has no collision shape, only where it started.)
+      const poster = this.world.posterOf(b.id);
+      if (poster) {
+        // A poster or painting: rolled or flat, as the world says it is now.
+        const holder = new THREE.Group();
+        holder.matrixAutoUpdate = false;
+        holder.matrix.fromArray(poster.matrix);
+        this.group.add(holder);
+        const view = buildPoster(poster.data);
+        holder.add(view.object);
+        this.posterViews.push({ id: b.id, view, hung: null });
+        this.movers.push({ id: b.id, i: this.world.drawn(b.id), obj: holder, base: holder.matrix.clone() });
+        this.eyesOn(b.id, holder, this.eyesIn(b.id, holder.matrix));
+        return;
+      }
       const at = this.world.pointMatrix(b.id);
       const model = this.modelOf(b.id);
       if (model && at) {
@@ -698,6 +713,9 @@ export class PlaySession {
 
   private motion = new THREE.Matrix4();
 
+  /** Posters and paintings drawn, and whether each was last drawn hung. */
+  private posterViews: { id: string; view: PosterObject; hung: boolean | null }[] = [];
+
   /** How long the world's step took in the last tick (ms). */
   stepMs = 0;
 
@@ -730,6 +748,8 @@ export class PlaySession {
         if (m.obj instanceof THREE.Mesh) m.obj.geometry.dispose();
       }
       this.movers = this.movers.filter((m) => !gone.has(m.id));
+      for (const p of this.posterViews) if (gone.has(p.id)) p.view.dispose();
+      this.posterViews = this.posterViews.filter((p) => !gone.has(p.id));
       for (const x of this.eyes) if (gone.has(x.id)) {
         x.eyes.dispose();
         this.eyesById.delete(x.id);
@@ -744,6 +764,12 @@ export class PlaySession {
       if (!f.present(m.i)) continue;
       m.obj.matrix.copy(motion.fromArray(f.bodyPose, m.i * POSE).multiply(m.base));
       m.obj.matrixWorldNeedsUpdate = true;
+    }
+    for (const p of this.posterViews) {
+      const hung = this.world.posterHung(p.id);
+      if (hung === null || hung === p.hung) continue;
+      p.hung = hung;
+      p.view.setHung(hung);
     }
     if (this.world.signVersion !== this.signVersion) {
       this.signVersion = this.world.signVersion;
@@ -1065,6 +1091,7 @@ export class PlaySession {
     this.listener?.removeFromParent();
     this.world.dispose();
     for (const s of this.signs.values()) s.sign.dispose();
+    for (const p of this.posterViews) p.view.dispose();
     for (const { eyes } of this.eyes) eyes.dispose();
     this.group.traverse((o) => {
       // (Googly eyes share one dome.)

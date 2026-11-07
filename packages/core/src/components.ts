@@ -59,6 +59,22 @@ export type GooglyEyesData = {
   white: string;
   pupilColor: string;
 };
+/**
+ * A poster or a painting (component `poster`): a picture the player carries and hangs on a wall. A poster that
+ * rolls is a scroll while loose and flattens to a sheet on the wall; a painting stays flat. Its picture faces +Z.
+ */
+export type PosterData = {
+  picture: string;
+  width: number;
+  height: number;
+  rolls: boolean;
+  thickness: number;
+  frame: string;
+  mass: number;
+  hungAtStart: boolean;
+};
+/** How thick a rolled poster's scroll is (its radius, u), the same for the physics and the drawing. */
+export const posterScrollRadius = (p: Pick<PosterData, 'height'>): number => Math.max(1.5, Math.min(6, p.height / 24));
 export type Text = Record<Lang, string>;
 
 export type FieldType =
@@ -599,6 +615,26 @@ export const COMPONENTS: ComponentDef[] = [
       { key: 'side', label: e('Look left and right', 'Смотреть влево-вправо'), type: { kind: 'number', min: 0, max: 180, step: 5, unit: '°' }, default: 70 },
       { key: 'upDown', label: e('Look up and down', 'Смотреть вверх-вниз'), type: { kind: 'number', min: 0, max: 89, step: 5, unit: '°' }, default: 50 },
       { key: 'time', label: e('Sitting down takes', 'Садится за'), type: { kind: 'number', min: 0, max: 2, step: 0.05, unit: 's' }, default: 0.4 },
+    ],
+  },
+  {
+    name: 'poster',
+    label: e('Poster or painting', 'Постер или картина'),
+    description: e(
+      'A picture the player picks up and hangs: carried against a wall, it sticks there flat (Use takes it down again). A poster that rolls is a scroll until it is hung; a painting stays flat.',
+      'Картинка, которую игрок берёт и вешает: если прижать к стене, она прилипает плоско («Использовать» снимает). Сворачивающийся постер — свиток, пока не повешен; картина остаётся плоской.',
+    ),
+    appliesTo: 'point',
+    conflicts: ['rigidBody', 'collider', 'model', 'npc', 'seat', 'hidingSpot', 'light'],
+    fields: [
+      { key: 'picture', label: e('Picture', 'Изображение'), type: { kind: 'material' }, default: '' },
+      { key: 'width', label: e('Width', 'Ширина'), type: { kind: 'number', min: 4, step: 4, unit: 'u' }, default: 32 },
+      { key: 'height', label: e('Height', 'Высота'), type: { kind: 'number', min: 4, step: 4, unit: 'u' }, default: 48 },
+      { key: 'rolls', label: e('Rolls up', 'Сворачивается'), hint: e('On: a scroll until hung (a poster). Off: always flat (a painting).', 'Вкл.: свиток, пока не повешен (постер). Выкл.: всегда плоская (картина).'), type: { kind: 'boolean' }, default: true },
+      { key: 'thickness', label: e('Thickness', 'Толщина'), hint: e('Flat, from the wall out.', 'В плоском виде, от стены.'), type: { kind: 'number', min: 0.5, step: 0.5, unit: 'u' }, default: 0.5 },
+      { key: 'frame', label: e('Frame / back', 'Рамка / оборот'), hint: e('The colour of the edges, the back and the rolled scroll.', 'Цвет краёв, оборота и свёрнутого свитка.'), type: { kind: 'color' }, default: '#e8e2d4' },
+      { key: 'mass', label: e('Weight', 'Вес'), type: { kind: 'number', min: 0.01, max: 50, step: 0.5, unit: 'kg' }, default: 0.5 },
+      { key: 'hungAtStart', label: e('Hung at start', 'Повешена в начале'), hint: e('Starts flat and fixed where it is placed (put it against a wall, picture out).', 'Начинает плоской и неподвижной на своём месте (поставьте у стены, картинкой наружу).'), type: { kind: 'boolean' }, default: false },
     ],
   },
   {

@@ -37,6 +37,8 @@ import {
   backgroundSoundOf,
   type GameRules,
   type ModelData,
+  type PosterData,
+  posterScrollRadius,
   type UiSettings,
   type WeaponDef,
   weaponOf,
@@ -255,6 +257,8 @@ interface Body {
   shape?: { collider: ColliderData; matrix: number[] };
   /** Point objects that collide by their model's shape. */
   model?: { data: ModelData; mesh: ModelMesh; matrix: number[] };
+  /** Posters and paintings: their data and where they were placed (without scale). */
+  poster?: { data: PosterData; matrix: number[] };
   /** Physics settings, when it has a Physics component. */
   rb?: RigidBodyData;
   /** Where it was before the last physics step (x, y, z, then the rotation x, y, z, w), for drawing in between. */
@@ -931,6 +935,8 @@ export class GameWorld {
         this.grow({ min: [m[12]! - t.width, m[13]!, m[14]! - t.width], max: [m[12]! + t.width, m[13]! + t.height, m[14]! + t.width] });
       } else if (e.components.npc) {
         this.npcEntities.push(e);
+      } else if (e.components.poster) {
+        this.addPoster(e, doc.worldMatrix(e.id));
       } else if (e.components.rigidBody || e.components.collider || this.modelShape(e)) {
         // (A Collision shape or a colliding model without Physics stays put.)
         this.addPointBody(e, doc.worldMatrix(e.id));
@@ -1303,6 +1309,130 @@ export class GameWorld {
     b.rb = rb;
   }
 
+  // ── Posters and paintings ──
+
+  /** Posters and paintings: whether each is hung on a wall now, its one collider, and the wall's outward normal. */
+  private posters = new Map<string, { data: PosterData; rb: RigidBodyData; hung: boolean; collider: RAPIER.Collider; normal: Q3; wallAt: Q3; clear: boolean }>();
+
+  /** A poster or painting: a light physics object, a scroll (rolls) or a flat sheet; hung at start, fixed in place. */
+  private addPoster(e: EntityData, world: number[]): void {
+    const data = readComponent<PosterData>('poster', e.components.poster);
+    const t = decomposeMat4(world);
+    const placement = composeTransform({ position: t.position, rotation: t.rotation, scale: [1, 1, 1] });
+    const rb: RigidBodyData = { ...readComponent<RigidBodyData>('rigidBody', {}), motion: 'dynamic', mass: Math.min(MAX_CARRY, Math.max(0.01, data.mass)), friction: 0.8, pickUp: true };
+    const body = this.world.createRigidBody(this.bodyDesc(rb).setTranslation(...t.position).setRotation(quatFromMatrix(placement)));
+    const flat = data.hungAtStart || !data.rolls;
+    const col = this.world.createCollider(this.material(posterCollider(data, flat), rb), body);
+    this.owner.set(col.handle, e.id);
+    // (Always tracked as moving, so it is drawn where it is after it is taken down or hung.)
+    this.track(e.id, 'point', 'dynamic', body);
+    const b = this.bodies.get(e.id)!;
+    b.rb = rb;
+    b.poster = { data, matrix: placement };
+    const z = applyMat4(placement, [0, 0, 1]);
+    const normal: Q3 = [z[0] - t.position[0], z[1] - t.position[1], z[2] - t.position[2]];
+    this.posters.set(e.id, { data, rb, hung: false, collider: col, normal, wallAt: t.position, clear: true });
+    if (data.hungAtStart) {
+      body.setBodyType(RAPIER.RigidBodyType.Fixed, false);
+      this.posters.get(e.id)!.hung = true;
+    }
+  }
+
+  /** Its one collider swapped for the scroll's or the flat sheet's (keeping whether it collides). */
+  private posterShape(id: string, flat: boolean): void {
+    const p = this.posters.get(id), b = this.bodies.get(id);
+    if (!p || !b) return;
+    const groups = p.collider.collisionGroups();
+    this.owner.delete(p.collider.handle);
+    this.world.removeCollider(p.collider, false);
+    p.collider = this.world.createCollider(this.material(posterCollider(p.data, flat), p.rb).setCollisionGroups(groups), b.body);
+    this.owner.set(p.collider.handle, id);
+  }
+
+  /** Whether a poster or painting is hung on a wall now (null: it isn't one). */
+  posterHung(id: string): boolean | null {
+    return this.posters.get(id)?.hung ?? null;
+  }
+
+  /** A poster's or painting's data and where it was placed (for drawing it). */
+  posterOf(id: string): { data: PosterData; matrix: number[] } | null {
+    return this.bodies.get(id)?.poster ?? null;
+  }
+
+  /** Flat against a wall: fixed, the picture (+Z) facing out along `normal`, upright, its back on the wall at `at`. */
+  private hangPoster(id: string, at: Q3, normal: Q3): void {
+    const p = this.posters.get(id), b = this.bodies.get(id);
+    if (!p || !b || p.hung) return;
+    if (this.held?.id === id) this.dropHeld();
+    const yaw = Math.atan2(normal[0], normal[2]);
+    const off = Math.max(0.25, p.data.thickness / 2) + 0.05;
+    b.body.setBodyType(RAPIER.RigidBodyType.Fixed, false);
+    b.body.setTranslation({ x: at[0] + normal[0] * off, y: at[1], z: at[2] + normal[2] * off }, false);
+    b.body.setRotation({ x: 0, y: Math.sin(yaw / 2), z: 0, w: Math.cos(yaw / 2) }, false);
+    if (p.data.rolls) this.posterShape(id, true);
+    p.hung = true;
+    p.normal = normal;
+    p.wallAt = at;
+    this.bus.emit({ type: 'poster.hang', target: id, time: this.time });
+  }
+
+  /** Off the wall: loose again (a poster rolls back up, a little out from the wall so it doesn't catch). */
+  private takeDownPoster(id: string): void {
+    const p = this.posters.get(id), b = this.bodies.get(id);
+    if (!p || !b || !p.hung) return;
+    const n = p.normal, t = b.body.translation();
+    const out = p.data.rolls ? posterScrollRadius(p.data) + 1 : 1;
+    b.body.setTranslation({ x: t.x + n[0] * out, y: t.y + n[1] * out, z: t.z + n[2] * out }, false);
+    b.body.setBodyType(RAPIER.RigidBodyType.Dynamic, true);
+    if (p.data.rolls) this.posterShape(id, false);
+    p.hung = false;
+    // (Not stuck straight back: first it has to leave the wall.)
+    p.clear = false;
+    this.bus.emit({ type: 'poster.takeDown', target: id, time: this.time });
+  }
+
+  /**
+   * After each step: a held poster or painting touching a wall (something fixed, standing up) while the player
+   * looks at that wall sticks to it.
+   */
+  private stickHeld(): void {
+    const h = this.held;
+    const p = h ? this.posters.get(h.id) : undefined;
+    if (!h || !p || p.hung || !this.player) return;
+    const look = this.player.lookDirection();
+    const c = h.body.translation();
+    if (!p.clear) {
+      // (Just taken down: it sticks again once it has been pulled away from that wall, or the player looks away.)
+      const n = p.normal, w = p.wallAt;
+      const away = (c.x - w[0]) * n[0] + (c.y - w[1]) * n[1] + (c.z - w[2]) * n[2];
+      if (away < 16 && look[0] * n[0] + look[1] * n[1] + look[2] * n[2] < -0.3) return;
+      p.clear = true;
+    }
+    let wall: { at: Q3; normal: Q3 } | null = null;
+    this.world.contactPairsWith(p.collider, (other) => {
+      if (wall || other.isSensor() || !other.parent()?.isFixed() || this.triggers.has(other.handle) || this.volumes.has(other.handle)) return;
+      let n: { x: number; y: number; z: number } | null = null;
+      this.world.contactPair(p.collider, other, (m) => {
+        if (!n && m.numContacts() > 0) n = m.normal();
+      });
+      if (!n) return;
+      const nn = n as { x: number; y: number; z: number };
+      // (Which way the normal points depends on the pair's order: try both, along the ray that reaches the wall.)
+      for (const s of [1, -1]) {
+        const hit = this.world.castRayAndGetNormal(new RAPIER.Ray(c, { x: nn.x * s, y: nn.y * s, z: nn.z * s }), 96, true, undefined, undefined, undefined, undefined, (x) => x.handle === other.handle);
+        if (!hit) continue;
+        const o = hit.normal;
+        // A wall (not a floor or a ceiling), and the player is looking at it.
+        if (Math.abs(o.y) > 0.5 || look[0] * o.x + look[1] * o.y + look[2] * o.z > -0.3) return;
+        const len = Math.hypot(o.x, o.z) || 1;
+        const at = { x: c.x + nn.x * s * hit.timeOfImpact, y: c.y + nn.y * s * hit.timeOfImpact, z: c.z + nn.z * s * hit.timeOfImpact };
+        wall = { at: [at.x, at.y, at.z], normal: [o.x / len, 0, o.z / len] };
+        return;
+      }
+    });
+    if (wall) this.hangPoster(h.id, (wall as { at: Q3 }).at, (wall as { normal: Q3 }).normal);
+  }
+
   private track(id: string, kind: BodyInfo['kind'], motion: BodyInfo['motion'], body: RAPIER.RigidBody, brushes: Brush[] = []): void {
     const t = body.translation(), r = body.rotation();
     this.bodies.set(id, {
@@ -1483,6 +1613,7 @@ export class GameWorld {
       this.carryOnBelts();
       this.syncStandIns();
       this.world.step(this.events);
+      if (this.held) this.stickHeld();
       this.accumulator -= STEP;
       this.time += STEP;
       this.base?.tick(STEP);
@@ -2196,7 +2327,7 @@ export class GameWorld {
     for (const t of targets) {
       const b = this.bodies.get(t);
       if (!b) continue;
-      if (b.info.motion !== 'dynamic' || b.rb?.pickUp === false || b.body.mass() > MAX_CARRY) return null;
+      if (b.info.motion !== 'dynamic' || b.rb?.pickUp === false || (!this.posters.has(t) && b.body.mass() > MAX_CARRY)) return null;
       return t;
     }
     return null;
@@ -2206,6 +2337,7 @@ export class GameWorld {
   private grab(id: string): boolean {
     const t = this.carryable(id);
     if (!t) return false;
+    if (this.posters.get(t)?.hung) this.takeDownPoster(t);
     this.hold(t, this.bodies.get(t)!.body);
     return true;
   }
@@ -2638,7 +2770,8 @@ export class GameWorld {
           unitBrushes.push(brush);
           this.unitOf.set(id, copyId);
         }
-      } else if (e.components.rigidBody || e.components.collider || this.modelShape(e)) this.addPointBody(copy, world);
+      } else if (e.components.poster) this.addPoster(copy, world);
+      else if (e.components.rigidBody || e.components.collider || this.modelShape(e)) this.addPointBody(copy, world);
       if (e.components.breakable) this.breakHealth.set(id, readComponent<BreakableData>('breakable', e.components.breakable).health);
       if (e.components.sign) this.signs.set(id, String((e.components.sign as { text?: unknown }).text ?? ''));
       if (e.components.sound) sounds.push([id, readComponent<SoundData>('sound', e.components.sound), world]);
@@ -2823,7 +2956,10 @@ export class GameWorld {
       const c = this.world.createCollider(desc.setCollisionGroups(groups), b.body);
       this.owner.set(c.handle, b.info.id);
     };
-    if (b.shape) {
+    if (b.poster) {
+      const p = this.posters.get(b.info.id);
+      make(posterCollider(b.poster.data, !!p && (p.hung || !b.poster.data.rolls)));
+    } else if (b.shape) {
       make(pointCollider(b.shape.collider, decomposeMat4(b.shape.matrix).scale.map((x) => Math.abs(x) * k) as Q3));
     } else if (b.model) {
       const scale = decomposeMat4(b.model.matrix).scale.map((x) => Math.abs(x) * k) as Q3;
@@ -2838,6 +2974,8 @@ export class GameWorld {
       this.owner.delete(c.handle);
       this.world.removeCollider(c, false);
     }
+    const p = this.posters.get(b.info.id);
+    if (p) p.collider = b.body.collider(0);
     b.body.wakeUp();
   }
 
@@ -3596,6 +3734,13 @@ function slerp(a: Quat, b0: Quat, t: number): Quat {
   const th = Math.acos(cos), s = Math.sin(th);
   const ka = Math.sin((1 - t) * th) / s, kb = Math.sin(t * th) / s;
   return { x: a.x * ka + b.x * kb, y: a.y * ka + b.y * kb, z: a.z * ka + b.z * kb, w: a.w * ka + b.w * kb };
+}
+
+/** A poster's collider: a scroll lying along its width (X), or a flat sheet facing +Z. */
+function posterCollider(p: PosterData, flat: boolean): RAPIER.ColliderDesc {
+  if (flat) return RAPIER.ColliderDesc.cuboid(p.width / 2, p.height / 2, Math.max(0.25, p.thickness / 2));
+  const r = posterScrollRadius(p);
+  return RAPIER.ColliderDesc.capsule(Math.max(0, p.width / 2 - r), r).setRotation({ x: 0, y: 0, z: Math.SQRT1_2, w: Math.SQRT1_2 });
 }
 
 /** A Collision shape component's collider, at an object's scale. */

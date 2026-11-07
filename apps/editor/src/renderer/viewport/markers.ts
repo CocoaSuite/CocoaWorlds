@@ -2,7 +2,7 @@
  * Editor-only visuals for entities that have no geometry of their own yet (spawn points, lights, empties).
  * Each marker has an invisible pick volume so it can be clicked.
  */
-import { readComponent, type EntityData, type GooglyEyesData, type ModelData, type SignData } from '@cocoaworlds/core';
+import { readComponent, type EntityData, type GooglyEyesData, type ModelData, type PosterData, type SignData } from '@cocoaworlds/core';
 import { modelInstance, onModelMaterialChange } from './models';
 
 /** Called when a marker's model has loaded (the view needs a redraw). */
@@ -14,6 +14,7 @@ export function onMarkerLoaded(fn: () => void): void {
 }
 import * as THREE from 'three';
 import { buildSign } from './sign';
+import { buildPoster } from './poster';
 import { buildGooglyEyes, type GooglyEyes } from './googly-eyes';
 
 export const COLORS = {
@@ -139,6 +140,17 @@ export function buildMarker(e: EntityData): Marker {
         group.add(box);
         markerLoaded();
       });
+  } else if (e.components.poster) {
+    // The poster as it starts (rolled, or flat on its wall), plus a small cross at its origin for selection colour.
+    const data = readComponent<PosterData>('poster', e.components.poster);
+    const poster = buildPoster(data, () => markerLoaded());
+    group.add(poster.object);
+    group.userData.dispose = poster.dispose;
+    lines.push(segs([[-6, 0, 0], [6, 0, 0], [0, -6, 0], [0, 6, 0], [0, 0, 0], [0, 0, 8]], baseColor));
+    const shown = poster.flat.visible ? poster.flat : poster.scroll!;
+    shown.geometry.computeBoundingBox();
+    const size = shown.geometry.boundingBox!.getSize(new THREE.Vector3());
+    pick = new THREE.Mesh(new THREE.BoxGeometry(Math.max(8, size.x), Math.max(8, size.y), Math.max(8, size.z)), pickMat);
   } else if (e.components.sign) {
     // The sign itself, plus a small cross at the object's origin for selection colour.
     const sign = buildSign(readComponent<SignData>('sign', e.components.sign));
@@ -259,6 +271,7 @@ export function disposeMarker(m: Marker): void {
   m.group.traverse((o) => {
     // (Signs dispose of themselves; googly eyes share one dome and dispose of their own materials.)
     if (o.name === 'sign' || o.name === 'googly-eye') return;
+    for (let x: THREE.Object3D | null = o; x; x = x.parent) if (x.name === 'poster') return;
     // (Model meshes share geometry with the loaded file; only the clone's tree is dropped.)
     for (let x: THREE.Object3D | null = o; x; x = x.parent) if (x.name === 'model') return;
     if (o instanceof THREE.Mesh || o instanceof THREE.LineSegments) {
@@ -271,5 +284,5 @@ export function disposeMarker(m: Marker): void {
 
 /** Stable key for "does this marker need rebuilding" (shape-affecting data only). */
 export function markerKey(e: EntityData): string {
-  return JSON.stringify([e.components.light ?? null, !!e.components.playerSpawn, e.components.sign ?? null, e.components.model ?? null, (e.components.npc as { side?: string } | undefined)?.side ?? null, e.components.reflectionProbe ?? null, e.components.googlyEyes ?? null]);
+  return JSON.stringify([e.components.light ?? null, !!e.components.playerSpawn, e.components.sign ?? null, e.components.poster ?? null, e.components.model ?? null, (e.components.npc as { side?: string } | undefined)?.side ?? null, e.components.reflectionProbe ?? null, e.components.googlyEyes ?? null]);
 }
