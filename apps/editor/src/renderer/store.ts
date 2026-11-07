@@ -81,7 +81,7 @@ import {
 import { create } from 'zustand';
 import { modelSlots } from './viewport/models';
 import { CHICKEN_EYES } from './viewport/googly-eyes';
-import { brushBounds, brushComponent, brushOf, isLocked, isShown, newBrushEntity, toLocal, toWorld, worldBrushOf, shapeBrushes, shapeName, worldBrushes, type DrawRole, type Outline, type ShapeOptions } from './brush/brushes';
+import { brushBounds, brushComponent, brushOf, isLocked, isShown, movingTree, newBrushEntity, toLocal, toWorld, worldBrushOf, shapeBrushes, shapeName, worldBrushes, type DrawRole, type Outline, type ShapeOptions } from './brush/brushes';
 import { useShallow } from 'zustand/react/shallow';
 import type { AssetEntry, AssetKind, OpenedProject, PrefabEntry } from '../shared/api';
 import { setAssetProject } from './assets';
@@ -244,6 +244,8 @@ interface Actions {
   createBrushes(min: [number, number, number], max: [number, number, number], outline?: Outline): void;
   /** `brush` is in world space. */
   setBrush(id: string, brush: Brush, mergeKey?: string, label?: string): void;
+  /** Move a brush and what is inside it by `d` (world units). */
+  moveBrush(id: string, d: [number, number, number]): void;
   changeBrushRole(id: string, role: BrushRole): void;
   applySubtract(ids: string[]): void;
   makeHollow(id: string, thickness: number, direction?: HollowDirection): void;
@@ -757,6 +759,21 @@ export const useEditor = create<State & Actions>()((set, get) => ({
     set({ selection: ents.map((e) => e.id) });
     const [x, y, z] = [max[0] - min[0], max[1] - min[1], max[2] - min[2]].map((n) => Math.abs(Math.round(n * 100) / 100));
     get().log('info', 'Brush', `Created ${ents.length > 1 ? `${ents.length} ${base} brushes` : ents[0]!.name} (${x} × ${y} × ${z})`);
+  },
+
+  moveBrush(id, d) {
+    const doc = get().doc;
+    const e = doc?.get(id);
+    if (!doc || !e) return;
+    get().applyLive(movingTree(doc, e).map((x) => {
+      const b = worldBrushOf(doc, x);
+      if (b) return { id: x.id, brush: translate(b.brush, d) };
+      const w = [...doc.worldMatrix(x.id)];
+      w[12] = w[12]! + d[0];
+      w[13] = w[13]! + d[1];
+      w[14] = w[14]! + d[2];
+      return { id: x.id, world: w };
+    }));
   },
 
   setBrush(id, brush, mergeKey, label = 'Edit brush') {

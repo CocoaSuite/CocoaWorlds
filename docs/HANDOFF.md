@@ -356,3 +356,10 @@ Status: done (2026-11-08). Statement `explode` (place, radius, amount): `Weapons
 (push from the size), so it hurts, breaks, throws and draws like a rocket's blast; `hasBlasts` is also true when a
 script uses it. Text signs inside a moving object are carried by it in Play (a timer on a thrown bomb). Test:
 `weapons.test.ts` "Make an explosion". Not checked by eye.
+
+### 22. Moving a brush carries what is inside it
+
+Status: done (2026-11-08). A brush moves by its faces, not its placement, so its children stayed behind (a sign on a
+bomb). `movingTree` (`brush/brushes.ts`): the gizmo drag (`buildDragSet`, move, turn and scale) and the Brush
+Inspector's position fields (`store.moveBrush`) also move what is inside, down through brushes. Test:
+`apps/editor/test/move-brush.test.ts`. Not checked by eye.

@@ -12,7 +12,7 @@ import { setCollisionsVisible } from './models';
 import { AoRenderer } from './ao';
 import { glassCastsNoShadow } from './glass-shadows';
 import { TransformControls } from 'three/addons/controls/TransformControls.js';
-import { brushBounds, brushOf, isLocked, isShown, worldBrushOf, worldBrushes, worldMatrices, type DrawRole, type Outline, type ShapeOptions } from '../brush/brushes';
+import { brushBounds, brushOf, isLocked, isShown, movingTree, worldBrushOf, worldBrushes, worldMatrices, type DrawRole, type Outline, type ShapeOptions } from '../brush/brushes';
 import { rootsOf } from '../scene-ops';
 import { isGroup } from '../scene-ops';
 import { PIVOT, REPEAT_AXES, applyMat4, mat4Key, pivotOf, repeatEnd, type Mat4 } from '@cocoaworlds/core';
@@ -1497,13 +1497,16 @@ export class ViewportEngine {
     }
     const inside = this.contents(items);
     const moving = new Set(inside.map((e) => e.id));
+    const doc = this.doc!;
+    const itemOf = (e: EntityData): DragSet['items'][number] => {
+      const b = worldBrushOf(doc, e, this.mats.get(e.id));
+      if (!b) return { id: e.id, world: [...(this.mats.get(e.id) ?? doc.worldMatrix(e.id))] };
+      return e.components[PIVOT] ? { id: e.id, brush: b.brush, pivot: pivotOf(doc, e.id, brushBounds) } : { id: e.id, brush: b.brush };
+    };
+    const all = items.flatMap((e) => movingTree(doc, e)).map(itemOf);
     const set: DragSet = {
       pivot,
-      items: items.map((e) => {
-        const b = this.doc ? worldBrushOf(this.doc, e, this.mats.get(e.id)) : null;
-        if (!b) return { id: e.id, world: [...(this.mats.get(e.id) ?? this.doc!.worldMatrix(e.id))] };
-        return e.components[PIVOT] ? { id: e.id, brush: b.brush, pivot: pivotOf(this.doc!, e.id, brushBounds) } : { id: e.id, brush: b.brush };
-      }),
+      items: all,
       grab: null,
       targets: [],
     };

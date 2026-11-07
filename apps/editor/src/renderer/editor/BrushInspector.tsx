@@ -44,7 +44,7 @@ export function BrushInspector({ e }: { e: EntityData }) {
     const d: V3 = [0, 0, 0];
     d[axis] = v - c[axis]!;
     if (d[axis] === 0) return;
-    s.setBrush(e.id, translate(b.brush, d), live ? `move-${e.id}` : undefined, 'Move brush');
+    s.moveBrush(e.id, d);
   };
   const begin = () => s.begin('Edit brush');
   const done = () => s.commit();

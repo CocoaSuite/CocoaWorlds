@@ -134,6 +134,16 @@ export function worldBrushOf(doc: SceneDoc, e: EntityData | undefined, space?: M
   return { role: b.role, brush };
 }
 
+/**
+ * What moves with `e` when it moves: itself and, since a brush moves by its faces and not its placement, what is
+ * inside it (down through brushes; anything else carries its own contents).
+ */
+export function movingTree(doc: SceneDoc, e: EntityData): EntityData[] {
+  const out = [e];
+  if (e.components.brush) for (const c of doc.entities) if (c.parent === e.id) out.push(...movingTree(doc, c));
+  return out;
+}
+
 /** All visible brushes in world space, for building the level. */
 export function worldBrushes(doc: SceneDoc): WorldBrush[] {
   const out: WorldBrush[] = [];
