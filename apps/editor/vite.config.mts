@@ -1,5 +1,9 @@
 import react from '@vitejs/plugin-react';
+import { fileURLToPath } from 'node:url';
 import { defineConfig, type Plugin } from 'vite';
+
+/** A path inside the renderer, absolute (the dev server's scan reads inputs from `root`, the build from here). */
+const page = (name: string) => fileURLToPath(new URL(`./src/renderer/${name}`, import.meta.url));
 
 /** Production builds get a strict Content-Security-Policy; the dev server needs inline scripts for hot reload. */
 function csp(): Plugin {
@@ -37,7 +41,7 @@ export default defineConfig({
     // The editor, and the player that exported games run in (export copies only what the player needs:
     // see the manifest).
     manifest: true,
-    rollupOptions: { input: { index: 'src/renderer/index.html', player: 'src/renderer/player.html' } },
+    rollupOptions: { input: { index: page('index.html'), player: page('player.html') } },
   },
   server: { port: 5183, strictPort: false },
 });
