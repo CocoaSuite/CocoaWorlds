@@ -1191,6 +1191,7 @@ export class GameWorld {
         }
         if (this.useQueued) this.doUse();
         this.carryHeld();
+        this.watchSeats();
         this.checkLevelZones();
         if (this.player.input.use) this.charge();
         this.fireWeapon();
@@ -1264,6 +1265,27 @@ export class GameWorld {
   private spots = new Map<string, HidingSpotData>();
   /** Spots that are seats: the player sits in plain view. */
   private seats = new Set<string>();
+  /** When each physics seat last moved (sitting waits until it has rested a moment). */
+  private seatMoved = new Map<string, number>();
+  private watchSeats(): void {
+    for (const id of this.seats) {
+      const b = this.bodies.get(this.bodyOf(id) ?? '')?.body;
+      if (!b?.isDynamic()) continue;
+      const v = b.linvel(), w = b.angvel();
+      if (Math.hypot(v.x, v.y, v.z) > 12 || Math.hypot(w.x, w.y, w.z) > 1) this.seatMoved.set(id, this.time);
+    }
+  }
+
+  /** A seat can be sat on: not flying or tumbling (rested a moment), and upright. */
+  private seatReady(id: string): boolean {
+    const b = this.bodies.get(this.bodyOf(id) ?? '')?.body;
+    if (!b?.isDynamic()) return true;
+    if (this.time - (this.seatMoved.get(id) ?? -Infinity) < 0.3) return false;
+    const q = b.rotation();
+    // (Its up axis, turned: the y of the rotated (0, 1, 0).)
+    return 1 - 2 * (q.x * q.x + q.z * q.z) > 0.7;
+  }
+
   /** A physics seat held still while sat on. */
   private stilled: RAPIER.RigidBody | null = null;
   private unstill(): void {
@@ -1540,7 +1562,7 @@ export class GameWorld {
     if (!hit) return null;
     const { id, targets, distance } = hit;
     if (this.held) return this.runner.usesHolding(targets, this.heldIds(), distance) ? '' : null;
-    const spot = targets.find((t) => this.spots.has(t) && this.keyOf(t) === 'KeyE');
+    const spot = targets.find((t) => this.spots.has(t) && this.keyOf(t) === 'KeyE' && this.seatReady(t));
     if (spot && distance <= this.reachOf(spot)) return String(this.spots.get(spot)!.prompt ?? '');
     const prompt = this.runner.usePrompt(targets, distance);
     if (prompt !== null) return prompt;
@@ -1848,7 +1870,7 @@ export class GameWorld {
     const hit = this.useAim();
     if (!hit) return;
     const { id, targets, distance } = hit;
-    const spot = targets.find((t) => this.spots.has(t) && this.keyOf(t) === 'KeyE');
+    const spot = targets.find((t) => this.spots.has(t) && this.keyOf(t) === 'KeyE' && this.seatReady(t));
     if (spot && distance <= this.reachOf(spot)) return this.enterHiding(spot);
     if (distance <= PLAYER.useReach) {
       if (this.grab(id)) return;
@@ -2777,7 +2799,7 @@ export class GameWorld {
   keyPrompts(): { key: string; prompt: string }[] {
     const out: { key: string; prompt: string }[] = [];
     const hit = !this.hiding && !this.held && !this.frozen ? this.useAim() : null;
-    const seat = hit?.targets.find((t) => this.seats.has(t) && this.keyOf(t) !== 'KeyE' && hit.distance <= this.reachOf(t));
+    const seat = hit?.targets.find((t) => this.seats.has(t) && this.keyOf(t) !== 'KeyE' && hit.distance <= this.reachOf(t) && this.seatReady(t));
     if (seat) out.push({ key: this.keyOf(seat), prompt: String(this.spots.get(seat)!.prompt ?? '') });
     for (const { targets, distance } of this.pressAims())
       for (const p of this.runner.keyPrompts(targets, distance)) if (!out.some((x) => x.key === p.key)) out.push(p);
@@ -2793,7 +2815,7 @@ export class GameWorld {
   private seatAt(code: string): string | null {
     if (!this.player || this.hiding || this.held || this.frozen || code === 'KeyE') return null;
     const hit = this.useAim();
-    return hit?.targets.find((t) => this.seats.has(t) && this.keyOf(t) === code && hit.distance <= this.reachOf(t)) ?? null;
+    return hit?.targets.find((t) => this.seats.has(t) && this.keyOf(t) === code && hit.distance <= this.reachOf(t) && this.seatReady(t)) ?? null;
   }
 
   /** The player clicked with the item in the picked hotbar slot. */

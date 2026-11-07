@@ -175,5 +175,25 @@ describe('hiding spots', () => {
     expect(w.hidingIn).toBeNull();
     w.dispose();
   });
+
+  it('a physics seat can not be sat on while it flies or lies on its side', () => {
+    const chair = brush('chair', [-30, 0, -90], [30, 40, -50], { seat: { key: 'KeyF' }, rigidBody: { motion: 'dynamic', mass: 10 } });
+    const w = GameWorld.create(scene(floor(), spawn(), chair));
+    w.setPlayerInput({ pitch: -0.6 });
+    run(w, 0.5);
+    const body = (w as never as { bodies: Map<string, { body: { setLinvel(v: object, wake: boolean): void; setRotation(q: object, wake: boolean): void } }> }).bodies.get(chair.id)!.body;
+    body.setLinvel({ x: 0, y: 200, z: 0 }, true);
+    w.step(1 / 60);
+    expect(w.keyPrompts()).toEqual([]);
+    w.pressKey('KeyF');
+    run(w, 0.1);
+    expect(w.hidingIn).toBeNull();
+    body.setRotation({ x: Math.SQRT1_2, y: 0, z: 0, w: Math.SQRT1_2 }, true);
+    run(w, 2);
+    w.pressKey('KeyF');
+    run(w, 0.1);
+    expect(w.hidingIn).toBeNull();
+    w.dispose();
+  });
 });
 
