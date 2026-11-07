@@ -344,6 +344,8 @@ Test: `packages/scripting/test/scripting.test.ts` "only once".
 
 ### 20. Fall and tumble keeps the Physics mass
 
-Status: done (2026-11-08). `makePhysical` gives an object with a Physics component its own mass (fixed objects
+Status: done (2026-11-08). `makePhysical` gives an object with a Physics component its own mass, gravity and Stay upright (fixed objects
 made to fall used to weigh as solid wood, so anything big was too heavy to pick up). Objects without Physics still
 weigh as wood. Test: `models.test.ts` "a fixed Physics object made to fall".
+The Physics component now shows Weight, Gravity, Stay upright and Can be picked up for every motion (they apply once a
+fixed or scripted object is made to fall).

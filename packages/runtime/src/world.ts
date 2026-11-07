@@ -3084,6 +3084,10 @@ export class GameWorld {
       if (b.rb) b.body.collider(i).setMass(Math.max(0.01, b.rb.mass) / k);
       else b.body.collider(i).setDensity(500 / UNITS_PER_METRE ** 3);
     }
+    if (b.rb) {
+      b.body.setGravityScale(b.rb.gravityScale, true);
+      if (b.rb.lockRotation) b.body.lockRotations(true, true);
+    }
     b.body.enableCcd(true);
     b.info.motion = 'dynamic';
   }
