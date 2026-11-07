@@ -2973,6 +2973,8 @@ export class GameWorld {
       s.setNpc(s.indexNpc(n.id), feet[0], feet[1], feet[2], yaw, n.alive, n.state, n.health);
     }
     s.setView(this.playerView(), this.player?.crouched ?? false);
+    const pl = this.player;
+    s.setMotion(pl?.sprinting ?? false, pl && !pl.onGround ? Math.max(0, -pl.velocity.y) : 0);
     return s;
   }
 

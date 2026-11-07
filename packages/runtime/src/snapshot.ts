@@ -39,6 +39,10 @@ export class FrameSnapshot {
   hasView = false;
   thirdPerson = false;
   crouched = false;
+  /** The player is sprinting (the view widens). */
+  sprinting = false;
+  /** How fast the player falls (units/s, 0 when not falling; the view widens on long falls). */
+  fallSpeed = 0;
 
   /** Counts fills (a reader can tell a fresh picture from the one it already used). */
   frame = 0;
@@ -164,6 +168,12 @@ export class FrameSnapshot {
     o[7] = v.feet[2]!;
     this.thirdPerson = v.thirdPerson;
     this.crouched = crouched;
+  }
+
+  /** What the view's field-of-view effects follow. */
+  setMotion(sprinting: boolean, fallSpeed: number): void {
+    this.sprinting = sprinting;
+    this.fallSpeed = fallSpeed;
   }
 }
 

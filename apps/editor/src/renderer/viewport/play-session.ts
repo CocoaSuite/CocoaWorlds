@@ -8,6 +8,9 @@
 import { SceneDoc, expandRepeats, readComponent, type ParticlesData, type ColliderData, type GameRules, type GameValue, type GooglyEyesData, type ModelData, type SceneFile, type SignData, type TerrainData } from '@cocoaworlds/core';
 import { buildMesh, isInvisibleMaterial, type Brush, type VoxelField, type WorldBrush } from '@cocoaworlds/geometry';
 import { GameWorld, initPhysics, POSE, AT, NPC, type BuildPrompt, type FrameSnapshot, type Hearing, type NavGrid, type BodyInfo, type ModelMesh, type SavedProgress, type Travel, type UiState, type PlayerInput, type PlayerStatus, type ScriptLog, type TriggerEvent } from '@cocoaworlds/runtime';
+
+/** Field-of-view effects, degrees added to the camera's own; ease rates per second. */
+const FOV = { sprint: 8, fall: 10, easeIn: 6, easeOut: 4 };
 import type { Problem, ScriptError } from '@cocoaworlds/scripting';
 import * as THREE from 'three';
 import { brushBounds, worldBrushes } from '../brush/brushes';
@@ -970,6 +973,48 @@ export class PlaySession {
     return this.world.travel;
   }
 
+  /** The camera's own field of view, which the effects below widen from. */
+  private baseFov: number | null = null;
+  private fovKick = 0;
+  private fovAt = 0;
+  private fovCam: THREE.PerspectiveCamera | null = null;
+
+  /** Give the camera back its own field of view (it outlives this session). */
+  private restoreFov(): void {
+    const c = this.fovCam;
+    if (c && this.baseFov !== null && c.fov !== this.baseFov) {
+      c.fov = this.baseFov;
+      c.updateProjectionMatrix();
+    }
+    this.fovCam = null;
+    this.fovKick = 0;
+    this.fovAt = 0;
+  }
+
+  /**
+   * Field-of-view effects: the view widens while sprinting and on long falls, easing in and out
+   * (framerate-independent).
+   */
+  private easeFov(cam: THREE.PerspectiveCamera, f: FrameSnapshot): void {
+    if (this.fovCam !== cam) {
+      this.restoreFov();
+      this.fovCam = cam;
+      this.baseFov = cam.fov;
+    }
+    const now = performance.now();
+    const dt = this.fovAt ? Math.min(0.1, (now - this.fovAt) / 1000) : 0;
+    this.fovAt = now;
+    const fall = THREE.MathUtils.clamp((f.fallSpeed - 400) / 500, 0, 1);
+    const target = (f.sprinting ? FOV.sprint : 0) + fall * FOV.fall;
+    const rate = target > this.fovKick ? FOV.easeIn : FOV.easeOut;
+    this.fovKick += (target - this.fovKick) * (1 - Math.exp(-rate * dt));
+    const fov = this.baseFov! + this.fovKick;
+    if (Math.abs(cam.fov - fov) > 1e-3) {
+      cam.fov = fov;
+      cam.updateProjectionMatrix();
+    }
+  }
+
   /** Place a camera at the player's eyes. Returns false when there is no player. */
   placeCamera(cam: THREE.PerspectiveCamera): boolean {
     const f = this.frame;
@@ -978,6 +1023,7 @@ export class PlaySession {
     cam.position.set(v[0]!, v[1]!, v[2]!);
     cam.rotation.set(v[4]!, v[3]!, 0, 'YXZ');
     cam.updateMatrixWorld();
+    this.easeFov(cam, f);
     // Third person: the player is seen, as a simple body turned the way they look.
     if (f.thirdPerson) {
       this.body ??= this.makeBody();
@@ -999,6 +1045,7 @@ export class PlaySession {
 
   dispose(): void {
     this.disposed = true;
+    this.restoreFov();
     this.baseView?.dispose();
     this.effects.dispose();
     this.foliage.dispose();
