@@ -335,3 +335,9 @@ of their own, the rest of the copy one unit; models and Collision shapes in a co
 copy's models are drawn with it (`Body.riders`, `GameWorld.riders`, drawn in `PlaySession.tick`). Before, models
 without collision in a copy were not drawn at all. Test: `models.test.ts` "a copy made while playing". A part that
 moves by itself doesn't follow when the whole copy is moved.
+
+### 19. Use stacks that run only once
+
+Status: done (2026-11-08). “When the player uses this” has an **only once** tick (`once` on the event): after its first
+run the stack stops listening and the prompt goes (`Instance.spent` in `vm.ts`). Not kept in saved progress.
+Test: `packages/scripting/test/scripting.test.ts` "only once".

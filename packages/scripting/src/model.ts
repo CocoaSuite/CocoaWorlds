@@ -197,7 +197,7 @@ export type EventBlock =
    * The player pressed Use (E) while looking at this object (or anything inside it). `prompt` is the word shown
    * under the crosshair when the player looks at it (“E  Open”); empty shows “Use”.
    */
-  | { id: string; kind: 'use'; prompt?: string; reach?: Expr }
+  | { id: string; kind: 'use'; prompt?: string; reach?: Expr; once?: boolean }
   /**
    * The player pressed Use (E) or Fire (click) at this object while holding `item` (or a copy of it; null:
    * anything), within `reach` units. “The thing that entered” is what they hold. Instead of dropping or throwing it.

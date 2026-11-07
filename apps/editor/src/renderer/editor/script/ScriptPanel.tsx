@@ -433,7 +433,10 @@ function EventRow({ ev, onRemove, onCopy, pick }: { ev: EventBlock; onRemove: ()
       <>
         {w('use')}, {w('usePrompt')} <kbd className="cw-key">E</kbd>{' '}
         <TextSlot value={ev.prompt ?? ''} label={w('usePrompt')} onChange={(prompt) => set({ prompt } as Partial<EventBlock>)} />, {w('within')}{' '}
-        <ReachSlot value={ev.reach} fallback={96} label={`${w('use')} ${w('within')}`} onChange={(reach) => set({ reach } as Partial<EventBlock>)} /> {w('units')}
+        <ReachSlot value={ev.reach} fallback={96} label={`${w('use')} ${w('within')}`} onChange={(reach) => set({ reach } as Partial<EventBlock>)} /> {w('units')}{' '}
+        <label className="cw-sb-check">
+          <input type="checkbox" checked={!!ev.once} aria-label={w('useOnce')} onChange={(e) => set({ once: e.target.checked || undefined } as Partial<EventBlock>)} /> {w('useOnce')}
+        </label>
       </>
     );
   else if (ev.kind === 'useHolding')

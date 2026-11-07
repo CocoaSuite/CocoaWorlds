@@ -104,6 +104,7 @@ const W = {
   addScore: ['Change the score by', 'Изменить счёт на'],
   say: ['Show on screen', 'Показать на экране'],
   usePrompt: ['showing', 'с подсказкой'],
+  useOnce: ['only once', 'только один раз'],
   playSound: ['Play sound', 'Играть звук'],
   playAnim: ['Play animation', 'Играть анимацию'],
   onWord: ['on', 'у'],

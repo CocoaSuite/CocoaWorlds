@@ -488,3 +488,17 @@ describe('do one of these at random', () => {
     expect(host.log.map((l) => l.split(' ')[1])).toEqual(['b', 'after']);
   });
 });
+
+describe('“only once” Use stacks', () => {
+  it('run the first time, then stop listening and showing their prompt', () => {
+    const s = script([handler({ ...newEvent('use'), prompt: 'Open', once: true } as Handler['event'], { ...newStatement('log'), text: text('opened') } as Statement)]);
+    const { host, vm, runFor } = run([['me', s]]);
+    expect(vm.usePrompt(['me'])).toBe('Open');
+    vm.dispatch({ type: 'use', targets: ['me'], by: 'player' });
+    runFor(0.2);
+    vm.dispatch({ type: 'use', targets: ['me'], by: 'player' });
+    runFor(0.2);
+    expect(host.log).toEqual(['0.1 opened']);
+    expect(vm.usePrompt(['me'])).toBeNull();
+  });
+});

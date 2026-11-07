@@ -114,6 +114,8 @@ interface Instance {
   timers: Map<string, number>;
   /** “When the player comes near / goes away” handlers by id: whether the player was within the distance. */
   near: Map<string, boolean>;
+  /** “Only once” Use stacks that have run (they no longer listen or show their prompt). */
+  spent: Set<string>;
 }
 
 interface Thread {
@@ -188,6 +190,7 @@ export class ScriptRunner {
       vars: program.variables.map((v) => v.initial),
       timers: new Map(program.handlers.filter((h) => h.event.kind === 'every').map((h) => [h.id, 0])),
       near: new Map(),
+      spent: new Set(),
     }));
   }
 
@@ -198,6 +201,7 @@ export class ScriptRunner {
       vars: program.variables.map((v) => v.initial),
       timers: new Map(program.handlers.filter((h) => h.event.kind === 'every').map((h) => [h.id, 0])),
       near: new Map(),
+      spent: new Set(),
     };
     this.instances.push(inst);
     if (!this.started) return;
@@ -218,7 +222,7 @@ export class ScriptRunner {
     for (const id of targets)
       for (const inst of this.instances) {
         if (inst.program.owner !== id) continue;
-        for (const h of inst.program.handlers) if (h.event.kind === 'use' && distance <= h.event.reach) return h.event.prompt;
+        for (const h of inst.program.handlers) if (h.event.kind === 'use' && distance <= h.event.reach && !inst.spent.has(h.id)) return h.event.prompt;
       }
     return null;
   }
@@ -296,7 +300,10 @@ export class ScriptRunner {
         } else if (e.type === 'die') {
           if (ev.kind === 'die') this.spawn(inst, h, null);
         } else if (e.type === 'use') {
-          if (ev.kind === 'use' && e.targets.includes(inst.program.owner) && (e.distance ?? 0) <= ev.reach) this.spawn(inst, h, e.by);
+          if (ev.kind === 'use' && e.targets.includes(inst.program.owner) && (e.distance ?? 0) <= ev.reach && !inst.spent.has(h.id)) {
+            if (ev.once) inst.spent.add(h.id);
+            this.spawn(inst, h, e.by);
+          }
         } else if (e.type === 'useHolding') {
           if (e.targets.includes(inst.program.owner) && this.holdingMatch(ev, e.held, e.distance)) this.spawn(inst, h, e.held[0] ?? null);
         } else if ((ev.kind === 'enter' || ev.kind === 'leave') && ev.kind === e.type && ev.zone === e.zone) {

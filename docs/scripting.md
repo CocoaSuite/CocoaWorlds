@@ -148,7 +148,8 @@ the player, comes closer when a wall is in the way, and the player is drawn as a
 
 “When the player uses this (E)” has a prompt word. While the player looks at the object within reach, the
 screen shows **E** and the word under the crosshair (“E Open”); with no word it shows “Use”. The door recipe
-uses “Open”, the button “Press”.
+uses “Open”, the button “Press”. Tick **only once** and the stack runs the first time only; after that the
+object no longer shows the prompt (a chest, a gift box).
 
 ## Holding things and putting them in spots
 

@@ -146,7 +146,7 @@ export type CompiledEvent =
   | { kind: 'start' }
   | { kind: 'enter' | 'leave'; zone: string }
   | { kind: 'message' | 'messageStop'; message: string }
-  | { kind: 'use'; prompt: string; reach: number }
+  | { kind: 'use'; prompt: string; reach: number; once?: boolean }
   | { kind: 'useHolding'; item: string | null; reach: number }
   | { kind: 'die' }
   | { kind: 'breaks' }
@@ -263,7 +263,7 @@ class HandlerCompiler {
     if (ev.kind === 'start') event = { kind: 'start' };
     else if (ev.kind === 'use') {
       const reach = ev.reach ? this.reachOf(ev.reach) : USE_REACH;
-      if (reach !== null) event = { kind: 'use', prompt: (ev.prompt ?? '').trim(), reach };
+      if (reach !== null) event = { kind: 'use', prompt: (ev.prompt ?? '').trim(), reach, ...(ev.once ? { once: true } : {}) };
     } else if (ev.kind === 'useHolding') {
       const reach = this.reachOf(ev.reach);
       const item = ev.item ? this.resolveRef(ev.item, ev.id) : null;
