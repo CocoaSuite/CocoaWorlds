@@ -118,6 +118,8 @@ export interface SavedScene {
   lights?: Record<string, boolean>;
   broken?: Record<string, number>;
   signs?: Record<string, string>;
+  /** Posters and paintings hung on a wall (true) or loose (false), when not as they started. */
+  posters?: Record<string, boolean>;
   /** The time of day (hours). */
   hour?: number;
 }
@@ -657,6 +659,9 @@ export class GameWorld {
       if (e && text !== String((e.components.sign as { text?: unknown } | undefined)?.text ?? '')) signs[id] = text;
     }
     if (Object.keys(signs).length) out.signs = signs;
+    const posters: Record<string, boolean> = {};
+    for (const [id, p] of this.posters) if (!this.gone.has(id) && p.hung !== p.data.hungAtStart) posters[id] = p.hung;
+    if (Object.keys(posters).length) out.posters = posters;
     return out;
   }
 
@@ -694,6 +699,7 @@ export class GameWorld {
         this.signs.set(id, text);
         this.signVersion++;
       }
+    for (const [id, hung] of Object.entries(save.posters ?? {})) if (typeof hung === 'boolean') this.setPosterHung(id, hung);
     if (typeof save.hour === 'number' && Number.isFinite(save.hour)) this.dayHour = ((save.hour % 24) + 24) % 24;
     const pl = save.player, p = this.player, at = v3(pl?.at);
     if (withPlayer && p && pl && at) {
@@ -1374,6 +1380,22 @@ export class GameWorld {
     p.normal = normal;
     p.wallAt = at;
     this.bus.emit({ type: 'poster.hang', target: id, time: this.time });
+  }
+
+  /** Hung or loose where it is now (loading a save): no moving, no events; the wall is behind its back (−Z). */
+  private setPosterHung(id: string, hung: boolean): void {
+    const p = this.posters.get(id), b = this.bodies.get(id);
+    if (!p || !b || p.hung === hung) return;
+    if (this.held?.id === id) this.dropHeld();
+    p.hung = hung;
+    if (hung) {
+      const q = b.body.rotation(), t = b.body.translation();
+      const n = qrot({ x: q.x, y: q.y, z: q.z, w: q.w }, [0, 0, 1]);
+      p.normal = [n[0], n[1], n[2]];
+      p.wallAt = [t.x, t.y, t.z];
+      b.body.setBodyType(RAPIER.RigidBodyType.Fixed, false);
+    } else b.body.setBodyType(RAPIER.RigidBodyType.Dynamic, true);
+    if (p.data.rolls) this.posterShape(id, hung);
   }
 
   /** Off the wall: loose again (a poster rolls back up, a little out from the wall so it doesn't catch). */

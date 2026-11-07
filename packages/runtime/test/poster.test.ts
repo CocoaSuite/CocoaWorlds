@@ -2,7 +2,7 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import { newEntity, newScene, type EntityData, type Vec3 } from '@cocoaworlds/core';
 import { box, toData } from '@cocoaworlds/geometry';
-import { GameWorld, initPhysics } from '../src';
+import { GameWorld, initPhysics, type SavedProgress } from '../src';
 
 beforeAll(async () => {
   await initPhysics();
@@ -12,12 +12,13 @@ const brush = (name: string, min: Vec3, max: Vec3): EntityData => newEntity(name
 const run = (w: GameWorld, seconds: number) => {
   for (let t = 0; t < seconds; t += 1 / 60) w.step(1 / 60);
 };
-function world(poster: Record<string, unknown>) {
+function world(poster: Record<string, unknown>, saved: SavedProgress | null = null, keepId?: string) {
   const s = newScene('posters');
   // A wall 200 u ahead of the player (who looks along −Z).
   const p = newEntity('poster', { poster }, { position: [0, 8, -48] });
+  if (keepId) p.id = keepId;
   s.entities = [brush('floor', [-2048, -16, -2048], [2048, 0, 2048]), brush('wall', [-512, 0, -232], [512, 256, -200]), newEntity('start', { playerSpawn: {} }), p];
-  const w = GameWorld.create(s);
+  const w = GameWorld.create(s, { rules: { saveWorld: true }, saved });
   w.setPlayerInput({ pitch: -0.9 });
   run(w, 0.3);
   return { w, id: p.id };
@@ -60,5 +61,23 @@ describe('posters', () => {
     expect(w.posterHung(id)).toBe(true);
     expect(w.positionOf(id)![1]).toBeCloseTo(8, 3);
     w.dispose();
+  });
+
+  it('a hung poster stays hung after saving and loading', () => {
+    const { w, id } = world({ rolls: true });
+    w.use();
+    run(w, 0.2);
+    w.setPlayerInput({ pitch: 0, forward: 1 });
+    run(w, 3);
+    expect(w.posterHung(id)).toBe(true);
+    const at = w.positionOf(id)!;
+    const saved = JSON.parse(JSON.stringify(w.progress())) as SavedProgress;
+    w.dispose();
+    const { w: w2 } = world({ rolls: true }, saved, id);
+    run(w2, 1);
+    expect(w2.posterHung(id)).toBe(true);
+    const at2 = w2.positionOf(id)!;
+    expect(Math.hypot(at2[0] - at[0], at2[1] - at[1], at2[2] - at[2])).toBeLessThan(0.5);
+    w2.dispose();
   });
 });
