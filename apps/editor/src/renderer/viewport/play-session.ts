@@ -7,7 +7,7 @@
  */
 import { SceneDoc, expandRepeats, readComponent, type ParticlesData, type ColliderData, type GameRules, type GameValue, type GooglyEyesData, type ModelData, type SceneFile, type SignData, type TerrainData } from '@cocoaworlds/core';
 import { buildMesh, isInvisibleMaterial, type Brush, type VoxelField, type WorldBrush } from '@cocoaworlds/geometry';
-import { GameWorld, initPhysics, type Hearing, type NavGrid, type BodyInfo, type ModelMesh, type SavedProgress, type Travel, type UiState, type PlayerInput, type PlayerStatus, type ScriptLog, type TriggerEvent } from '@cocoaworlds/runtime';
+import { GameWorld, initPhysics, POSE, AT, NPC, type FrameSnapshot, type Hearing, type NavGrid, type BodyInfo, type ModelMesh, type SavedProgress, type Travel, type UiState, type PlayerInput, type PlayerStatus, type ScriptLog, type TriggerEvent } from '@cocoaworlds/runtime';
 import type { Problem, ScriptError } from '@cocoaworlds/scripting';
 import * as THREE from 'three';
 import { brushBounds, worldBrushes } from '../brush/brushes';
@@ -69,7 +69,8 @@ export class PlaySession {
     return this.world.navigation();
   }
   /** Objects drawn where their body is: base placement, then the body's motion on top. */
-  private movers: { id: string; obj: THREE.Object3D; base: THREE.Matrix4 }[] = [];
+  /** What moves, each with its body's index in the frame's snapshot. */
+  private movers: { id: string; i: number; obj: THREE.Object3D; base: THREE.Matrix4 }[] = [];
   readonly info: PlayInfo;
   private shapeMat = new THREE.MeshStandardMaterial({ color: 0xc8c8c8, roughness: 0.8 });
   private uses: string[] = [];
@@ -186,7 +187,7 @@ export class PlaySession {
       holder.matrixAutoUpdate = false;
       holder.matrix.fromArray(doc.worldMatrix(e.id));
       this.group.add(holder);
-      if (mover) this.movers.push({ id: mover, obj: holder, base: holder.matrix.clone() });
+      if (mover) this.movers.push({ id: mover, i: this.world.drawn(mover), obj: holder, base: holder.matrix.clone() });
       this.attachModel(holder, data, e.id);
     }
     const alone = (data: ModelData) => (c: { id: string; matrix: THREE.Matrix4 }) => {
@@ -229,8 +230,8 @@ export class PlaySession {
       holder.matrix.fromArray(doc.worldMatrix(e.id));
       this.group.add(holder);
       const body = this.world.bodyOf(e.id);
-      if (body) this.movers.push({ id: body, obj: holder, base: holder.matrix.clone() });
-      this.emitters.push({ data: readComponent<ParticlesData>('particles', e.components.particles), holder, body, owed: 0 });
+      if (body) this.movers.push({ id: body, i: this.world.drawn(body), obj: holder, base: holder.matrix.clone() });
+      this.emitters.push({ data: readComponent<ParticlesData>('particles', e.components.particles), holder, body, bodyAt: body ? this.world.drawn(body) : -1, owed: 0 });
     }
 
     // Text signs, where they stand (redrawn when blocks change their text).
@@ -322,7 +323,7 @@ export class PlaySession {
   }
 
   /** Lights' starting places, and the body each rides with. */
-  private lightAt = new Map<string, { start: THREE.Matrix4; body: string | null }>();
+  private lightAt = new Map<string, { start: THREE.Matrix4; body: string | null; i: number }>();
   private lightNow = new THREE.Matrix4();
 
   /** Lights follow what carries them and take the changes scripts make. */
@@ -331,13 +332,16 @@ export class PlaySession {
       const s = this.world.lightOf(id);
       if (!s) continue;
       let at = this.lightAt.get(id);
-      if (!at) this.lightAt.set(id, (at = { start: new THREE.Matrix4().fromArray(this.doc.worldMatrix(id)), body: this.world.bodyOf(id) }));
+      if (!at) {
+        const body = this.world.bodyOf(id);
+        this.lightAt.set(id, (at = { start: new THREE.Matrix4().fromArray(this.doc.worldMatrix(id)), body, i: body ? this.world.drawn(body) : -1 }));
+      }
       let world: THREE.Matrix4 | null = null;
       let on = s.on;
       if (at.body) {
-        const m = this.world.drawnMotionOf(at.body);
-        if (!m || !this.world.isVisible(at.body)) on = false;
-        else world = this.lightNow.fromArray(m).multiply(at.start);
+        const f = this.frame;
+        if (!f.present(at.i) || !f.visible(at.i)) on = false;
+        else world = this.lightNow.fromArray(f.bodyPose, at.i * POSE).multiply(at.start);
       }
       lighting.drive(id, { ...s, on }, world);
     }
@@ -425,7 +429,7 @@ export class PlaySession {
   private listener: THREE.AudioListener | null = null;
   private static buffers = new Map<string, Promise<AudioBuffer>>();
   /** Sounds playing now (for following moving objects and stopping). */
-  readonly sounds: { source: string; sound: string; audio: THREE.Audio | THREE.PositionalAudio; follow: string | null }[] = [];
+  readonly sounds: { source: string; sound: string; audio: THREE.Audio | THREE.PositionalAudio; follow: string | null; followAt: number }[] = [];
 
   /** How things sound where the ears are (Sound areas, water): the effect chain every changed sound goes through. */
   stage: SoundStage | null = null;
@@ -483,7 +487,7 @@ export class PlaySession {
     audio.setLoop(e.loop);
     audio.setVolume(e.volume);
     this.group.add(audio);
-    const entry = { source: e.source, sound: e.sound, audio, follow: e.follow };
+    const entry = { source: e.source, sound: e.sound, audio, follow: e.follow, followAt: e.follow ? this.world.drawn(e.follow) : -1 };
     this.sounds.push(entry);
     audio.onEnded = () => {
       // (Replacing three's own onEnded, which only does this.)
@@ -608,7 +612,7 @@ export class PlaySession {
         holder.matrixAutoUpdate = false;
         holder.matrix.fromArray(at);
         this.group.add(holder);
-        this.movers.push({ id: b.id, obj: holder, base: holder.matrix.clone() });
+        this.movers.push({ id: b.id, i: this.world.drawn(b.id), obj: holder, base: holder.matrix.clone() });
         this.attachModel(holder, model, b.id);
         this.eyesOn(b.id, holder, this.eyesIn(b.id, holder.matrix));
         return;
@@ -630,7 +634,7 @@ export class PlaySession {
     obj.matrix.copy(base);
     obj.castShadow = obj.receiveShadow = true;
     this.group.add(obj);
-    this.movers.push({ id: b.id, obj, base });
+    this.movers.push({ id: b.id, i: this.world.drawn(b.id), obj, base });
     if (b.kind !== 'brush' && b.kind !== 'unit') this.eyesOn(b.id, obj, this.eyesIn(b.id, base));
   }
 
@@ -642,9 +646,19 @@ export class PlaySession {
 
   private motion = new THREE.Matrix4();
 
+  /** This frame's picture of what is drawn (taken in `tick`, after the step). */
+  private snap: FrameSnapshot | null = null;
+
+  /** The frame's snapshot (before the first tick, taken now). */
+  private get frame(): FrameSnapshot {
+    return (this.snap ??= this.world.snapshot());
+  }
+
   /** Advance the game and move what moved. Returns what happened this frame. */
   tick(dt: number): PlayFrame {
     this.world.step(dt);
+    // (One picture of what is drawn this frame: everything below reads it, not the world object by object.)
+    this.snap = this.world.snapshot();
     this.effects.syncProjectiles(this.world.projectilesNow());
     this.placeNpcs();
     this.updateGlow();
@@ -666,12 +680,12 @@ export class PlaySession {
       this.eyes = this.eyes.filter((x) => !gone.has(x.id));
     }
     const motion = this.motion;
+    const f = this.frame;
     for (const m of this.movers) {
-      m.obj.visible = this.world.isVisible(m.id);
+      m.obj.visible = f.visible(m.i);
       // (Drawn between the last two physics steps, as the player's view is: smooth at any frame rate.)
-      const mm = this.world.drawnMotionOf(m.id);
-      if (!mm) continue;
-      m.obj.matrix.copy(motion.fromArray(mm).multiply(m.base));
+      if (!f.present(m.i)) continue;
+      m.obj.matrix.copy(motion.fromArray(f.bodyPose, m.i * POSE).multiply(m.base));
       m.obj.matrixWorldNeedsUpdate = true;
     }
     if (this.world.signVersion !== this.signVersion) {
@@ -690,9 +704,9 @@ export class PlaySession {
     this.hear();
     // Sounds that travel with a moving object.
     for (const s of this.sounds) {
-      if (!s.follow) continue;
-      const p = this.world.positionOf(s.follow);
-      if (p) s.audio.position.set(...p);
+      if (!s.follow || !f.present(s.followAt)) continue;
+      const a = s.followAt * AT;
+      s.audio.position.set(f.bodyAt[a]!, f.bodyAt[a + 1]!, f.bodyAt[a + 2]!);
     }
     const uses = this.uses, notes = this.notes;
     this.uses = [];
@@ -805,19 +819,21 @@ export class PlaySession {
 
   /** Creatures where they are now; plain figures lie down when dead (models play their dying animation). */
   private placeNpcs(): void {
-    for (const n of this.world.npcStates(true)) {
-      const v = this.npcViews.get(n.id);
+    const f = this.frame;
+    for (let i = 0; i < f.npcCount; i++) {
+      const v = this.npcViews.get(f.npcIds[i]!);
       if (!v) continue;
-      v.holder.position.set(...n.feet);
-      v.holder.rotation.set(0, n.yaw, 0);
-      if (v.figure && !n.alive) {
+      const k = i * NPC, p = f.npcPose;
+      v.holder.position.set(p[k]!, p[k + 1]!, p[k + 2]!);
+      v.holder.rotation.set(0, p[k + 3]!, 0);
+      if (v.figure && !f.npcAlive[i]) {
         // (Falls backwards, away from where it was facing.)
         v.inner.rotation.x = Math.min(Math.PI / 2, v.inner.rotation.x + 0.12);
         v.inner.position.y = 10;
       }
     }
   }
-  private emitters: { data: ParticlesData; holder: THREE.Group; body: string | null; owed: number }[] = [];
+  private emitters: { data: ParticlesData; holder: THREE.Group; body: string | null; bodyAt: number; owed: number }[] = [];
 
   private emitAt = new THREE.Vector3();
   private emitQ = new THREE.Quaternion();
@@ -828,7 +844,7 @@ export class PlaySession {
   private emit(dt: number): void {
     const at = this.emitAt, q = this.emitQ, s = this.emitS;
     for (const em of this.emitters) {
-      const on = em.body ? (this.world.switchedOn(em.body) ?? em.data.on) && this.world.isVisible(em.body) : em.data.on;
+      const on = em.body ? (this.world.switchedOn(em.body) ?? em.data.on) && this.frame.visible(em.bodyAt) : em.data.on;
       if (!on || em.data.rate <= 0) continue;
       em.owed += em.data.rate * dt;
       const n = Math.floor(em.owed);
@@ -896,19 +912,19 @@ export class PlaySession {
 
   /** Place a camera at the player's eyes. Returns false when there is no player. */
   placeCamera(cam: THREE.PerspectiveCamera): boolean {
-    const v = this.world.playerView();
-    if (!v) return false;
-    cam.position.set(...v.eye);
-    cam.rotation.set(v.pitch, v.yaw, 0, 'YXZ');
+    const f = this.frame;
+    if (!f.hasView) return false;
+    const v = f.view;
+    cam.position.set(v[0]!, v[1]!, v[2]!);
+    cam.rotation.set(v[4]!, v[3]!, 0, 'YXZ');
     cam.updateMatrixWorld();
     // Third person: the player is seen, as a simple body turned the way they look.
-    if (v.thirdPerson) {
+    if (f.thirdPerson) {
       this.body ??= this.makeBody();
       this.body.visible = true;
-      this.body.position.set(...v.feet);
-      this.body.rotation.set(0, v.yaw, 0);
-      const crouched = this.world.player?.crouched ?? false;
-      this.body.scale.set(1, crouched ? 0.5 : 1, 1);
+      this.body.position.set(v[5]!, v[6]!, v[7]!);
+      this.body.rotation.set(0, v[3]!, 0);
+      this.body.scale.set(1, f.crouched ? 0.5 : 1, 1);
     } else if (this.body) this.body.visible = false;
     return true;
   }

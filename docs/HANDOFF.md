@@ -163,19 +163,71 @@ Next, if wanted: an e2e test with a real carried floodlight; copies keeping thei
 
 ### 8. Frame stutters: optimisation sweep
 
-Status: done, but not yet run: that session had no installed packages (no Three.js, Rapier, Vitest or Electron), so
-only a type check of the project's own code and a side-by-side check of the path search (old and new give the same
-paths) were possible. First thing next session: `npm test`, the e2e tests, and a look in Play on a real GPU. What and where: docs/rendering.md,
-“Smooth frames”. In short: shaders compiled before Play's first frame and models compiled in the background
-(`warmPlay` in `engine.ts`, `game/runner.ts`, `PlaySession.warm`); reflections switched on first and captured over
-four frames (`SceneReflections.prime`, `job`); pooled tracers, fireballs, marks and blast lights (`effects.ts`,
+Status: done, **run and checked** (2026-11-07). What and where: docs/rendering.md, “Smooth frames”. In short:
+shaders compiled before Play's first frame and models compiled in the background (`warmPlay` in `engine.ts`,
+`game/runner.ts`, `PlaySession.warm`); reflections switched on first and captured over four frames
+(`SceneReflections.prime`, `job`); pooled tracers, fireballs, marks and blast lights (`effects.ts`,
 `GameWorld.hasBlasts`); signs redrawn in place (`sign.ts` `retext`); lights built from what stays put
 (`PlaySession.levelBounds`, `SceneLighting.update(…, still)`, the cached `shadows`, `WorldRenderer.shapeVersion`);
 moving objects, creatures and camera views drawn between physics steps (`GameWorld.drawnMotionOf`,
 `npcStates(true)`); path search without fresh memory (`NavGrid.scratch`) and staggered (`Npc.repathEvery`);
 particles upload only their live part; the status line at most four times a second (`sendStats`). Tests:
-`packages/runtime/test/smooth.test.ts`.
+`packages/runtime/test/smooth.test.ts`, e2e `test-e2e/smooth-frames.test.mjs` (blast lights made up front and
+dark again, light count unchanged, tracer pool, sign retext keeps its material, reflections on at the first frame,
+the falling crate drawn where the snapshot says).
+
+Results of the run: unit tests and type check passed as pushed. In e2e, the sweep broke two tests, both in how
+they measured: `col.test.mjs` counted visible *materials*, so the eight pooled (hidden) fireballs looked like 8,448
+drawn triangles (now it counts only what is drawn, `traverseVisible`); `many-models.test.mjs` read the renderer's
+draw counter at a random moment, which also holds the spread-out reflection captures and whatever drew between
+frames (now it waits for captures to finish and reads the status line's count of a frame: 19 draws for 256
+crates). Checked by eye in Play (screenshots): fireball and its light on the wall, scorch and bullet marks, the
+sign changing text in place (resized), the crate falling and landing. Everything else that failed was older than
+the sweep (the same failures on the commit before it), from sessions that pushed without Electron:
+- the block picker (de02241) replaced the event and block menus: tests now pick with `pickBlock` / `findBlock`
+  (helpers.mjs: search, then the option);
+- the chicken's googly eyes have their own Position fields (chicken test takes the object's, the first);
+- the Add component menu has Seat and Foliage for moving brushes and names items by `aria-label`
+  (physics test); game rules gained fields (health test checks only the ones it set);
+- time limits: on this machine's software GPU (SwiftShader) Play runs at about 3 frames a second, the game at
+  0.14× real time (the same before and after the sweep). `CW_E2E_SLOW=6` stretches every wait (helpers.mjs
+  `SLOW`); run the suite with it on such machines, one file at a time (`--test-concurrency=1`): two Electron
+  windows at once on 2 cores time out at random.
+
+Fixed on the way (not from the sweep): a screen that frees the mouse at Play's start could be beaten by the
+pointer lock Play had asked for (it arrived after, and stayed): `engine.ts` and `runner.ts` now let go of a lock
+that arrives after a screen freed the mouse (`dropLock`). `ui.test.mjs` failed on it most runs.
+
+Flaky (also before the sweep: passed 1 of 3 on the commit before it): `cocoa-materials.test.mjs`, dropping a link
+a little off a node's dot (line 113) sometimes doesn't connect.
+
+Still failing (also before the sweep, not looked into): `glass-shadow.test.mjs` (no shadow at all under the pane
+in the editor's Game lighting: 38–88 shadowed pixels, wants > 2000; check that the sun's shadows show in the
+editor at all) and `editor.test.mjs` (dragging the gizmo's X arrow in the Top view also moved Z by 128).
 
 Next, if wanted: measure on a real GPU with a busy level (frame times in the status line); skip the ground-blend
 and occlusion scene walks when nothing needs them; cheaper bulb shadows (each is six renders a frame).
+
+### 9. Performance architecture, step 0: one frame snapshot
+
+Proposal (waiting for approval, nothing else built): [proposals/performance-architecture.md](proposals/performance-architecture.md)
+(keep Electron; the frame as messages; the world in a Web Worker; instancing; Rust/WASM for navigation, voxel
+meshing and maybe the VM; WebGPU later; each with order, risks and tests).
+
+Status of step 0: done. `PlaySession` reads one picture per frame, `GameWorld.snapshot()` (`packages/runtime/src/
+snapshot.ts`, `FrameSnapshot`), taken in `tick` right after the step, instead of calling the world per object:
+- bodies: drawn motion (16 numbers, as `drawnMotionOf`), place (as `positionOf`), present and shown flags; every
+  moving body is in it, others when asked for with `GameWorld.drawn(id)` (written at once, so it can be read that
+  frame; lights and emitters on still bodies, sounds that follow one);
+- creatures: feet and yaw as drawn, alive, health, state (as `npcStates(true)`);
+- the player's view: eye, yaw, pitch, feet, third person, crouched (as `playerView`, so a scripted camera ends
+  there when its time is up, once a frame as before).
+Each object keeps one index for the whole game (never reused; a removed body stays, not present). Arrays grow by
+doubling and are filled in place. Readers: movers, `placeNpcs`, `driveLights`, emitters, following sounds,
+`placeCamera`. Same thread, same values: `packages/runtime/test/snapshot.test.ts` compares every field with the old
+calls over steps of many lengths, hidden and removed bodies, and growth.
+
+Not yet in the snapshot (step 1 of the proposal): everything else read per frame (HUD, prompts, sounds, signs,
+light states, `switchedOn`, events). The fill still uses `drawnMotionOf`, which makes small arrays per body: write
+straight into the typed array once the worker step is near.
 

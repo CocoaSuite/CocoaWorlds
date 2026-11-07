@@ -52,6 +52,7 @@ import { PLAYER, Player, fallDamage, type PlayerInput } from './player';
 import { Weapons, type V3 } from './weapons';
 import { ANIM_ROLES, Npc, type AnimRole } from './npc';
 import { NavGrid } from './navgrid';
+import { FrameSnapshot } from './snapshot';
 import { momentAnimation } from './hunter/personality';
 import type { SpotInfo } from './hunter/spots';
 import type { StimulusKind } from './hunter/stimuli';
@@ -1703,20 +1704,25 @@ export class GameWorld {
 
   /** Creatures now, for drawing: where their feet are, which way they face, whether alive. */
   npcStates(drawn = false): { id: string; feet: V3; yaw: number; alive: boolean; state: string; health: number }[] {
-    const a = this.alpha;
     return [...this.npcs.values()].map((n) => {
-      const p = drawn ? this.npcPrev.get(n.id) : undefined;
-      let feet: V3 = [n.feet.x, n.feet.y, n.feet.z], yaw = n.yaw;
-      // (Drawn: between the last two steps, unless it was put somewhere else.)
-      if (p && a < 1 && Math.abs(feet[0] - p[0]!) + Math.abs(feet[1] - p[1]!) + Math.abs(feet[2] - p[2]!) < SNAP) {
-        feet = [p[0]! + (feet[0] - p[0]!) * a, p[1]! + (feet[1] - p[1]!) * a, p[2]! + (feet[2] - p[2]!) * a];
-        let d = yaw - p[3]!;
-        while (d > Math.PI) d -= Math.PI * 2;
-        while (d < -Math.PI) d += Math.PI * 2;
-        yaw = p[3]! + d * a;
-      }
+      const { feet, yaw } = drawn ? this.drawnNpc(n) : { feet: [n.feet.x, n.feet.y, n.feet.z] as V3, yaw: n.yaw };
       return { id: n.id, feet, yaw, alive: n.alive, state: n.state, health: n.health };
     });
+  }
+
+  /** A creature's feet and facing as drawn: between the last two steps, unless it was put somewhere else. */
+  private drawnNpc(n: Npc): { feet: V3; yaw: number } {
+    const a = this.alpha;
+    const p = this.npcPrev.get(n.id);
+    let feet: V3 = [n.feet.x, n.feet.y, n.feet.z], yaw = n.yaw;
+    if (p && a < 1 && Math.abs(feet[0] - p[0]!) + Math.abs(feet[1] - p[1]!) + Math.abs(feet[2] - p[2]!) < SNAP) {
+      feet = [p[0]! + (feet[0] - p[0]!) * a, p[1]! + (feet[1] - p[1]!) * a, p[2]! + (feet[2] - p[2]!) * a];
+      let d = yaw - p[3]!;
+      while (d > Math.PI) d -= Math.PI * 2;
+      while (d < -Math.PI) d += Math.PI * 2;
+      yaw = p[3]! + d * a;
+    }
+    return { feet, yaw };
   }
 
   /** A hit by a weapon or a blast: “When this is hit” runs on it and what it is inside; breakables lose health. */
@@ -2901,6 +2907,48 @@ export class GameWorld {
     if (b.scale === 1) return multiply(pose, b.startInverse);
     const k = b.scale;
     return multiply(multiply(pose, [k, 0, 0, 0, 0, k, 0, 0, 0, 0, k, 0, 0, 0, 0, 1]), b.startInverse);
+  }
+
+  private frameSnapshot = new FrameSnapshot();
+
+  /**
+   * What is drawn this frame, in one picture (see `FrameSnapshot`): every moving body's drawn motion, place and
+   * whether it is shown (and those of bodies asked for with `drawn`), each creature as drawn, and the player's view.
+   * The same values `drawnMotionOf`, `positionOf`, `isVisible`, `npcStates(true)` and `playerView` give; take it
+   * once a frame, after `step` (the view through a scripted camera ends here when its time is up, as in
+   * `playerView`). The same object each time, filled again.
+   */
+  snapshot(): FrameSnapshot {
+    const s = this.frameSnapshot;
+    s.begin();
+    const tracked = s.trackedIds;
+    for (const [id, b] of this.bodies) {
+      if (b.info.motion === 'fixed' && !tracked.has(id)) continue;
+      const i = s.indexBody(id);
+      const t = b.body.translation();
+      s.setBody(i, this.drawnMotionOf(id)!, t.x, t.y, t.z, b.visible);
+    }
+    for (const n of this.npcs.values()) {
+      const { feet, yaw } = this.drawnNpc(n);
+      s.setNpc(s.indexNpc(n.id), feet[0], feet[1], feet[2], yaw, n.alive, n.state, n.health);
+    }
+    s.setView(this.playerView(), this.player?.crouched ?? false);
+    return s;
+  }
+
+  /**
+   * Keep body `id` in `snapshot()` (where it is drawn) even if it doesn't move, and write it into the current picture now (so it can be
+   * read this frame). Returns its index there.
+   */
+  drawn(id: string): number {
+    const s = this.frameSnapshot;
+    const i = s.track(id);
+    const b = this.bodies.get(id);
+    if (b) {
+      const t = b.body.translation();
+      s.setBody(i, this.drawnMotionOf(id)!, t.x, t.y, t.z, b.visible);
+    }
+    return i;
   }
 
   /** World position of a body now (for tests and debugging). */
