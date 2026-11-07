@@ -68,6 +68,8 @@ export type PosterData = {
   width: number;
   height: number;
   rolls: boolean;
+  /** The rolled scroll's look: a model lying along X, fitted to the width ('' : a plain cylinder). */
+  scrollModel: string;
   thickness: number;
   frame: string;
   mass: number;
@@ -631,6 +633,14 @@ export const COMPONENTS: ComponentDef[] = [
       { key: 'width', label: e('Width', 'Ширина'), type: { kind: 'number', min: 4, step: 4, unit: 'u' }, default: 32 },
       { key: 'height', label: e('Height', 'Высота'), type: { kind: 'number', min: 4, step: 4, unit: 'u' }, default: 48 },
       { key: 'rolls', label: e('Rolls up', 'Сворачивается'), hint: e('On: a scroll until hung (a poster). Off: always flat (a painting).', 'Вкл.: свиток, пока не повешен (постер). Выкл.: всегда плоская (картина).'), type: { kind: 'boolean' }, default: true },
+      {
+        key: 'scrollModel',
+        label: e('Scroll model', 'Модель свитка'),
+        hint: e('How it looks rolled up: a model lying along X, centred, scaled to the width. Empty: a plain cylinder. It still collides as a cylinder.', 'Как выглядит свёрнутым: модель вдоль X, по центру, подгоняется под ширину. Пусто — простой цилиндр. Сталкивается всё равно как цилиндр.'),
+        type: { kind: 'asset', asset: 'models' },
+        default: '',
+        when: { key: 'rolls', is: [true] },
+      },
       { key: 'thickness', label: e('Thickness', 'Толщина'), hint: e('Flat, from the wall out.', 'В плоском виде, от стены.'), type: { kind: 'number', min: 0.5, step: 0.5, unit: 'u' }, default: 0.5 },
       { key: 'frame', label: e('Frame / back', 'Рамка / оборот'), hint: e('The colour of the edges, the back and the rolled scroll.', 'Цвет краёв, оборота и свёрнутого свитка.'), type: { kind: 'color' }, default: '#e8e2d4' },
       { key: 'mass', label: e('Weight', 'Вес'), type: { kind: 'number', min: 0.01, max: 50, step: 0.5, unit: 'kg' }, default: 0.5 },

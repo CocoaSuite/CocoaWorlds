@@ -5,11 +5,12 @@
 import { posterScrollRadius, type PosterData } from '@cocoaworlds/core';
 import * as THREE from 'three';
 import { projectMaterial, releaseMaterial } from './project-materials';
+import { modelInstance, type ModelInstance } from './models';
 
 export interface PosterObject {
   object: THREE.Group;
-  /** The rolled-up look (null for a painting, which never rolls). */
-  scroll: THREE.Mesh | null;
+  /** The rolled-up look: a plain cylinder or the scroll model (null for a painting, which never rolls). */
+  scroll: THREE.Object3D | null;
   flat: THREE.Mesh;
   /** Show it hung (flat) or loose (rolled, if it rolls). */
   setHung(hung: boolean): void;
@@ -26,12 +27,33 @@ export function buildPoster(data: PosterData, onUpdate: () => void = () => {}): 
   const flat = new THREE.Mesh(new THREE.BoxGeometry(data.width, data.height, depth), [back, back, back, back, picture, back]);
   flat.castShadow = flat.receiveShadow = true;
   object.add(flat);
-  let scroll: THREE.Mesh | null = null;
+  let scroll: THREE.Group | null = null;
+  let cylinder: THREE.Mesh | null = null;
+  let model: ModelInstance | null = null;
+  let gone = false;
   if (data.rolls) {
+    scroll = new THREE.Group();
     const r = posterScrollRadius(data);
-    scroll = new THREE.Mesh(new THREE.CylinderGeometry(r, r, data.width, 20).rotateZ(Math.PI / 2), back);
-    scroll.castShadow = scroll.receiveShadow = true;
+    cylinder = new THREE.Mesh(new THREE.CylinderGeometry(r, r, data.width, 20).rotateZ(Math.PI / 2), back);
+    cylinder.castShadow = cylinder.receiveShadow = true;
+    scroll.add(cylinder);
     object.add(scroll);
+    if (data.scrollModel) {
+      // The scroll model in place of the cylinder once it has loaded: centred and scaled so it is as long (X) as the poster is wide.
+      const holder = scroll;
+      void modelInstance({ model: data.scrollModel, units: 'metres', animation: '', castShadows: true, collision: 'none' })
+        .then((inst) => {
+          if (gone) return inst.dispose();
+          model = inst;
+          const k = data.width / Math.max(1e-3, inst.size.x);
+          inst.object.scale.multiplyScalar(k);
+          inst.object.position.copy(inst.center).multiplyScalar(-k);
+          holder.remove(cylinder!);
+          holder.add(inst.object);
+          onUpdate();
+        })
+        .catch(() => {});
+    }
   }
   const setHung = (hung: boolean) => {
     flat.visible = hung || !scroll;
@@ -44,8 +66,10 @@ export function buildPoster(data: PosterData, onUpdate: () => void = () => {}): 
     flat,
     setHung,
     dispose: () => {
+      gone = true;
       flat.geometry.dispose();
-      scroll?.geometry.dispose();
+      cylinder?.geometry.dispose();
+      model?.dispose();
       back.dispose();
       if (data.picture) releaseMaterial(picture);
       picture.dispose();

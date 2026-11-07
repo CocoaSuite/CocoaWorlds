@@ -2,7 +2,7 @@
  * Editor-only visuals for entities that have no geometry of their own yet (spawn points, lights, empties).
  * Each marker has an invisible pick volume so it can be clicked.
  */
-import { readComponent, type EntityData, type GooglyEyesData, type ModelData, type PosterData, type SignData } from '@cocoaworlds/core';
+import { posterScrollRadius, readComponent, type EntityData, type GooglyEyesData, type ModelData, type PosterData, type SignData } from '@cocoaworlds/core';
 import { modelInstance, onModelMaterialChange } from './models';
 
 /** Called when a marker's model has loaded (the view needs a redraw). */
@@ -147,10 +147,8 @@ export function buildMarker(e: EntityData): Marker {
     group.add(poster.object);
     group.userData.dispose = poster.dispose;
     lines.push(segs([[-6, 0, 0], [6, 0, 0], [0, -6, 0], [0, 6, 0], [0, 0, 0], [0, 0, 8]], baseColor));
-    const shown = poster.flat.visible ? poster.flat : poster.scroll!;
-    shown.geometry.computeBoundingBox();
-    const size = shown.geometry.boundingBox!.getSize(new THREE.Vector3());
-    pick = new THREE.Mesh(new THREE.BoxGeometry(Math.max(8, size.x), Math.max(8, size.y), Math.max(8, size.z)), pickMat);
+    const d = poster.flat.visible ? data.thickness : posterScrollRadius(data) * 2;
+    pick = new THREE.Mesh(new THREE.BoxGeometry(Math.max(8, data.width), Math.max(8, poster.flat.visible ? data.height : d), Math.max(8, d)), pickMat);
   } else if (e.components.sign) {
     // The sign itself, plus a small cross at the object's origin for selection colour.
     const sign = buildSign(readComponent<SignData>('sign', e.components.sign));
