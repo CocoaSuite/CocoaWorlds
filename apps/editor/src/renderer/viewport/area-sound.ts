@@ -5,6 +5,7 @@
  *   sounds ─▶ listener gain ─▶ lowpass ─┬─▶ dry ───────────────▶ speakers
  *                                       └─▶ echo (convolver) ─▶ wet ─┘     (one echo per effect, faded in and out)
  *   plain sounds ─▶ plain ─▶ speakers
+ *   outside a sealed room (base building) ─▶ outside ─▶ muffle ─▶ listener gain   (lowpass and quieter)
  *
  * The echoes are made in code (decaying noise), so no audio files have to ship. Changing effect fades over
  * FADE seconds so walking through a door doesn't click.
@@ -61,6 +62,9 @@ export class SoundStage {
   private dry: GainNode;
   /** Sounds that areas don't change go here, straight out. */
   readonly plain: GainNode;
+  /** Sounds from outside the sealed room the ears are in go here first: muffled, then on as any other. */
+  readonly outside: GainNode;
+  private muffle: BiquadFilterNode;
   private echoes = new Map<SoundEffect, { conv: ConvolverNode; wet: GainNode }>();
   /** What it's set to now (for tests and the console). */
   effect: SoundEffect = 'none';
@@ -79,6 +83,25 @@ export class SoundStage {
     this.lowpass.connect(this.dry);
     this.dry.connect(ctx.destination);
     this.plain.connect(ctx.destination);
+    this.outside = ctx.createGain();
+    this.muffle = ctx.createBiquadFilter();
+    this.muffle.type = 'lowpass';
+    this.muffle.frequency.value = OPEN;
+    this.muffle.Q.value = 0.7;
+    this.outside.connect(this.muffle);
+    this.muffle.connect(listener.gain);
+  }
+
+  /** How muffled what's outside a sealed room is (lowpass Hz, volume 0…1). */
+  setMuffle(lowpass: number, volume: number): void {
+    ramp(this.ctx, this.muffle.frequency, Math.max(40, Math.min(OPEN, lowpass)));
+    ramp(this.ctx, this.outside.gain, Math.max(0, volume));
+  }
+
+  /** Send a sound through the muffle (outside a sealed room) or straight to the listener as usual. */
+  route(audio: THREE.Audio | THREE.PositionalAudio, outside: boolean): void {
+    audio.gain.disconnect();
+    audio.gain.connect(outside ? this.outside : this.listener.gain);
   }
 
   /** Fade to an effect at an amount. */
@@ -131,6 +154,8 @@ export class SoundStage {
     this.lowpass.disconnect();
     this.dry.disconnect();
     this.plain.disconnect();
+    this.outside.disconnect();
+    this.muffle.disconnect();
     this.listener.gain.disconnect();
     this.listener.gain.connect(this.ctx.destination);
   }

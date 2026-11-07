@@ -66,16 +66,18 @@ export interface GameRules {
   stamina: boolean;
   /** Frames per second in a corner while playing. */
   showFps: boolean;
+  /** Base building: plans place build sites, rooms seal, comfort, sleeping to save (missing: off). */
+  building: boolean;
 }
 
-export const defaultGameRules = (): GameRules => ({ health: true, score: true, thirdPerson: false, saveItems: false, stamina: false, showFps: false });
+export const defaultGameRules = (): GameRules => ({ health: true, score: true, thirdPerson: false, saveItems: false, stamina: false, showFps: false, building: false });
 
 /** A project's game rules with defaults filled in. */
 export function gameRules(settings: Pick<ProjectSettings, 'game'> | undefined): GameRules {
   const g = settings?.game ?? {};
   const d = defaultGameRules();
   const pick = (k: keyof GameRules) => (typeof g[k] === 'boolean' ? (g[k] as boolean) : d[k]);
-  return { health: pick('health'), score: pick('score'), thirdPerson: pick('thirdPerson'), saveItems: pick('saveItems'), stamina: pick('stamina'), showFps: pick('showFps') };
+  return { health: pick('health'), score: pick('score'), thirdPerson: pick('thirdPerson'), saveItems: pick('saveItems'), stamina: pick('stamina'), showFps: pick('showFps'), building: pick('building') };
 }
 
 export interface ProjectFile {
@@ -132,6 +134,8 @@ export interface SceneSettings {
   day?: DayCycle;
   /** The map's background sound (wind, birds, a hum), looping and heard everywhere while playing (missing: none). */
   backgroundSound?: BackgroundSound;
+  /** Base building: the game's own build pieces (JSON, as building/data/*.json) and base settings merged over base.json. */
+  building?: { pieces?: unknown[]; base?: unknown };
 }
 
 export interface BackgroundSound {

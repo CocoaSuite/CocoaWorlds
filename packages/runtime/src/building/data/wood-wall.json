@@ -1,0 +1,29 @@
+{
+  "id": "wood_wall",
+  "label": "Wood wall",
+  "kind": "wall",
+  "blueprint": "Wood wall plan",
+  "snap": "edge",
+  "seal": { "needs": [], "closed": false },
+  "stages": [
+    { "id": "posts", "action": "place", "item": "Wooden post", "count": 2, "label": "Set the posts", "sound": "" },
+    { "id": "drive", "action": "tap", "tool": "Sledgehammer", "count": 6, "label": "Drive the posts in" },
+    {
+      "repeat": 4,
+      "stages": [
+        { "id": "board", "action": "place", "item": "Board", "label": "Hold a board up" },
+        { "id": "nail", "action": "tap", "tool": "Hammer", "item": "Nail", "count": 4, "label": "Nail the board" }
+      ]
+    }
+  ],
+  "mesh": {
+    "parts": [
+      { "id": "post_a", "at": [3, 52, 0], "size": [6, 104, 6], "color": "#6b4a2b", "from": "posts", "step": 1, "ground": true, "sink": { "stage": "drive", "depth": 14 } },
+      { "id": "post_b", "at": [93, 52, 0], "size": [6, 104, 6], "color": "#6b4a2b", "from": "posts", "step": 2, "ground": true, "sink": { "stage": "drive", "depth": 14 } },
+      { "id": "board_1", "at": [48, 12, 4], "size": [96, 22, 2], "color": "#9a7246", "from": "board_1" },
+      { "id": "board_2", "at": [48, 36, 4], "size": [96, 22, 2], "color": "#946d42", "from": "board_2" },
+      { "id": "board_3", "at": [48, 60, 4], "size": [96, 22, 2], "color": "#9a7246", "from": "board_3" },
+      { "id": "board_4", "at": [48, 84, 4], "size": [96, 22, 2], "color": "#946d42", "from": "board_4" }
+    ]
+  }
+}

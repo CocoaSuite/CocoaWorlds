@@ -246,3 +246,12 @@ First run here (software GPU, meaningless for speed): world step 18 ms median on
 calls** a frame (plants one by one, bulb shadows): instancing (step 3) may come before the worker. Decide from the
 user's numbers.
 
+### 11. Base building (comfort and safety)
+
+Status: first working version. Game rule `building`. Data-driven pieces (`packages/runtime/src/building/data/*.json`,
+plus `settings.building` in a scene), build sites stage by stage, doors/bolts/shutters, the chair wedge, rooms and
+sealing (muffle + wind cut), hidden comfort (ambience only), sleep-to-save in comfortable rooms, horror events and a
+sample knock, saved in progress. Design and API: `docs/building.md`. Tests: `packages/runtime/test/building.test.ts`.
+
+Next, if wanted: blocks for the base events (When a room is sealed, When something knocks); model files per piece;
+a second storey; an e2e test of placing in Play.

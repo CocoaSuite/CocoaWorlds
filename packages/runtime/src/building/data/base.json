@@ -1,0 +1,22 @@
+{
+  "grid": 96,
+  "reach": 110,
+  "placeReach": 240,
+  "seal": { "lowpass": 900, "outsideVolume": 0.45, "windVolume": 0.15 },
+  "comfort": {
+    "sealed": 35,
+    "light": 15,
+    "maxLights": 3,
+    "tags": { "fireplace": 20, "lantern": 4, "bed": 15, "chair": 6, "personal": 5 },
+    "components": { "seat": 6 },
+    "wedged": 5,
+    "locked": 5,
+    "max": 100,
+    "sleep": 55,
+    "every": 0.5
+  },
+  "ambience": { "music": 0.35, "fire": 0.6, "fireTag": "fireplace" },
+  "sleep": { "tags": ["bed"], "hours": 8, "saveOn": "sleep", "uneasy": "Too uneasy to sleep here.", "slept": "" },
+  "wedge": { "tags": ["chair"], "components": ["seat"], "unwedgeChance": 0.08, "sound": "", "prompt": "Wedge under the handle" },
+  "knock": { "every": 120, "chance": 0.3, "sound": "", "volume": 0.9, "range": 900 }
+}

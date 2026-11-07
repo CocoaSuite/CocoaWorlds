@@ -145,6 +145,7 @@ Last updated: 2026-11-01 (Phase 2, first slice).
 | Build…: export the game for the web or as a desktop game (Windows, macOS, Linux; this computer's runtime reused, others downloaded once); a standalone player page | **Done** (B4) |
 | Saved progress: kept game values, kept items, “Forget saved progress”, the real clock; in exported games and in Play | **Done** (B4) |
 | Items and the inventory: hotbar slots (1–9, wheel), click to use; blocks to give, take, count, show and hide screens and elements, set texts, react to clicks and item use | **Done** (B5) |
+| Base building (comfort and safety): JSON build pieces (wood wall, concrete wall, door, window) placed as ghost sites from plans, worked stage by stage (place, tap, hold, pour, cure timer); doors, bolts, shutters, the chair wedge; rooms found and sealed (outside muffled, wind cut); hidden comfort driving ambience; sleep to save only in comfortable rooms; events and the knock hook; saved | **Partial** | See docs/building.md (limits: one storey, edge pieces only, boxes as meshes). |
 | The optional graph view (V3), drag-and-drop of blocks, watching values and breakpoints | Planned (rest of Phase 5) |
 | Standalone runtime and Play as built (Phase 8) | Planned |
 | Desktop and web export (Phase 9) | Planned |

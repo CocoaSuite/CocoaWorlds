@@ -7,7 +7,7 @@
  */
 import { SceneDoc, expandRepeats, readComponent, type ParticlesData, type ColliderData, type GameRules, type GameValue, type GooglyEyesData, type ModelData, type SceneFile, type SignData, type TerrainData } from '@cocoaworlds/core';
 import { buildMesh, isInvisibleMaterial, type Brush, type VoxelField, type WorldBrush } from '@cocoaworlds/geometry';
-import { GameWorld, initPhysics, POSE, AT, NPC, type FrameSnapshot, type Hearing, type NavGrid, type BodyInfo, type ModelMesh, type SavedProgress, type Travel, type UiState, type PlayerInput, type PlayerStatus, type ScriptLog, type TriggerEvent } from '@cocoaworlds/runtime';
+import { GameWorld, initPhysics, POSE, AT, NPC, type BuildPrompt, type FrameSnapshot, type Hearing, type NavGrid, type BodyInfo, type ModelMesh, type SavedProgress, type Travel, type UiState, type PlayerInput, type PlayerStatus, type ScriptLog, type TriggerEvent } from '@cocoaworlds/runtime';
 import type { Problem, ScriptError } from '@cocoaworlds/scripting';
 import * as THREE from 'three';
 import { brushBounds, worldBrushes } from '../brush/brushes';
@@ -26,6 +26,7 @@ import { EMITTER_DEFAULTS } from './particles';
 import { assetUrl } from '../assets';
 import { modelGeometry, modelInstance, type ModelInstance } from './models';
 import { SoundStage, ramp } from './area-sound';
+import { BaseView } from './base-view';
 import type { SceneLighting } from './scene-lighting';
 
 export interface PlayInfo {
@@ -159,6 +160,11 @@ export class PlaySession {
 
     this.material = material;
     this.doc = doc;
+    // Base building: build sites, ghosts and the plan's preview.
+    if (this.world.base) {
+      this.baseView = new BaseView(material);
+      this.group.add(this.baseView.group);
+    }
     for (const b of this.world.movingBodies()) if (doc.get(b.id)) this.addMover(b);
 
     // Models of objects without a body of their own: still, or carried by the moving object they are inside.
@@ -429,7 +435,7 @@ export class PlaySession {
   private listener: THREE.AudioListener | null = null;
   private static buffers = new Map<string, Promise<AudioBuffer>>();
   /** Sounds playing now (for following moving objects and stopping). */
-  readonly sounds: { source: string; sound: string; audio: THREE.Audio | THREE.PositionalAudio; follow: string | null; followAt: number }[] = [];
+  readonly sounds: { source: string; sound: string; audio: THREE.Audio | THREE.PositionalAudio; follow: string | null; followAt: number; volume: number; plain: boolean; outside: boolean; fire: boolean }[] = [];
 
   /** How things sound where the ears are (Sound areas, water): the effect chain every changed sound goes through. */
   stage: SoundStage | null = null;
@@ -487,8 +493,12 @@ export class PlaySession {
     audio.setLoop(e.loop);
     audio.setVolume(e.volume);
     this.group.add(audio);
-    const entry = { source: e.source, sound: e.sound, audio, follow: e.follow, followAt: e.follow ? this.world.drawn(e.follow) : -1 };
+    const fireTag = this.world.base?.config.ambience.fireTag ?? '';
+    const fire = !!fireTag && !!this.doc.get(e.source)?.tags.includes(fireTag);
+    const entry = { source: e.source, sound: e.sound, audio, follow: e.follow, followAt: e.follow ? this.world.drawn(e.follow) : -1, volume: e.volume, plain: e.areaEffects === false, outside: false, fire };
     this.sounds.push(entry);
+    // (A fire's loudness follows comfort: set on the next frame.)
+    if (fire) this.comfortNow = -1;
     audio.onEnded = () => {
       // (Replacing three's own onEnded, which only does this.)
       (audio as { isPlaying: boolean }).isPlaying = false;
@@ -512,6 +522,10 @@ export class PlaySession {
   }
 
   private ears = new THREE.Vector3();
+  private baseView: BaseView | null = null;
+  private soundAt = new THREE.Vector3();
+  private bgOutside = false;
+  private comfortNow = -1;
 
   /** Each frame: the effect and background sound for where the ears are now. */
   private hear(): void {
@@ -520,6 +534,7 @@ export class PlaySession {
     const h = this.world.hearing(listener.getWorldPosition(this.ears));
     this.hearingNow = h;
     this.stage.set(h.effect, h.mix);
+    if (h.room !== undefined) this.hearBase(h);
     const key = h.background ? `${h.background.sound}|${h.background.volume}` : '';
     if ((this.background?.key ?? '') === key) return;
     // Same sound, new volume: just glide to it.
@@ -532,6 +547,38 @@ export class PlaySession {
     if (cur?.audio) this.fadeOut(cur.audio);
     this.background = h.background ? { key, sound: h.background.sound, audio: null } : null;
     if (h.background) void this.startBackground(key, h.background.sound, h.background.volume);
+  }
+
+  /**
+   * Base building: in a sealed room, sounds from outside it (and the wind, the background loop) go through the
+   * muffle, the wind quieter still; comfort makes music softer and the fire louder. Nothing is shown.
+   */
+  private hearBase(h: Hearing): void {
+    const base = this.world.base!, stage = this.stage!;
+    const sealed = !!h.room?.sealed;
+    const cfg = base.config;
+    stage.setMuffle(sealed ? cfg.seal.lowpass : 20000, sealed ? cfg.seal.outsideVolume : 1);
+    if (h.background && sealed) h.background = { ...h.background, volume: h.background.volume * cfg.seal.windVolume };
+    for (const s of this.sounds) {
+      if (s.plain || !(s.audio instanceof THREE.PositionalAudio)) continue;
+      const out = sealed && base.roomAt(s.audio.getWorldPosition(this.soundAt))?.id !== h.room!.id;
+      if (out !== s.outside) {
+        s.outside = out;
+        stage.route(s.audio, out);
+      }
+    }
+    if (this.background?.audio && this.bgOutside !== sealed) {
+      this.bgOutside = sealed;
+      stage.route(this.background.audio, sealed);
+    }
+    // (Comfort moves slowly, so this only changes now and then.)
+    const comfort = Math.round((h.room?.comfort ?? 0) * 20) / 20;
+    if (comfort === this.comfortNow) return;
+    this.comfortNow = comfort;
+    const ctx = this.listener!.context;
+    ramp(ctx, stage.plain.gain, 1 - cfg.ambience.music * comfort, 1.5);
+    const fire = 1 + cfg.ambience.fire * (comfort * 2 - 1);
+    for (const s of this.sounds) if (s.fire) ramp(ctx, s.audio.gain.gain, s.volume * Math.max(0, fire), 1.5);
   }
 
   /** A background loop, heard everywhere, fading in. */
@@ -556,6 +603,8 @@ export class PlaySession {
     audio.play();
     ramp(listener.context, audio.gain.gain, volume);
     this.background.audio = audio;
+    // (A new loop starts unmuffled: routed again on the next frame if the room is sealed.)
+    this.bgOutside = false;
   }
 
   private fadeOut(audio: THREE.Audio): void {
@@ -703,6 +752,7 @@ export class PlaySession {
         s.sign.retext(text);
       }
     }
+    if (this.baseView) this.baseView.sync(this.world.base!);
     for (const m of this.mixers) m.update(dt);
     // Googly eyes' pupils roll about as their objects moved this frame.
     for (const { eyes } of this.eyes) eyes.update(dt);
@@ -762,6 +812,11 @@ export class PlaySession {
   /** For tests: give the player items as a script would. */
   giveItem(name: string, n: number): void {
     this.world.giveItem(name, n);
+  }
+
+  /** What E (or a click with a plan) would do at the base now, for the HUD (null: nothing). */
+  buildPrompt(): BuildPrompt | null {
+    return this.world.buildPrompt();
   }
 
   /** What pressing Use would do now (see GameWorld.usePrompt). */
@@ -944,6 +999,7 @@ export class PlaySession {
 
   dispose(): void {
     this.disposed = true;
+    this.baseView?.dispose();
     this.effects.dispose();
     this.foliage.dispose();
     this.terrains.dispose();

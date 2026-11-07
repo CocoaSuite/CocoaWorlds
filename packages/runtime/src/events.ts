@@ -33,7 +33,24 @@ export type GameEvent =
   | { type: 'npc.die'; target: string; time: number }
   /** The player is leaving for another scene (a level change). */
   | { type: 'travel'; scene: string; landmark: string; time: number }
-  | { type: 'explosion'; at: [number, number, number]; radius: number; normal: [number, number, number] | null; time: number };
+  | { type: 'explosion'; at: [number, number, number]; radius: number; normal: [number, number, number] | null; time: number }
+  /** A light was switched on or off. */
+  | { type: 'light'; target: string; on: boolean; time: number }
+  /** Base building: a ghost build site placed, a stage done, the piece built (its required stages done). */
+  | { type: 'base.placed'; site: string; piece: string; time: number }
+  | { type: 'base.stage'; site: string; piece: string; stage: string; time: number }
+  | { type: 'base.built'; site: string; piece: string; time: number }
+  /** A room became sealed (every wall, door and window gap closed) or stopped being. */
+  | { type: 'base.sealed'; room: string; sealed: boolean; time: number }
+  | { type: 'base.door'; site: string; open: boolean; time: number }
+  | { type: 'base.lock'; site: string; locked: boolean; time: number }
+  /** A chair wedged under a door handle (chair: null, taken away). */
+  | { type: 'base.wedge'; site: string; chair: string | null; time: number }
+  /** On waking, a wedged chair was found slipped out. */
+  | { type: 'base.unwedged'; site: string; chair: string; time: number }
+  | { type: 'base.sleep'; room: string | null; comfort: number; time: number }
+  /** The sample horror hook: something knocks on a door or window of a room, from outside. */
+  | { type: 'base.knock'; site: string; room: string; at: [number, number, number]; time: number };
 
 export type EventType = GameEvent['type'];
 type Of<T extends EventType> = Extract<GameEvent, { type: T }>;

@@ -1,8 +1,9 @@
 /** The in-game display (health, score, game values, messages, the use prompt), for Play and exported games. */
-import type { UiState } from '@cocoaworlds/runtime';
+import type { BuildPrompt, UiState } from '@cocoaworlds/runtime';
 import { useEffect, useState } from 'react';
 import { t } from '../i18n';
 import type { PlaySession } from '../viewport/play-session';
+import { BuildIcon } from './build-icons';
 
 /** What the in-game display shows. */
 export interface Hud {
@@ -26,6 +27,8 @@ export interface Hud {
   messages: string[];
   /** Looking at something usable: its prompt word ('' for plain “Use”), else null. */
   use: string | null;
+  /** Base building: what E (or a click, with a plan in hand) does at a build site, door or window. */
+  build: BuildPrompt | null;
   /** Other keys that do something at what's looked at or held, with their prompt words. */
   keys: { key: string; prompt: string }[];
   /** The screen UI now, and every value texts and bars can show ({Cash}, health, score). */
@@ -83,6 +86,7 @@ export function hudOf(play: PlaySession, locked: boolean): Hud {
     values: screen.values.filter((v) => v.show).map((v) => ({ name: v.name, value: formatValue(v.value) })),
     messages: screen.messages,
     use: locked ? play.usePrompt() : null,
+    build: locked ? play.buildPrompt() : null,
     keys: locked ? play.keyPrompts() : [],
     ui: play.uiState(),
     allValues: { ...Object.fromEntries(screen.values.map((v) => [v.name, v.value])), health: Math.ceil(status?.health ?? 0), armour: Math.floor(status?.armour ?? 0), score: status?.score ?? 0 },
@@ -108,6 +112,23 @@ export function HudView({ hud }: { hud: Hud }) {
               <span>{k.prompt || t('hud.use')}</span>
             </div>
           ))}
+        </div>
+      )}
+      {hud.build && (
+        <div className={`cw-ov cw-build-prompt${hud.build.missing ? ' missing' : ''}`} data-testid="build-prompt" role="status">
+          <BuildIcon name={hud.build.icon} />
+          <div className="cw-build-text">
+            <div className="cw-use-row">
+              <kbd>{hud.build.site ? 'E' : t('hud.click')}</kbd>
+              <span>{hud.build.label}</span>
+            </div>
+            {hud.build.missing && <div className="cw-build-missing">{t('hud.needs')} {hud.build.missing}</div>}
+            {hud.build.progress !== null && (
+              <span className="cw-build-bar">
+                <span style={{ width: `${Math.round(hud.build.progress * 100)}%` }} />
+              </span>
+            )}
+          </div>
         </div>
       )}
       {hud.messages.length > 0 && (

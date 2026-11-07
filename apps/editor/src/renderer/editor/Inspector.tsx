@@ -320,6 +320,10 @@ function GameRulesSection() {
       <Field label={t('insp.saveItems')}>
         <Switch checked={rules.saveItems} label={t('insp.saveItems')} onChange={(on) => !playing && void set('saveItems', on)} />
       </Field>
+      <Field label={t('insp.building')}>
+        <Switch checked={rules.building} label={t('insp.building')} onChange={(on) => !playing && void set('building', on)} />
+      </Field>
+      <p className="cw-hint">{t('insp.buildingHint')}</p>
       <p className="cw-hint">{t('insp.progressHint')}</p>
       <Button
         size="sm"
