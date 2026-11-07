@@ -257,6 +257,9 @@ const CARRY_SLIP = 128;
 /** The fastest (u/s) what's held moves to its place. */
 const CARRY_SPEED = 1500;
 
+/** A model or Collision shape that collides as part of a unit: the object, the id it goes by, where it is. */
+type UnitPoint = { e: EntityData; id: string; world: number[] };
+
 interface Body {
   info: BodyInfo;
   body: RAPIER.RigidBody;
@@ -279,6 +282,8 @@ interface Body {
   poster?: { data: PosterData; matrix: number[] };
   /** Physics settings, when it has a Physics component. */
   rb?: RigidBodyData;
+  /** Copies made while playing: models carried by this unit, and where they were placed. */
+  riders?: { id: string; matrix: number[] }[];
   /** Where it was before the last physics step (x, y, z, then the rotation x, y, z, w), for drawing in between. */
   prev?: Float64Array;
   /** How it moved when the world started (scripts and picking up can change `info.motion`). */
@@ -943,7 +948,7 @@ export class GameWorld {
     const unitOf = this.unitOf;
     for (const root of unitRoots) for (const e of doc.subtree(root)) if (!own(e) || e.id === root) unitOf.set(e.id, root);
     const unitBrushes = new Map<string, Brush[]>(unitRoots.map((r) => [r, []]));
-    const unitPoints = new Map<string, EntityData[]>(unitRoots.map((r) => [r, []]));
+    const unitPoints = new Map<string, UnitPoint[]>(unitRoots.map((r) => [r, []]));
     const scriptedZones = new Set(scriptTargets(scripts).filter((id) => doc.get(id)?.components.trigger));
 
     const level: WorldBrush[] = [];
@@ -993,7 +998,7 @@ export class GameWorld {
         this.addPoster(e, doc.worldMatrix(e.id));
       } else if (unitOf.has(e.id)) {
         // (A model or Collision shape moved by scripts collides as part of its unit.)
-        if (e.components.model || e.components.collider) unitPoints.get(unitOf.get(e.id)!)!.push(e);
+        if (e.components.model || e.components.collider) unitPoints.get(unitOf.get(e.id)!)!.push({ e, id: e.id, world: doc.worldMatrix(e.id) });
       } else if (e.components.rigidBody || e.components.collider || this.modelShape(e)) {
         // (A Collision shape or a colliding model without Physics stays put.)
         this.addPointBody(e, doc.worldMatrix(e.id));
@@ -1189,7 +1194,7 @@ export class GameWorld {
   }
 
   /** An object moved by scripts: a kinematic body at its place, carrying the hulls of every brush inside it. */
-  private addUnit(id: string, world: number[], brushes: Brush[], pivot: [number, number, number], points: EntityData[] = []): void {
+  private addUnit(id: string, world: number[], brushes: Brush[], pivot: [number, number, number], points: UnitPoint[] = [], named = true): void {
     const t = decomposeMat4(world);
     const placement = composeTransform({ position: pivot, rotation: t.rotation, scale: [1, 1, 1] });
     const toLocal = invertRigid(placement);
@@ -1202,9 +1207,8 @@ export class GameWorld {
       this.owner.set(c.handle, id);
     }
     // Models and Collision shapes inside: their shapes, placed on the unit's body. A model with no collision of
-    // its own gets a box, so it can still be knocked about once it falls and tumbles.
-    for (const e of points) {
-      const m = this.doc.worldMatrix(e.id);
+    // its own gets a box when it is what scripts name, so it can still be knocked about once it falls and tumbles.
+    for (const { e, id: owner, world: m } of points) {
       const p = decomposeMat4(m);
       const scale = p.scale.map(Math.abs) as Q3;
       const rel = multiply(toLocal, composeTransform({ position: p.position, rotation: p.rotation, scale: [1, 1, 1] }));
@@ -1213,17 +1217,17 @@ export class GameWorld {
       let descs: RAPIER.ColliderDesc[];
       if (model) descs = modelColliders(model.data, model.mesh, scale, true).map((d) => d.desc);
       else if (e.components.collider) descs = [pointCollider(readComponent<ColliderData>('collider', e.components.collider), scale)];
-      else {
+      else if (named && owner === id) {
         const data = readComponent<ModelData>('model', e.components.model);
         const mesh = data.collision !== 'none' ? this.models.get(data.model) : undefined;
         descs = mesh && mesh.positions.length >= 9 ? modelColliders({ ...data, collision: 'box' }, { ...mesh, parts: undefined }, scale, true).map((d) => d.desc) : [];
-      }
+      } else descs = [];
       for (const desc of descs) {
         const t = desc.translation, r = desc.rotation;
         desc.setTranslation(...transformPoint(rel, [t.x, t.y, t.z]));
         desc.setRotation(quatMul(rq, r));
         const c = this.world.createCollider(desc.setFriction(0.6), body);
-        this.owner.set(c.handle, e.id);
+        this.owner.set(c.handle, owner);
       }
     }
     this.track(id, 'unit', 'kinematic', body, brushes);
@@ -2877,7 +2881,22 @@ export class GameWorld {
     };
     const rootHasBody = !!root.components.rigidBody;
     const sounds: [string, SoundData, number[]][] = [];
-    const unitBrushes: Brush[] = [];
+    // The copy is one unit, except parts its own scripts move by themselves (a lid that falls off): units of their own.
+    const inCopy = new Set(parts.map((e) => e.id));
+    const ownBody = (e: EntityData) => !!e.components.rigidBody || !!e.components.trigger || !!e.components.water || !!e.components.ladder || !!e.components.levelChange || !!e.components.npc || !!e.components.soundArea;
+    const named = rootHasBody ? [] : scriptTargets(parts.filter((e) => e.components.script).map((e) => [e.id, e.components.script as unknown as Script])).filter((t) => t !== template && inCopy.has(t) && !ownBody(this.doc.get(t)!));
+    const subRoots = named.filter((t) => !named.some((o) => o !== t && this.doc.isAncestor(o, t)));
+    const unitOfPart = (e: EntityData): string => {
+      for (let x: EntityData | undefined = e; x && x.id !== template; x = x.parent ? this.doc.get(x.parent) : undefined) if (subRoots.includes(x.id)) return x.id;
+      return template;
+    };
+    const units = new Map<string, { brushes: Brush[]; points: UnitPoint[]; riders: { id: string; matrix: number[] }[] }>();
+    const unitFor = (e: EntityData) => {
+      const u = unitOfPart(e);
+      if (!units.has(u)) units.set(u, { brushes: [], points: [], riders: [] });
+      this.unitOf.set(ids.get(e.id)!, ids.get(u)!);
+      return units.get(u)!;
+    };
     for (const e of parts) {
       const id = ids.get(e.id)!;
       const copy: EntityData = { ...remap(e), id };
@@ -2889,17 +2908,25 @@ export class GameWorld {
         const brush = brushToWorld(fromData({ faces: brushData.faces, mesh: brushData.mesh }), world);
         if (e.components.trigger) this.addTrigger(copy, brush, false);
         else if (e.components.rigidBody) this.addBrushBody(copy, brush);
-        else if (brushData.role !== 'subtract' && !rootHasBody) {
-          unitBrushes.push(brush);
-          this.unitOf.set(id, copyId);
-        }
+        else if (brushData.role !== 'subtract' && !rootHasBody) unitFor(e).brushes.push(brush);
       } else if (e.components.poster) this.addPoster(copy, world);
-      else if (e.components.rigidBody || e.components.collider || this.modelShape(e)) this.addPointBody(copy, world);
+      else if (!rootHasBody && !e.components.rigidBody && (e.components.model || e.components.collider)) {
+        const u = unitFor(e);
+        u.points.push({ e, id, world });
+        if (e.components.model) u.riders.push({ id, matrix: world });
+      } else if (e.components.rigidBody || e.components.collider || this.modelShape(e)) this.addPointBody(copy, world);
       if (e.components.breakable) this.breakHealth.set(id, readComponent<BreakableData>('breakable', e.components.breakable).health);
       if (e.components.sign) this.signs.set(id, String((e.components.sign as { text?: unknown }).text ?? ''));
       if (e.components.sound) sounds.push([id, readComponent<SoundData>('sound', e.components.sound), world]);
     }
-    if (unitBrushes.length && !this.bodies.has(copyId)) this.addUnit(copyId, multiply(shift, this.doc.worldMatrix(template)), unitBrushes, [at[0], at[1], at[2]]);
+    for (const [u, { brushes, points, riders }] of units) {
+      const id = ids.get(u)!;
+      if (this.bodies.has(id) || (!brushes.length && !points.length && !riders.length)) continue;
+      const p = u === template ? at : pivotOf(this.doc, u, boundsOfEntity);
+      const pivot: [number, number, number] = u === template ? [p[0], p[1], p[2]] : [p[0] + offset[0], p[1] + offset[1], p[2] + offset[2]];
+      this.addUnit(id, multiply(shift, this.doc.worldMatrix(u)), brushes, pivot, points, u !== template);
+      if (riders.length) this.bodies.get(id)!.riders = riders;
+    }
     for (const id of ids.values()) {
       const b = this.bodies.get(id);
       if (b && b.info.kind !== 'zone') {
@@ -2960,6 +2987,11 @@ export class GameWorld {
   }
 
   /** Copies made and objects removed since the last call (for drawing). */
+  /** Models a copy's unit carries (to draw them with it). */
+  riders(id: string): { id: string; matrix: number[] }[] {
+    return this.bodies.get(id)?.riders ?? [];
+  }
+
   drainChanges(): { spawned: BodyInfo[]; removed: string[] } {
     const spawned = this.spawnedIds.map((id) => this.bodies.get(id)?.info).filter((b): b is BodyInfo => !!b);
     const removed = this.removedIds;

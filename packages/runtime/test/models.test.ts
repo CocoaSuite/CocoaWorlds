@@ -178,3 +178,34 @@ describe('a model that scripts move', () => {
     expect(w.positionOf(lid.id)![1]).toBeGreaterThan(-4);
   });
 });
+
+describe('a copy made while playing', () => {
+  it('a part its scripts make fall is a unit of its own: the lid pops off, the box stays', () => {
+    const giftBox = newEntity('gift box', { brush: { role: 'solid', faces: toData(box([-16, 0, -16], [16, 24, 16])).faces } as never });
+    giftBox.visible = false;
+    const lid = newEntity('lid', { model: { model: 'assets/models/lid.glb', units: 'metres', animation: '', castShadows: true, collision: 'auto' } as never }, { position: [0, 24, 0] });
+    lid.parent = giftBox.id;
+    const n = (value: number) => ({ id: `n${value}`, kind: 'number' as const, value });
+    giftBox.components.script = { version: 1, variables: [], handlers: [{ id: 'h', event: { id: 'e', kind: 'start' }, body: [
+      { id: 'w', kind: 'wait', seconds: n(0.5) },
+      { id: 'p', kind: 'physical', target: { entity: lid.id } },
+      { id: 'q', kind: 'push', target: { entity: lid.id }, direction: 'up', strength: n(250) },
+    ] }] } as never;
+    const spot = newEntity('spot', {}, { position: [-200, 12, 0] });
+    const maker = newEntity('maker', {});
+    maker.components.script = { version: 1, variables: [], handlers: [{ id: 'm', event: { id: 'em', kind: 'start' }, body: [{ id: 'c', kind: 'spawn', template: { entity: giftBox.id }, at: { entity: spot.id } }] }] } as never;
+    const w = GameWorld.create(scene(floor(), giftBox, lid, spot, maker, newEntity('start', { playerSpawn: {} }, { position: [300, 0, 0] })), { models: new Map([['assets/models/lid.glb', boxes([[[-0.45, 0, -0.45], [0.45, 0.1, 0.45]]])]]) });
+    run(w, 0.2);
+    const [boxCopy, lidCopy] = [`${giftBox.id}#1`, `${lid.id}#1`];
+    expect(w.movingBodies().find((b) => b.id === lidCopy)?.kind).toBe('unit');
+    expect(w.riders(lidCopy).map((r) => r.id)).toEqual([lidCopy]);
+    const boxAt = w.positionOf(boxCopy)!;
+    expect(boxAt).toBeTruthy();
+    const start = w.positionOf(lidCopy)![1];
+    run(w, 0.5);
+    expect(w.positionOf(lidCopy)![1]).toBeGreaterThan(start);
+    run(w, 3);
+    expect(w.positionOf(lidCopy)![1]).toBeGreaterThan(-4);
+    expect(w.positionOf(boxCopy)).toEqual(boxAt);
+  });
+});

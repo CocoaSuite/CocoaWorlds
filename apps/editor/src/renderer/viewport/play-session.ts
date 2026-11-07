@@ -745,7 +745,19 @@ export class PlaySession {
     this.emit(dt);
     this.effects.tick(dt);
     const changes = this.world.drainChanges();
-    for (const b of changes.spawned) this.addMover(b);
+    for (const b of changes.spawned) {
+      this.addMover(b);
+      for (const r of this.world.riders(b.id)) {
+        const data = this.modelOf(r.id);
+        if (!data) continue;
+        const holder = new THREE.Group();
+        holder.matrixAutoUpdate = false;
+        holder.matrix.fromArray(r.matrix);
+        this.group.add(holder);
+        this.movers.push({ id: b.id, i: this.world.drawn(b.id), obj: holder, base: holder.matrix.clone() });
+        this.attachModel(holder, data, r.id);
+      }
+    }
     if (changes.removed.length) {
       const gone = new Set(changes.removed);
       for (const m of this.movers.filter((m) => gone.has(m.id))) {

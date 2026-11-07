@@ -330,4 +330,8 @@ shapes inside a unit put their shapes on the unit's body (`addUnit` `points`; a 
 gets a box), and `play-session.ts` draws a model that is its own unit. Test: `models.test.ts` "a model that scripts
 move". Not checked by eye in the app.
 
-Still so: in a copy made while playing, the whole copy is one unit, so making a part of it fall drops the whole copy.
+Copies made while playing (2026-11-08): parts the copy's own scripts move (`physical`, `push`, `move` …) are units
+of their own, the rest of the copy one unit; models and Collision shapes in a copy collide with their unit, and the
+copy's models are drawn with it (`Body.riders`, `GameWorld.riders`, drawn in `PlaySession.tick`). Before, models
+without collision in a copy were not drawn at all. Test: `models.test.ts` "a copy made while playing". A part that
+moves by itself doesn't follow when the whole copy is moved.
