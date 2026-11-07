@@ -33,8 +33,11 @@ colours are the look at full day; dawn and dusk warm the horizon and the sun; at
 light from the other side) and stars take over, and the ambient light dims (**Night brightness**). Settings: start
 hour, how many real minutes a day lasts (0: still), night brightness. The editor shows the start hour; Play and
 exported games run the clock. A scene without a Sun gets one. Blocks: **Set the time of day to n**, value **the
-time of day**. Code: `viewport/day.ts`, `SceneLighting.setDay`, `GameWorld.dayHour`. Reflections follow every
-half hour of game time.
+time of day**. Code: `viewport/day.ts`, `SceneLighting.setDay`, `GameWorld.dayHour`. Reflections follow the
+light: whenever it has changed by a few percent (`SceneLighting.dayVersion`), the sky reflection is redrawn and every
+reflection probe captures again, each new capture going in half over what the probe held
+(`SceneReflections.relight`), so dawn and dusk change brushes' light smoothly. Probes also light brushes (their
+ambient), so a stale daytime capture used to keep brushes bright into the night until the camera moved.
 
 **Days.** The day count starts at **First day** and goes up each time the clock passes midnight (also while
 sleeping in a base). **Show the day on screen** puts a Day counter with the health and score (`{day}` also works

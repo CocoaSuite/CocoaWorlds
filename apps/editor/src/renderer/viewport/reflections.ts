@@ -16,6 +16,9 @@ import { setSceneReflection } from './project-materials';
 /** How far (u) the camera may move before the scene is captured again. */
 const MOVE = 192;
 
+/** How much of a capture made because the light changed goes into what the probe held (the rest eases in later). */
+const SOFT = 0.5;
+
 /** Views of a capture drawn a frame (six make a capture; the blur is the frame after the last). */
 const FACES_PER_FRAME = 2;
 
@@ -49,12 +52,13 @@ export function sceneProbes(doc: SceneDoc, pieces: Brush[], auto: boolean): Prob
 /** Writes one probe's blurred cube into its row of the atlas. */
 function atlasPass(): { scene: THREE.Scene; cam: THREE.Camera; mat: THREE.ShaderMaterial } {
   const mat = new THREE.ShaderMaterial({
-    uniforms: { env: { value: null }, slot: { value: 0 }, maxLod: { value: 5 } },
+    uniforms: { env: { value: null }, slot: { value: 0 }, maxLod: { value: 5 }, share: { value: 1 } },
     vertexShader: 'void main() { gl_Position = vec4(position.xy, 0.0, 1.0); }',
     fragmentShader: /* glsl */ `
       uniform samplerCube env;
       uniform float slot;
       uniform float maxLod;
+      uniform float share;
       ${OCT_GLSL}
       void main() {
         vec2 f = floor(gl_FragCoord.xy);
@@ -62,8 +66,11 @@ function atlasPass(): { scene: THREE.Scene; cam: THREE.Camera; mat: THREE.Shader
         vec2 ij = vec2(mod(f.x, ${PROBE_TILE.toFixed(1)}), f.y - slot * ${PROBE_TILE.toFixed(1)});
         vec3 d = cwOctDir(ij / ${(PROBE_TILE - 1).toFixed(1)});
         float r = level / ${(PROBE_LEVELS - 1).toFixed(1)};
-        gl_FragColor = vec4(textureLod(env, d, maxLod * r * (2.0 - r)).rgb, 1.0);
+        gl_FragColor = vec4(textureLod(env, d, maxLod * r * (2.0 - r)).rgb, share);
       }`,
+    // (Over what the row held, by `share`: a new capture can ease in.)
+    blending: THREE.NormalBlending,
+    transparent: true,
     depthTest: false,
     depthWrite: false,
     toneMapped: false,
@@ -93,6 +100,9 @@ export class SceneReflections {
   private queue: number[] = [];
   /** Set when the level changed: capture again at the next chance. */
   dirty = true;
+  /** The light changed (day and night): capture everything again, each easing in over what it held. */
+  private soft = false;
+  private queueSoft = false;
 
   constructor(private r: THREE.WebGLRenderer) {
     this.pmrem = new THREE.PMREMGenerator(r);
@@ -128,7 +138,14 @@ export class SceneReflections {
    * A capture under way. Its six views are drawn over the next frames (a few a frame) and then blurred into its
    * row of the atlas, so a capture never holds one frame up for six drawings of the whole scene and the blur.
    */
-  private job: { slot: number; from: THREE.Vector3; face: number } | null = null;
+  private job: { slot: number; from: THREE.Vector3; face: number; soft?: boolean } | null = null;
+
+  /** The light changed (the time of day): capture again, easing in, so the change has no hard step. */
+  relight(): void {
+    if (!this.on) return;
+    if (!this.dirty) this.soft = true;
+    this.dirty = true;
+  }
 
   /** Capture if due (camera at `eye`); `helpers` are editor aids left out of the picture. */
   update(scene: THREE.Scene, eye: THREE.Vector3, enabled: boolean, helpers: THREE.Object3D[] = []): void {
@@ -141,7 +158,11 @@ export class SceneReflections {
       }
       return;
     }
-    if (this.dirty) this.queue = this.probes.map((_, i) => i);
+    if (this.dirty) {
+      // (Rooms still waiting keep their turn: captures again and again as the light changes don't starve the last.)
+      for (let i = 0; i < this.probes.length; i++) if (!this.queue.includes(i)) this.queue.push(i);
+      this.queueSoft = this.soft;
+    }
     if (this.job) return this.go(scene, helpers);
     const now = performance.now();
     const outdoor = !this.on || this.dirty || this.at.distanceTo(eye) >= MOVE;
@@ -149,14 +170,15 @@ export class SceneReflections {
       this.last = now;
       this.dirty = false;
       this.at.copy(eye);
-      this.job = { slot: 0, from: eye.clone(), face: 0 };
+      this.job = { slot: 0, from: eye.clone(), face: 0, soft: this.soft };
+      this.soft = false;
       return this.go(scene, helpers);
     }
     // One room after another.
     const i = this.queue.shift();
     if (i === undefined || !this.on) return;
     const p = this.probes[i]!;
-    this.job = { slot: i + 1, from: new THREE.Vector3(...p.at), face: 0 };
+    this.job = { slot: i + 1, from: new THREE.Vector3(...p.at), face: 0, soft: this.queueSoft };
     this.go(scene, helpers);
   }
 
@@ -189,7 +211,7 @@ export class SceneReflections {
       return;
     }
     this.job = null;
-    this.store(job.slot);
+    this.store(job.slot, job.soft ? SOFT : 1);
     if (job.slot === 0 && !this.on) {
       this.on = true;
       PROBES.cwProbeAtlas.value = this.atlas.texture;
@@ -248,7 +270,7 @@ export class SceneReflections {
   }
 
   /** Blur the drawn cube and write it into the atlas row `slot`. */
-  private store(slot: number): void {
+  private store(slot: number, share = 1): void {
     const r = this.r;
     this.env = this.pmrem.fromCubemap(this.cube.texture, this.env ?? undefined);
     // Into the atlas row.
@@ -256,6 +278,7 @@ export class SceneReflections {
     const u = this.pass.mat.uniforms;
     u.env!.value = this.env.texture;
     u.slot!.value = slot;
+    u.share!.value = share;
     u.maxLod!.value = Math.max(0, this.env.texture.mipmaps.length - 1);
     this.atlas.viewport.set(0, slot * PROBE_TILE, PROBE_LEVELS * PROBE_TILE, PROBE_TILE);
     this.atlas.scissor.copy(this.atlas.viewport);

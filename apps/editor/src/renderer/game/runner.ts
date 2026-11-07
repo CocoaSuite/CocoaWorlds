@@ -58,6 +58,7 @@ export class GameRunner {
   private ao: AoRenderer | null = null;
   private groundBlend: GroundBlend | null = null;
   private reflections: SceneReflections | null = null;
+  private lightSeen = 0;
   private probesFor: PlaySession | null = null;
   private materials = new Map<string, THREE.Material>();
   private keys = new Set<string>();
@@ -253,6 +254,11 @@ export class GameRunner {
         this.reflections.prime(this.scene, this.cam.getWorldPosition(new THREE.Vector3()), play.doc.settings.reflections !== false);
         this.renderer.compile(play.group, this.cam, this.scene);
         play.warm = (o) => this.renderer.compileAsync(o, this.cam, this.scene);
+      }
+      // (The time of day changed the light enough: capture again, easing in.)
+      if (this.lighting.dayVersion !== this.lightSeen) {
+        this.lightSeen = this.lighting.dayVersion;
+        this.reflections.relight();
       }
       this.reflections.update(this.scene, this.cam.getWorldPosition(new THREE.Vector3()), this.play?.doc.settings.reflections !== false);
       (this.groundBlend ??= new GroundBlend()).prepare(this.renderer, this.scene, this.cam);

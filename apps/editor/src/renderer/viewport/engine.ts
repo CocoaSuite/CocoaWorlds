@@ -1152,6 +1152,14 @@ export class ViewportEngine {
     return [this.snapV(p.x), this.snapV(p.y), this.snapV(p.z)];
   }
 
+  /** The time of day changed the light enough: reflections capture again, easing in. */
+  private relight(): void {
+    if (this.lighting.dayVersion === this.lightSeen) return;
+    this.lightSeen = this.lighting.dayVersion;
+    this.reflections?.relight();
+  }
+  private lightSeen = 0;
+
   frameSelection(): void {
     const box = new THREE.Box3();
     const addBrush = (id: string) => {
@@ -1842,6 +1850,7 @@ export class ViewportEngine {
       this.reflections ??= new SceneReflections(r);
       if (this.reflectOn()) this.syncProbes();
       this.warmPlay(this.fpCam, this.fpCam.getWorldPosition(new THREE.Vector3()));
+      this.relight();
       (this.reflections ??= new SceneReflections(r)).update(this.scene, this.fpCam.getWorldPosition(new THREE.Vector3()), this.reflectOn(), [this.grid.object]);
       if (this.reflections.busy) this.invalidate();
       this.groundBlend.prepare(r, this.scene, this.fpCam, [this.grid.object]);
@@ -1859,6 +1868,7 @@ export class ViewportEngine {
     this.reflections ??= new SceneReflections(r);
     if (this.reflectOn()) this.syncProbes();
     this.warmPlay(this.rig.camera, this.rig.target.clone().add(new THREE.Vector3(0, 64, 0)));
+    this.relight();
     (this.reflections ??= new SceneReflections(r)).update(this.scene, this.rig.target.clone().add(new THREE.Vector3(0, 64, 0)), this.reflectOn(), [this.grid.object]);
     if (this.reflections.busy) this.invalidate();
     this.groundBlend.prepare(r, this.scene, this.rig.camera, [this.grid.object]);

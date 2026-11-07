@@ -74,6 +74,9 @@ const cloudAt = (day: string, night: string, dusk: string, look: { day: number; 
 /** A bulb of brightness 1 lights a wall this far away about as much as the sun does (units). */
 const FALLOFF = 96;
 
+/** How bright a colour looks. */
+const lum = (c: THREE.Color) => 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b;
+
 export class SceneLighting {
   readonly group = new THREE.Group();
   private key = '';
@@ -84,7 +87,7 @@ export class SceneLighting {
   /** The lights by object id, with how much brighter the light is than its Brightness (Play changes them). */
   readonly lights = new Map<string, { light: THREE.Light; falloff: number }>();
   /** With day and night on: the daytime look to change from, and what changes. */
-  private day: { cycle: DayCycle; settings: SceneSettings; sun: THREE.DirectionalLight; sunColour: string; sunIntensity: number; noon: THREE.Vector3; center: THREE.Vector3; radius: number; hemi: THREE.HemisphereLight; reflectAt: number } | null = null;
+  private day: { cycle: DayCycle; settings: SceneSettings; sun: THREE.DirectionalLight; sunColour: string; sunIntensity: number; noon: THREE.Vector3; center: THREE.Vector3; radius: number; hemi: THREE.HemisphereLight } | null = null;
 
   constructor() {
     this.group.name = 'scene-lighting';
@@ -207,7 +210,8 @@ export class SceneLighting {
         this.suns.push(sun);
       }
       const f = firstSun?.forward ?? new THREE.Vector3(-0.35, -0.6, -0.45);
-      this.day = { cycle, settings, sun, sunColour: firstSun?.colour ?? '#fff4e0', sunIntensity: firstSun?.intensity ?? 2, noon: new THREE.Vector3(-f.x, 0, -f.z), center, radius, hemi, reflectAt: NaN };
+      this.day = { cycle, settings, sun, sunColour: firstSun?.colour ?? '#fff4e0', sunIntensity: firstSun?.intensity ?? 2, noon: new THREE.Vector3(-f.x, 0, -f.z), center, radius, hemi };
+      this.lightSig = null;
     }
 
     // Sky, background and fog.
@@ -252,13 +256,18 @@ export class SceneLighting {
     applySky(this.skyMat, { ...sky, top: hex(look.top), horizon: hex(look.horizon), ground: hex(new THREE.Color(sky.ground).multiplyScalar(0.3 + 0.7 * look.day)), stars: Math.max(sky.stars, look.night), cloudColour: hex(cloudAt(sky.cloudColour, '#2a3246', '#ffb48c', look)), cloudShade: hex(cloudAt(sky.cloudShade, '#121724', '#8a5a6e', look)) }, { dir: look.toward, colour: sunSeen });
     if (this.fog) this.fog.color.copy(fromSky ? look.horizon : new THREE.Color(st.fog.color).lerp(look.horizon, 1 - look.day));
     this.background.copy(look.horizon);
-    // (Reflections are drawn again only every half hour of game time: drawing them is slow.)
-    const step = Math.round(h * 2) / 2;
-    if (step !== d.reflectAt) {
-      d.reflectAt = step;
+    // (Reflections are drawn again only once the light has changed a little: drawing them is slow.)
+    const sig = [d.sun.intensity, d.hemi.intensity * lum(d.hemi.color), lum(look.horizon), lum(look.top)];
+    if (!this.lightSig || sig.some((v, i) => Math.abs(v - this.lightSig![i]!) > 0.004 + 0.03 * Math.abs(this.lightSig![i]!))) {
+      this.lightSig = sig;
+      this.dayVersion++;
       setReflection(hex(look.top), hex(look.horizon), hex(new THREE.Color(sky.ground).multiplyScalar(0.3 + 0.7 * look.day)));
     }
   }
+
+  /** The light at the last reflection update, and a count that goes up at each (probes capture again then). */
+  private lightSig: number[] | null = null;
+  dayVersion = 0;
 
   private background = new THREE.Color('#1f1f1f');
   private fog: THREE.Fog | null = null;

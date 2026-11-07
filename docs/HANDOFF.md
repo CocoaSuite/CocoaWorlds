@@ -310,3 +310,12 @@ Status: done. See docs/rendering.md, Grass on top. A 2048 u lawn (20,000 tufts):
 bare patches about a fifth. Saves 8 of 50 triangles a tuft up close, 6 of 14 and 6 of 10 further out. Code:
 `viewport/foliage.ts` (`tuftGeometry` parts, `edgeTufts`, `add`). Test: `apps/editor/test/foliage-discs.test.ts`.
 Not checked by eye in the app.
+
+### 17. Day and night: no hard step in brushes' light
+
+Status: done. Brushes take their ambient light from the reflection probes, which were captured only when the camera
+moved 192 u or the level changed, so at dusk they stayed day-bright and then jumped. Now `SceneLighting.setDay` bumps
+`dayVersion` when the light changed by a few percent; the editor and the game call `SceneReflections.relight()`,
+which captures every probe again, each blended half over what it held. Rooms waiting their turn keep it (no
+starving). Cost: captures run on and off through dawn and dusk (2 extra views a frame while one is under way),
+none at noon or night. Test: `apps/editor/test/day.test.ts`. Not checked by eye in the app.
