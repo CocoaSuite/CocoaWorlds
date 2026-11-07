@@ -231,3 +231,18 @@ Not yet in the snapshot (step 1 of the proposal): everything else read per frame
 light states, `switchedOn`, events). The fill still uses `drawnMotionOf`, which makes small arrays per body: write
 straight into the typed array once the worker step is near.
 
+### 10. Frame-time bench
+
+Status: done (2026-11-07), waiting for the user's first run on a real GPU. `npm run bench` (`tools/bench/run.mjs`;
+how to use: `tools/bench/README.md`): makes a project through the editor, writes the bench level into it
+(`tools/bench/scene.ts`, built by esbuild from the engine's own functions: 64 rooms, 16 bulbs (4 with shadows),
+200 crates, 40 creatures (10 Hunters), 2,000 plants, a rocket every 3 s), plays it with vsync off for 8 + 30 s while
+the player walks and turns, and writes `tools/bench/results/<date>-<commit>.md` and `.json` (git-ignored). Frame
+times come from `viewport/frame-log.ts` (`ViewportEngine.frames`: interval, tick, world step, draw, draw calls,
+triangles per Play frame); the status line shows `world … ms · draw … ms` in Play. Test: `tools/bench/scene.test.ts`
+(the level has what it promises, is the same each time, plays). Vitest now also runs `tools/**/*.test.ts`.
+
+First run here (software GPU, meaningless for speed): world step 18 ms median on this 2-core VM, and **5,494 draw
+calls** a frame (plants one by one, bulb shadows): instancing (step 3) may come before the worker. Decide from the
+user's numbers.
+

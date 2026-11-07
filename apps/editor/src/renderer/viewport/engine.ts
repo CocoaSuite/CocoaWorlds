@@ -2,6 +2,7 @@
  * The editor viewport: draws the level, grid and gizmos, handles camera navigation, picking, transform dragging
  * and the brush tool. Renders on demand (only after something changes) so an idle editor costs no GPU time.
  */
+import { FrameLog } from './frame-log';
 import { SceneReflections, sceneProbes } from './reflections';
 import { GroundBlend } from './ground-blend';
 import { SceneDoc, expandRepeats, ownerOf, type EntityData, type Transform, type Vec3 } from '@cocoaworlds/core';
@@ -147,6 +148,8 @@ const SNAP_PX = 12;
 
 export interface ViewportStats {
   frameMs: number;
+  /** The world's step in the last frame of Play (ms); null outside Play. */
+  worldMs: number | null;
   draws: number;
   triangles: number;
   view: ViewKind;
@@ -1577,8 +1580,10 @@ export class ViewportEngine {
     if (this.disposed) return;
     this.raf = requestAnimationFrame(this.loop);
     const now = performance.now();
-    const dt = Math.min(0.05, (now - this.lastTick) / 1000);
+    const interval = now - this.lastTick;
+    const dt = Math.min(0.05, interval / 1000);
     this.lastTick = now;
+    let tickMs = 0;
     if (this.drag?.mode === 'look' && this.keys.size) {
       const v = new THREE.Vector3(
         (this.keys.has('KeyD') ? 1 : 0) - (this.keys.has('KeyA') ? 1 : 0),
@@ -1592,6 +1597,7 @@ export class ViewportEngine {
     }
     if (this.play) {
       const frame = this.play.tick(dt);
+      tickMs = performance.now() - now;
       const travel = this.play.travel;
       if (travel && !this.travelling) {
         this.travelling = true;
@@ -1630,8 +1636,11 @@ export class ViewportEngine {
     const t0 = performance.now();
     this.renderer.info.reset();
     this.render();
+    const drawMs = performance.now() - t0;
+    if (this.play) this.frames.add(interval, tickMs, this.play.stepMs, drawMs, this.renderer.info.render.calls, this.renderer.info.render.triangles);
     this.sendStats({
-      frameMs: performance.now() - t0,
+      frameMs: drawMs,
+      worldMs: this.play ? this.play.stepMs : null,
       draws: this.renderer.info.render.calls,
       triangles: this.renderer.info.render.triangles,
       view: this.rig.kind,
@@ -1641,6 +1650,9 @@ export class ViewportEngine {
   };
 
   private stats: ViewportStats | null = null;
+
+  /** Frame times while playing (read by the bench, `tools/bench`). */
+  readonly frames = new FrameLog();
   private statsAt = -Infinity;
   private statsTimer = 0;
 

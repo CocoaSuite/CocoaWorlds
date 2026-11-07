@@ -646,6 +646,9 @@ export class PlaySession {
 
   private motion = new THREE.Matrix4();
 
+  /** How long the world's step took in the last tick (ms). */
+  stepMs = 0;
+
   /** This frame's picture of what is drawn (taken in `tick`, after the step). */
   private snap: FrameSnapshot | null = null;
 
@@ -656,7 +659,9 @@ export class PlaySession {
 
   /** Advance the game and move what moved. Returns what happened this frame. */
   tick(dt: number): PlayFrame {
+    const t0 = performance.now();
     this.world.step(dt);
+    this.stepMs = performance.now() - t0;
     // (One picture of what is drawn this frame: everything below reads it, not the world object by object.)
     this.snap = this.world.snapshot();
     this.effects.syncProjectiles(this.world.projectilesNow());

@@ -15,6 +15,9 @@ Each need also notes the roadmap step that delivers it (the B / A steps are in [
 
 Status as of 2026-11-02 (after B4).
 
+Frame times (how fast the engine runs, not what it can make) are measured with `npm run bench`: see
+[tools/bench/README.md](tools/bench/README.md).
+
 ## What every target needs
 
 These come up in almost every game, so they come first.

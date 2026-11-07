@@ -2,7 +2,7 @@
   "name": "cocoaworlds",
   "private": true,
   "version": "0.1.0",
-  "description": "CocoaWorlds — 3D game engine and editor",
+  "description": "CocoaWorlds \u2014 3D game engine and editor",
   "workspaces": [
     "packages/*",
     "apps/*"
@@ -13,7 +13,8 @@
     "start": "npm run start -w @cocoaworlds/editor",
     "typecheck": "tsc -b",
     "test": "vitest run",
-    "test:e2e": "npm run test:e2e -w @cocoaworlds/editor"
+    "test:e2e": "npm run test:e2e -w @cocoaworlds/editor",
+    "bench": "node tools/bench/run.mjs"
   },
   "engines": {
     "node": ">=22"

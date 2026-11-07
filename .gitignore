@@ -7,3 +7,4 @@ release/
 .cocoaworlds/
 test-results/
 __pycache__/
+tools/bench/results/
