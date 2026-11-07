@@ -341,3 +341,9 @@ moves by itself doesn't follow when the whole copy is moved.
 Status: done (2026-11-08). “When the player uses this” has an **only once** tick (`once` on the event): after its first
 run the stack stops listening and the prompt goes (`Instance.spent` in `vm.ts`). Not kept in saved progress.
 Test: `packages/scripting/test/scripting.test.ts` "only once".
+
+### 20. Fall and tumble keeps the Physics mass
+
+Status: done (2026-11-08). `makePhysical` gives an object with a Physics component its own mass (fixed objects
+made to fall used to weigh as solid wood, so anything big was too heavy to pick up). Objects without Physics still
+weigh as wood. Test: `models.test.ts` "a fixed Physics object made to fall".

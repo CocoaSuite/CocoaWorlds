@@ -3078,8 +3078,12 @@ export class GameWorld {
     if (b.body.isDynamic()) return;
     this.tweens.delete(b.info.id);
     b.body.setBodyType(RAPIER.RigidBodyType.Dynamic, true);
-    // About wood: 500 kg/m³ in an inch-based world.
-    for (let i = 0; i < b.body.numColliders(); i++) b.body.collider(i).setDensity(500 / UNITS_PER_METRE ** 3);
+    // Its Physics mass when it has one, else about wood: 500 kg/m³ in an inch-based world.
+    const k = b.body.numColliders();
+    for (let i = 0; i < k; i++) {
+      if (b.rb) b.body.collider(i).setMass(Math.max(0.01, b.rb.mass) / k);
+      else b.body.collider(i).setDensity(500 / UNITS_PER_METRE ** 3);
+    }
     b.body.enableCcd(true);
     b.info.motion = 'dynamic';
   }

@@ -209,3 +209,16 @@ describe('a copy made while playing', () => {
     expect(w.positionOf(boxCopy)).toEqual(boxAt);
   });
 });
+
+describe('a fixed Physics object made to fall', () => {
+  it('weighs its Physics mass, so a big light box can be picked up', () => {
+    const big = newEntity('box', { brush: { role: 'solid', faces: toData(box([-24, 0, -24], [24, 48, 24])).faces } as never, rigidBody: { motion: 'fixed', mass: 3 } as never });
+    const n = (value: number) => ({ id: `n${value}`, kind: 'number' as const, value });
+    big.components.script = { version: 1, variables: [], handlers: [{ id: 'h', event: { id: 'e', kind: 'start' }, body: [{ id: 'w', kind: 'wait', seconds: n(0.2) }, { id: 'p', kind: 'physical', target: { self: true } }] }] } as never;
+    const w = GameWorld.create(scene(floor(), big, newEntity('start', { playerSpawn: {} }, { position: [300, 0, 0] })), {});
+    run(w, 0.5);
+    const b = (w as unknown as { bodies: Map<string, { body: RAPIER.RigidBody }> }).bodies.get(big.id)!;
+    expect(b.body.isDynamic()).toBe(true);
+    expect(b.body.mass()).toBeCloseTo(3, 1);
+  });
+});
