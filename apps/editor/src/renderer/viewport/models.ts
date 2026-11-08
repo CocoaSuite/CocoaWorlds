@@ -6,6 +6,8 @@ import type { ModelData } from '@cocoaworlds/core';
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { clone as cloneSkinned } from 'three/examples/jsm/utils/SkeletonUtils.js';
+import { computeMikkTSpaceTangents } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import * as MikkTSpace from 'three/examples/jsm/libs/mikktspace.module.js';
 import { assetUrl } from '../assets';
 import { projectMaterial, releaseMaterial } from './project-materials';
 
@@ -97,6 +99,35 @@ export function setCollisionsVisible(v: boolean): void {
 const cache = new Map<string, Promise<LoadedModel>>();
 const loader = new GLTFLoader();
 
+/**
+ * Normal maps are baked against Blender's tangents. A file saved without them gets the same ones here, so baked
+ * shading has no seams.
+ */
+async function addTangents(scene: THREE.Object3D): Promise<void> {
+  const meshes: THREE.Mesh[] = [];
+  scene.traverse((o) => {
+    const mesh = o as THREE.Mesh;
+    const mats = mesh.isMesh ? (Array.isArray(mesh.material) ? mesh.material : [mesh.material]) : [];
+    const g = mesh.geometry;
+    if (mats.some((m) => (m as THREE.MeshStandardMaterial).normalMap) && g && !g.attributes.tangent && g.attributes.normal && g.attributes.uv) meshes.push(mesh);
+  });
+  if (!meshes.length) return;
+  await MikkTSpace.ready;
+  const flipped = new Set<THREE.Material>();
+  for (const mesh of meshes) {
+    computeMikkTSpaceTangents(mesh.geometry, MikkTSpace);
+    // The loader flips the normal map's green for its own guessed tangents; real ones don't want that.
+    for (const m of Array.isArray(mesh.material) ? mesh.material : [mesh.material]) {
+      const s = m as THREE.MeshStandardMaterial;
+      if (s.normalMap && !flipped.has(m)) {
+        flipped.add(m);
+        s.normalScale.y = s.normalScale.x;
+        m.needsUpdate = true;
+      }
+    }
+  }
+}
+
 /** Load a model file (cached). */
 export function loadModel(path: string): Promise<LoadedModel> {
   let p = cache.get(path);
@@ -105,6 +136,7 @@ export function loadModel(path: string): Promise<LoadedModel> {
       const url = await assetUrl(path);
       const bytes = await (await fetch(url)).arrayBuffer();
       const gltf = await loader.parseAsync(bytes, '');
+      await addTangents(gltf.scene);
       return { scene: gltf.scene, animations: gltf.animations, collision: splitCollision(gltf.scene, gltf.animations) };
     })();
     p.catch(() => cache.delete(path));
