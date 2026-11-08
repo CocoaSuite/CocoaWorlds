@@ -73,6 +73,7 @@ export function TopBar({ onShowKeys }: { onShowKeys: () => void }) {
               { label: `${s.zUp ? '✓ ' : ''}${t('view.zUp')}`, onSelect: () => s.toggle('zUp') },
               { label: `${s.gameLighting ? '✓ ' : ''}${t('view.gameLighting')}`, onSelect: () => s.toggle('gameLighting') },
               { label: `${s.showStats ? '✓ ' : ''}${t('view.stats')}`, onSelect: () => s.toggle('showStats') },
+              { label: `${s.showPlayBar ? '✓ ' : ''}${t('view.playBar')}`, shortcut: 'F6', onSelect: () => s.toggle('showPlayBar') },
               { label: `${s.showBottom ? '✓ ' : ''}${t('view.bottom')}`, onSelect: () => s.toggle('showBottom') },
               'separator',
               { label: `${s.lang === 'en' ? '✓ ' : ''}English`, onSelect: () => s.setLang('en') },

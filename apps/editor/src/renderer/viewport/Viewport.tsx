@@ -64,6 +64,7 @@ export function Viewport() {
   const terrainBrush = useEditor((s) => s.terrainBrush);
   const gameLighting = useEditor((s) => s.gameLighting);
   const showStats = useEditor((s) => s.showStats);
+  const showPlayBar = useEditor((s) => s.showPlayBar);
   const gridSize = useEditor((s) => s.session?.project.settings.gridSize ?? 16);
   const focusRequest = useEditor((s) => s.focusRequest);
   const sel = useSelectedEntities();
@@ -378,12 +379,15 @@ export function Viewport() {
           {stats.frameMs.toFixed(1)} ms · {stats.draws} draws · {stats.triangles.toLocaleString()} tris · {t('stats.build')} {stats.buildMs} ms
         </div>
       )}
-      {playing && (
+      {playing && showPlayBar && (
         <div className="cw-ov cw-play-banner" data-testid="play-banner">
           <span className="cw-live-dot" />
           {lock === null ? t('play.banner') : t('play.bannerPlayer')}
           <button type="button" className="cw-play-stop" onClick={() => useEditor.getState().stopPlaying()}>
             {t('play.stop')}
+          </button>
+          <button type="button" className="cw-play-hide" data-testid="play-banner-hide" title={`${t('play.hideBar')} (F6)`} aria-label={t('play.hideBar')} onClick={() => useEditor.getState().toggle('showPlayBar')}>
+            ×
           </button>
         </div>
       )}

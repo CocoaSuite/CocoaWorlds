@@ -157,6 +157,8 @@ interface State {
   /** Show the scene's own lighting (lights, sky, fog) in the editor instead of the flat preview lights. */
   gameLighting: boolean;
   showStats: boolean;
+  /** The “Playing…” bar over the view while playtesting (F6; kept between sessions). */
+  showPlayBar: boolean;
   showBottom: boolean;
   snap: boolean;
   dirty: boolean;
@@ -216,7 +218,7 @@ interface Actions {
   /** A finished terrain stroke, already made: recorded so it can be undone. */
   terrainEdit(cmd: { label: string; apply(): void; revert(): void }): void;
   setView(v: ViewMode): void;
-  toggle(k: 'showGrid' | 'showNav' | 'showGrass' | 'showProbes' | 'showCollisions' | 'zUp' | 'uvPane' | 'showStats' | 'showBottom' | 'snap' | 'vertexSnap' | 'pivotEdit' | 'gameLighting'): void;
+  toggle(k: 'showGrid' | 'showNav' | 'showGrass' | 'showProbes' | 'showCollisions' | 'zUp' | 'uvPane' | 'showStats' | 'showPlayBar' | 'showBottom' | 'snap' | 'vertexSnap' | 'pivotEdit' | 'gameLighting'): void;
   /** Put an object's pivot at a world position (null: back to the default, its middle). */
   setPivot(id: string, world: Vec3 | null, mergeKey?: string): void;
   execute(cmd: Command): void;
@@ -392,6 +394,7 @@ export const useEditor = create<State & Actions>()((set, get) => ({
   gameLighting: false,
   assets: { textures: [], sounds: [], models: [] },
   showStats: true,
+  showPlayBar: savedPlayBar(),
   showBottom: true,
   snap: true,
   dirty: false,
@@ -512,6 +515,13 @@ export const useEditor = create<State & Actions>()((set, get) => ({
   toggle: (k) => {
     set((s) => ({ [k]: !s[k] }) as Partial<State>);
     if (k === 'zUp') saveZUp(get().zUp);
+    if (k === 'showPlayBar') {
+      try {
+        localStorage.setItem('cw.playBar', get().showPlayBar ? '1' : '0');
+      } catch {
+        /* (Not kept.) */
+      }
+    }
   },
 
   execute(cmd) {
@@ -1954,3 +1964,12 @@ export function chickenScript(friendly: boolean): Script {
 
 // (For the automated tests, as the view is: `window.__cwStore`.)
 (window as unknown as { __cwStore?: typeof useEditor }).__cwStore = useEditor;
+
+/** Whether the playtest bar shows (on unless switched off before). */
+function savedPlayBar(): boolean {
+  try {
+    return localStorage.getItem('cw.playBar') !== '0';
+  } catch {
+    return true;
+  }
+}

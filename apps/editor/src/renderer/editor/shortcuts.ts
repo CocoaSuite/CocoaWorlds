@@ -46,6 +46,7 @@ export const SHORTCUTS: { label: string; keys: string[] }[] = [
   { label: 'Deselect / step out', keys: ['Esc'] },
   { label: 'Play / Stop', keys: ['F5'] },
   { label: 'Stop playing', keys: ['Esc'] },
+  { label: 'Show / hide the playtest bar', keys: ['F6'] },
   { label: 'This list', keys: ['?'] },
 ];
 
@@ -71,6 +72,10 @@ export function useShortcuts(openKeys: () => void): void {
       if (e.code === 'F5') {
         e.preventDefault();
         return s.playing ? s.stopPlaying() : s.play();
+      }
+      if (e.code === 'F6') {
+        e.preventDefault();
+        return s.toggle('showPlayBar');
       }
       // While playing, the scene can't be edited: only Esc (stop) and the camera keys work.
       if (s.playing) {

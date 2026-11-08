@@ -782,8 +782,8 @@ export class ViewportEngine {
       document.exitPointerLock();
       return true;
     }
-    // F5 still stops the game.
-    if (e.key === 'F5') return false;
+    // F5 still stops the game; F6 shows or hides the playtest bar.
+    if (e.key === 'F5' || e.key === 'F6') return false;
     // Otherwise every key belongs to the game (Ctrl+S, Ctrl+Z… would be surprising mid-jump).
     e.preventDefault();
     e.stopImmediatePropagation();
