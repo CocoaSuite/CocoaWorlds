@@ -376,7 +376,7 @@ export function Viewport() {
         <div className="cw-ov cw-ov-br mono" data-testid="viewport-stats">
           {stats.building ? `${t('stats.building')} · ` : ''}
           {stats.worldMs !== null ? `${t('stats.world')} ${stats.worldMs.toFixed(1)} ms · ${t('stats.draw')} ` : ''}
-          {stats.frameMs.toFixed(1)} ms · {stats.draws} draws · {stats.triangles.toLocaleString()} tris · {t('stats.build')} {stats.buildMs} ms
+          {stats.frameMs.toFixed(1)} ms&nbsp;&nbsp; {stats.draws} draws&nbsp;&nbsp; {stats.triangles.toLocaleString()} tris&nbsp;&nbsp; {t('stats.build')} {stats.buildMs} ms
         </div>
       )}
       {playing && showPlayBar && (
