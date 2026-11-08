@@ -197,4 +197,30 @@ describe('keeping the world', () => {
     expect(Math.abs(w3.positionOf(crate.id)![0] - 700)).toBeLessThan(2);
     w3.dispose();
   });
+
+  it('stacks that ran “only once” or “once a day” stay spent after loading', () => {
+    const make = () => {
+      const s = newScene('yard');
+      const box = newEntity('box', {});
+      box.id = 'box';
+      const stack = (id: string, limit: 'once' | 'day', what: string) => ({ id, event: { id: `e${id}`, kind: 'message', message: 'ring', limit }, body: [{ id: `c${id}`, kind: 'change', variable: what, by: n(1) }] });
+      box.components.script = { version: 1, variables: [{ name: 'a', type: 'number', initial: 0 }, { name: 'b', type: 'number', initial: 0 }], handlers: [stack('h1', 'once', 'a'), stack('h2', 'day', 'b')] } as Script as never;
+      s.entities = [brush('floor', [-512, -16, -512], [512, 0, 512]), newEntity('start', { playerSpawn: {} }), box];
+      return s;
+    };
+    const w1 = GameWorld.create(make(), { rules: { saveWorld: true } });
+    run(w1, 0.1);
+    send(w1, 'ring');
+    const saved = store(w1);
+    expect(saved.world?.yard?.spent?.box).toBeDefined();
+    const w2 = GameWorld.create(make(), { rules: { saveWorld: true }, saved });
+    run(w2, 0.1);
+    const vars = () => (w2 as unknown as { runner: { instances: { program: { owner: string }; vars: number[] }[] } }).runner.instances.find((i) => i.program.owner === 'box')!.vars;
+    send(w2, 'ring');
+    expect(vars()).toEqual([0, 0]);
+    (w2 as unknown as { day: number }).day++;
+    send(w2, 'ring');
+    expect(vars()).toEqual([0, 1]);
+  });
 });
+

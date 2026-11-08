@@ -202,11 +202,31 @@ export class ScriptRunner {
       vars: program.variables.map((v) => v.initial),
       timers: new Map(program.handlers.filter((h) => h.event.kind === 'every').map((h) => [h.id, 0])),
       near: new Map(),
-      spent: new Map(),
+      spent: new Map(Object.entries(this.spentLater.get(program.owner) ?? {})),
     };
     this.instances.push(inst);
     if (!this.started) return;
     for (const h of program.handlers) if (h.event.kind === 'start') this.spawn(inst, h, null);
+  }
+
+  /** Limited stacks that have had their run: object → stack → the day it ran (for saving). */
+  spentState(): Record<string, Record<string, number>> {
+    const out: Record<string, Record<string, number>> = {};
+    for (const i of this.instances) if (i.spent.size) out[i.program.owner] = Object.fromEntries(i.spent);
+    return out;
+  }
+
+  private spentLater = new Map<string, Record<string, number>>();
+
+  /** Back from a save (objects made later, copies, get theirs when their scripts are added). */
+  restoreSpent(saved: Record<string, Record<string, number>>): void {
+    for (const [owner, stacks] of Object.entries(saved)) {
+      if (!stacks || typeof stacks !== 'object') continue;
+      const clean = Object.fromEntries(Object.entries(stacks).filter(([, d]) => typeof d === 'number' && Number.isFinite(d)));
+      const inst = this.instances.find((i) => i.program.owner === owner);
+      if (inst) inst.spent = new Map(Object.entries(clean));
+      else this.spentLater.set(owner, clean);
+    }
   }
 
   /** Objects removed from the game: their scripts stop. */

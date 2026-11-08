@@ -339,7 +339,7 @@ moves by itself doesn't follow when the whole copy is moved.
 ### 19. Use stacks that run only once
 
 Status: done (2026-11-08). “When the player uses this” has an **only once** tick (`once` on the event): after its first
-run the stack stops listening and the prompt goes (`Instance.spent` in `vm.ts`). Not kept in saved progress.
+run the stack stops listening and the prompt goes (`Instance.spent` in `vm.ts`). Kept with the world (see 25).
 Test: `packages/scripting/test/scripting.test.ts` "only once".
 
 ### 20. Fall and tumble keeps the Physics mass
@@ -387,4 +387,5 @@ creatures' footsteps, scraping/rolling loops, breaking sounds.
 
 Status: done (2026-11-08). `EventBlock.limit` ('once' | 'day'), compiled onto the handler; `ScriptRunner.spawn`
 skips a spent handler (`Instance.spent`: handler → the day it ran). The old Use-only `once` still reads as
-'once'. Test: `scripting.test.ts` "how often a stack runs". Not kept in saved progress.
+'once'. Test: `scripting.test.ts` "how often a stack runs". Kept with the world (`SavedScene.spent`,
+`ScriptRunner.spentState`/`restoreSpent`; copies get theirs when added). Test: `world-save.test.ts`.

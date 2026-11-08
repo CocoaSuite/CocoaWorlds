@@ -132,6 +132,8 @@ export interface SavedScene {
   posters?: Record<string, boolean>;
   /** The time of day (hours). */
   hour?: number;
+  /** Stacks limited to once (ever, or a day) that have run: object → stack → the day it ran. */
+  spent?: Record<string, Record<string, number>>;
 }
 
 /** An object's saved state: place, turn, and only what differs from how it started. */
@@ -725,6 +727,8 @@ export class GameWorld {
     const posters: Record<string, boolean> = {};
     for (const [id, p] of this.posters) if (!this.gone.has(id) && p.hung !== p.data.hungAtStart) posters[id] = p.hung;
     if (Object.keys(posters).length) out.posters = posters;
+    const spent = this.runner.spentState();
+    if (Object.keys(spent).length) out.spent = spent;
     return out;
   }
 
@@ -763,6 +767,7 @@ export class GameWorld {
         this.signVersion++;
       }
     for (const [id, hung] of Object.entries(save.posters ?? {})) if (typeof hung === 'boolean') this.setPosterHung(id, hung);
+    if (save.spent && typeof save.spent === 'object') this.runner.restoreSpent(save.spent);
     if (typeof save.hour === 'number' && Number.isFinite(save.hour)) this.dayHour = ((save.hour % 24) + 24) % 24;
     const pl = save.player, p = this.player, at = v3(pl?.at);
     if (withPlayer && p && pl && at) {

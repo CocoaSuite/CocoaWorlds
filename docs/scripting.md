@@ -152,7 +152,7 @@ screen shows **E** and the word under the crosshair (“E Open”); with no word
 uses “Open”, the button “Press”. 
 Every event block ends with **how often**: *every time*, *once a day* (again when the day count goes up) or
 *only once* (never again). A Use stack that has had its run no longer shows its prompt (a chest, a gift box).
-Not kept in saved progress yet.
+When the game keeps the world (Game rules), which stacks have had their run is kept too.
 
 ## Holding things and putting them in spots
 
