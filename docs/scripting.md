@@ -235,8 +235,8 @@ and the parts named
 **Head part** and **Gantry part** move: the gantry rises with the layers and slides front-back, the head slides
 left-right (on the gantry, if it is inside it). Model the head with its nozzle tip resting on the middle of the
 plate. Prints are drawn cut at the layer being laid: layer lines on the sides, the cut top in the filament
-colour, and the head traces each layer's outline (the copy's triangles cut at that height) and then a zig-zag
-fill. Shadows and ambient occlusion leave a print out until it is done.
+colour, and the head goes round each layer's outline (the copy's triangles cut at that height) and a zig-zag
+fill at its own pace, slower for bigger prints, gliding to the next layer without jumps. Shadows and ambient occlusion leave a print out until it is done.
 
 A copied or printed prop with Physics keeps what is inside it: brushes become part of its body (they collide
 and move with it) and models ride it.

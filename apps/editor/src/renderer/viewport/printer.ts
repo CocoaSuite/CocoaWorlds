@@ -20,6 +20,8 @@ export interface PrinterObject {
 
 const FRAME = 0x3a3a38, POST = 0x5f5e5a, PLATE = 0x888780, HEAD = 0xd85a30, NOZZLE = 0xba7517;
 const NOZZLE_LEN = PRINTER_NOZZLE;
+/** The head's speed along a layer for a tiny print (u/s); it drops as prints get bigger. */
+const HEAD_SPEED = 150;
 
 /** The built-in printer, in the printer's own space (its plate's top middle at `bed`). */
 export function buildPrinter(data: PrinterData): PrinterObject {
@@ -144,46 +146,73 @@ export class PrinterRig {
       let added = false;
       for (const m of meshes) if (!this.patched.has(m)) added = this.patch(m) || added;
       if (added || !this.boundsOk) this.measure();
-      if (this.boundsOk) this.printAt(print.done, target);
-      this.offset.copy(target);
+      if (this.boundsOk) {
+        this.printAt(dt, print.done, target);
+        // (Never jumped: across the plate at most a few times its printing pace, up to the next layer eased.)
+        const dx = target.x - this.offset.x, dz = target.z - this.offset.z;
+        const d = Math.hypot(dx, dz), max = this.speed * 3 * dt;
+        if (d > max) {
+          this.offset.x += (dx / d) * max;
+          this.offset.z += (dz / d) * max;
+        } else {
+          this.offset.x = target.x;
+          this.offset.z = target.z;
+        }
+        this.offset.y += (target.y - this.offset.y) * Math.min(1, dt * 8);
+      } else this.offset.lerp(target, Math.min(1, dt * 3));
     } else this.offset.lerp(target, Math.min(1, dt * 3));
     this.moveParts();
   }
 
-  /** Where the cut is and where the head is, `done` (0–1) through the print; `out`: the head's offset. */
-  private printAt(done: number, out: THREE.Vector3): void {
+  /** How far along this layer's path the head is (u), and how fast it goes there (u/s; slower for bigger prints). */
+  private along = 0;
+  private speed = 60;
+
+  /** Where the cut is and where the head is headed, `done` (0–1) through the print; `out`: the head's offset. */
+  private printAt(dt: number, done: number, out: THREE.Vector3): void {
     const lh = Math.max(0.01, this.data.layerHeight);
     const b = this.bounds;
     const layers = Math.max(1, Math.ceil((b.max.y - b.min.y) / lh));
-    const k = Math.min(layers - 1e-6, done * layers);
-    const layer = Math.floor(k);
-    const f = k - layer;
+    const layer = Math.floor(Math.min(layers - 1e-6, done * layers));
     const top = b.min.y + (layer + 1) * lh;
     this.uniforms.uPrintTop.value = top;
     this.uniforms.uPrintLayer.value = lh;
+    const [bx, by, bz] = this.data.bed;
     if (layer !== this.layer) {
       this.layer = layer;
       this.slice(b.min.y + (layer + 0.5) * lh, layer);
+      // (The new layer's path is taken up where the head is now, not from its start.)
+      this.along = this.nearestAlong(this.offset.x + bx, this.offset.z + bz);
     }
-    // Head: along the outline, then the zig-zag fill; its nozzle at the top of the layer.
-    const [bx, by, bz] = this.data.bed;
+    // The head goes round and round the layer's path at its own pace, its nozzle at the top of the layer.
+    const n = this.path.length / 2;
+    const total = n ? this.lengths[n - 1]! : 0;
+    if (total > 0) this.along = (this.along + this.speed * dt) % total;
     const local = this.toPrinter(new THREE.Vector3(0, top, 0));
-    const p = this.pointAt(f);
-    out.set(p ? p[0] - bx : 0, local.y - by, p ? p[1] - bz : 0);
+    const p = this.pointAt(this.along);
+    out.set(p ? p[0] - bx : this.offset.x, local.y - by, p ? p[1] - bz : this.offset.z);
   }
 
-  /** A point of this layer's path, `f` (0–1) along it in time (outline first, then the fill). */
-  private pointAt(f: number): [number, number] | null {
+  /** A point of this layer's path, `s` u along it (outline first, then the fill). */
+  private pointAt(s: number): [number, number] | null {
     const n = this.path.length / 2;
     if (!n) return null;
     if (n === 1) return [this.path[0]!, this.path[1]!];
-    const total = this.lengths[n - 1]!;
-    const s = Math.min(1, Math.max(0, f)) * total;
     let i = 1;
     while (i < n - 1 && this.lengths[i]! < s) i++;
     const s0 = this.lengths[i - 1]!, s1 = this.lengths[i]!;
-    const t = s1 > s0 ? (s - s0) / (s1 - s0) : 0;
+    const t = s1 > s0 ? Math.min(1, Math.max(0, (s - s0) / (s1 - s0))) : 0;
     return [this.path[(i - 1) * 2]! + (this.path[i * 2]! - this.path[(i - 1) * 2]!) * t, this.path[(i - 1) * 2 + 1]! + (this.path[i * 2 + 1]! - this.path[(i - 1) * 2 + 1]!) * t];
+  }
+
+  /** How far along this layer's path its point nearest to (x, z) is. */
+  private nearestAlong(x: number, z: number): number {
+    let best = 0, bestD = Infinity;
+    for (let i = 0; i < this.path.length; i += 2) {
+      const d = (this.path[i]! - x) ** 2 + (this.path[i + 1]! - z) ** 2;
+      if (d < bestD) (bestD = d), (best = this.lengths[i / 2]!);
+    }
+    return best;
   }
 
   /** This layer's path: the copy's triangles cut at height `y` (world), chained into an outline, then a zig-zag over it. */
@@ -351,6 +380,9 @@ export class PrinterRig {
     }
     this.boundsOk = !this.bounds.isEmpty();
     this.layer = -1;
+    // Bigger prints: a slower head (u/s), as a bigger nozzle laying more at a time would be.
+    const size = this.boundsOk ? this.bounds.getSize(tmpV).length() : 0;
+    this.speed = HEAD_SPEED / (1 + size / 24);
   }
 
   /** The print is done (or gone): its meshes are drawn as they are again. */
@@ -368,6 +400,7 @@ export class PrinterRig {
     this.layer = -1;
     this.path = [];
     this.lengths = [];
+    this.along = 0;
     this.copy = null;
     this.uniforms.uPrintTop.value = 1e9;
   }
