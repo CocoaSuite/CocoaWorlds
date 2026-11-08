@@ -229,13 +229,13 @@ the player can carry with E.
 **3D printer** (component, Add › 3D printer): the print space (width, height, depth), where the build plate's
 top middle is, layer height and seconds per layer (a print takes its height ÷ layer height × seconds), the
 filament colour (the cut top of a print and the layer just laid), and an optional sound looping while it prints.
-Without a Model it draws the built-in printer, which collides (base, plate, posts) so finished prints rest on the
-plate; with one, that model replaces the whole printer (give it a collision setting so prints land on its plate)
-and the parts named
-**Lift part**, **Gantry part** and **Head part** move like a fixed-bed printer: the lift climbs the corner lead
-screws one layer at a time (up only), the gantry slides front-back on the lift's rails, the head slides left-right
-on the gantry. Each moves with the parts it is inside (without a lift, the gantry rises itself). Model the head with its nozzle tip resting on the middle of the
-plate. Prints are drawn cut at the layer being laid: layer lines on the sides, the cut top in the filament
+Its Model is the printer: Add › 3D printer brings the ready-made one (`models/3d_printer.glb`: collision boxes
+named `col_` for the base and posts, so finished prints rest on the plate; settings to match). For your own, name
+its moving parts in **Lift part**, **Gantry part** and **Head part** (`lift`, `gantry`, `head` by default); they
+move like a fixed-bed printer: the lift climbs one layer at a time (up only), the gantry slides front-back on it,
+the head slides left-right on the gantry. Each moves with the parts it is inside (without a lift, the gantry rises
+itself). The nozzle is the head's lowest point, found by itself. Without a Model nothing is drawn but prints still
+rise. Prints are drawn cut at the layer being laid: layer lines on the sides, the cut top in the filament
 colour, and the head goes round each layer's outline (the copy's triangles cut at that height) and a zig-zag
 fill at its own pace, slower for bigger prints, gliding to the next layer without jumps. Shadows and ambient occlusion leave a print out until it is done.
 

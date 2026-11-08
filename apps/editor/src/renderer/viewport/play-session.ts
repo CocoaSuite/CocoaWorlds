@@ -24,7 +24,7 @@ import { WEAR_RING, buildLevel } from './world-build';
 import { toGeometry } from './world-render';
 import { buildSign, type SignObject } from './sign';
 import { buildPoster, type PosterObject } from './poster';
-import { PrinterRig, buildPrinter, type PrinterObject } from './printer';
+import { PrinterRig } from './printer';
 import { buildGooglyEyes, type GooglyEyes } from './googly-eyes';
 import { Effects } from './effects';
 import { VfxRenderer, effectById, type VfxHandle } from './vfx';
@@ -289,23 +289,21 @@ export class PlaySession {
       this.addSign(e.id, data, doc.worldMatrix(e.id));
     }
 
-    // 3D printers: the built-in one, or the object's own model (its parts found once it has loaded).
+    // 3D printers: their model's parts are found once it has loaded (without a model, prints are still cut).
     for (const e of doc.entities) {
       if (!e.components.printer || !shown(e.id)) continue;
       const data = readComponent<PrinterData>('printer', e.components.printer);
       if (this.modelOf(e.id)) {
-        this.printers.push({ id: e.id, data, rig: null, built: null });
+        this.printers.push({ id: e.id, data, rig: null });
         continue;
       }
       const holder = new THREE.Group();
       holder.matrixAutoUpdate = false;
       holder.matrix.fromArray(doc.worldMatrix(e.id));
       this.group.add(holder);
-      const built = buildPrinter(data);
-      holder.add(built.object);
-      const rig = new PrinterRig(data, built.object);
-      rig.setParts(built.head, built.gantry, built.lift);
-      this.printers.push({ id: e.id, data, rig, built });
+      const rig = new PrinterRig(data, holder);
+      rig.setParts(null, null, null);
+      this.printers.push({ id: e.id, data, rig });
     }
 
     // Googly eyes on what draws their object: a creature where it walks, or where the object stands (carried
@@ -912,7 +910,7 @@ export class PlaySession {
   private motion = new THREE.Matrix4();
 
   /** 3D printers: what moves their parts and cuts their prints (null: its own model hasn't loaded yet). */
-  private printers: { id: string; data: PrinterData; rig: PrinterRig | null; built: PrinterObject | null }[] = [];
+  private printers: { id: string; data: PrinterData; rig: PrinterRig | null }[] = [];
 
   /** Printers' heads and gantries, and the prints on them cut at the layer being laid. */
   private updatePrinters(dt: number): void {
@@ -1375,10 +1373,7 @@ export class PlaySession {
     this.world.dispose();
     for (const s of this.signs.values()) s.sign.dispose();
     for (const p of this.posterViews) p.view.dispose();
-    for (const p of this.printers) {
-      p.rig?.dispose();
-      p.built?.dispose();
-    }
+    for (const p of this.printers) p.rig?.dispose();
     for (const { eyes } of this.eyes) eyes.dispose();
     this.group.traverse((o) => {
       // (Googly eyes share one dome.)

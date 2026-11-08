@@ -86,8 +86,8 @@ export type PosterData = {
   hungAtStart: boolean;
 };
 /**
- * A 3D printer (component `printer`): “Print” blocks make copies of objects on it, layer by layer. Its own Model,
- * when it has one, is drawn instead of the built-in printer, with the parts named here moved by the print.
+ * A 3D printer (component `printer`): “Print” blocks make copies of objects on it, layer by layer. Its Model is the
+ * printer (Add › 3D printer brings the ready-made one), with the parts named here moved by the print.
  */
 export type PrinterData = {
   /** The space a print fits in (u): width, height, depth. */
@@ -110,28 +110,6 @@ export type PrinterData = {
   sound: string;
   volume: number;
 };
-/**
- * The built-in printer's still parts (base, build plate, corner posts, top frame) as boxes in the printer's own
- * space: what the editor and the game draw, and what the game collides with (the plate holds finished prints).
- */
-export function printerFrame(data: Pick<PrinterData, 'size' | 'bed'>): { part: 'base' | 'plate' | 'post' | 'top'; center: [number, number, number]; size: [number, number, number] }[] {
-  const [W, H, D] = data.size;
-  const [bx, by, bz] = data.bed;
-  const margin = 6, post = 3;
-  const halfW = W / 2 + margin, halfD = D / 2 + margin;
-  const top = by + H + PRINTER_NOZZLE + 12;
-  const baseH = Math.max(1, by - 2);
-  const out: ReturnType<typeof printerFrame> = [
-    { part: 'base', center: [bx, baseH / 2, bz], size: [halfW * 2, baseH, halfD * 2] },
-    { part: 'plate', center: [bx, by - 1, bz], size: [W + 4, 2, D + 4] },
-  ];
-  for (const sx of [-1, 1]) for (const sz of [-1, 1]) out.push({ part: 'post', center: [bx + sx * halfW, top / 2, bz + sz * halfD], size: [post, top, post] });
-  for (const sz of [-1, 1]) out.push({ part: 'top', center: [bx, top, bz + sz * halfD], size: [halfW * 2 + post, post, post] });
-  for (const sx of [-1, 1]) out.push({ part: 'top', center: [bx + sx * halfW, top, bz], size: [post, post, halfD * 2 + post] });
-  return out;
-}
-/** The built-in printer's nozzle length (u): the head's body starts this far above the nozzle's tip. */
-export const PRINTER_NOZZLE = 3;
 /** A prop that sticks into the ground (component `stake`) when it hits it hard enough, tip first. */
 export type StakeData = {
   /** Which way its tip points, in its own axes. */
@@ -744,20 +722,20 @@ export const COMPONENTS: ComponentDef[] = [
     name: 'printer',
     label: e('3D printer', '3D-принтер'),
     description: e(
-      'Prints copies of objects layer by layer: the Print block (Objects) puts a copy of an object on it, the print rises from the plate and the head traces each layer; when it is done the copy is a normal object (it can be picked up) and “When a print is done” runs. More prints wait their turn. With a Model of its own, the model is drawn instead of the built-in printer, and the parts named below move.',
-      'Печатает копии объектов слой за слоем: блок «Напечатать» (Объекты) ставит на него копию объекта, печать растёт от стола, а головка обводит каждый слой; когда готово, копия становится обычным объектом (её можно взять) и срабатывает «Когда печать готова». Остальные печати ждут очереди. Если у него есть своя Модель, рисуется она вместо встроенного принтера, а названные ниже части двигаются.',
+      'Prints copies of objects layer by layer: the Print block (Objects) puts a copy of an object on it, the print rises from the plate and the head traces each layer; when it is done the copy is a normal object (it can be picked up) and “When a print is done” runs. More prints wait their turn. Its Model is the printer (Add › 3D printer brings a ready-made one); the parts named below move.',
+      'Печатает копии объектов слой за слоем: блок «Напечатать» (Объекты) ставит на него копию объекта, печать растёт от стола, а головка обводит каждый слой; когда готово, копия становится обычным объектом (её можно взять) и срабатывает «Когда печать готова». Остальные печати ждут очереди. Его Модель и есть принтер («Добавить › 3D-принтер» ставит готовый); названные ниже части двигаются.',
     ),
     appliesTo: 'point',
     conflicts: ['poster', 'npc', 'seat', 'hidingSpot', 'stake'],
     fields: [
-      { key: 'size', label: e('Print space', 'Область печати'), hint: e('Width, height and depth of what fits.', 'Ширина, высота и глубина того, что помещается.'), type: { kind: 'vec3', step: 4, min: 4 }, default: [40, 40, 40] },
-      { key: 'bed', label: e('Build plate', 'Стол'), hint: e('The middle of the plate’s top, from the object’s origin.', 'Середина верха стола от начала объекта.'), type: { kind: 'vec3', step: 1 }, default: [0, 6, 0] },
+      { key: 'size', label: e('Print space', 'Область печати'), hint: e('Width, height and depth of what fits.', 'Ширина, высота и глубина того, что помещается.'), type: { kind: 'vec3', step: 4, min: 4 }, default: [40, 56, 40] },
+      { key: 'bed', label: e('Build plate', 'Стол'), hint: e('The middle of the plate’s top, from the object’s origin.', 'Середина верха стола от начала объекта.'), type: { kind: 'vec3', step: 1 }, default: [0, 6.3, 0] },
       { key: 'layerHeight', label: e('Layer height', 'Высота слоя'), type: { kind: 'number', min: 0.1, step: 0.25, unit: 'u' }, default: 1 },
       { key: 'layerSeconds', label: e('Each layer takes', 'Слой печатается за'), type: { kind: 'number', min: 0.02, step: 0.05, unit: 's' }, default: 0.4 },
       { key: 'filament', label: e('Filament colour', 'Цвет пластика'), hint: e('The cut top of a print and the layer just laid.', 'Срез печати сверху и только что уложенный слой.'), type: { kind: 'color' }, default: '#1d9e75' },
-      { key: 'head', label: e('Head part', 'Часть «головка»'), hint: e('In its own Model: the part that moves left-right and front-back. Empty: none.', 'В своей Модели: часть, что ходит влево-вправо и вперёд-назад. Пусто — нет.'), type: { kind: 'text' }, default: '', group: e('Own model', 'Своя модель') },
-      { key: 'gantry', label: e('Gantry part', 'Часть «портал»'), hint: e('In its own Model: the bar the head rides; moves front-back (and up with the layers, unless it is inside the lift). Empty: none.', 'В своей Модели: балка, по которой ходит головка; ходит вперёд-назад (и вверх со слоями, если не внутри подъёмника). Пусто — нет.'), type: { kind: 'text' }, default: '', group: e('Own model', 'Своя модель') },
-      { key: 'lift', label: e('Lift part', 'Часть «подъёмник»'), hint: e('In its own Model: the frame that climbs one layer at a time (up only), carrying the gantry. Empty: none.', 'В своей Модели: рама, что поднимается на слой за раз (только вверх) и несёт портал. Пусто — нет.'), type: { kind: 'text' }, default: '', group: e('Own model', 'Своя модель') },
+      { key: 'head', label: e('Head part', 'Часть «головка»'), hint: e('In its Model: the part with the nozzle; moves left-right (the nozzle’s lowest point is found by itself). Empty: none.', 'В Модели: часть с соплом; ходит влево-вправо (нижняя точка сопла находится сама). Пусто — нет.'), type: { kind: 'text' }, default: 'head', group: e('Moving parts', 'Подвижные части') },
+      { key: 'gantry', label: e('Gantry part', 'Часть «портал»'), hint: e('In its Model: the bar the head rides; moves front-back (and up with the layers, unless it is inside the lift). Empty: none.', 'В Модели: балка, по которой ходит головка; ходит вперёд-назад (и вверх со слоями, если не внутри подъёмника). Пусто — нет.'), type: { kind: 'text' }, default: 'gantry', group: e('Moving parts', 'Подвижные части') },
+      { key: 'lift', label: e('Lift part', 'Часть «подъёмник»'), hint: e('In its Model: the frame that climbs one layer at a time (up only), carrying the gantry. Empty: none.', 'В Модели: рама, что поднимается на слой за раз (только вверх) и несёт портал. Пусто — нет.'), type: { kind: 'text' }, default: 'lift', group: e('Moving parts', 'Подвижные части') },
       { key: 'sound', label: e('Printing sound', 'Звук печати'), hint: e('Loops while it prints.', 'Звучит по кругу во время печати.'), type: { kind: 'asset', asset: 'sounds' }, default: '' },
       { key: 'volume', label: e('Volume', 'Громкость'), type: { kind: 'number', min: 0, max: 4, step: 0.1 }, default: 1 },
     ],

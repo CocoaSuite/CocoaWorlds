@@ -68,7 +68,10 @@ export async function writeAsset(dir: string, kind: unknown, name: unknown, byte
 }
 
 /** Ready-made assets the editor ships with (Add › Chicken), by name: where they come from and where they go. */
-const SAMPLES: Record<string, { file: string; as: string; kind: AssetKind }> = { chicken: { file: 'chicken.glb', as: 'chicken_rigged.glb', kind: 'models' } };
+const SAMPLES: Record<string, { file: string; as: string; kind: AssetKind }> = {
+  chicken: { file: 'chicken.glb', as: 'chicken_rigged.glb', kind: 'models' },
+  printer: { file: 'printer.glb', as: '3d_printer.glb', kind: 'models' },
+};
 
 /**
  * Put a ready-made asset into the project (once: if it's there already, that one is used). `samplesDir` is the

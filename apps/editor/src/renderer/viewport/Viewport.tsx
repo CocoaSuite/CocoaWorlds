@@ -292,7 +292,7 @@ export function Viewport() {
         { label: t('add.poster'), onSelect: () => s.add('poster', ctx?.ground ?? undefined) },
         { label: t('add.painting'), onSelect: () => s.add('painting', ctx?.ground ?? undefined) },
         { label: t('add.stake'), onSelect: () => s.add('stake', ctx?.ground ?? undefined) },
-        { label: t('add.printer'), onSelect: () => s.add('printer', ctx?.ground ?? undefined) },
+        { label: t('add.printer'), onSelect: () => void s.addPrinter(ctx?.ground ?? undefined) },
         { label: t('add.chicken'), onSelect: () => void s.addChicken(false, ctx?.ground ?? undefined) },
         { label: t('add.chickenFriend'), onSelect: () => void s.addChicken(true, ctx?.ground ?? undefined) },
         { label: t('add.ladder'), onSelect: () => s.addLadder(ctx?.ground ?? undefined) },

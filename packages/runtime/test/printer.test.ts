@@ -42,7 +42,9 @@ function scene(): { s: SceneFile; crate: EntityData; printer: EntityData } {
     variables: [],
     handlers: [{ id: 'h2', event: { id: 'e2', kind: 'printed' }, body: [{ id: 'c', kind: 'change', variable: 'Printed', by: n(1) }] }],
   } as never;
-  s.entities = [brush('floor', [-1024, -16, -1024], [1024, 0, 1024]), newEntity('start', { playerSpawn: {} }), crate, printer, newEntity('shop', { script: script as never })];
+  // (The printer's plate: in a game it is the printer model's collision.)
+  const plate = brush('plate', [-24, 30, -224], [24, 40, -176]);
+  s.entities = [brush('floor', [-1024, -16, -1024], [1024, 0, 1024]), newEntity('start', { playerSpawn: {} }), crate, printer, plate, newEntity('shop', { script: script as never })];
   return { s, crate, printer };
 }
 const values = [{ name: 'Printed', type: 'number' as const, initial: 0, show: false }];
@@ -70,7 +72,7 @@ describe('3D printer', () => {
     expect(w.positionOf(copy)![1]).toBeCloseTo(48, 3);
     expect(w.prints()[0]!.done).toBeGreaterThan(0.5);
     expect(w.gameValues()[0]!.value).toBe(0);
-    // Done: it rests on the built-in printer's plate (not through it), the printer's “print done” ran, the next print began.
+    // Done: it rests on the plate (not through it), the printer's “print done” ran, the next print began.
     run(w, 1.5);
     expect(w.gameValues()[0]!.value).toBe(1);
     expect(w.positionOf(copy)![1]).toBeGreaterThan(46);

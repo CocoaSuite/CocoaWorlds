@@ -1,105 +1,18 @@
 /**
- * How a 3D printer looks and prints (component `printer`). The built-in printer is a box frame with a build
- * plate, a gantry that rises with the layers and slides front-back, and a head that slides along it; a printer
- * with a Model of its own moves the parts named in its settings the same way.
+ * How a 3D printer prints (component `printer`). Its Model is the printer; the parts named in its settings move
+ * like a fixed-bed printer: the lift climbs one layer at a time, the gantry slides front-back on it, the head
+ * slides left-right on the gantry (each with the moving parts it is inside). The nozzle is the head's lowest point.
  *
  * A print under way is drawn cut off at the layer being laid: every mesh of the copy gets a copy of its material
  * that drops what is above the cut, shades the layer lines and tints the fresh layer; its back faces are drawn
- * in the filament's colour so the cut looks solid. The head traces the copy's outline at the cut (a slice of its
- * triangles), then fills it in with a zig-zag. The editor and the game draw the printer the same way.
+ * in the filament's colour so the cut looks solid. The head goes round the copy's outline at the cut (a slice of
+ * its triangles) and a zig-zag fill at its own pace.
  */
-import { PRINTER_NOZZLE, printerFrame, type PrinterData } from '@cocoaworlds/core';
+import type { PrinterData } from '@cocoaworlds/core';
 import * as THREE from 'three';
 
-export interface PrinterObject {
-  object: THREE.Group;
-  head: THREE.Object3D;
-  gantry: THREE.Object3D;
-  lift: THREE.Object3D;
-  dispose(): void;
-}
-
-const FRAME = 0x3a3a38, POST = 0x5f5e5a, PLATE = 0x888780, HEAD = 0xd85a30, NOZZLE = 0xba7517, LIFT = 0x7f77dd, SCREW = 0xb4b2a9;
-const NOZZLE_LEN = PRINTER_NOZZLE;
 /** The head's speed along a layer for a tiny print (u/s); it drops as prints get bigger. */
 const HEAD_SPEED = 150;
-
-/** The built-in printer, in the printer's own space (its plate's top middle at `bed`). */
-export function buildPrinter(data: PrinterData): PrinterObject {
-  const object = new THREE.Group();
-  object.name = 'printer';
-  const mats: THREE.Material[] = [];
-  const geos: THREE.BufferGeometry[] = [];
-  const mat = (color: number) => {
-    const m = new THREE.MeshStandardMaterial({ color, roughness: 0.8, flatShading: true });
-    mats.push(m);
-    return m;
-  };
-  const frameM = mat(FRAME), postM = mat(POST), plateM = mat(PLATE), headM = mat(HEAD), nozzleM = mat(NOZZLE), liftM = mat(LIFT), screwM = mat(SCREW);
-  const box = (w: number, h: number, d: number, m: THREE.Material, x: number, y: number, z: number, parent: THREE.Object3D = object) => {
-    const g = new THREE.BoxGeometry(Math.max(0.1, w), Math.max(0.1, h), Math.max(0.1, d));
-    geos.push(g);
-    const b = new THREE.Mesh(g, m);
-    b.position.set(x, y, z);
-    b.castShadow = b.receiveShadow = true;
-    parent.add(b);
-    return b;
-  };
-  const [bx, by, bz] = data.bed;
-  const margin = 6, post = 3;
-  const halfW = data.size[0] / 2 + margin;
-  const color = { base: frameM, plate: plateM, post: postM, top: postM };
-  for (const f of printerFrame(data)) box(f.size[0], f.size[1], f.size[2], color[f.part], f.center[0], f.center[1], f.center[2]);
-  // Lead screws inside the corner posts: the lift climbs them.
-  const [, , depth] = data.size;
-  const halfD = depth / 2 + margin;
-  const inset = 4;
-  const topY = by + data.size[1] + NOZZLE_LEN + 12;
-  for (const sx of [-1, 1])
-    for (const sz of [-1, 1]) {
-      const g = new THREE.CylinderGeometry(0.6, 0.6, topY - by, 8);
-      geos.push(g);
-      const screw = new THREE.Mesh(g, screwM);
-      screw.position.set(bx + sx * (halfW - inset), by + (topY - by) / 2, bz + sz * (halfD - inset));
-      object.add(screw);
-    }
-  // The lift: a frame round the print, a nut block on each screw, rails along the sides. Up only.
-  const lift = new THREE.Group();
-  lift.name = 'printer-lift';
-  object.add(lift);
-  const railY = by + NOZZLE_LEN + 5;
-  for (const sx of [-1, 1]) box(2.5, 2.5, halfD * 2 - inset * 2, liftM, bx + sx * (halfW - inset), railY, bz, lift);
-  for (const sz of [-1, 1]) box(halfW * 2 - inset * 2, 2, 2, liftM, bx, railY, bz + sz * (halfD - inset), lift);
-  for (const sx of [-1, 1]) for (const sz of [-1, 1]) box(5, 4, 5, liftM, bx + sx * (halfW - inset), railY, bz + sz * (halfD - inset), lift);
-  // The gantry: a bar across, a carriage on each rail. Front-back.
-  const gantry = new THREE.Group();
-  gantry.name = 'printer-gantry';
-  lift.add(gantry);
-  const barY = railY + 2.5;
-  box(halfW * 2 - inset * 2, 2.5, 2.5, frameM, bx, barY, bz + 5, gantry);
-  for (const sx of [-1, 1]) box(4, 3, 8, postM, bx + sx * (halfW - inset), barY, bz + 3, gantry);
-  // The head on the bar. Left-right.
-  const head = new THREE.Group();
-  head.name = 'printer-head';
-  gantry.add(head);
-  box(8, 10, 8, headM, bx, by + NOZZLE_LEN + 5, bz, head);
-  const cone = new THREE.ConeGeometry(1.2, NOZZLE_LEN, 8);
-  geos.push(cone);
-  const nozzle = new THREE.Mesh(cone, nozzleM);
-  nozzle.rotation.x = Math.PI;
-  nozzle.position.set(bx, by + NOZZLE_LEN / 2, bz);
-  head.add(nozzle);
-  return {
-    object,
-    head,
-    gantry,
-    lift,
-    dispose() {
-      for (const g of geos) g.dispose();
-      for (const m of mats) m.dispose();
-    },
-  };
-}
 
 /** A print under way, as the game says: how far along it is (0–1). */
 export interface PrintState {
@@ -132,6 +45,8 @@ export class PrinterRig {
   private headRest = new THREE.Vector3();
   private gantryRest = new THREE.Vector3();
   private liftRest = new THREE.Vector3();
+  /** Where the nozzle's tip is with the parts at rest, in the printer's space (the plate's middle without a head). */
+  private tip = new THREE.Vector3();
   /** The head's offset from rest in the printer's space now (eased back to resting when idle). */
   private offset = new THREE.Vector3();
   private patched = new Map<THREE.Mesh, PatchedMesh>();
@@ -163,12 +78,44 @@ export class PrinterRig {
     if (head) this.headRest.copy(head.position);
     if (gantry) this.gantryRest.copy(gantry.position);
     if (lift) this.liftRest.copy(lift.position);
+    this.tip.fromArray(this.data.bed);
+    if (head) this.findTip(head);
+  }
+
+  /** The nozzle: the head's lowest point (the middle of its corners within half a unit of the lowest). */
+  private findTip(head: THREE.Object3D): void {
+    this.root.updateWorldMatrix(true, true);
+    const toPrinter = tmpM.copy(this.root.matrixWorld).invert();
+    const pts: number[] = [];
+    let low = Infinity;
+    const v = new THREE.Vector3(), m = new THREE.Matrix4();
+    head.traverse((o) => {
+      const mesh = o as THREE.Mesh;
+      const pos = mesh.isMesh ? (mesh.geometry.getAttribute('position') as THREE.BufferAttribute | undefined) : undefined;
+      if (!pos) return;
+      m.multiplyMatrices(toPrinter, mesh.matrixWorld);
+      for (let i = 0; i < pos.count; i++) {
+        v.fromBufferAttribute(pos, i).applyMatrix4(m);
+        pts.push(v.x, v.y, v.z);
+        low = Math.min(low, v.y);
+      }
+    });
+    let x = 0, z = 0, n = 0;
+    for (let i = 0; i < pts.length; i += 3)
+      if (pts[i + 1]! < low + 0.5) {
+        x += pts[i]!;
+        z += pts[i + 2]!;
+        n++;
+      }
+    if (n) this.tip.set(x / n, low, z / n);
   }
 
   /** One frame: `print` is the print on this printer (null: idle) and `meshes` what draws its copy. */
   update(dt: number, print: (PrintState & { copy: string }) | null, meshes: THREE.Mesh[]): void {
     if (!print || print.copy !== this.copy) this.finish();
-    const target = new THREE.Vector3(0, this.data.size[1] * 0.25 + 4, 0);
+    // (Resting: the nozzle over the plate's middle, a quarter of the print space up.)
+    const [bx, by, bz] = this.data.bed;
+    const target = new THREE.Vector3(bx, by + this.data.size[1] * 0.25 + 4, bz).sub(this.tip);
     if (print) {
       this.copy = print.copy;
       let added = false;
@@ -205,12 +152,12 @@ export class PrinterRig {
     const top = b.min.y + (layer + 1) * lh;
     this.uniforms.uPrintTop.value = top;
     this.uniforms.uPrintLayer.value = lh;
-    const [bx, by, bz] = this.data.bed;
+    const t = this.tip;
     if (layer !== this.layer) {
       this.layer = layer;
       this.slice(b.min.y + (layer + 0.5) * lh, layer);
       // (The new layer's path is taken up where the head is now, not from its start.)
-      this.along = this.nearestAlong(this.offset.x + bx, this.offset.z + bz);
+      this.along = this.nearestAlong(this.offset.x + t.x, this.offset.z + t.z);
     }
     // The head goes round and round the layer's path at its own pace, its nozzle at the top of the layer.
     const n = this.path.length / 2;
@@ -218,7 +165,7 @@ export class PrinterRig {
     if (total > 0) this.along = (this.along + this.speed * dt) % total;
     const local = this.toPrinter(new THREE.Vector3(0, top, 0));
     const p = this.pointAt(this.along);
-    out.set(p ? p[0] - bx : this.offset.x, local.y - by, p ? p[1] - bz : this.offset.z);
+    out.set(p ? p[0] - t.x : this.offset.x, local.y - t.y, p ? p[1] - t.z : this.offset.z);
   }
 
   /** A point of this layer's path, `s` u along it (outline first, then the fill). */

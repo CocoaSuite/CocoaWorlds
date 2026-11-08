@@ -151,7 +151,7 @@ export function SceneTree() {
             { label: t('add.poster'), onSelect: () => s.add('poster') },
             { label: t('add.painting'), onSelect: () => s.add('painting') },
             { label: t('add.stake'), onSelect: () => s.add('stake') },
-            { label: t('add.printer'), onSelect: () => s.add('printer') },
+            { label: t('add.printer'), onSelect: () => void s.addPrinter() },
             { label: t('add.chicken'), onSelect: () => void s.addChicken(false) },
             { label: t('add.chickenFriend'), onSelect: () => void s.addChicken(true) },
             { label: t('add.ladder'), onSelect: () => s.addLadder() },

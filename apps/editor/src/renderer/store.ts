@@ -119,7 +119,7 @@ export type ViewMode = 'perspective' | 'top' | 'front' | 'side';
 /** Grid sizes to snap to (u). */
 export const GRID_SIZES = [1, 2, 4, 8, 16, 32, 64, 128, 256, 512];
 
-export type AddKind = 'empty' | 'pointLight' | 'spotLight' | 'sun' | 'spawn' | 'sign' | 'reflectionProbe' | 'poster' | 'painting' | 'stake' | 'printer';
+export type AddKind = 'empty' | 'pointLight' | 'spotLight' | 'sun' | 'spawn' | 'sign' | 'reflectionProbe' | 'poster' | 'painting' | 'stake';
 export interface LogEntry {
   at: string;
   level: 'info' | 'warn' | 'error';
@@ -229,6 +229,8 @@ interface Actions {
   add(kind: AddKind, at?: [number, number, number]): void;
   /** Add the ready-made chicken (its model is copied into the project the first time): an enemy or a friend. */
   addChicken(friendly: boolean, at?: [number, number, number]): Promise<void>;
+  /** The ready-made 3D printer: its model (with collision boxes and moving lift, gantry and head) and settings to match. */
+  addPrinter(at?: [number, number, number]): Promise<void>;
   /** A ready-made ladder: a Repeat group of rail-and-rung segments with a climbing zone in each, and a top cap. */
   addLadder(at?: [number, number, number]): void;
   /** A new terrain: flat ground 2048 u square, 768 u deep, its surface at `at` (T1). */
@@ -550,7 +552,6 @@ export const useEditor = create<State & Actions>()((set, get) => ({
       sign: () => base('sign', { sign: { text: 'Text', size: 16, color: '#ffffff', background: true, faceCamera: false } }, 64),
       poster: () => base('poster', { poster: { picture: '', width: 32, height: 48, rolls: true, scrollModel: '', scrollScale: 1, scrollCollision: 'cylinder', thickness: 0.5, frame: '#e8e2d4', mass: 0.5, hungAtStart: false } }, 8),
       painting: () => base('painting', { poster: { picture: '', width: 48, height: 36, rolls: false, scrollModel: '', scrollScale: 1, scrollCollision: 'cylinder', thickness: 3, frame: '#5a3d25', mass: 4, hungAtStart: false } }, 24),
-      printer: () => base('3d_printer', { printer: {} }),
       stake: () => base('stake', { model: {}, rigidBody: { motion: 'dynamic' }, stake: { tip: 'bottom', speed: 160, depth: 6, tilt: 10 } }, 16),
     }[kind]();
     get().execute(addEntitiesCmd(doc, [e], `Add ${e.name}`));
@@ -629,6 +630,18 @@ export const useEditor = create<State & Actions>()((set, get) => ({
     get().execute(addEntitiesCmd(doc, [e], `Add ${e.name}`));
     set({ selection: [e.id] });
     get().log('info', 'Scene', `Added a chicken (${friendly ? 'a friend: it follows you when you press E' : 'an enemy: it pecks when you come close'})`);
+  },
+
+  async addPrinter(at = get().placementPoint() ?? [0, 0, 0]) {
+    const { doc, session } = get();
+    if (!doc || !session) return;
+    const r = await window.cocoa.projects.addSample(session.dir, 'printer');
+    if (!r.ok) return get().notify(r.error);
+    void get().loadAssets();
+    const e = newEntity('3d_printer', { model: { ...defaultComponent('model'), model: r.value.path, units: 'metres', collision: 'auto' }, printer: defaultComponent('printer') }, { position: [at[0], at[1], at[2]] });
+    get().execute(addEntitiesCmd(doc, [e], `Add ${e.name}`));
+    set({ selection: [e.id] });
+    get().log('info', 'Scene', 'Added a 3D printer (the Print block prints on it)');
   },
 
   deleteSelection() {

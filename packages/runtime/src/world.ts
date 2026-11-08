@@ -45,7 +45,6 @@ import {
   type PosterData,
   type StakeData,
   type PrinterData,
-  printerFrame,
   worldBoundsOf,
   posterScrollRadius,
   posterOf,
@@ -1050,8 +1049,6 @@ export class GameWorld {
       if (!e.components.printer || !shown(e)) continue;
       const data = readComponent<PrinterData>('printer', e.components.printer);
       this.printers.set(e.id, { data, job: null, queue: [] });
-      // The built-in printer collides (its own model collides by its Model settings).
-      if (!(e.components.model as { model?: string } | undefined)?.model) this.addPrinterFrame(e.id, data, doc.worldMatrix(e.id));
     }
     const info = { objects, rules, globals: values.map((v) => ({ name: v.name, type: v.type })), signs: new Set(this.signs.keys()), lights: new Set(this.lights.keys()), printers: new Set(this.printers.keys()) };
     this.scriptInfo = info;
@@ -3273,20 +3270,6 @@ export class GameWorld {
   private printers = new Map<string, { data: PrinterData; job: PrintJob | null; queue: string[] }>();
   /** Bodies of prints under way (they don't move, collide or get picked up), with their body type to go back to. */
   private printing = new Map<string, RAPIER.RigidBodyType>();
-
-  /** The built-in printer's still parts as one fixed body (the plate holds finished prints; posts stop the player). */
-  private addPrinterFrame(id: string, data: PrinterData, m: number[]): void {
-    const t = decomposeMat4(m);
-    const q = quatFromMatrix(composeTransform({ position: t.position, rotation: t.rotation, scale: [1, 1, 1] }));
-    const body = this.world.createRigidBody(RAPIER.RigidBodyDesc.fixed().setTranslation(t.position[0], t.position[1], t.position[2]).setRotation(q));
-    const k = t.scale.map(Math.abs);
-    for (const f of printerFrame(data)) {
-      const desc = RAPIER.ColliderDesc.cuboid((f.size[0] * k[0]!) / 2, (f.size[1] * k[1]!) / 2, (f.size[2] * k[2]!) / 2)
-        .setTranslation(f.center[0] * k[0]!, f.center[1] * k[1]!, f.center[2] * k[2]!)
-        .setFriction(0.6);
-      this.owner.set(this.world.createCollider(desc, body).handle, id);
-    }
-  }
 
   /** Print a copy of `template` on `printer`: the copy, or null when it waits its turn. */
   print(template: string, printer: string): string | null {

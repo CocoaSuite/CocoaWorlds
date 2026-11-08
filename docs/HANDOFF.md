@@ -422,6 +422,12 @@ Kinematics: a fixed-bed printer: `lift` (up only, rides four lead screws), `gant
 rails), `head` (left-right); `PrinterRig.moveParts` moves each by its total minus that of the moving part it is
 inside. Template model with these node names: the built-in printer exported as GLB (metres).
 
+Ready-made printer (replaces the built-in drawn one): `apps/editor/samples/printer.glb` (the user's model; its
+`head` mesh split into `gantry` (bar, carriages) and `head` (block, nozzle), nested lift › gantry › head; `col_`
+boxes for base and posts), copied in by `addPrinter` (store) as `models/3d_printer.glb`. `PrinterRig.findTip`
+takes the nozzle as the head's lowest point, so a model's rest pose can be anything. `buildPrinter`,
+`printerFrame` and the world's frame collider are gone.
+
 Next, if wanted: the shop screen bundled with the computer UI (catalogue, prices, Buy → Print); a custom printer
 model sample; an e2e test of a print in Play.
 
