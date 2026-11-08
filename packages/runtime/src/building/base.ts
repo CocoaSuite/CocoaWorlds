@@ -1,12 +1,13 @@
 /**
- * The base, blueprint style (as Lumber Tycoon 2): blueprints placed on the build grid, filled by props of their
- * material touching them, finished pieces that block and can be knocked down, doors that open. No physics and no
- * drawing: the game world is the `BaseHost` (items, the ground, blockers, props, events) and whoever draws reads
- * `parts()`.
+ * The base, blueprint style (as Lumber Tycoon 2): blueprints picked from a menu of the ones owned, placed on the
+ * build grid (on the ground, on and beside other pieces, turned with R and T), filled by props of their material
+ * lying in them, finished pieces that block and can be knocked down, doors that open. No physics and no drawing:
+ * the game world is the `BaseHost` (items, rays, blockers, props, events) and whoever draws reads `parts()` and
+ * `tags()`.
  */
 import type { GameEvent } from '../events';
 import type { BaseConfig, PartDef, PieceDef } from './defs';
-import { nearestSpot, parseSpot, spotKey, spotMiddle, spotToWorld, spotYaw, type Spot } from './grid';
+import { normTurn, overlapShare, rayAabb, turn, turnedSize, type Turn } from './grid';
 
 type V3 = [number, number, number];
 
@@ -23,9 +24,8 @@ export interface BaseHost {
   time(): number;
   itemCount(name: string): number;
   giveItem(name: string, n: number): void;
-  selectedItem(): string;
-  /** The ground's height under (x, z), looking down from `fromY`; finished pieces count as ground (null: nothing there). */
-  groundAt(x: number, z: number, fromY: number): number | null;
+  /** The world (not blueprints) a ray from the eye meets first: how far, and the face's normal (null: nothing in reach). */
+  castRay(from: V3, dir: V3, reach: number): { distance: number; normal: V3 } | null;
   setBlocker(key: string, box: BlockerBox | null): void;
   /** Props (their ids) of material `tag` (named after it or tagged with it) that touch the box, loose or carried. */
   propsIn(box: BlockerBox, tag: string): string[];
@@ -39,9 +39,9 @@ export interface BaseHost {
 export interface Site {
   id: string;
   def: PieceDef;
-  spot: Spot;
-  /** Ground height at the spot's middle. */
-  y: number;
+  /** Its box's lowest corner (world). */
+  min: V3;
+  turn: Turn;
   /** Props in it now (def.count: finished). */
   filled: number;
   /** Finished: health left. */
@@ -52,15 +52,16 @@ export interface Site {
 export interface SiteSave {
   id: string;
   piece: string;
-  spot: string;
-  y: number;
+  min: V3;
+  yaw: number;
+  tilt: number;
   filled: number;
   health: number;
   open: boolean;
 }
 /** Saved base of one scene. */
 export interface BaseSave {
-  v: 2;
+  v: 3;
   sites: SiteSave[];
   next: number;
 }
@@ -71,7 +72,7 @@ export interface BuildPrompt {
   icon: string;
   /** The piece and how far along it is ('Wood wall · 50%'). */
   title: string;
-  /** What E does ('' : nothing). */
+  /** What E (or a click, placing) does ('' : nothing). */
   label: string;
   /** 0…1: a blueprint's completion, or a damaged piece's health (null: nothing to show). */
   progress: number | null;
@@ -89,6 +90,30 @@ export interface DrawnPart {
   color: string;
   material: string;
   ghost: boolean;
+  /** How see-through a ghost is (1: solid). */
+  opacity: number;
+}
+
+/** The % over an unfinished blueprint. */
+export interface BlueprintTag {
+  site: string;
+  at: V3;
+  percent: number;
+}
+
+/** A blueprint the player owns, for the menu. */
+export interface BlueprintCard {
+  piece: string;
+  label: string;
+  category: string;
+  icon: string;
+  /** How many (for blueprints placing uses up; else at least 1). */
+  count: number;
+  material: string;
+  needs: number;
+  /** Its boxes, for drawing a card picture. */
+  size: V3;
+  parts: { at: V3; size: V3; color: string }[];
 }
 
 /** Where E is pointed: a site, and how far. */
@@ -99,14 +124,14 @@ export interface BaseAim {
 
 export interface Placement {
   piece: string;
-  spot: Spot;
-  y: number;
+  min: V3;
+  turn: Turn;
   valid: boolean;
 }
 
 const deg = Math.PI / 180;
-/** Pieces closer in height than this share a spot (u). */
-const SAME_LEVEL = 8;
+/** Pieces overlapping more than this share of the smaller can't both be there (walls meeting at a corner can). */
+const OVERLAP = 0.2;
 
 export class BaseSystem {
   private sites = new Map<string, Site>();
@@ -119,7 +144,12 @@ export class BaseSystem {
   private removing: { site: string; t: number } | null = null;
   /** Goes up whenever something drawn changes (for whoever draws). */
   version = 0;
-  /** The ghost a blueprint in hand would place, if aimed at the ground. */
+  /** The blueprint menu is open. */
+  menuOpen = false;
+  /** The piece being placed (picked from the menu), and how it is turned. */
+  placing: string | null = null;
+  placingTurn: Turn = { yaw: 0, tilt: 0 };
+  /** Where the piece being placed would go, if aimed at something. */
   preview: Placement | null = null;
 
   constructor(
@@ -147,54 +177,27 @@ export class BaseSystem {
     return Math.min(1, s.filled / s.def.count);
   }
 
-  /** The piece a blueprint item places. */
-  pieceForPlan(item: string): PieceDef | null {
+  /** A site's box size (turned). */
+  sizeOf(s: { def: PieceDef; turn: Turn }): V3 {
+    return turnedSize(s.def.size, s.turn);
+  }
+
+  /** The piece a blueprint item stands for. */
+  pieceForBlueprint(item: string): PieceDef | null {
     if (!item) return null;
     for (const d of this.pieces.values()) if (d.blueprint === item) return d;
     return null;
   }
 
-  /** A site already on this spot at about this height. */
-  private taken(spot: Spot, y: number): boolean {
-    const key = spotKey(spot);
-    for (const s of this.sites.values()) if (spotKey(s.spot) === key && Math.abs(s.y - y) < SAME_LEVEL) return true;
+  /** Whether something already takes up (most of) this space. */
+  private blocked(min: V3, size: V3): boolean {
+    for (const s of this.sites.values()) if (overlapShare(min, size, s.min, this.sizeOf(s)) > OVERLAP) return true;
     return false;
   }
 
-  /** Where the blueprint in hand would go, aiming at point `p` (null: no blueprint in hand or nothing aimed at). */
-  aimPlacement(p: V3 | null): Placement | null {
-    const def = this.pieceForPlan(this.host.selectedItem());
-    const was = this.preview;
-    if (!def || !p) this.preview = null;
-    else {
-      const g = this.config.grid;
-      const spot = nearestSpot(def.snap, p[0], p[2], g);
-      const [mx, mz] = spotMiddle(spot, g);
-      const y = this.host.groundAt(mx, mz, p[1] + 16) ?? p[1];
-      this.preview = { piece: def.id, spot, y, valid: !this.taken(spot, y) };
-    }
-    if (JSON.stringify(was) !== JSON.stringify(this.preview)) this.version++;
-    return this.preview;
-  }
-
-  /** Place the previewed blueprint (its id, or null when it can't go there). */
-  placePreview(): string | null {
-    const p = this.preview;
-    if (!p?.valid) return null;
-    const def = this.pieces.get(p.piece)!;
-    if (def.consumeBlueprint) {
-      if (this.host.itemCount(def.blueprint) <= 0) return null;
-      this.host.giveItem(def.blueprint, -1);
-    }
-    const id = this.add(def, p.spot, p.y);
-    this.preview = null;
-    this.host.emit({ type: 'base.placed', site: id, piece: def.id, time: this.host.time() });
-    return id;
-  }
-
   /** A new blueprint (`filled`: finished already, for scripts and loading). */
-  add(def: PieceDef, spot: Spot, y: number, id = `site${this.next++}`, filled = 0): string {
-    const s: Site = { id, def, spot, y, filled: Math.max(0, Math.min(def.count, filled)), health: def.health, open: false };
+  add(def: PieceDef, min: V3, t: Partial<Turn> = {}, id = `site${this.next++}`, filled = 0): string {
+    const s: Site = { id, def, min: [...min], turn: normTurn(t), filled: Math.max(0, Math.min(def.count, filled)), health: def.health, open: false };
     this.sites.set(id, s);
     this.changed(s);
     return id;
@@ -211,6 +214,119 @@ export class BaseSystem {
     for (const [p, site] of this.claims) if (site === id) this.claims.delete(p);
     this.version++;
   }
+
+  // ── The menu and placing ──
+
+  /** The blueprints the player owns. */
+  owned(): BlueprintCard[] {
+    const out: BlueprintCard[] = [];
+    for (const d of this.pieces.values()) {
+      const n = this.host.itemCount(d.blueprint);
+      if (n <= 0) continue;
+      out.push({ piece: d.id, label: d.label, category: d.category, icon: d.icon, count: n, material: d.materialLabel, needs: d.count, size: [...d.size], parts: d.mesh.parts.map((p) => ({ at: [...p.at], size: [...p.size], color: p.color })) });
+    }
+    return out;
+  }
+
+  setMenu(open: boolean): void {
+    if (this.menuOpen === open) return;
+    this.menuOpen = open;
+    this.version++;
+  }
+
+  /** Start placing an owned blueprint (false: not owned). */
+  startPlacing(piece: string): boolean {
+    const d = this.pieces.get(piece);
+    if (!d || this.host.itemCount(d.blueprint) <= 0) return false;
+    if (this.placing !== piece) this.placingTurn = { yaw: 0, tilt: 0 };
+    this.placing = piece;
+    this.setMenu(false);
+    this.version++;
+    return true;
+  }
+
+  stopPlacing(): void {
+    if (!this.placing) return;
+    this.placing = null;
+    this.preview = null;
+    this.version++;
+  }
+
+  /** R: a quarter turn about up. */
+  rotate(): void {
+    if (!this.placing) return;
+    this.placingTurn = { ...this.placingTurn, yaw: (this.placingTurn.yaw + 1) % 4 };
+    this.version++;
+  }
+
+  /** T: tip it over a quarter (pieces that turn). */
+  tip(): void {
+    const d = this.placing ? this.pieces.get(this.placing) : null;
+    if (!d?.turns) return;
+    this.placingTurn = { ...this.placingTurn, tilt: (this.placingTurn.tilt + 1) % 4 };
+    this.version++;
+  }
+
+  /**
+   * Where the piece being placed goes, aimed from the eye: against the face aimed at (the ground, a wall, a
+   * blueprint's top or side), lined up on the grid along that face, flush with it across.
+   */
+  aimPlacement(eye: V3 | null, dir: V3 | null): Placement | null {
+    const def = this.placing ? this.pieces.get(this.placing) : null;
+    const was = JSON.stringify(this.preview);
+    this.preview = null;
+    if (def && eye && dir) {
+      const reach = this.config.placeReach;
+      let hit = this.host.castRay(eye, dir, reach);
+      let on: Site | null = null;
+      for (const s of this.sites.values()) {
+        const h = rayAabb(eye, dir, s.min, this.sizeOf(s));
+        if (h && h.distance <= reach && (!hit || h.distance <= hit.distance + 0.5)) {
+          hit = h;
+          on = s;
+        }
+      }
+      if (hit) {
+        const p: V3 = [eye[0] + dir[0] * hit.distance, eye[1] + dir[1] * hit.distance, eye[2] + dir[2] * hit.distance];
+        const t = this.placingTurn;
+        const size = turnedSize(def.size, t);
+        const n = hit.normal;
+        const k = [0, 1, 2].reduce((a, b) => (Math.abs(n[b]!) > Math.abs(n[a]!) ? b : a), 0);
+        const g = this.config.grid;
+        const min: V3 = [0, 0, 0];
+        for (let i = 0; i < 3; i++) {
+          if (i === k) min[i] = n[i]! > 0 ? p[i]! : p[i]! - size[i]!;
+          // (Up and down beside a piece: on its levels; elsewhere on the world grid.)
+          else if (i === 1) {
+            const base = on ? on.min[1] : 0;
+            min[i] = base + Math.round((p[1] - size[1] / 2 - base) / g) * g;
+          } else min[i] = Math.round((p[i]! - size[i]! / 2) / g) * g;
+        }
+        this.preview = { piece: def.id, min, turn: { ...t }, valid: !this.blocked(min, size) };
+      }
+    }
+    if (was !== JSON.stringify(this.preview)) this.version++;
+    return this.preview;
+  }
+
+  /** Place the previewed blueprint (its id, or null when it can't go there). Placing goes on until stopped. */
+  placePreview(): string | null {
+    const p = this.preview;
+    if (!p?.valid) return null;
+    const def = this.pieces.get(p.piece)!;
+    if (this.host.itemCount(def.blueprint) <= 0) {
+      this.stopPlacing();
+      return null;
+    }
+    if (def.consumeBlueprint) this.host.giveItem(def.blueprint, -1);
+    const id = this.add(def, p.min, p.turn);
+    this.preview = { ...p, valid: false };
+    this.host.emit({ type: 'base.placed', site: id, piece: def.id, time: this.host.time() });
+    if (this.host.itemCount(def.blueprint) <= 0) this.stopPlacing();
+    return id;
+  }
+
+  // ── Filling ──
 
   /**
    * A blueprint now holds `n` props. Short of its count they stay where they are (taken out again, it goes back
@@ -246,6 +362,38 @@ export class BaseSystem {
     this.remove(id);
     this.host.emit({ type: 'base.broken', site: id, piece: s.def.id, time: this.host.time() });
     if (s.def.sounds.broken) this.host.playSound(s.def.sounds.broken, at, 1, 900);
+  }
+
+  /**
+   * Every `every` seconds: which props are in which blueprint. A prop counts for one blueprint only: the one it
+   * is already in while it still touches it, else the oldest one it touches that has room. Props past a
+   * blueprint's count aren't its own, so the next blueprint they touch can have them.
+   */
+  tick(dt: number): void {
+    this.lookIn -= dt;
+    if (this.lookIn > 0) return;
+    this.lookIn = this.config.every;
+    const open = [...this.sites.values()].filter((s) => !this.built(s));
+    const touching = new Map(open.map((s) => [s.id, this.host.propsIn(this.space(s), s.def.material)]));
+    const claims = new Map<string, string>();
+    const held = new Map<string, string[]>(open.map((s) => [s.id, []]));
+    // (Kept: still touching the blueprint it was in.)
+    for (const [prop, site] of this.claims)
+      if (touching.get(site)?.includes(prop)) {
+        claims.set(prop, site);
+        held.get(site)!.push(prop);
+      }
+    for (const s of open) {
+      const mine = held.get(s.id)!;
+      for (const prop of touching.get(s.id)!) {
+        if (mine.length >= s.def.count) break;
+        if (claims.has(prop)) continue;
+        claims.set(prop, s.id);
+        mine.push(prop);
+      }
+    }
+    this.claims = claims;
+    for (const s of open) this.setFilled(s, held.get(s.id)!);
   }
 
   // ── Using ──
@@ -287,8 +435,13 @@ export class BaseSystem {
     this.host.emit({ type: 'base.removed', site: s.id, piece: s.def.id, time: this.host.time() });
   }
 
-  /** What the HUD shows for the piece aimed at. */
+  /** What the HUD shows for the piece aimed at, or the one being placed. */
   prompt(aim: BaseAim | null): BuildPrompt | null {
+    const pv = this.placing ? this.pieces.get(this.placing) : null;
+    if (pv) {
+      const ok = this.preview?.valid !== false;
+      return { site: '', icon: 'place', title: pv.label, label: ok ? 'Place' : 'Something is in the way', progress: null, missing: `${pv.count} ${pv.materialLabel.toLowerCase()}` };
+    }
     const s = aim ? this.sites.get(aim.site) : undefined;
     if (!s) return null;
     const d = s.def;
@@ -308,56 +461,28 @@ export class BaseSystem {
     return hurt === null ? null : { site: s.id, icon: 'hammer', title: d.label, label: '', progress: hurt, missing: '' };
   }
 
-  /**
-   * Every `every` seconds: which props are in which blueprint. A prop counts for one blueprint only: the one it
-   * is already in while it still touches it, else the oldest one it touches that has room. Props past a
-   * blueprint's count aren't its own, so the next blueprint they touch can have them.
-   */
-  tick(dt: number): void {
-    this.lookIn -= dt;
-    if (this.lookIn > 0) return;
-    this.lookIn = this.config.every;
-    const open = [...this.sites.values()].filter((s) => !this.built(s));
-    const touching = new Map(open.map((s) => [s.id, this.host.propsIn(this.space(s), s.def.material)]));
-    const claims = new Map<string, string>();
-    const held = new Map<string, string[]>(open.map((s) => [s.id, []]));
-    // (Kept: still touching the blueprint it was in.)
-    for (const [prop, site] of this.claims)
-      if (touching.get(site)?.includes(prop)) {
-        claims.set(prop, site);
-        held.get(site)!.push(prop);
-      }
-    for (const s of open) {
-      const mine = held.get(s.id)!;
-      for (const prop of touching.get(s.id)!) {
-        if (mine.length >= s.def.count) break;
-        if (claims.has(prop)) continue;
-        claims.set(prop, s.id);
-        mine.push(prop);
-      }
-    }
-    this.claims = claims;
-    for (const s of open) this.setFilled(s, held.get(s.id)!);
-  }
-
   // ── Shapes ──
 
-  private middle(s: Site): V3 {
-    const [x, z] = spotMiddle(s.spot, this.config.grid);
-    return [x, s.y + 48, z];
+  private middle(s: { def: PieceDef; turn: Turn; min: V3 }): V3 {
+    const z = this.sizeOf(s);
+    return [s.min[0] + z[0] / 2, s.min[1] + z[1] / 2, s.min[2] + z[2] / 2];
   }
 
-  /** The space a blueprint takes props in: round all its boxes, a little bigger. */
+  /** The space a blueprint takes props in: its box, a little bigger. */
   space(s: Site): BlockerBox {
-    const lo: V3 = [Infinity, Infinity, Infinity], hi: V3 = [-Infinity, -Infinity, -Infinity];
-    for (const p of s.def.mesh.parts)
-      for (let k = 0; k < 3; k++) {
-        lo[k] = Math.min(lo[k]!, p.at[k]! - p.size[k]! / 2);
-        hi[k] = Math.max(hi[k]!, p.at[k]! + p.size[k]! / 2);
-      }
-    const e = this.config.touch;
-    const [x, z] = spotToWorld(s.spot, this.config.grid, (lo[0] + hi[0]) / 2, (lo[2] + hi[2]) / 2);
-    return { center: [x, s.y + (lo[1] + hi[1]) / 2, z], half: [(hi[0] - lo[0]) / 2 + e, (hi[1] - lo[1]) / 2 + e, (hi[2] - lo[2]) / 2 + e], yaw: spotYaw(s.spot), site: s.id };
+    const z = this.sizeOf(s), e = this.config.touch;
+    return { center: this.middle(s), half: [z[0] / 2 + e, z[1] / 2 + e, z[2] / 2 + e], yaw: 0, site: s.id };
+  }
+
+  /** The % over each unfinished blueprint. */
+  tags(): BlueprintTag[] {
+    const out: BlueprintTag[] = [];
+    for (const s of this.sites.values()) {
+      if (this.built(s)) continue;
+      const m = this.middle(s);
+      out.push({ site: s.id, at: [m[0], s.min[1] + this.sizeOf(s)[1] + 8, m[2]], percent: Math.floor(this.fraction(s) * 100) });
+    }
+    return out;
   }
 
   private changed(s: Site): void {
@@ -372,7 +497,7 @@ export class BaseSystem {
     if (this.built(s))
       s.def.mesh.parts.forEach((p) => {
         if (!p.solid || (p.swing && s.open)) return;
-        const d = this.pose(s, p, false);
+        const d = this.pose(s, p, 'solid');
         this.host.setBlocker(d.key, { center: d.center, half: [d.size[0] / 2, d.size[1] / 2, d.size[2] / 2], yaw: d.yaw, site: s.id });
         now.push(d.key);
         old.delete(d.key);
@@ -381,37 +506,51 @@ export class BaseSystem {
     this.blockers.set(s.id, now);
   }
 
-  private pose(s: Site, p: PartDef, ghost: boolean): DrawnPart {
-    const g = this.config.grid;
+  /** A part where it is now, turned with its piece (and swung open). Untipped, a part keeps its size and turns by yaw; tipped, it is a box along the world axes. */
+  private pose(s: Site, p: PartDef, look: 'solid' | 'blueprint' | 'placing' | 'invalid'): DrawnPart {
+    const size0 = s.def.size;
     let [lx, ly, lz] = p.at;
-    let yaw = spotYaw(s.spot);
-    if (p.swing && s.open) {
-      const a = p.swing.angle * deg;
+    let swing = 0;
+    if (p.swing && s.open && s.turn.tilt === 0) {
+      swing = p.swing.angle * deg;
       const [hx, hz] = p.swing.hinge;
       const dx = lx - hx, dz = lz - hz;
-      lx = hx + dx * Math.cos(a) + dz * Math.sin(a);
-      lz = hz - dx * Math.sin(a) + dz * Math.cos(a);
-      yaw += a;
+      lx = hx + dx * Math.cos(swing) + dz * Math.sin(swing);
+      lz = hz - dx * Math.sin(swing) + dz * Math.cos(swing);
     }
-    const [x, z] = spotToWorld(s.spot, g, lx, lz);
-    return { key: `${s.id}:${p.id}`, site: s.id, center: [x, s.y + ly, z], size: [...p.size], yaw, color: ghost ? this.config.ghost.color : p.color, material: ghost ? '' : p.material, ghost };
+    const c = this.middle(s);
+    const off = turn([lx - size0[0] / 2, ly - size0[1] / 2, lz - size0[2] / 2], s.turn);
+    const flat = s.turn.tilt === 0;
+    const g = this.config.ghost;
+    const color = look === 'solid' ? p.color : look === 'blueprint' ? g.color : look === 'placing' ? g.placing : g.invalid;
+    return {
+      key: `${s.id}:${p.id}`,
+      site: s.id,
+      center: [c[0] + off[0], c[1] + off[1], c[2] + off[2]],
+      size: flat ? [...p.size] : turnedSize(p.size, s.turn),
+      yaw: flat ? s.turn.yaw * (Math.PI / 2) + swing : 0,
+      color,
+      material: look === 'solid' ? p.material : '',
+      ghost: look !== 'solid',
+      opacity: look === 'solid' ? 1 : look === 'blueprint' ? g.opacity : g.placingOpacity,
+    };
   }
 
   /** A site's boxes as drawn now: solid once finished, the blueprint look before. */
   private siteParts(s: Site): DrawnPart[] {
-    const ghost = !this.built(s);
-    return s.def.mesh.parts.map((p) => this.pose(s, p, ghost));
+    const look = this.built(s) ? 'solid' : 'blueprint';
+    return s.def.mesh.parts.map((p) => this.pose(s, p, look));
   }
 
-  /** Everything to draw: every piece, and the placement preview. */
+  /** Everything to draw: every piece, and the ghost being placed. */
   parts(): DrawnPart[] {
     const out: DrawnPart[] = [];
     for (const s of this.sites.values()) out.push(...this.siteParts(s));
     const p = this.preview;
     const def = p && this.pieces.get(p.piece);
     if (p && def) {
-      const ghost: Site = { id: 'preview', def, spot: p.spot, y: p.y, filled: 0, health: def.health, open: false };
-      for (const d of this.siteParts(ghost)) out.push(p.valid ? d : { ...d, color: this.config.ghost.invalid });
+      const ghost: Site = { id: 'preview', def, min: p.min, turn: p.turn, filled: 0, health: def.health, open: false };
+      for (const part of def.mesh.parts) out.push(this.pose(ghost, part, p.valid ? 'placing' : 'invalid'));
     }
     return out;
   }
@@ -420,25 +559,26 @@ export class BaseSystem {
 
   save(): BaseSave {
     return {
-      v: 2,
+      v: 3,
       next: this.next,
-      sites: [...this.sites.values()].map((s) => ({ id: s.id, piece: s.def.id, spot: spotKey(s.spot), y: s.y, filled: s.filled, health: s.health, open: s.open })),
+      sites: [...this.sites.values()].map((s) => ({ id: s.id, piece: s.def.id, min: [...s.min], yaw: s.turn.yaw, tilt: s.turn.tilt, filled: s.filled, health: s.health, open: s.open })),
     };
   }
 
   load(save: unknown): void {
     const b = save as Partial<BaseSave> | null;
-    // (Bases saved by the old build-site system are left behind.)
-    if (!b || b.v !== 2 || !Array.isArray(b.sites)) return;
+    // (Bases saved by older build systems are left behind.)
+    if (!b || b.v !== 3 || !Array.isArray(b.sites)) return;
     for (const id of [...this.sites.keys()]) this.remove(id);
     for (const r of b.sites) {
       const def = this.pieces.get(String(r?.piece));
-      const spot = parseSpot(String(r?.spot));
-      const y = Number(r?.y) || 0;
-      if (!def || !spot || spot.kind !== def.snap || this.taken(spot, y)) continue;
+      const min = Array.isArray(r?.min) && r.min.length === 3 ? (r.min.map((v) => Number(v) || 0) as V3) : null;
+      if (!def || !min) continue;
+      const t = normTurn({ yaw: r.yaw, tilt: r.tilt });
+      if (this.blocked(min, turnedSize(def.size, t))) continue;
       // (Unfinished: empty until the props lying in it are found again.)
       const done = Math.round(Number(r.filled) || 0) >= def.count;
-      const id = this.add(def, spot, y, String(r.id), done ? def.count : 0);
+      const id = this.add(def, min, t, String(r.id), done ? def.count : 0);
       const s = this.sites.get(id)!;
       s.health = Math.max(1, Math.min(def.health, Number(r.health) || def.health));
       s.open = r.open === true;

@@ -1,0 +1,61 @@
+{
+  "id": "concrete_door",
+  "label": "Concrete door frame",
+  "category": "Concrete",
+  "blueprint": "Concrete door frame blueprint",
+  "material": "concrete powder",
+  "materialLabel": "Bags of concrete powder",
+  "count": 3,
+  "health": 180,
+  "size": [
+    96,
+    96,
+    10
+  ],
+  "mesh": {
+    "parts": [
+      {
+        "id": "side_a",
+        "at": [
+          11,
+          48,
+          5
+        ],
+        "size": [
+          22,
+          96,
+          10
+        ],
+        "color": "#9a9a96"
+      },
+      {
+        "id": "side_b",
+        "at": [
+          85,
+          48,
+          5
+        ],
+        "size": [
+          22,
+          96,
+          10
+        ],
+        "color": "#9a9a96"
+      },
+      {
+        "id": "top",
+        "at": [
+          48,
+          88,
+          5
+        ],
+        "size": [
+          52,
+          16,
+          10
+        ],
+        "color": "#9a9a96"
+      }
+    ]
+  }
+}

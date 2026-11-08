@@ -1,9 +1,26 @@
 {
-  "grid": 96,
+  "grid": 48,
   "reach": 140,
   "placeReach": 320,
   "removeHold": 1,
   "every": 0.1,
   "touch": 4,
-  "ghost": { "color": "#4aa3df", "invalid": "#c0392b" }
+  "ghost": {
+    "color": "#1d1a2e",
+    "opacity": 0.45,
+    "placing": "#ffffff",
+    "placingOpacity": 0.3,
+    "invalid": "#c0392b"
+  },
+  "tag": {
+    "color": "#1f2a7a",
+    "text": "#e8eaff"
+  },
+  "ui": {
+    "panel": "",
+    "rolls": "",
+    "card": "",
+    "tag": ""
+  },
+  "menuKey": "KeyB"
 }

@@ -1,21 +1,111 @@
 {
   "id": "wood_door",
   "label": "Wood door",
+  "category": "Wood",
   "blueprint": "Wood door blueprint",
-  "snap": "edge",
   "material": "plank",
   "materialLabel": "Planks",
   "count": 3,
   "health": 60,
+  "size": [
+    96,
+    96,
+    8
+  ],
   "opens": true,
   "mesh": {
     "parts": [
-      { "id": "jamb_a", "at": [3, 52, 0], "size": [6, 104, 6], "color": "#6b4a2b" },
-      { "id": "jamb_b", "at": [93, 52, 0], "size": [6, 104, 6], "color": "#6b4a2b" },
-      { "id": "side_a", "at": [14, 52, 0], "size": [16, 104, 4], "color": "#946d42" },
-      { "id": "side_b", "at": [82, 52, 0], "size": [16, 104, 4], "color": "#946d42" },
-      { "id": "header", "at": [48, 96, 0], "size": [52, 16, 4], "color": "#6b4a2b" },
-      { "id": "leaf", "at": [48, 44, 0], "size": [52, 88, 3], "color": "#9a7246", "swing": { "hinge": [22, 0], "angle": 90 } }
+      {
+        "id": "jamb_a",
+        "at": [
+          3,
+          48,
+          4
+        ],
+        "size": [
+          6,
+          96,
+          8
+        ],
+        "color": "#6b4a2b"
+      },
+      {
+        "id": "jamb_b",
+        "at": [
+          93,
+          48,
+          4
+        ],
+        "size": [
+          6,
+          96,
+          8
+        ],
+        "color": "#6b4a2b"
+      },
+      {
+        "id": "side_a",
+        "at": [
+          14,
+          48,
+          4
+        ],
+        "size": [
+          16,
+          96,
+          4
+        ],
+        "color": "#946d42"
+      },
+      {
+        "id": "side_b",
+        "at": [
+          82,
+          48,
+          4
+        ],
+        "size": [
+          16,
+          96,
+          4
+        ],
+        "color": "#946d42"
+      },
+      {
+        "id": "header",
+        "at": [
+          48,
+          88,
+          4
+        ],
+        "size": [
+          52,
+          16,
+          4
+        ],
+        "color": "#6b4a2b"
+      },
+      {
+        "id": "leaf",
+        "at": [
+          48,
+          40,
+          4
+        ],
+        "size": [
+          52,
+          80,
+          3
+        ],
+        "color": "#9a7246",
+        "swing": {
+          "hinge": [
+            22,
+            4
+          ],
+          "angle": 90
+        }
+      }
     ]
   }
 }

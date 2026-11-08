@@ -1,0 +1,75 @@
+{
+  "id": "wood_small_wall",
+  "label": "Small wood wall",
+  "category": "Wood",
+  "blueprint": "Small wood wall blueprint",
+  "material": "plank",
+  "materialLabel": "Planks",
+  "count": 2,
+  "health": 40,
+  "size": [
+    96,
+    48,
+    8
+  ],
+  "mesh": {
+    "parts": [
+      {
+        "id": "post_a",
+        "at": [
+          3,
+          24,
+          4
+        ],
+        "size": [
+          6,
+          48,
+          8
+        ],
+        "color": "#6b4a2b"
+      },
+      {
+        "id": "post_b",
+        "at": [
+          93,
+          24,
+          4
+        ],
+        "size": [
+          6,
+          48,
+          8
+        ],
+        "color": "#6b4a2b"
+      },
+      {
+        "id": "board_1",
+        "at": [
+          48,
+          12,
+          4
+        ],
+        "size": [
+          84,
+          23,
+          4
+        ],
+        "color": "#9a7246"
+      },
+      {
+        "id": "board_2",
+        "at": [
+          48,
+          36,
+          4
+        ],
+        "size": [
+          84,
+          23,
+          4
+        ],
+        "color": "#946d42"
+      }
+    ]
+  }
+}

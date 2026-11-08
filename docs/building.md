@@ -11,62 +11,65 @@ Code: `packages/runtime/src/building/` (`defs.ts` JSON shapes, `grid.ts` edges a
 
 ## Playing
 
-1. **Place.** A blueprint item in the picked hotbar slot (`Wood wall blueprint`, …) shows a flat blue ghost on the
-   nearest grid edge (walls, doors, windows) or cell (floors, foundations); red where something is already there.
-   A click places it as a blueprint at 0%. Blueprints stand on what's under them: the ground, or a finished
-   piece (a wall on a foundation, a second wall on top of the first). The item is kept: buy once, place many
-   (`consumeBlueprint: true` makes each placing use one).
-2. **Fill.** Every physics prop whose name starts with the piece's `material` (“Plank”, “Plank 2”, “Concrete
+1. **Pick.** **B** opens the blueprint menu: a blue scroll of the blueprints the player owns, in sections
+   (Concrete, Wood…). Blueprints are items (`Wood wall blueprint`, …) but not hotbar slots: owning one puts it in
+   the menu. A card starts placing it and the menu shuts.
+2. **Place.** A light ghost follows the aim, against the face aimed at (the ground, a wall, a blueprint's top or
+   side), lined up on the grid (48 u) along that face and flush with it across: blueprints stack on blueprints
+   and go beside them. **R** turns it a quarter about up, **T** tips it over a quarter (a wall becomes a floor;
+   doors don't tip). Red where something already takes up most of that space (walls meeting at a corner are
+   fine). A click places a blueprint at 0%; placing goes on until **Q** or a right click. A blueprint item is kept
+   (`consumeBlueprint: true` makes each placing use one, and placing stops when there are none).
+3. **Fill.** Every physics prop whose name starts with the piece's `material` (“Plank”, “Plank 2”, “Concrete
    powder bag”; any case), or that is tagged with it, counts while it touches the blueprint, loose or carried:
-   one each, whatever its size. It stays where it is; take it out again and the % goes back down. Other props are
-   left alone. A prop counts for one blueprint only: the one it is already in while it still touches it, else the
-   oldest one it touches that has room (props past a blueprint's count go to the next one they touch).
-   Aimed at, the HUD shows `Wood wall · 50%`, a bar and what's still needed.
-3. **Finish.** Once `count` props are in at once, they are all used up together and the piece is solid.
+   one each, whatever its size. It stays where it is; take it out again and the % goes back down. A prop counts
+   for one blueprint only: the one it is already in while it still touches it, else the oldest one it touches
+   that has room. Each blueprint shows its % on a tag above it; aimed at, the HUD shows it too.
+4. **Finish.** Once `count` props are in at once, they are all used up together and the piece is solid.
 
 - **Remove a blueprint:** hold E on it for `removeHold` seconds (1). The props in it stay.
 - **Knock a piece down:** finished pieces have `health`. Weapon hits (the crowbar: 10 a swing), bullets, blasts
-  (**Make an explosion**) and **Damage everything within** blocks wear it down; at 0 it is gone. Aimed at, a damaged piece shows its
-  health bar.
-- **Doors:** E opens and shuts a finished `opens` piece (its `swing` parts turn about their hinge and stop blocking).
-
-Getting blueprints: they are hotbar items, so anything that gives items gives them (the **Give an item** block, a
-pickup, the start of the game). The home-computer shop will sell them once its UI exists.
+  (**Make an explosion**) and **Damage everything within** blocks wear it down; at 0 it is gone.
+- **Doors:** E opens and shuts a finished `opens` piece.
 
 ## Pieces are JSON
 
-Built-in (`data/`): `wood-wall`, `wood-floor`, `wood-door`, `wood-window` (4/4/3/3 planks) and `concrete-wall`,
-`concrete-floor` (3/4 bags of concrete powder). A game adds pieces (or replaces one by id) with no code, in the scene
-file:
+Built-in (`data/`), Concrete: large wall, small wall, door frame, window frame, foundation (bags of concrete
+powder); Wood: wall, small wall, floor, door, window wall (planks). A game adds pieces (or replaces one by id) with
+no code, in the scene file:
 
 ```json
 "settings": { "building": {
-  "pieces": [ { "id": "mud_wall", "label": "Mud wall", "material": "mud", "count": 5, "mesh": { "parts": [ … ] } } ],
+  "pieces": [ { "id": "mud_wall", "label": "Mud wall", "category": "Mud", "material": "mud", "count": 5, "size": [96, 96, 8], "mesh": { "parts": [ … ] } } ],
   "base": { "removeHold": 2 }
 } }
 ```
 
-A piece: `id`, `label`, `blueprint` (the item that places it; default “*label* blueprint”), `consumeBlueprint`,
-`snap` (`edge` or `cell`), `material` (the tag), `materialLabel` (plural, for the HUD), `count`, `health`, `opens`,
-`sounds` (`add`, `built`, `broken`, `door`: project paths) and `mesh.parts`.
+A piece: `id`, `label`, `category` (menu section), `blueprint` (the item that owns it; default “*label*
+blueprint”), `icon` (a project image for its card; missing: drawn from its boxes), `consumeBlueprint`, `size` (its
+box: x along, y up, z across; missing: round its parts), `turns` (T tips it; doors don't), `material` (the
+name/tag), `materialLabel` (plural, for the HUD), `count`, `health`, `opens`, `sounds` (`add`, `built`, `broken`,
+`door`) and `mesh.parts`.
 
-Parts are boxes in the spot's own space: x along (0…grid), y up from what it stands on, z across (an edge's middle
-is z 0; a cell runs 0…grid). `at` (the box's middle), `size`, `color`, `material` (a project material by name),
-`solid` (blocks once finished; default yes), `swing` (`{ hinge: [x, z], angle }`: turns open by that much). The
-space a blueprint takes props in is the box round all its parts, `touch` units bigger.
+Parts are boxes in the piece's own space, from its box's corner: `at` (the box's middle), `size`, `color`,
+`material`, `solid`, `swing` (`{ hinge: [x, z], angle }`).
 
-`base` is merged over `data/base.json`: `grid` (96), `reach` (E, 140), `placeReach` (320), `removeHold` (s),
-`every` (how often blueprints look for props, s), `touch` (u), `ghost` (`color`, `invalid`).
+`base` is merged over `data/base.json`: `grid` (48), `reach`, `placeReach`, `removeHold`, `every`, `touch`,
+`menuKey` (`KeyB`), `ghost` (`color`/`opacity` of placed blueprints, `placing`/`placingOpacity` of the ghost,
+`invalid`), `tag` (`color`, `text`) and `ui`: pictures (project images) that replace the flat colours — `panel`
+(the scroll), `rolls` (its ends), `card` (behind each card), `tag` (behind each %).
 
 ## Events and API
 
 Events: `base.placed {site, piece}`, `base.progress {site, piece, filled, count}` (up or down), `base.built`, `base.removed`
 (E held), `base.broken` (knocked down), `base.door {site, open}`.
 
-`world.base` (`BaseSystem`): `allSites()`, `site(id)` (`filled`, `health`, `open`, `spot`, `y`), `built(s)`,
-`fraction(s)`, `add(def, spot, y, id?, filled?)`, `remove(id)`, `damage(id, amount)`, `space(s)`, `pieces`,
-`config`, `save()` / `load()`. Finished pieces' colliders are owned by `@base:<site>`, so weapons find them.
+`world.base` (`BaseSystem`): `allSites()`, `site(id)` (`min`, `turn`, `filled`, `health`, `open`), `built(s)`,
+`fraction(s)`, `add(def, min, turn?, id?, filled?)`, `remove(id)`, `damage(id, amount)`, `owned()`, `menuOpen`,
+`placing`, `startPlacing(id)`, `stopPlacing()`, `rotate()`, `tip()`, `tags()`, `pieces`, `config`, `save()` /
+`load()`. `GameWorld`: `baseKey(code)`, `toggleBlueprints()`, `pickBlueprint(id)`, `blueprintMenu()`,
+`blueprintTags()`. Menu: `ui/BlueprintMenu.tsx`. Finished pieces' colliders are owned by `@base:<site>`, so weapons find them.
 
-Saved in progress as `base` (per scene, `v: 2`): finished pieces as finished, blueprints empty (they fill again from
+Saved in progress as `base` (per scene, `v: 3`): finished pieces as finished, blueprints empty (they fill again from
 the props lying in them, which stay where they were when the game keeps the world). Bases saved by the old
 build-site system are not loaded. Props used up are taken out of the game like any removed object.

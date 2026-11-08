@@ -1,13 +1,33 @@
 {
   "id": "concrete_wall",
-  "label": "Concrete wall",
-  "blueprint": "Concrete wall blueprint",
-  "snap": "edge",
+  "label": "Large concrete wall",
+  "category": "Concrete",
+  "blueprint": "Large concrete wall blueprint",
   "material": "concrete powder",
   "materialLabel": "Bags of concrete powder",
   "count": 3,
   "health": 200,
+  "size": [
+    96,
+    96,
+    10
+  ],
   "mesh": {
-    "parts": [{ "id": "wall", "at": [48, 52, 0], "size": [96, 104, 10], "color": "#9a9a96" }]
+    "parts": [
+      {
+        "id": "wall",
+        "at": [
+          48,
+          48,
+          5
+        ],
+        "size": [
+          96,
+          96,
+          10
+        ],
+        "color": "#9a9a96"
+      }
+    ]
   }
 }

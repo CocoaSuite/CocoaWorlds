@@ -1,20 +1,103 @@
 {
   "id": "wood_wall",
   "label": "Wood wall",
+  "category": "Wood",
   "blueprint": "Wood wall blueprint",
-  "snap": "edge",
   "material": "plank",
   "materialLabel": "Planks",
   "count": 4,
   "health": 60,
+  "size": [
+    96,
+    96,
+    8
+  ],
   "mesh": {
     "parts": [
-      { "id": "post_a", "at": [3, 52, 0], "size": [6, 104, 6], "color": "#6b4a2b" },
-      { "id": "post_b", "at": [93, 52, 0], "size": [6, 104, 6], "color": "#6b4a2b" },
-      { "id": "board_1", "at": [48, 13, 4], "size": [96, 24, 2], "color": "#9a7246" },
-      { "id": "board_2", "at": [48, 39, 4], "size": [96, 24, 2], "color": "#946d42" },
-      { "id": "board_3", "at": [48, 65, 4], "size": [96, 24, 2], "color": "#9a7246" },
-      { "id": "board_4", "at": [48, 91, 4], "size": [96, 24, 2], "color": "#946d42" }
+      {
+        "id": "post_a",
+        "at": [
+          3,
+          48,
+          4
+        ],
+        "size": [
+          6,
+          96,
+          8
+        ],
+        "color": "#6b4a2b"
+      },
+      {
+        "id": "post_b",
+        "at": [
+          93,
+          48,
+          4
+        ],
+        "size": [
+          6,
+          96,
+          8
+        ],
+        "color": "#6b4a2b"
+      },
+      {
+        "id": "board_1",
+        "at": [
+          48,
+          12,
+          4
+        ],
+        "size": [
+          84,
+          23,
+          4
+        ],
+        "color": "#9a7246"
+      },
+      {
+        "id": "board_2",
+        "at": [
+          48,
+          36,
+          4
+        ],
+        "size": [
+          84,
+          23,
+          4
+        ],
+        "color": "#946d42"
+      },
+      {
+        "id": "board_3",
+        "at": [
+          48,
+          60,
+          4
+        ],
+        "size": [
+          84,
+          23,
+          4
+        ],
+        "color": "#9a7246"
+      },
+      {
+        "id": "board_4",
+        "at": [
+          48,
+          84,
+          4
+        ],
+        "size": [
+          84,
+          23,
+          4
+        ],
+        "color": "#946d42"
+      }
     ]
   }
 }

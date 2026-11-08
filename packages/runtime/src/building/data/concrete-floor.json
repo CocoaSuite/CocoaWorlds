@@ -1,13 +1,33 @@
 {
   "id": "concrete_floor",
   "label": "Concrete foundation",
+  "category": "Concrete",
   "blueprint": "Concrete foundation blueprint",
-  "snap": "cell",
   "material": "concrete powder",
   "materialLabel": "Bags of concrete powder",
   "count": 4,
   "health": 250,
+  "size": [
+    96,
+    12,
+    96
+  ],
   "mesh": {
-    "parts": [{ "id": "slab", "at": [48, 6, 48], "size": [96, 12, 96], "color": "#8f8f8b" }]
+    "parts": [
+      {
+        "id": "slab",
+        "at": [
+          48,
+          6,
+          48
+        ],
+        "size": [
+          96,
+          12,
+          96
+        ],
+        "color": "#8f8f8b"
+      }
+    ]
   }
 }

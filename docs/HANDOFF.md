@@ -254,8 +254,9 @@ user's numbers.
 ### 11. Base building (blueprints, Lumber Tycoon 2 style)
 
 Status: rewritten Nov 2026 (the old stage-by-stage build sites, rooms, sealing, comfort, sleep-to-save, the wedge
-and the knock are gone). Game rule `building`. Blueprint items place see-through blueprints on the grid (edges for
-walls/doors/windows, cells for floors/foundations); props tagged with the piece's `material` (`plank`,
+and the knock are gone). Game rule `building`. B opens a menu of the blueprints owned (items, not hotbar slots); the
+picked one is placed on a 48 u grid against the face aimed at (stacking, beside), R turns, T tips, Q stops; % tags
+over blueprints; props tagged with the piece's `material` (`plank`,
 `concrete powder`) count while touching it (one blueprint each), and once `count` are in they are used up and it is solid.
 Hold E on a blueprint to remove it; finished pieces have `health` and are knocked down by weapon hits, blasts and damage blocks. Doors open
 with E. Data: `packages/runtime/src/building/data/*.json` plus `settings.building` in a scene. Design and API:

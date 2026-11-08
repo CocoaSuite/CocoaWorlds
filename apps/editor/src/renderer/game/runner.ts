@@ -197,6 +197,15 @@ export class GameRunner {
     this.play?.clickUi(id);
   }
 
+  /** Base building: a blueprint picked in the menu (placing starts), or the menu shut. */
+  pickBlueprint(piece: string): void {
+    this.play?.pickBlueprint(piece);
+  }
+
+  closeBlueprints(): void {
+    this.play?.closeBlueprints();
+  }
+
   pickRow(list: string, row: string): void {
     this.play?.pickRow(list, row);
   }
@@ -356,6 +365,8 @@ export class GameRunner {
     }
     if (e.key === 'F11' || e.key === 'F12') return;
     e.preventDefault();
+    // Base building: B opens the blueprint menu; R, T and Q turn and stop the blueprint being placed.
+    if (down && !e.repeat && this.play.baseKey(e.code)) return;
     if (down && /^Digit[1-9]$/.test(e.code)) return this.play.selectSlot(Number(e.code.slice(5)) - 1);
     // R held with something in hand: the mouse turns it instead of the view.
     if (e.code === 'KeyR' && (this.rotating || this.play.holding)) return void (this.rotating = down);
@@ -380,6 +391,8 @@ export class GameRunner {
   };
 
   private mouseDown = (e: MouseEvent): void => {
+    // (A right click stops placing a blueprint.)
+    if (e.button === 2 && this.locked) this.play?.stopPlacing();
     if (e.button !== 0 || !this.play) return;
     if (this.locked) {
       this.play.useItem();

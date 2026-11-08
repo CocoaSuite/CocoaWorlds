@@ -1,14 +1,14 @@
 /**
  * Base building, blueprint style: what a build piece is, as plain JSON.
  *
- * A blueprint item in hand shows a ghost on the build grid; a click places it as a see-through blueprint at 0%.
+ * Blueprints the player owns are picked from the blueprint menu (B); a ghost follows the aim on the build grid
+ * (R and T turn it a quarter) and a click places it as a see-through blueprint at 0%.
  * Props of the piece's material (a plank, a bag of concrete powder) put into it count one each; once `count` of
  * them are in at once they are used up together and it is finished and solid. Finished pieces have health: hits and blasts
  * knock them down. New materials and pieces are new JSON files: nothing here knows about wood or concrete.
  */
-import type { SnapKind } from './grid';
 
-/** One box of a piece's look, in the spot's space: x along (0…grid), y up from the ground, z across. */
+/** One box of a piece's look, in the piece's own space: from its box's corner, x along, y up, z across. */
 export interface PartDef {
   id: string;
   /** The box's middle. */
@@ -17,7 +17,7 @@ export interface PartDef {
   color: string;
   /** A project material by name ('' : the flat colour). */
   material: string;
-  /** Swings open about a hinge (x, z in spot space) by `angle` degrees when the piece is open (a door leaf). */
+  /** Swings open about a hinge (x, z in the piece's space) by `angle` degrees when the piece is open (a door leaf). */
   swing: { hinge: [number, number]; angle: number } | null;
   /** Blocks the player and props once finished (and, for a swinging part, shut). */
   solid: boolean;
@@ -26,12 +26,18 @@ export interface PartDef {
 export interface PieceDef {
   id: string;
   label: string;
-  /** The hotbar item that places it (bought, given or found). */
+  /** The section of the blueprint menu it is in ('Wood', 'Concrete'). */
+  category: string;
+  /** The item that makes it show in the blueprint menu (bought, given or found; not a hotbar slot). */
   blueprint: string;
+  /** Its card picture in the menu (a project image; '' : drawn from its boxes). */
+  icon: string;
   /** Whether placing uses the blueprint item up (missing: no, it places as many as wanted). */
   consumeBlueprint: boolean;
-  /** On a grid edge (walls, doors) or a cell (floors, foundations). */
-  snap: SnapKind;
+  /** Its box (x along, y up, z across): what it takes up on the grid; parts sit in it. */
+  size: [number, number, number];
+  /** T tips it over (missing: yes; doors: no). */
+  turns: boolean;
   /** The tag a prop needs to count towards it (`plank`, `concrete powder`). */
   material: string;
   /** How the material is called in the HUD, plural ('Planks'). */
@@ -68,6 +74,13 @@ function readPart(raw: unknown, i: number): PartDef {
   };
 }
 
+/** The box round all parts, from the origin (for a piece with no `size`). */
+function bounds(parts: PartDef[]): [number, number, number] {
+  const hi: [number, number, number] = [1, 1, 1];
+  for (const p of parts) for (let k = 0; k < 3; k++) hi[k] = Math.max(hi[k]!, p.at[k]! + p.size[k]! / 2);
+  return hi;
+}
+
 /** A piece from its JSON, with defaults filled in. Throws on what can't work (no id, no parts, no material). */
 export function readPieceDef(raw: unknown): PieceDef {
   const d = obj(raw);
@@ -83,9 +96,12 @@ export function readPieceDef(raw: unknown): PieceDef {
   return {
     id,
     label,
+    category: str(d.category, 'Other'),
     blueprint: str(d.blueprint, `${label} blueprint`),
+    icon: str(d.icon),
     consumeBlueprint: d.consumeBlueprint === true,
-    snap: d.snap === 'cell' ? 'cell' : 'edge',
+    size: v3(d.size, bounds(parts)),
+    turns: d.turns !== false && d.opens !== true,
     material,
     materialLabel: str(d.materialLabel, material),
     count: Math.max(1, Math.round(num(d.count, 1))),
@@ -100,7 +116,7 @@ export function readPieceDef(raw: unknown): PieceDef {
 export interface BaseConfig {
   /** Grid cell size (u). */
   grid: number;
-  /** How far E reaches a piece, and how far a blueprint item places one. */
+  /** How far E reaches a piece, and how far a blueprint is placed. */
   reach: number;
   placeReach: number;
   /** Seconds E is held on an unfinished blueprint to remove it (the props in it stay where they are). */
@@ -109,8 +125,14 @@ export interface BaseConfig {
   every: number;
   /** How far round a blueprint's boxes a prop counts as touching it (u). */
   touch: number;
-  /** The see-through blueprint look: flat colour (and red where it can't go). */
-  ghost: { color: string; invalid: string };
+  /** The looks: placed blueprints (dark, see-through), the ghost being placed (light; red where it can't go). */
+  ghost: { color: string; opacity: number; placing: string; placingOpacity: number; invalid: string };
+  /** The % tag over each blueprint. */
+  tag: { color: string; text: string };
+  /** Pictures for the blueprint menu and tags (project images; '' : flat colours). */
+  ui: { panel: string; rolls: string; card: string; tag: string };
+  /** The key that opens the blueprint menu. */
+  menuKey: string;
 }
 
 export function readBaseConfig(raw: unknown, over: unknown = {}): BaseConfig {
@@ -121,13 +143,24 @@ export function readBaseConfig(raw: unknown, over: unknown = {}): BaseConfig {
   };
   const c = merge(raw, over);
   const ghost = obj(c.ghost);
+  const tag = obj(c.tag);
+  const ui = obj(c.ui);
   return {
-    grid: Math.max(8, num(c.grid, 96)),
+    grid: Math.max(8, num(c.grid, 48)),
     reach: num(c.reach, 140),
     placeReach: num(c.placeReach, 320),
     removeHold: Math.max(0.1, num(c.removeHold, 1)),
     every: Math.max(1 / 60, num(c.every, 0.1)),
     touch: Math.max(0, num(c.touch, 4)),
-    ghost: { color: str(ghost.color, '#4aa3df'), invalid: str(ghost.invalid, '#c0392b') },
+    ghost: {
+      color: str(ghost.color, '#1d1a2e'),
+      opacity: num(ghost.opacity, 0.45),
+      placing: str(ghost.placing, '#ffffff'),
+      placingOpacity: num(ghost.placingOpacity, 0.3),
+      invalid: str(ghost.invalid, '#c0392b'),
+    },
+    tag: { color: str(tag.color, '#1f2a7a'), text: str(tag.text, '#e8eaff') },
+    ui: { panel: str(ui.panel), rolls: str(ui.rolls), card: str(ui.card), tag: str(ui.tag) },
+    menuKey: str(c.menuKey, 'KeyB'),
   };
 }

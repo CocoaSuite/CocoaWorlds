@@ -1,0 +1,75 @@
+{
+  "id": "concrete_window",
+  "label": "Concrete window frame",
+  "category": "Concrete",
+  "blueprint": "Concrete window frame blueprint",
+  "material": "concrete powder",
+  "materialLabel": "Bags of concrete powder",
+  "count": 3,
+  "health": 180,
+  "size": [
+    96,
+    96,
+    10
+  ],
+  "mesh": {
+    "parts": [
+      {
+        "id": "low",
+        "at": [
+          48,
+          20,
+          5
+        ],
+        "size": [
+          96,
+          40,
+          10
+        ],
+        "color": "#9a9a96"
+      },
+      {
+        "id": "high",
+        "at": [
+          48,
+          84,
+          5
+        ],
+        "size": [
+          96,
+          24,
+          10
+        ],
+        "color": "#9a9a96"
+      },
+      {
+        "id": "side_a",
+        "at": [
+          11,
+          56,
+          5
+        ],
+        "size": [
+          22,
+          32,
+          10
+        ],
+        "color": "#9a9a96"
+      },
+      {
+        "id": "side_b",
+        "at": [
+          85,
+          56,
+          5
+        ],
+        "size": [
+          22,
+          32,
+          10
+        ],
+        "color": "#9a9a96"
+      }
+    ]
+  }
+}

@@ -3,6 +3,7 @@ import type { BuildPrompt, UiState } from '@cocoaworlds/runtime';
 import { useEffect, useState } from 'react';
 import { t } from '../i18n';
 import type { PlaySession } from '../viewport/play-session';
+import type { BlueprintMenuState } from './BlueprintMenu';
 import { BuildIcon } from './build-icons';
 
 /** What the in-game display shows. */
@@ -37,6 +38,10 @@ export interface Hud {
   use: string | null;
   /** Base building: the blueprint aimed at (how full it is), the one in hand's ghost, a door or a damaged piece. */
   build: BuildPrompt | null;
+  /** Placing a blueprint (the keys show). */
+  placing: boolean;
+  /** The blueprint menu (null: shut). */
+  blueprints: BlueprintMenuState | null;
   /** Other keys that do something at what's looked at or held, with their prompt words. */
   keys: { key: string; prompt: string }[];
   /** The screen UI now, and every value texts and bars can show ({Cash}, health, score). */
@@ -105,6 +110,8 @@ export function hudOf(play: PlaySession, locked: boolean): Hud {
     messages: screen.messages,
     use: locked ? play.usePrompt() : null,
     build: locked ? play.buildPrompt() : null,
+    placing: locked && play.placing,
+    blueprints: play.blueprintMenu(),
     keys: locked ? play.keyPrompts() : [],
     ui: play.uiState(),
     allValues: { ...Object.fromEntries(screen.values.map((v) => [v.name, v.value])), health: Math.ceil(status?.health ?? 0), armour: Math.floor(status?.armour ?? 0), score: status?.score ?? 0, day: play.day },
@@ -116,6 +123,14 @@ export function HudView({ hud }: { hud: Hud }) {
   const low = hud.showHealth && hud.health <= 25;
   return (
     <>
+      {hud.placing && (
+        <div className="cw-ov cw-place-keys" data-testid="place-keys">
+          <span><kbd>{t('hud.click')}</kbd>Place</span>
+          <span><kbd>R</kbd>Rotate</span>
+          <span><kbd>T</kbd>Turn</span>
+          <span><kbd>Q</kbd>Cancel</span>
+        </div>
+      )}
       {(hud.use !== null || hud.keys.length > 0) && (
         <div className="cw-ov cw-use-prompt" data-testid="use-prompt" role="status">
           {hud.use !== null && (

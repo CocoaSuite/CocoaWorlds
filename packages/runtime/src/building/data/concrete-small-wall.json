@@ -1,0 +1,33 @@
+{
+  "id": "concrete_small_wall",
+  "label": "Small concrete wall",
+  "category": "Concrete",
+  "blueprint": "Small concrete wall blueprint",
+  "material": "concrete powder",
+  "materialLabel": "Bags of concrete powder",
+  "count": 2,
+  "health": 140,
+  "size": [
+    96,
+    48,
+    10
+  ],
+  "mesh": {
+    "parts": [
+      {
+        "id": "wall",
+        "at": [
+          48,
+          24,
+          5
+        ],
+        "size": [
+          96,
+          48,
+          10
+        ],
+        "color": "#9a9a96"
+      }
+    ]
+  }
+}

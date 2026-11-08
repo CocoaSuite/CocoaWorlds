@@ -178,7 +178,7 @@ export class PlaySession {
     this.doc = doc;
     this.realistic = doc.settings.acoustics !== false;
     this.makeSpareLights(doc);
-    // Base building: blueprints, finished pieces and the blueprint in hand's preview.
+    // Base building: blueprints (with their % tags), finished pieces and the ghost being placed.
     if (this.world.base) {
       this.baseView = new BaseView(material);
       this.group.add(this.baseView.group);
@@ -1198,9 +1198,37 @@ export class PlaySession {
     this.world.giveItem(name, n);
   }
 
-  /** What E (or a click with a plan) would do at the base now, for the HUD (null: nothing). */
+  /** What E (or a click, placing a blueprint) would do at the base now, for the HUD (null: nothing). */
   buildPrompt(): BuildPrompt | null {
     return this.world.buildPrompt();
+  }
+
+  /** Base building: the blueprint menu key, and R / T / Q while placing (true: the base took the key). */
+  baseKey(code: string): boolean {
+    return this.world.baseKey(code);
+  }
+
+  /** The blueprint menu as shown now (null: shut). */
+  blueprintMenu(): ReturnType<GameWorld['blueprintMenu']> {
+    return this.world.blueprintMenu();
+  }
+
+  pickBlueprint(piece: string): void {
+    this.world.pickBlueprint(piece);
+  }
+
+  closeBlueprints(): void {
+    this.world.toggleBlueprints(false);
+  }
+
+  /** Placing a blueprint (the click places; R, T, Q). */
+  get placing(): boolean {
+    return !!this.world.base?.placing;
+  }
+
+  /** Stop placing a blueprint (a right click). */
+  stopPlacing(): void {
+    this.world.base?.stopPlacing();
   }
 
   /** What pressing Use would do now (see GameWorld.usePrompt). */

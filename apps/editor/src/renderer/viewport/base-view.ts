@@ -1,10 +1,11 @@
 /**
- * Base building, drawn: every build site's boxes (built parts solid, what's still to build as a flat ghost) and
- * the ghost a plan in hand would place. Boxes are kept by key and moved in place, so pouring or a door swinging
- * makes nothing new.
+ * Base building, drawn: finished pieces solid, blueprints dark and see-through with their % tag over them, and
+ * the ghost of the blueprint being placed. Boxes are kept by key and moved in place, so a door swinging makes
+ * nothing new; a tag is drawn again only when its % changes.
  */
 import * as THREE from 'three';
-import type { BaseSystem, DrawnPart } from '@cocoaworlds/runtime';
+import type { BaseSystem, BlueprintTag, DrawnPart } from '@cocoaworlds/runtime';
+import { assetUrl } from '../assets';
 
 const unit = new THREE.BoxGeometry(1, 1, 1);
 
@@ -21,11 +22,12 @@ export class BaseView {
 
   private materialOf(p: DrawnPart): THREE.Material {
     if (p.ghost) {
-      let m = this.ghosts.get(p.color);
+      const k = `${p.color}/${p.opacity}`;
+      let m = this.ghosts.get(k);
       if (!m) {
         // Flat and see-through: no lighting, no glow.
-        m = new THREE.MeshBasicMaterial({ color: p.color, transparent: true, opacity: 0.28, depthWrite: false });
-        this.ghosts.set(p.color, m);
+        m = new THREE.MeshBasicMaterial({ color: p.color, transparent: true, opacity: p.opacity, depthWrite: false });
+        this.ghosts.set(k, m);
       }
       return m;
     }
@@ -38,10 +40,89 @@ export class BaseView {
     return m;
   }
 
-  /** Bring the boxes up to date with the base (cheap when nothing changed). */
+  private tags = new Map<string, { sprite: THREE.Sprite; percent: number }>();
+  private tagLook: { color: string; text: string; image: HTMLImageElement | null; path: string } = { color: '#1f2a7a', text: '#e8eaff', image: null, path: '' };
+
+  /** The tag's picture (a project image behind the %), loaded once; tags are drawn again when it arrives. */
+  private setTagLook(color: string, text: string, path: string): void {
+    const l = this.tagLook;
+    l.color = color;
+    l.text = text;
+    if (path === l.path) return;
+    l.path = path;
+    l.image = null;
+    if (!path) return;
+    assetUrl(path)
+      .then((url) => {
+        const img = new Image();
+        img.onload = () => {
+          if (l.path !== path) return;
+          l.image = img;
+          for (const t of this.tags.values()) t.percent = -1;
+          this.version = -1;
+        };
+        img.src = url;
+      })
+      .catch(() => {});
+  }
+
+  private drawTag(sprite: THREE.Sprite, percent: number): void {
+    const c = document.createElement('canvas');
+    c.width = 128;
+    c.height = 64;
+    const g = c.getContext('2d')!;
+    const l = this.tagLook;
+    if (l.image) g.drawImage(l.image, 0, 0, 128, 64);
+    else {
+      g.fillStyle = l.color;
+      g.fillRect(0, 0, 128, 64);
+    }
+    g.fillStyle = l.text;
+    g.font = '600 36px sans-serif';
+    g.textAlign = 'center';
+    g.textBaseline = 'middle';
+    g.fillText(`${percent}%`, 64, 34);
+    const old = sprite.material.map;
+    sprite.material.map = new THREE.CanvasTexture(c);
+    sprite.material.map.colorSpace = THREE.SRGBColorSpace;
+    sprite.material.needsUpdate = true;
+    old?.dispose();
+  }
+
+  private syncTags(list: BlueprintTag[]): void {
+    const seen = new Set<string>();
+    for (const t of list) {
+      seen.add(t.site);
+      let e = this.tags.get(t.site);
+      if (!e) {
+        const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ depthWrite: false }));
+        sprite.scale.set(24, 12, 1);
+        sprite.renderOrder = 3;
+        e = { sprite, percent: -1 };
+        this.tags.set(t.site, e);
+        this.group.add(sprite);
+      }
+      e.sprite.position.set(...t.at);
+      if (e.percent !== t.percent) {
+        e.percent = t.percent;
+        this.drawTag(e.sprite, t.percent);
+      }
+    }
+    for (const [site, e] of this.tags)
+      if (!seen.has(site)) {
+        e.sprite.removeFromParent();
+        e.sprite.material.map?.dispose();
+        e.sprite.material.dispose();
+        this.tags.delete(site);
+      }
+  }
+
+  /** Bring the boxes and tags up to date with the base (cheap when nothing changed). */
   sync(base: BaseSystem): void {
     if (base.version === this.version) return;
     this.version = base.version;
+    this.setTagLook(base.config.tag.color, base.config.tag.text, base.config.ui.tag);
+    this.syncTags(base.tags());
     const seen = new Set<string>();
     for (const p of base.parts()) {
       const key = `${p.key}${p.ghost ? '~' : ''}`;
@@ -68,6 +149,7 @@ export class BaseView {
 
   dispose(): void {
     for (const m of [...this.solids.values(), ...this.ghosts.values()]) m.dispose();
+    this.syncTags([]);
     this.group.removeFromParent();
   }
 }

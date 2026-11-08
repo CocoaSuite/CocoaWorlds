@@ -65,7 +65,8 @@ import { ANIM_ROLES, Npc, type AnimRole } from './npc';
 import { NavGrid } from './navgrid';
 import { Acoustics } from './acoustics';
 import { FrameSnapshot } from './snapshot';
-import { BaseSystem, type BaseAim, type BlockerBox, type BuildPrompt } from './building/base';
+import { BaseSystem, type BaseAim, type BlockerBox, type BlueprintCard, type BlueprintTag, type BuildPrompt } from './building/base';
+import type { BaseConfig } from './building/defs';
 import { buildingCatalog } from './building/catalog';
 import { momentAnimation } from './hunter/personality';
 import type { SpotInfo } from './hunter/spots';
@@ -4025,13 +4026,19 @@ export class GameWorld {
 
   /** The item in the picked hotbar slot ('' when that slot is empty). */
   selectedItem(): string {
-    return [...this.inventory.keys()][this.slot] ?? '';
+    return this.slotItems()[this.slot] ?? '';
+  }
+
+  /** The items in hotbar slots: everything carried but blueprints (those are in the blueprint menu). */
+  private slotItems(): string[] {
+    const items = [...this.inventory.keys()];
+    return this.base ? items.filter((i) => !this.base!.pieceForBlueprint(i)) : items;
   }
 
   /** Pick a hotbar slot (0-based; wraps around the hotbar's slots, or the items carried when there is no hotbar). */
   selectSlot(slot: number): void {
     const bars = this.ui.screens.flatMap((s) => s.elements.filter((e) => e.kind === 'hotbar').map((e) => e.slots));
-    const n = Math.max(1, ...(bars.length ? bars : [this.inventory.size]));
+    const n = Math.max(1, ...(bars.length ? bars : [this.slotItems().length]));
     this.slot = ((Math.round(slot) % n) + n) % n;
   }
 
@@ -4057,7 +4064,7 @@ export class GameWorld {
     const e = this.uiVisible(list);
     if (e?.kind !== 'list') return;
     if (e.source === 'inventory') {
-      const i = [...this.inventory.keys()].indexOf(row);
+      const i = this.slotItems().indexOf(row);
       if (i < 0) return;
       this.slot = i;
     } else if (!this.uiRows.get(list)?.includes(row)) return;
@@ -4110,7 +4117,8 @@ export class GameWorld {
 
   /** The player clicked with the item in the picked hotbar slot. */
   useItem(): void {
-    if (this.base && !this.held && this.base.pieceForPlan(this.selectedItem())) {
+    // (Placing a blueprint: the click places it.)
+    if (this.base?.placing && !this.held) {
       this.base.placePreview();
       return;
     }
@@ -4129,9 +4137,9 @@ export class GameWorld {
       hidden: [...this.uiHidden],
       texts,
       lists,
-      inventory: [...this.inventory].map(([item, count]) => ({ item, count })),
+      inventory: this.slotItems().map((item) => ({ item, count: this.inventory.get(item) ?? 0 })),
       slot: this.slot,
-      freesMouse: this.ui.screens.some((sc) => sc.freesMouse && this.uiShown.has(sc.id)),
+      freesMouse: !!this.base?.menuOpen || this.ui.screens.some((sc) => sc.freesMouse && this.uiShown.has(sc.id)),
     };
   }
 
@@ -4287,8 +4295,10 @@ export class GameWorld {
       time: () => this.time,
       itemCount: (name) => this.inventory.get(name) ?? 0,
       giveItem: (name, n) => this.giveItem(name, n),
-      selectedItem: () => this.selectedItem(),
-      groundAt: (x, z, fromY) => this.groundAt(x, z, fromY),
+      castRay: (from, dir, reach) => {
+        const hit = this.world.castRayAndGetNormal(new RAPIER.Ray({ x: from[0], y: from[1], z: from[2] }, { x: dir[0], y: dir[1], z: dir[2] }), reach, true, RAPIER.QueryFilterFlags.EXCLUDE_SENSORS, 0xffffffff, this.player?.collider, undefined, (c) => !this.isHeld(c) && !this.standIns.has(c.handle));
+        return hit ? { distance: hit.timeOfImpact, normal: [hit.normal.x, hit.normal.y, hit.normal.z] } : null;
+      },
       setBlocker: (key, box) => this.setBaseBlocker(key, box),
       propsIn: (box, tag) => this.propsIn(box, tag),
       consume: (id) => {
@@ -4298,12 +4308,6 @@ export class GameWorld {
       emit: (e) => this.bus.emit(e),
       playSound: (sound, at, volume, range) => this.bus.emit({ type: 'sound', sound, at, follow: null, volume, loop: false, range, source: 'base', time: this.time }),
     });
-  }
-
-  /** The ground under (x, z), looking down from `fromY` (fixed things and finished build pieces: not what moves). */
-  private groundAt(x: number, z: number, fromY: number): number | null {
-    const hit = this.world.castRay(new RAPIER.Ray({ x, y: fromY, z }, { x: 0, y: -1, z: 0 }), 8192, true, RAPIER.QueryFilterFlags.EXCLUDE_SENSORS, 0xffffffff, this.player?.collider, undefined, (c) => !c.parent()?.isDynamic() && !this.standIns.has(c.handle));
-    return hit ? fromY - hit.timeOfImpact : null;
   }
 
   private setBaseBlocker(key: string, box: BlockerBox | null): void {
@@ -4388,32 +4392,63 @@ export class GameWorld {
     return true;
   }
 
-  /** Each step: E held on a blueprint (to remove it), and the ghost a blueprint in hand would place. */
+  /** Each step: E held on a blueprint (to remove it), and where the blueprint being placed would go. */
   private stepBase(): void {
     const b = this.base!, p = this.player!;
-    const aim = this.held ? null : this.baseAim();
+    const aim = this.held || b.placing ? null : this.baseAim();
     b.hold(aim, !!p.input.use && !this.frozen, STEP);
-    let point: [number, number, number] | null = null;
-    if (!this.held && !this.hiding && b.pieceForPlan(this.selectedItem())) {
-      const hit = p.aimAt(b.config.placeReach, (c) => this.isHeld(c));
-      if (hit) {
-        const e = p.eye(), d = p.lookDirection();
-        point = [e[0] + d[0] * hit.distance, e[1] + d[1] * hit.distance, e[2] + d[2] * hit.distance];
-      }
-    }
-    b.aimPlacement(point);
+    if (b.placing && !this.held && !this.hiding && !this.frozen && !b.menuOpen) {
+      const e = p.eye(), d = p.lookDirection();
+      b.aimPlacement([e[0], e[1], e[2]], [d[0], d[1], d[2]]);
+    } else b.aimPlacement(null, null);
   }
 
-  /** What the HUD shows at the base now: the blueprint in hand's ghost, or the piece aimed at. */
+  /** What the HUD shows at the base now: the blueprint being placed, or the piece aimed at. */
   buildPrompt(): BuildPrompt | null {
     const b = this.base;
-    if (!b || !this.player || this.hiding) return null;
-    const pv = b.preview;
-    if (pv) {
-      const def = b.pieces.get(pv.piece)!;
-      return { site: '', icon: 'place', title: def.label, label: pv.valid ? 'Place blueprint' : 'Something is already here', progress: null, missing: pv.valid ? `${def.count} ${def.materialLabel.toLowerCase()}` : '' };
+    if (!b || !this.player || this.hiding || b.menuOpen) return null;
+    return b.prompt(this.held || b.placing ? null : this.baseAim());
+  }
+
+  /** The blueprint menu (B): open or shut it (placing stops while it is open). */
+  toggleBlueprints(open = !this.base?.menuOpen): void {
+    const b = this.base;
+    if (!b) return;
+    if (open) b.stopPlacing();
+    b.setMenu(open);
+  }
+
+  /** A blueprint picked in the menu: placing it starts (the menu shuts). */
+  pickBlueprint(piece: string): void {
+    this.base?.startPlacing(piece);
+  }
+
+  /** Keys while placing: R turns, T tips, Q (or a right click) stops placing. True: the base took the key. */
+  baseKey(code: string): boolean {
+    const b = this.base;
+    if (!b) return false;
+    if (code === b.config.menuKey) {
+      this.toggleBlueprints();
+      return true;
     }
-    return b.prompt(this.held ? null : this.baseAim());
+    if (!b.placing) return false;
+    if (code === 'KeyR') b.rotate();
+    else if (code === 'KeyT') b.tip();
+    else if (code === 'KeyQ') b.stopPlacing();
+    else return false;
+    return true;
+  }
+
+  /** The blueprint menu for the HUD (null: shut, or no base building). */
+  blueprintMenu(): { cards: BlueprintCard[]; ui: BaseConfig['ui'] } | null {
+    const b = this.base;
+    return b?.menuOpen ? { cards: b.owned(), ui: b.config.ui } : null;
+  }
+
+  /** The % tags over blueprints and how they look (for drawing). */
+  blueprintTags(): { tags: BlueprintTag[]; color: string; text: string; image: string } | null {
+    const b = this.base;
+    return b ? { tags: b.tags(), color: b.config.tag.color, text: b.config.tag.text, image: b.config.ui.tag } : null;
   }
 
   /** A block set the day: a different one starts. */

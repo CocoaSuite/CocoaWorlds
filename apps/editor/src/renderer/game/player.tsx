@@ -8,6 +8,7 @@ import { uiOf, type SceneFile } from '@cocoaworlds/core';
 import { useEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { setAssetReader } from '../assets';
+import { BlueprintMenu } from '../ui/BlueprintMenu';
 import { HudView, type Hud } from '../ui/Hud';
 import { UiLayer } from '../ui/UiLayer';
 import { SaveMenu } from '../ui/SaveMenu';
@@ -61,6 +62,7 @@ function Player() {
     <div className="cw-player" ref={host}>
       {scene && hud && <UiLayer ui={uiOf(scene.settings)} live={hud.ui} values={hud.allValues} onClick={(id) => runner.current?.clickUi(id)} onRow={(l, row) => runner.current?.pickRow(l, row)} />}
       {hud && <HudView hud={hud} />}
+      {hud?.blueprints && <BlueprintMenu menu={hud.blueprints} onPick={(id) => runner.current?.pickBlueprint(id)} onClose={() => runner.current?.closeBlueprints()} />}
       {locked && <div className="cw-crosshair" aria-hidden="true" />}
       {data && hud && !locked && !uiMouse && data.rules.saveMenu && (
         <SaveMenu onResume={() => runner.current?.capture()} onSave={() => runner.current?.saveGame() ?? false} onLoad={() => runner.current?.loadGame() ?? false} savedAt={runner.current?.savedAt ?? null} />

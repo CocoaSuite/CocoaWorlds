@@ -713,6 +713,15 @@ export class ViewportEngine {
     this.play?.clickUi(id);
   }
 
+  /** Base building: a blueprint picked in the menu (placing starts), or the menu shut. */
+  pickBlueprint(piece: string): void {
+    this.play?.pickBlueprint(piece);
+  }
+
+  closeBlueprints(): void {
+    this.play?.closeBlueprints();
+  }
+
   /** The player picked a row of a list on screen. */
   pickRow(list: string, row: string): void {
     this.play?.pickRow(list, row);
@@ -787,6 +796,8 @@ export class ViewportEngine {
     // Otherwise every key belongs to the game (Ctrl+S, Ctrl+Z… would be surprising mid-jump).
     e.preventDefault();
     e.stopImmediatePropagation();
+    // Base building: B opens the blueprint menu; R, T and Q turn and stop the blueprint being placed.
+    if (down && !e.repeat && this.play?.baseKey(e.code)) return true;
     // 1–9 pick a hotbar slot.
     if (down && /^Digit[1-9]$/.test(e.code)) {
       this.play?.selectSlot(Number(e.code.slice(5)) - 1);
@@ -2103,6 +2114,8 @@ export class ViewportEngine {
     const el = this.renderer.domElement;
     el.focus();
     if (this.asPlayer) {
+      // (A right click stops placing a blueprint.)
+      if (this.locked && e.button === 2) this.play?.stopPlacing();
       if (this.locked && e.button === 0) {
         this.play?.useItem();
         this.play?.setInput({ fire: true });
