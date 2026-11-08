@@ -936,6 +936,11 @@ export class PlaySession {
     this.world.selectSlot(slot);
   }
 
+  /** The wheel: up pushes what is carried away, down brings it closer. False when nothing is carried. */
+  wheelHeld(deltaY: number): boolean {
+    return this.world.moveHeld(Math.max(-12, Math.min(12, -deltaY * 0.08)));
+  }
+
   /** For tests: give the player items as a script would. */
   giveItem(name: string, n: number): void {
     this.world.giveItem(name, n);

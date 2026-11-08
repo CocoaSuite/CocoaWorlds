@@ -45,6 +45,27 @@ describe('carrying', () => {
     w.dispose();
   });
 
+  it('the wheel brings it closer or pushes it away, within limits; nothing carried, the wheel is not taken', () => {
+    const { w, id } = world({});
+    expect(w.moveHeld(10)).toBe(false);
+    w.use();
+    run(w, 0.5);
+    w.setPlayerInput({ pitch: 0 });
+    const far = () => {
+      const [x, , z] = w.positionOf(id)!;
+      return Math.hypot(x, z);
+    };
+    for (let i = 0; i < 20; i++) expect(w.moveHeld(12)).toBe(true);
+    run(w, 1);
+    expect(far()).toBeGreaterThan(130);
+    expect(far()).toBeLessThan(160);
+    for (let i = 0; i < 20; i++) w.moveHeld(-12);
+    run(w, 1);
+    expect(far()).toBeLessThan(55);
+    expect(w.holding).toBe(id);
+    w.dispose();
+  });
+
   it('Fire throws it', () => {
     const { w, id } = world({});
     w.use();

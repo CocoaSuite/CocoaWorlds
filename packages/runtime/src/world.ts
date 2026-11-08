@@ -257,6 +257,9 @@ type Quat = { x: number; y: number; z: number; w: number };
 
 /** The heaviest thing the player can pick up (kg). */
 const MAX_CARRY = 50;
+/** How close and how far something carried can be brought or pushed with the wheel (u, from the eyes). */
+const HOLD_NEAR = 40;
+const HOLD_FAR = 150;
 /** How sharply something must be stopped to make a sound (u/s; about 0.6 m/s: set down gently, a soft tap). */
 const HIT_SPEED = 24;
 /** A hit this sharp is as loud as it gets (u/s; about 10 m/s: thrown hard, or a long fall). */
@@ -2502,6 +2505,16 @@ export class GameWorld {
     if (!t) return false;
     if (this.posters.get(t)?.hung) this.takeDownPoster(t);
     this.hold(t, this.bodies.get(t)!.body);
+    return true;
+  }
+
+  /**
+   * The wheel while carrying: the thing comes closer or goes further (by `by` u, kept HOLD_NEAR–HOLD_FAR).
+   * False when nothing is carried (the wheel does its usual job).
+   */
+  moveHeld(by: number): boolean {
+    if (!this.held) return false;
+    this.held.distance = Math.max(HOLD_NEAR, Math.min(HOLD_FAR, this.held.distance + by));
     return true;
   }
 
