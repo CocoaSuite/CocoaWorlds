@@ -224,7 +224,12 @@ export function setShading(m: THREE.MeshStandardMaterial, mapping: Mapping, tile
     for (const c of ['map_fragment', 'roughnessmap_fragment', 'metalnessmap_fragment', 'emissivemap_fragment', 'alphamap_fragment', 'aomap_fragment'])
       if (mapping !== 'face' || after[c]) f = f.replace(`#include <${c}>`, `${chunk(c)}\n${after[c] ?? ''}`);
     if (mapping !== 'face') f = f.replace('#include <normal_fragment_maps>', NORMALS);
-    if (bevel > 0) f = f.replace('#include <lights_physical_fragment>', 'bevelNormal(normal);\n#include <lights_physical_fragment>');
+    if (bevel > 0) {
+      f = f.replace('#include <lights_physical_fragment>', 'vec3 bevelFlat = normal;\nbevelNormal(normal);\n#include <lights_physical_fragment>');
+      // A bevel can't catch a light the face itself has its back to: without this, faces turned from the sun
+      // pick up light at their edges, and their own shadow shows there as acne.
+      f = f.replace('#include <lights_fragment_begin>', THREE.ShaderChunk.lights_fragment_begin.replaceAll('RE_Direct( directLight,', 'directLight.color *= smoothstep( -0.05, 0.1, dot( bevelFlat, directLight.direction ) );\n\t\tRE_Direct( directLight,'));
+    }
     shader.fragmentShader = f;
   };
 }
