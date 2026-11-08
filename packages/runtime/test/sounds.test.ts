@@ -74,8 +74,8 @@ describe('footsteps', () => {
     w.setPlayerInput({ forward: 1 });
     run(w, 2);
     const walked = steps.filter((s) => s.kind === 'step');
-    expect(walked.length).toBeGreaterThan(5);
-    expect(walked.length).toBeLessThan(14);
+    expect(walked.length).toBeGreaterThan(2);
+    expect(walked.length).toBeLessThan(7);
     expect(walked[0]!.surface).toBe('concrete');
     run(w, 3);
     expect(steps.some((s) => s.surface === 'wood')).toBe(true);

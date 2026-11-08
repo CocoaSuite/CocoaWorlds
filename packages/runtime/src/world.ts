@@ -3636,8 +3636,8 @@ export class GameWorld {
       return this.surfaceAt(hit.collider.handle, { x: feet.x, y: feet.y + 4 - hit.timeOfImpact, z: feet.z }, hit.featureId);
     };
     const step = (kind: 'step' | 'land' | 'jump', volume: number) => this.bus.emit({ type: 'step', kind, surface: under(), at: [feet.x, feet.y, feet.z], volume, time: this.time });
-    if (p.landingSpeed > 120) step('land', Math.min(1, 0.35 + p.landingSpeed / 900));
-    else if (this.wasOnGround && !p.onGround && v.y > 100 && !p.onLadder) step('jump', 0.35);
+    if (p.landingSpeed > 120) step('land', Math.min(0.6, 0.15 + p.landingSpeed / 1500));
+    else if (this.wasOnGround && !p.onGround && v.y > 100 && !p.onLadder) step('jump', 0.15);
     this.wasOnGround = p.onGround;
     const speed = Math.hypot(v.x, v.z);
     if (!p.onGround || p.waterLevel >= 2 || speed < 20) {
@@ -3648,8 +3648,8 @@ export class GameWorld {
     const sprint = speed > 250, walk = p.crouched || speed < 130;
     this.stepLeft -= speed * STEP;
     if (this.stepLeft > 0) return;
-    this.stepLeft += p.crouched ? 36 : walk ? 44 : sprint ? 70 : 56;
-    step('step', p.crouched ? 0.2 : walk ? 0.4 : sprint ? 0.85 : 0.6);
+    this.stepLeft += p.crouched ? 50 : walk ? 64 : sprint ? 104 : 84;
+    step('step', p.crouched ? 0.06 : walk ? 0.12 : sprint ? 0.3 : 0.2);
   }
 
   /** Velocities just before a physics step: what the step changes beyond gravity is what things hit. */
