@@ -111,25 +111,41 @@ const UNSEEN = 31;
  * shadow shaders of its cut-out materials, and its textures on the GPU. Without this, the first frame a poster
  * hung (its picture's shader, the picture's own shadow shader, the picture uploaded) stalled the game.
  */
-export function prepareToDraw(r: THREE.WebGLRenderer, obj: THREE.Object3D, cam: THREE.Camera, scene: THREE.Scene): Promise<unknown> {
-  const done = r.compileAsync(obj, cam, scene);
+export function prepareToDraw(r: THREE.WebGLRenderer, obj: THREE.Object3D, cam: THREE.Camera, scene: THREE.Scene, viaTarget: boolean): Promise<unknown> {
+  const done = asDrawn(r, viaTarget, () => r.compileAsync(obj, cam, scene));
   compileShadows(r, obj, cam, scene);
   return done.then(() => uploadTextures(r, obj));
 }
 
 /** The same, at once (before the game's first frame). */
-export function prepareToDrawNow(r: THREE.WebGLRenderer, obj: THREE.Object3D, cam: THREE.Camera, scene: THREE.Scene): void {
-  r.compile(obj, cam, scene);
+export function prepareToDrawNow(r: THREE.WebGLRenderer, obj: THREE.Object3D, cam: THREE.Camera, scene: THREE.Scene, viaTarget: boolean): void {
+  asDrawn(r, viaTarget, () => r.compile(obj, cam, scene));
   compileShadows(r, obj, cam, scene);
   uploadTextures(r, obj);
 }
+
+/**
+ * Compiles as the game draws: a shader's settings include where it draws to (the screen, or occlusion and bloom's
+ * render target: no tone mapping, linear colour), so one compiled for the other is never used.
+ */
+function asDrawn<T>(r: THREE.WebGLRenderer, viaTarget: boolean, compile: () => T): T {
+  if (!viaTarget) return compile();
+  const prev = r.getRenderTarget();
+  r.setRenderTarget((compileTarget ??= new THREE.WebGLRenderTarget(1, 1)));
+  try {
+    return compile();
+  } finally {
+    r.setRenderTarget(prev);
+  }
+}
+
+let compileTarget: THREE.WebGLRenderTarget | null = null;
 
 // Three.js draws a cut-out material's shadow (a map or an opacity map, with alpha test) with a depth material of
 // its own, made and compiled at its first shadow; `compile` doesn't do it. Shadow shaders with the same settings
 // are shared, so compiling one stand-in for each kind (kept, so the shared shader stays) readies them all.
 const SHADOW_SIDE: Record<number, THREE.Side> = { [THREE.FrontSide]: THREE.BackSide, [THREE.BackSide]: THREE.FrontSide, [THREE.DoubleSide]: THREE.DoubleSide };
 const shadowStandIns = new Map<string, THREE.Mesh>();
-let shadowTarget: THREE.WebGLRenderTarget | null = null;
 
 function compileShadows(r: THREE.WebGLRenderer, obj: THREE.Object3D, cam: THREE.Camera, scene: THREE.Scene): void {
   if (!r.shadowMap.enabled) return;
@@ -157,13 +173,7 @@ function compileShadows(r: THREE.WebGLRenderer, obj: THREE.Object3D, cam: THREE.
   });
   if (!group.children.length) return;
   // (Compiled as shadows are drawn: into a render target, so not tone-mapped.)
-  const prev = r.getRenderTarget();
-  r.setRenderTarget((shadowTarget ??= new THREE.WebGLRenderTarget(1, 1)));
-  try {
-    r.compile(group, cam, scene);
-  } finally {
-    r.setRenderTarget(prev);
-  }
+  asDrawn(r, true, () => r.compile(group, cam, scene));
   // (Kept for their shaders only: nothing of the real objects held.)
   for (const c of group.children) {
     const sm = (c as THREE.Mesh).material as THREE.MeshDepthMaterial;

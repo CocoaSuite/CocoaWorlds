@@ -256,7 +256,7 @@ export class ViewportEngine {
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.renderer.setClearColor(0x1f1f1f);
     this.renderer.shadowMap.enabled = true;
-    this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    this.renderer.shadowMap.type = THREE.PCFShadowMap; // (What Three.js turns PCFSoft into at the first shadow: set now, so shaders compiled ahead match.)
     glassCastsNoShadow(this.renderer);
     // (Glass draws what's behind it once more each frame: at half size, which the blur hides.)
     this.renderer.transmissionResolutionScale = 0.5;
@@ -1811,6 +1811,11 @@ export class ViewportEngine {
     this.probeLinesUpdate();
   }
 
+  /** Whether Play's frames are drawn through occlusion and bloom's render target (shaders are compiled to match). */
+  private drawsViaTarget(): boolean {
+    return (this.ao ??= new AoRenderer(this.renderer)).active(this.doc?.settings);
+  }
+
   private renderAo(cam: THREE.Camera): boolean {
     if (!(this.play || this.gameLighting)) return false;
     return (this.ao ??= new AoRenderer(this.renderer)).render(this.scene, cam, this.doc?.settings);
@@ -1830,9 +1835,9 @@ export class ViewportEngine {
     this.warmed = play;
     // (Reflections first: switching them on changes the shaders of shiny materials.)
     this.reflections?.prime(this.scene, eye, this.reflectOn(), [this.grid.object]);
-    prepareToDrawNow(this.renderer, play.group, cam, this.scene);
+    prepareToDrawNow(this.renderer, play.group, cam, this.scene, this.drawsViaTarget());
     // Models that load later are compiled in the background before they appear.
-    play.warm = (o) => prepareToDraw(this.renderer, o, cam, this.scene);
+    play.warm = (o) => prepareToDraw(this.renderer, o, cam, this.scene, this.drawsViaTarget());
   }
 
   private render(): void {

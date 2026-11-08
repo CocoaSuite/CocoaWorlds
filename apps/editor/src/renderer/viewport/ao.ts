@@ -23,6 +23,13 @@ export class AoRenderer {
     this.software = /swiftshader|llvmpipe|software/i.test(name);
   }
 
+  /** Whether `render` draws the scene into a render target (occlusion or bloom on), not straight to the screen. */
+  active(settings: { ao?: AoSettings; bloom?: BloomSettings } | undefined): boolean {
+    const s = aoOf(settings);
+    const b = bloomOf(settings);
+    return (s.enabled && s.strength > 0 && !this.software) || (b.enabled && b.strength > 0);
+  }
+
   /** Draw `scene` from `cam` with occlusion and bloom, if either is on. False: nothing drawn (draw it plainly). */
   render(scene: THREE.Scene, cam: THREE.Camera, settings: { ao?: AoSettings; bloom?: BloomSettings } | undefined): boolean {
     const s = aoOf(settings);

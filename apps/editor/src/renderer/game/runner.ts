@@ -90,7 +90,7 @@ export class GameRunner {
     r.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     r.setClearColor(0x1f1f1f);
     r.shadowMap.enabled = true;
-    r.shadowMap.type = THREE.PCFSoftShadowMap;
+    r.shadowMap.type = THREE.PCFShadowMap; // (What Three.js turns PCFSoft into at the first shadow: set now, so shaders compiled ahead match.)
     glassCastsNoShadow(r);
     r.transmissionResolutionScale = 0.5;
     r.domElement.className = 'cw-canvas';
@@ -262,8 +262,8 @@ export class GameRunner {
       if (this.warmed !== play) {
         this.warmed = play;
         this.reflections.prime(this.scene, this.cam.getWorldPosition(new THREE.Vector3()), play.doc.settings.reflections !== false);
-        prepareToDrawNow(this.renderer, play.group, this.cam, this.scene);
-        play.warm = (o) => prepareToDraw(this.renderer, o, this.cam, this.scene);
+        prepareToDrawNow(this.renderer, play.group, this.cam, this.scene, this.drawsViaTarget());
+        play.warm = (o) => prepareToDraw(this.renderer, o, this.cam, this.scene, this.drawsViaTarget());
       }
       // (The time of day changed the light enough: capture again, easing in.)
       if (this.lighting.dayVersion !== this.lightSeen) {
@@ -280,6 +280,11 @@ export class GameRunner {
   /** The scene being played. */
   private current!: SceneFile;
   private warmed: PlaySession | null = null;
+
+  /** Whether frames are drawn through occlusion and bloom's render target (shaders are compiled to match). */
+  private drawsViaTarget(): boolean {
+    return (this.ao ??= new AoRenderer(this.renderer)).active(this.play?.doc.settings);
+  }
 
   /** A level change: the same game goes on in the next scene, from where the last one left the player. */
   private async go(t: Travel): Promise<void> {
