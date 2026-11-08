@@ -34,6 +34,17 @@ Code: `packages/runtime/src/building/` (`defs.ts` JSON shapes, `grid.ts` edges a
   the frame; one door per frame); elsewhere it goes on the grid like anything else. E opens and shuts a finished
   door: it swings smoothly over `openTime` seconds and blocks only while shut.
 
+## Materials and stitching
+
+Inspector › Game rules › Base building has a material picker per menu section (Concrete, Wood, Glass…): finished
+pieces of that section are drawn with that project material (graph materials included); a part's own `material`
+wins; none: their flat colours. Saved in the scene as `settings.building.looks` (section → material).
+
+Finished pieces of one look that touch are drawn as one stitched mesh (`viewport/stitch.ts`): no faces between
+them, each flat side as few large rectangles, so wear and bevels land only on outer edges. Give the material
+**World** mapping so its texture runs across them. Doors, see-through parts (glass) and blueprints are drawn on
+their own. Colliders stay per part.
+
 ## Pieces are JSON
 
 Built-in (`data/`), flat single-colour boxes. Concrete (1 bag of concrete powder each): large wall, small wall,

@@ -10,6 +10,8 @@ import { storeProgress } from '../game/progress';
 import { t } from '../i18n';
 import { BrushInspector, MultiBrushActions } from './BrushInspector';
 import { FaceInspector } from './FaceInspector';
+import { MaterialPicker } from './MaterialPicker';
+import { buildingCatalog } from '@cocoaworlds/runtime';
 import { ComponentsSection } from './ComponentsSection';
 import { PrefabSection } from './PrefabSection';
 import { isGroup } from '../scene-ops';
@@ -330,6 +332,39 @@ function Fold({ id, title, children }: { id: string; title: string; children: Re
   );
 }
 
+/** Base building: the material each menu section's finished pieces are drawn with (touching pieces are stitched into one). */
+function BuildingLooks() {
+  const doc = useEditor((s) => s.doc);
+  useEditor((s) => s.rev);
+  const playing = useEditor((s) => !!s.playing);
+  if (!doc) return null;
+  const building = doc.settings.building ?? {};
+  const looks = building.looks ?? {};
+  const sections = [...new Set([...buildingCatalog(building).pieces.values()].map((d) => d.category))];
+  const set = (section: string, material: string) => {
+    if (playing) return;
+    const next = { ...looks };
+    if (material) next[section] = material;
+    else delete next[section];
+    useEditor.getState().setSceneSettings({ building: { ...building, looks: next } }, t('insp.buildingLook'));
+  };
+  return (
+    <>
+      <p className="cw-hint">{t('insp.buildingLooksHint')}</p>
+      {sections.map((sec) => (
+        <div key={sec} className="cw-row">
+          <MaterialPicker label={sec} value={looks[sec] ?? null} onChange={(m) => set(sec, m)} />
+          {looks[sec] && (
+            <Button size="sm" onClick={() => set(sec, '')}>
+              {t('insp.flatColour')}
+            </Button>
+          )}
+        </div>
+      ))}
+    </>
+  );
+}
+
 /** Built-in game systems for the whole project: a building or farming game may want no health or score. */
 function GameRulesSection() {
   const project = useEditor((s) => s.session?.project);
@@ -373,6 +408,7 @@ function GameRulesSection() {
         <Switch checked={rules.building} label={t('insp.building')} onChange={(on) => !playing && void set('building', on)} />
       </Field>
       <p className="cw-hint">{t('insp.buildingHint')}</p>
+      {rules.building && <BuildingLooks />}
       <p className="cw-hint">{t('insp.progressHint')}</p>
       <Button
         size="sm"

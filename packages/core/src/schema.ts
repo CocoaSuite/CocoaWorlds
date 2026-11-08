@@ -157,8 +157,8 @@ export interface SceneSettings {
    * area says otherwise. Off: every sound is heard straight, as before.
    */
   acoustics?: boolean;
-  /** Base building: the game's own build pieces (JSON, as building/data/*.json) and base settings merged over base.json. */
-  building?: { pieces?: unknown[]; base?: unknown };
+  /** Base building: the game's own build pieces (JSON, as building/data/*.json), base settings merged over base.json, and the project material each menu section's pieces are drawn with when finished (`looks`: section → material). */
+  building?: { pieces?: unknown[]; base?: unknown; looks?: Record<string, string> };
 }
 
 export interface BackgroundSound {

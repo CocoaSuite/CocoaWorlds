@@ -144,6 +144,8 @@ export interface BaseConfig {
   ui: { panel: string; rolls: string; card: string; tag: string };
   /** The key that opens the blueprint menu. */
   menuKey: string;
+  /** The project material finished pieces of each menu section are drawn with ('Wood' → a material; a part's own `material` wins). */
+  looks: Record<string, string>;
 }
 
 export function readBaseConfig(raw: unknown, over: unknown = {}): BaseConfig {
@@ -173,5 +175,6 @@ export function readBaseConfig(raw: unknown, over: unknown = {}): BaseConfig {
     tag: { color: str(tag.color, '#1f2a7a'), text: str(tag.text, '#e8eaff') },
     ui: { panel: str(ui.panel), rolls: str(ui.rolls), card: str(ui.card), tag: str(ui.tag) },
     menuKey: str(c.menuKey, 'KeyB'),
+    looks: Object.fromEntries(Object.entries(obj(c.looks)).filter(([, v]) => typeof v === 'string' && v)) as Record<string, string>,
   };
 }

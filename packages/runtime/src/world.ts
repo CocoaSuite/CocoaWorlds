@@ -4288,7 +4288,7 @@ export class GameWorld {
   private baseColliders = new Map<string, RAPIER.Collider>();
   private baseHandles = new Set<number>();
 
-  private initBase(extra: { pieces?: unknown[]; base?: unknown } | undefined): void {
+  private initBase(extra: { pieces?: unknown[]; base?: unknown; looks?: unknown } | undefined): void {
     const { pieces, config, problems } = buildingCatalog(extra);
     this.buildingProblems.push(...problems);
     this.base = new BaseSystem(pieces, config, {

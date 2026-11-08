@@ -23,7 +23,7 @@ export const BUILT_IN_PIECES: unknown[] = [concreteWall, concreteSmallWall, conc
 export const BUILT_IN_BASE: unknown = base;
 
 /** Every piece (built-in, then the game's, which replace built-ins of the same id) and the base settings. */
-export function buildingCatalog(extra?: { pieces?: unknown[]; base?: unknown }): { pieces: Map<string, PieceDef>; config: BaseConfig; problems: string[] } {
+export function buildingCatalog(extra?: { pieces?: unknown[]; base?: unknown; looks?: unknown }): { pieces: Map<string, PieceDef>; config: BaseConfig; problems: string[] } {
   const pieces = new Map<string, PieceDef>();
   const problems: string[] = [];
   for (const raw of [...BUILT_IN_PIECES, ...(Array.isArray(extra?.pieces) ? extra.pieces : [])]) {
@@ -34,5 +34,7 @@ export function buildingCatalog(extra?: { pieces?: unknown[]; base?: unknown }):
       problems.push((e as Error).message);
     }
   }
-  return { pieces, config: readBaseConfig(BUILT_IN_BASE, extra?.base), problems };
+  const config = readBaseConfig(BUILT_IN_BASE, extra?.base);
+  if (extra?.looks && typeof extra.looks === 'object') for (const [k, v] of Object.entries(extra.looks)) if (typeof v === 'string' && v) config.looks[k] = v;
+  return { pieces, config, problems };
 }

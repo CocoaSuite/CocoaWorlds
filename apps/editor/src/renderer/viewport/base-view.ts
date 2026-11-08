@@ -6,6 +6,7 @@
 import * as THREE from 'three';
 import type { BaseSystem, BlueprintTag, DrawnPart } from '@cocoaworlds/runtime';
 import { assetUrl } from '../assets';
+import { stitch, type Box } from './stitch';
 
 const unit = new THREE.BoxGeometry(1, 1, 1);
 
@@ -127,7 +128,18 @@ export class BaseView {
     this.setTagLook(base.config.tag.color, base.config.tag.text, base.config.ui.tag);
     this.syncTags(base.tags());
     const seen = new Set<string>();
+    const stitched = new Map<string, { part: DrawnPart; boxes: Box[] }>();
     for (const p of base.parts()) {
+      // Finished, still, opaque boxes of one look: drawn as one stitched mesh (below).
+      if (p.stitch) {
+        const k = `${p.material}|${p.material ? '' : p.color}`;
+        let g = stitched.get(k);
+        if (!g) stitched.set(k, (g = { part: p, boxes: [] }));
+        const odd = Math.round(p.yaw / (Math.PI / 2)) % 2 !== 0;
+        const h: [number, number, number] = odd ? [p.size[2] / 2, p.size[1] / 2, p.size[0] / 2] : [p.size[0] / 2, p.size[1] / 2, p.size[2] / 2];
+        g.boxes.push({ min: [p.center[0] - h[0], p.center[1] - h[1], p.center[2] - h[2]], max: [p.center[0] + h[0], p.center[1] + h[1], p.center[2] + h[2]] });
+        continue;
+      }
       const key = `${p.key}${p.ghost ? '~' : ''}`;
       seen.add(key);
       let mesh = this.boxes.get(key);
@@ -148,10 +160,39 @@ export class BaseView {
         mesh.removeFromParent();
         this.boxes.delete(key);
       }
+    this.syncStitched(stitched);
+  }
+
+  /** One mesh per look, rebuilt only when its boxes change. */
+  private stitched = new Map<string, { mesh: THREE.Mesh; boxes: string }>();
+
+  private syncStitched(groups: Map<string, { part: DrawnPart; boxes: Box[] }>): void {
+    for (const [k, g] of groups) {
+      const boxes = JSON.stringify(g.boxes);
+      let e = this.stitched.get(k);
+      if (e && e.boxes === boxes) continue;
+      if (!e) {
+        const mesh = new THREE.Mesh(new THREE.BufferGeometry(), this.materialOf(g.part));
+        mesh.castShadow = mesh.receiveShadow = true;
+        this.group.add(mesh);
+        this.stitched.set(k, (e = { mesh, boxes: '' }));
+      }
+      e.mesh.geometry.dispose();
+      e.mesh.geometry = stitch(g.boxes);
+      e.mesh.material = this.materialOf(g.part);
+      e.boxes = boxes;
+    }
+    for (const [k, e] of this.stitched)
+      if (!groups.has(k)) {
+        e.mesh.removeFromParent();
+        e.mesh.geometry.dispose();
+        this.stitched.delete(k);
+      }
   }
 
   dispose(): void {
     for (const m of [...this.solids.values(), ...this.ghosts.values()]) m.dispose();
+    this.syncStitched(new Map());
     this.syncTags([]);
     this.group.removeFromParent();
   }

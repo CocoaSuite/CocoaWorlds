@@ -94,6 +94,8 @@ export interface DrawnPart {
   ghost: boolean;
   /** How see-through a ghost is (1: solid). */
   opacity: number;
+  /** Drawn as one with touching boxes of the same look (finished, opaque, not moving, square to the axes). */
+  stitch: boolean;
 }
 
 /** The % over an unfinished blueprint. */
@@ -570,6 +572,7 @@ export class BaseSystem {
       lz = hz - dx * Math.sin(swing) + dz * Math.cos(swing);
     }
     const c = this.middle(s);
+    const solid = look === 'solid';
     const off = turn([lx - size0[0] / 2, ly - size0[1] / 2, lz - size0[2] / 2], s.turn);
     const flat = s.turn.tilt === 0;
     const g = this.config.ghost;
@@ -581,9 +584,10 @@ export class BaseSystem {
       size: flat ? [...p.size] : turnedSize(p.size, s.turn),
       yaw: flat ? s.turn.yaw * (Math.PI / 2) + swing : 0,
       color,
-      material: look === 'solid' ? p.material : '',
-      ghost: look !== 'solid',
-      opacity: look === 'solid' ? p.opacity : look === 'blueprint' ? g.opacity : g.placingOpacity,
+      material: solid ? p.material || this.config.looks[s.def.category] || '' : '',
+      ghost: !solid,
+      opacity: solid ? p.opacity : look === 'blueprint' ? g.opacity : g.placingOpacity,
+      stitch: solid && !p.swing && p.opacity >= 1 && s.id !== '',
     };
   }
 

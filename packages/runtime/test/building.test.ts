@@ -224,6 +224,21 @@ describe('filling blueprints', () => {
     expect(h.base.parts().some((p) => p.ghost)).toBe(false);
   });
 
+  it('finished pieces take their section\'s material and stitch; doors, glass and blueprints don\'t', () => {
+    const { pieces, config } = buildingCatalog({ looks: { Wood: 'oak' } });
+    const h = fakeHost();
+    const base = new BaseSystem(pieces, config, (h.base as never as { host: BaseHost }).host);
+    base.add(pieces.get('wood_wall')!, [0, 0, 0], {}, undefined, 4);
+    base.add(pieces.get('wood_door')!, [200, 0, 0], {}, undefined, 2);
+    base.add(pieces.get('window')!, [400, 0, 0], {}, undefined, 1);
+    base.add(pieces.get('wood_floor')!, [600, 0, 0]);
+    const by = (site: string) => base.parts().filter((p) => p.site === site);
+    expect(by('site1')).toMatchObject([{ material: 'oak', stitch: true }]);
+    expect(by('site2').every((p) => !p.stitch)).toBe(true);
+    expect(by('site3')[0]!.stitch).toBe(false);
+    expect(by('site4')[0]).toMatchObject({ stitch: false, ghost: true, material: '' });
+  });
+
   it('the space it takes props in wraps its boxes', () => {
     const h = fakeHost();
     const id = h.base.add(piece(h, 'wood_floor'), [96, 10, 0]);
