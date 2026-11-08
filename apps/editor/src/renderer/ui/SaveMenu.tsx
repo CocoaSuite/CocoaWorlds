@@ -44,7 +44,7 @@ export function SaveMenu({ onSave, onLoad, onResume, savedAt }: SaveMenuProps) {
       >
         {t('save.load')}
       </button>
-      <span className="cw-save-when">{when ? `${t('save.saved')} · ${when}` : t('save.none')}</span>
+      <span className="cw-save-when">{when ? `${t('save.saved')}\u00a0\u00a0 ${when}` : t('save.none')}</span>
     </div>
   );
 }
