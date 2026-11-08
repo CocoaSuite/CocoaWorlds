@@ -10,6 +10,7 @@ import {
   CURRENT_SCHEMA_VERSION,
   defaultSceneSettings,
   type ComponentData,
+  type EmptyClass,
   type EntityData,
   type SceneFile,
   type SceneSettings,
@@ -230,6 +231,12 @@ export function setSceneSettingsCmd(doc: SceneDoc, patch: Partial<SceneSettings>
   const prev = clone(doc.settings);
   const next = clone({ ...doc.settings, ...patch });
   return { label, mergeKey, apply: () => doc.setSettings(next), revert: () => doc.setSettings(prev) };
+}
+
+export function setEmptyClassCmd(doc: SceneDoc, id: string, value: EmptyClass | undefined): Command {
+  const prev = doc.get(id)?.emptyClass;
+  const set = (v: EmptyClass | undefined) => doc.patch(id, (e) => void (v ? (e.emptyClass = v) : delete e.emptyClass));
+  return { label: 'Set class', apply: () => set(value), revert: () => set(prev) };
 }
 
 export function renameCmd(doc: SceneDoc, id: string, name: string): Command {

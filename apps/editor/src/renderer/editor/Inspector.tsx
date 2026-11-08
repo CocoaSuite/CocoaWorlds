@@ -3,7 +3,7 @@ import { SurfaceSoundsEditor } from './SurfaceSounds';
 import { PaintPanel } from '../viewport/PaintPanel';
 import { useState } from 'react';
 import { shown, stored, type AxisKind } from '../axes';
-import { PIVOT, aoOf, bloomOf, dayOf, backgroundSoundOf, gameRules, pivotOf, sceneSettings, worldBoundsOf, type EntityData, type SceneSettings as SceneSettingsData, type Transform, type Vec3 } from '@cocoaworlds/core';
+import { PIVOT, aoOf, bloomOf, dayOf, backgroundSoundOf, gameRules, pivotOf, sceneSettings, worldBoundsOf, type EmptyClass, type EntityData, type SceneSettings as SceneSettingsData, type Transform, type Vec3 } from '@cocoaworlds/core';
 import { brushBounds } from '../brush/brushes';
 import { Button, ColorField, Field, NumberField, PanelHeader, Section, Switch } from '@cocoaworlds/ui';
 import { storeProgress } from '../game/progress';
@@ -14,6 +14,7 @@ import { ComponentsSection } from './ComponentsSection';
 import { PrefabSection } from './PrefabSection';
 import { isGroup } from '../scene-ops';
 import { clearsGrass } from '../viewport/foliage';
+import { isPlainEmpty } from '../viewport/markers';
 import { useSelectedEntities, useEditor } from '../store';
 
 export function Inspector() {
@@ -437,6 +438,17 @@ function EntityInspector({ e }: { e: EntityData }) {
       <PrefabSection e={e} />
       <TransformSection e={e} />
       <PivotSection e={e} />
+      {isPlainEmpty(e) && (
+        <Field label={t('insp.class')}>
+          <select className="cw-input cw-select" aria-label={t('insp.class')} value={e.emptyClass ?? ''} onChange={(ev) => s.setEmptyClass(e.id, (ev.target.value || undefined) as EmptyClass | undefined)}>
+            {(['', 'point', 'assetSpawn', 'audioEmitter'] as const).map((c) => (
+              <option key={c} value={c}>
+                {t(`class.${c || 'none'}`)}
+              </option>
+            ))}
+          </select>
+        </Field>
+      )}
       <Section title={t('insp.display')}>
         <div className="cw-flagrow">
           <span>{t('insp.visible')}</span>

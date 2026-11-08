@@ -2,7 +2,7 @@
  * Editor-only visuals for entities that have no geometry of their own yet (spawn points, lights, empties).
  * Each marker has an invisible pick volume so it can be clicked.
  */
-import { posterOf, posterScrollRadius, readComponent, type EntityData, type GooglyEyesData, type ModelData, type SignData } from '@cocoaworlds/core';
+import { posterOf, posterScrollRadius, readComponent, type EmptyClass, type EntityData, type GooglyEyesData, type ModelData, type SignData } from '@cocoaworlds/core';
 import { modelInstance, onModelMaterialChange } from './models';
 
 /** Called when a marker's model has loaded (the view needs a redraw). */
@@ -16,6 +16,44 @@ import * as THREE from 'three';
 import { buildSign } from './sign';
 import { buildPoster } from './poster';
 import { buildGooglyEyes, type GooglyEyes } from './googly-eyes';
+import pointIcon from '../assets/empty/PathPoint.png';
+import spawnIcon from '../assets/empty/Finish.png';
+import audioIcon from '../assets/empty/AudioEmitter.png';
+
+const ICONS: Record<EmptyClass, string> = { point: pointIcon, assetSpawn: spawnIcon, audioEmitter: audioIcon };
+const ICON_PX = 32;
+const iconTextures = new Map<EmptyClass, THREE.Texture>();
+
+function iconTexture(c: EmptyClass): THREE.Texture {
+  let tex = iconTextures.get(c);
+  if (!tex) {
+    tex = new THREE.TextureLoader().load(ICONS[c], () => markerLoaded());
+    tex.colorSpace = THREE.SRGBColorSpace;
+    iconTextures.set(c, tex);
+  }
+  return tex;
+}
+
+const worldScale = new THREE.Vector3();
+
+/** A camera-facing icon that stays the same size on screen. */
+function iconSprite(c: EmptyClass): THREE.Sprite {
+  const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: iconTexture(c), sizeAttenuation: false, transparent: true }));
+  sprite.name = 'empty-icon';
+  sprite.onBeforeRender = (renderer) => {
+    const k = (ICON_PX * 2) / Math.max(1, renderer.domElement.clientHeight);
+    sprite.parent?.getWorldScale(worldScale);
+    sprite.scale.set(k / (worldScale.x || 1), k / (worldScale.y || 1), 1);
+    sprite.updateMatrixWorld();
+  };
+  return sprite;
+}
+
+/** An object with nothing to draw of its own (it can be given a class icon). */
+export function isPlainEmpty(e: EntityData): boolean {
+  const c = e.components;
+  return !c.brush && !c.poster && !c.sign && !c.npc && !c.reflectionProbe && !c.playerSpawn && !c.light && !(c.model as { model?: string } | undefined)?.model;
+}
 
 export const COLORS = {
   idle: 0xb8b8b8,
@@ -28,7 +66,8 @@ export const COLORS = {
 export interface Marker {
   group: THREE.Group;
   lines: THREE.LineSegments[];
-  pick: THREE.Mesh;
+  pick: THREE.Object3D;
+  icon?: THREE.Sprite;
   baseColor: number;
   /** A box round the whole model, shown only while selected (models are too busy to outline). */
   box?: THREE.LineSegments;
@@ -89,7 +128,8 @@ export function buildMarker(e: EntityData): Marker {
   group.userData.entityId = e.id;
   group.rotation.order = 'YXZ';
   const lines: THREE.LineSegments[] = [];
-  let pick: THREE.Mesh;
+  let pick: THREE.Object3D;
+  let icon: THREE.Sprite | undefined;
   // (Made below, once the marker's own parts are in; a model that loads later carries them on a bone.)
   let eyes: GooglyEyes | undefined;
   let box: THREE.LineSegments | undefined;
@@ -122,8 +162,8 @@ export function buildMarker(e: EntityData): Marker {
         baseColor,
       ),
     );
-    pick = new THREE.Mesh(new THREE.BoxGeometry(24, 24, 24), pickMat);
-    const p = pick;
+    const p = new THREE.Mesh(new THREE.BoxGeometry(24, 24, 24), pickMat);
+    pick = p;
     const b = (box = new THREE.LineSegments(boxEdges(new THREE.Vector3(24, 24, 24), new THREE.Vector3()), new THREE.LineBasicMaterial({ color: COLORS.selected })));
     b.name = 'selection-box';
     b.visible = false;
@@ -224,6 +264,8 @@ export function buildMarker(e: EntityData): Marker {
       lines.push(l);
     }
     pick = new THREE.Mesh(new THREE.SphereGeometry(14, 8, 6), pickMat);
+  } else if (e.emptyClass && ICONS[e.emptyClass]) {
+    pick = icon = iconSprite(e.emptyClass);
   } else {
     lines.push(
       segs(
@@ -247,7 +289,7 @@ export function buildMarker(e: EntityData): Marker {
     eyes = buildGooglyEyes(readComponent<GooglyEyesData>('googlyEyes', e.components.googlyEyes));
     group.add(eyes.object);
   }
-  return { group, lines, pick, baseColor, box, eyes };
+  return { group, lines, pick, baseColor, box, eyes, icon };
 }
 
 /** The 12 edges of a box of `size` round `center` (a hair bigger, so it isn't hidden in the model's surface). */
@@ -260,6 +302,7 @@ function boxEdges(size: THREE.Vector3, center: THREE.Vector3): THREE.BufferGeome
 export function setMarkerSelected(m: Marker, selected: boolean): void {
   for (const l of m.lines) (l.material as THREE.LineBasicMaterial).color.setHex(selected ? COLORS.selected : m.baseColor);
   if (m.box) m.box.visible = selected;
+  m.icon?.material.color.setHex(selected ? COLORS.selected : 0xffffff);
 }
 
 export function disposeMarker(m: Marker): void {
@@ -272,6 +315,7 @@ export function disposeMarker(m: Marker): void {
     for (let x: THREE.Object3D | null = o; x; x = x.parent) if (x.name === 'poster') return;
     // (Model meshes share geometry with the loaded file; only the clone's tree is dropped.)
     for (let x: THREE.Object3D | null = o; x; x = x.parent) if (x.name === 'model') return;
+    if (o instanceof THREE.Sprite) return o.material.dispose();
     if (o instanceof THREE.Mesh || o instanceof THREE.LineSegments) {
       o.geometry.dispose();
       const mat = o.material as THREE.Material;
@@ -282,5 +326,5 @@ export function disposeMarker(m: Marker): void {
 
 /** Stable key for "does this marker need rebuilding" (shape-affecting data only). */
 export function markerKey(e: EntityData): string {
-  return JSON.stringify([e.components.light ?? null, !!e.components.playerSpawn, e.components.sign ?? null, e.components.poster ?? null, e.components.model ?? null, (e.components.npc as { side?: string } | undefined)?.side ?? null, e.components.reflectionProbe ?? null, e.components.googlyEyes ?? null]);
+  return JSON.stringify([e.components.light ?? null, !!e.components.playerSpawn, e.components.sign ?? null, e.components.poster ?? null, e.components.model ?? null, (e.components.npc as { side?: string } | undefined)?.side ?? null, e.components.reflectionProbe ?? null, e.components.googlyEyes ?? null, e.emptyClass ?? null]);
 }

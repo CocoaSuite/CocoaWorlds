@@ -103,6 +103,8 @@ export interface ProjectFile {
 /** Component data is plain JSON keyed by component type, e.g. `{ light: { kind: 'point', ... } }`. */
 export type ComponentData = Record<string, unknown>;
 
+export type EmptyClass = 'point' | 'assetSpawn' | 'audioEmitter';
+
 export interface EntityData {
   id: string;
   name: string;
@@ -115,6 +117,8 @@ export interface EntityData {
   locked: boolean;
   /** True: grass grows under it (it doesn't clear Foliage it stands on). */
   keepsGrass?: boolean;
+  /** What an empty object stands for (an editor icon only). */
+  emptyClass?: EmptyClass;
   components: Record<string, ComponentData>;
 }
 

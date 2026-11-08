@@ -39,6 +39,8 @@ import {
   reparentCmd,
   setComponentCmd,
   setFlagCmd,
+  setEmptyClassCmd,
+  type EmptyClass,
   setTransformCmd,
   type Command,
   type EntityData,
@@ -235,6 +237,7 @@ interface Actions {
   rename(id: string, name: string): void;
   setTransform(id: string, tr: Transform, mergeKey?: string): void;
   setFlag(id: string, flag: 'visible' | 'locked' | 'keepsGrass', v: boolean): void;
+  setEmptyClass(id: string, v: EmptyClass | undefined): void;
   startRename(id: string | null): void;
   frameSelection(): void;
   save(): Promise<boolean>;
@@ -657,6 +660,10 @@ export const useEditor = create<State & Actions>()((set, get) => ({
   setFlag(id, flag, v) {
     const doc = get().doc;
     if (doc) get().execute(setFlagCmd(doc, id, flag, v));
+  },
+  setEmptyClass(id, v) {
+    const doc = get().doc;
+    if (doc) get().execute(setEmptyClassCmd(doc, id, v));
   },
 
   startRename: (id) => set({ renaming: id }),
