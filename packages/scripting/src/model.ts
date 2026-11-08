@@ -188,7 +188,8 @@ export type Statement =
   /** The player lets go of what they hold. */
   | { id: string; kind: 'drop' };
 
-export type EventBlock =
+/** `limit`: the stack runs only once ever, or once a day (the day count); otherwise every time. */
+export type EventBlock = { limit?: EventLimit } & (
   | { id: string; kind: 'start' }
   | { id: string; kind: 'enter'; zone: Ref }
   | { id: string; kind: 'leave'; zone: Ref }
@@ -202,7 +203,7 @@ export type EventBlock =
    * The player pressed Use (E) while looking at this object (or anything inside it). `prompt` is the word shown
    * under the crosshair when the player looks at it (“E  Open”); empty shows “Use”.
    */
-  | { id: string; kind: 'use'; prompt?: string; reach?: Expr; once?: boolean }
+  | { id: string; kind: 'use'; prompt?: string; reach?: Expr }
   /**
    * The player pressed Use (E) or Fire (click) at this object while holding `item` (or a copy of it; null:
    * anything), within `reach` units. “The thing that entered” is what they hold. Instead of dropping or throwing it.
@@ -243,7 +244,9 @@ export type EventBlock =
    */
   | { id: string; kind: 'press'; key: string; prompt?: string; reach?: Expr }
   /** A hunting creature makes a move (`what`: its name, '' for any): runs on the creature and on the hiding spot it is at. */
-  | { id: string; kind: 'does'; what: string };
+  | { id: string; kind: 'does'; what: string }
+);
+export type EventLimit = 'once' | 'day';
 
 export interface Handler {
   id: string;

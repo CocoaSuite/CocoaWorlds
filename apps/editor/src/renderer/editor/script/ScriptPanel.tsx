@@ -22,6 +22,7 @@ import {
   freshIds,
   innerLists,
   type EventBlock,
+  type EventLimit,
   type Handler,
   type EventKind,
   type Expr,
@@ -433,10 +434,7 @@ function EventRow({ ev, onRemove, onCopy, pick }: { ev: EventBlock; onRemove: ()
       <>
         {w('use')}, {w('usePrompt')} <kbd className="cw-key">E</kbd>{' '}
         <TextSlot value={ev.prompt ?? ''} label={w('usePrompt')} onChange={(prompt) => set({ prompt } as Partial<EventBlock>)} />, {w('within')}{' '}
-        <ReachSlot value={ev.reach} fallback={96} label={`${w('use')} ${w('within')}`} onChange={(reach) => set({ reach } as Partial<EventBlock>)} /> {w('units')}{' '}
-        <label className="cw-sb-check">
-          <input type="checkbox" checked={!!ev.once} aria-label={w('useOnce')} onChange={(e) => set({ once: e.target.checked || undefined } as Partial<EventBlock>)} /> {w('useOnce')}
-        </label>
+        <ReachSlot value={ev.reach} fallback={96} label={`${w('use')} ${w('within')}`} onChange={(reach) => set({ reach } as Partial<EventBlock>)} /> {w('units')}
       </>
     );
   else if (ev.kind === 'useHolding')
@@ -529,10 +527,19 @@ function EventRow({ ev, onRemove, onCopy, pick }: { ev: EventBlock; onRemove: ()
       {w('every')} <ExprSlot expr={ev.seconds} type="number" label={w('every')} /> {w('seconds')}
     </>
   );
+  // (Use stacks saved “only once” as `once` before every event had a limit.)
+  const limit = ev.limit ?? ((ev as { once?: boolean }).once ? 'once' : '');
   return (
     <div className="cw-blk event" data-block={ev.id} data-pick={pick} tabIndex={-1} onMouseDown={focusRow}>
       <div className="cw-blk-line">
-        <span className="cw-blk-words">{content}</span>
+        <span className="cw-blk-words">
+          {content}{' '}
+          <select className="cw-slot cw-sb-limit" aria-label={w('limit')} value={limit} onChange={(e) => set({ limit: (e.currentTarget.value || undefined) as EventLimit | undefined, once: undefined } as Partial<EventBlock>)}>
+            <option value="">{w('limitAny')}</option>
+            <option value="day">{w('limitDay')}</option>
+            <option value="once">{w('limitOnce')}</option>
+          </select>
+        </span>
         <span className="cw-blk-tools">
           <IconButton icon="copy" label={t('script.copyStack')} onClick={onCopy} />
           <IconButton icon="close" label={t('script.removeStack')} onClick={onRemove} />

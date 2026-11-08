@@ -680,3 +680,5 @@ button.cw-sec.cw-fold { width: 100%; border: 0; border-top: 1px solid var(--line
 .cw-ss-row > .cw-muted { width: 84px; }
 .cw-ss-chip { font: inherit; font-size: 11px; padding: 1px 6px; border-radius: 4px; border: 1px solid var(--line); background: transparent; color: inherit; cursor: pointer; }
 .cw-ss-add { flex: 1; min-width: 100px; }
+.cw-sb-limit { width: auto; }
+.cw-sb-limit:has(option[value='']:checked) { opacity: 0.6; }

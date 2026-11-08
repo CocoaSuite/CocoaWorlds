@@ -147,7 +147,7 @@ export type CompiledEvent =
   | { kind: 'start' }
   | { kind: 'enter' | 'leave'; zone: string }
   | { kind: 'message' | 'messageStop'; message: string }
-  | { kind: 'use'; prompt: string; reach: number; once?: boolean }
+  | { kind: 'use'; prompt: string; reach: number }
   | { kind: 'useHolding'; item: string | null; reach: number }
   | { kind: 'die' }
   | { kind: 'breaks' }
@@ -173,6 +173,8 @@ export interface CompiledHandler {
   /** For each instruction, the statement block it belongs to (for highlighting the running block). */
   blocks: string[];
   temps: number;
+  /** Runs only once ever, or once a day. */
+  limit?: 'once' | 'day';
 }
 
 export interface Program {
@@ -264,7 +266,7 @@ class HandlerCompiler {
     if (ev.kind === 'start') event = { kind: 'start' };
     else if (ev.kind === 'use') {
       const reach = ev.reach ? this.reachOf(ev.reach) : USE_REACH;
-      if (reach !== null) event = { kind: 'use', prompt: (ev.prompt ?? '').trim(), reach, ...(ev.once ? { once: true } : {}) };
+      if (reach !== null) event = { kind: 'use', prompt: (ev.prompt ?? '').trim(), reach };
     } else if (ev.kind === 'useHolding') {
       const reach = this.reachOf(ev.reach);
       const item = ev.item ? this.resolveRef(ev.item, ev.id) : null;
@@ -317,7 +319,10 @@ class HandlerCompiler {
     this.statements(this.h.body);
     this.emit({ op: 'halt' });
     if (!event) return null;
-    return { id: this.h.id, event, code: this.code, blocks: this.blocks, temps: this.temps };
+    // (“Only once” on Use stacks was saved as `once` before every event had a limit.)
+    const old = this.h.event as { kind: string; limit?: 'once' | 'day'; once?: boolean };
+    const limit = old.limit ?? (old.kind === 'use' && old.once ? 'once' : undefined);
+    return { id: this.h.id, event, code: this.code, blocks: this.blocks, temps: this.temps, ...(limit ? { limit } : {}) };
   }
 
   /** Object refs: `self` is the script's owner; `other` is the thing that entered or left. */

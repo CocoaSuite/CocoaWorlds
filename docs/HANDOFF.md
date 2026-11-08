@@ -382,3 +382,9 @@ Editor: `viewport/surface-sounds.ts` (registry, set by the store and the game ru
 `PlaySession.surfaceSound`, Inspector › Surface sounds (`editor/SurfaceSounds.tsx`), Materials › Sounds like.
 Test: `packages/runtime/test/sounds.test.ts`. Not heard in the app yet. Not done: ladder and swimming sounds,
 creatures' footsteps, scraping/rolling loops, breaking sounds.
+
+### 25. Once a day / only once on every event
+
+Status: done (2026-11-08). `EventBlock.limit` ('once' | 'day'), compiled onto the handler; `ScriptRunner.spawn`
+skips a spent handler (`Instance.spent`: handler → the day it ran). The old Use-only `once` still reads as
+'once'. Test: `scripting.test.ts` "how often a stack runs". Not kept in saved progress.

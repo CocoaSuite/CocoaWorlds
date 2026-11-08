@@ -53,7 +53,7 @@ class Fake {
   send = (message: string, to: string | null, from: string) => void this.sent.push({ message, to, from });
 }
 
-function run(scripts: [string, Script][], until = 10, dt = 0.1) {
+function run(scripts: [string, Script][], until = 10, dt = 0.1, day?: () => number) {
   const host = new Fake();
   const programs = scripts.map(([owner, s]) => {
     const r = compileScript(owner, s, scene);
@@ -70,6 +70,7 @@ function run(scripts: [string, Script][], until = 10, dt = 0.1) {
       vm.dispatch({ type: 'message', message: m, to, from });
     },
     log: (t) => void host.log.push(`${host.t.toFixed(1)} ${t}`),
+    ...(day ? { day } : {}),
   });
   vm.start();
   const step = () => {
@@ -500,5 +501,36 @@ describe('“only once” Use stacks', () => {
     runFor(0.2);
     expect(host.log).toEqual(['0.1 opened']);
     expect(vm.usePrompt(['me'])).toBeNull();
+  });
+});
+
+describe('how often a stack runs', () => {
+  const enter = (limit: 'once' | 'day') => script([handler({ ...newEvent('enter'), zone: { entity: 'zone' }, limit } as Handler['event'], { ...newStatement('log'), text: text('in') } as Statement)]);
+  const goIn = (vm: { dispatch(e: never): void }) => vm.dispatch({ type: 'enter', zone: 'zone', other: 'player' } as never);
+
+  it('once a day: again the next day, not before', () => {
+    let day = 1;
+    const { host, vm, runFor } = run([['me', enter('day')]], 10, 0.1, () => day);
+    goIn(vm);
+    runFor(0.2);
+    goIn(vm);
+    runFor(0.2);
+    day = 2;
+    goIn(vm);
+    runFor(0.2);
+    goIn(vm);
+    runFor(0.2);
+    expect(host.log).toHaveLength(2);
+  });
+
+  it('only once: never again, any day', () => {
+    let day = 1;
+    const { host, vm, runFor } = run([['me', enter('once')]], 10, 0.1, () => day);
+    goIn(vm);
+    runFor(0.2);
+    day = 5;
+    goIn(vm);
+    runFor(0.2);
+    expect(host.log).toHaveLength(1);
   });
 });

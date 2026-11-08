@@ -149,8 +149,10 @@ the player, comes closer when a wall is in the way, and the player is drawn as a
 
 “When the player uses this (E)” has a prompt word. While the player looks at the object within reach, the
 screen shows **E** and the word under the crosshair (“E Open”); with no word it shows “Use”. The door recipe
-uses “Open”, the button “Press”. Tick **only once** and the stack runs the first time only; after that the
-object no longer shows the prompt (a chest, a gift box).
+uses “Open”, the button “Press”. 
+Every event block ends with **how often**: *every time*, *once a day* (again when the day count goes up) or
+*only once* (never again). A Use stack that has had its run no longer shows its prompt (a chest, a gift box).
+Not kept in saved progress yet.
 
 ## Holding things and putting them in spots
 
