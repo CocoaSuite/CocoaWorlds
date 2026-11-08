@@ -17,6 +17,7 @@ Status as of 2026-11-02 (after B4).
 
 Frame times (how fast the engine runs, not what it can make) are measured with `npm run bench`: see
 [tools/bench/README.md](tools/bench/README.md).
+Sound propagation's cost per frame is measured with `npm run bench:acoustics`: see [docs/acoustics.md](docs/acoustics.md#measured).
 
 ## What every target needs
 

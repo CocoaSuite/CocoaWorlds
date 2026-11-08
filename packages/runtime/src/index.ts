@@ -7,3 +7,4 @@ export * from './navgrid';
 export * from './snapshot';
 export * from './building';
 export * from './vfx';
+export * from './acoustics';

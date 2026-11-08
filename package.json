@@ -14,7 +14,8 @@
     "typecheck": "tsc -b",
     "test": "vitest run",
     "test:e2e": "npm run test:e2e -w @cocoaworlds/editor",
-    "bench": "node tools/bench/run.mjs"
+    "bench": "node tools/bench/run.mjs",
+    "bench:acoustics": "node tools/bench/acoustics.mjs"
   },
   "engines": {
     "node": ">=22"

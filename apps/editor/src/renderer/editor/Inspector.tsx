@@ -265,6 +265,10 @@ function SceneSettings() {
         </Field>
         {bg.sound && <Field label={t('insp.bgVolume')}>{num(t('insp.bgVolume'), bg.volume, 0.1, (v) => set({ backgroundSound: { ...bg, volume: Math.max(0, Math.min(4, v)) } }, 'Background volume', 'scene-bg-vol'))}</Field>}
         <p className="cw-hint">{t('insp.bgSoundHint')}</p>
+        <Field label={t('insp.acoustics')}>
+          <Switch label={t('insp.acoustics')} checked={doc.settings.acoustics !== false} onChange={(v) => set({ acoustics: v }, v ? 'Realistic sound on' : 'Realistic sound off')} />
+        </Field>
+        <p className="cw-hint">{t('insp.acousticsHint')}</p>
       </Fold>
       <GameRulesSection />
       <Fold id="surfaceSounds" title={t('ss.title')}>

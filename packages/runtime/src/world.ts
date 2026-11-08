@@ -63,6 +63,7 @@ import { PLAYER, Player, fallDamage, type PlayerInput } from './player';
 import { Weapons, type V3 } from './weapons';
 import { ANIM_ROLES, Npc, type AnimRole } from './npc';
 import { NavGrid } from './navgrid';
+import { Acoustics } from './acoustics';
 import { FrameSnapshot } from './snapshot';
 import { BaseSystem, type BaseAim, type BlockerBox, type BuildPrompt, type ComfortSource } from './building/base';
 import { buildingCatalog } from './building/catalog';
@@ -1555,6 +1556,28 @@ export class GameWorld {
       [x.max[0] + 32, x.max[1] + 32, x.max[2] + 32],
     );
     return this.nav;
+  }
+
+  private sound: Acoustics | null = null;
+
+  /**
+   * How sounds reach the ears through this level (walls, materials, ways round, the room's echo): made the
+   * first time it's asked for. Walls, floors, doors and props that stay put stop sound; zones, water, physics
+   * objects, creatures and the player don't.
+   */
+  get acoustics(): Acoustics {
+    return (this.sound ??= new Acoustics({
+      world: this.world,
+      solid: (c) => {
+        const b = c.parent();
+        if (!b || b.isDynamic()) return false;
+        const h = c.handle;
+        return !this.triggers.has(h) && !this.volumes.has(h) && !this.standInOf.has(h) && !this.npcs.has(this.owner.get(h) ?? '') && c.handle !== this.player?.collider.handle;
+      },
+      exclude: () => this.player?.collider,
+      surfaceAt: (h, at) => this.surfaceAt(h, at),
+      extent: () => this.extent,
+    }));
   }
 
   /** Convex COL brushes that stay put (their planes, in world space). */
@@ -4288,6 +4311,10 @@ export class GameWorld {
   private setBaseBlocker(key: string, box: BlockerBox | null): void {
     const old = this.baseColliders.get(key);
     if (old) {
+      if (this.sound) {
+        const t = old.translation(), h = old.halfExtents() ?? { x: 64, y: 64, z: 64 }, r = Math.hypot(h.x, h.y, h.z);
+        this.sound.changed({ x: t.x - r, y: t.y - r, z: t.z - r }, { x: t.x + r, y: t.y + r, z: t.z + r });
+      }
       this.baseHandles.delete(old.handle);
       this.world.removeCollider(old, false);
       this.baseColliders.delete(key);
@@ -4299,6 +4326,10 @@ export class GameWorld {
     const c = this.world.createCollider(desc, this.baseBody);
     this.baseColliders.set(key, c);
     this.baseHandles.add(c.handle);
+    if (this.sound) {
+      const r = Math.hypot(...box.half);
+      this.sound.changed({ x: box.center[0] - r, y: box.center[1] - r, z: box.center[2] - r }, { x: box.center[0] + r, y: box.center[1] + r, z: box.center[2] + r });
+    }
   }
 
   /** Where an object is now (it, or the moving body it rides in). */

@@ -8,7 +8,11 @@
  *   outside a sealed room (base building) ─▶ outside ─▶ muffle ─▶ listener gain   (lowpass and quieter)
  *
  * The echoes are made in code (decaying noise), so no audio files have to ship. Changing effect fades over
- * FADE seconds so walking through a door doesn't click.
+ * FADE seconds so walking through a door doesn't click. An echo that has faded out is unplugged (a convolver
+ * keeps costing CPU while plugged in, even at no volume), and plugged back in when it's wanted again.
+ *
+ * Effects come from Sound areas, or (realistic sound) from the place the ears are in: a small room, a corridor,
+ * a hall or a cave, worked out by the game's acoustics.
  */
 import type { SoundEffect } from '@cocoaworlds/core';
 import type * as THREE from 'three';
@@ -18,10 +22,15 @@ export const FADE = 0.3;
 /** Wide open: the lowpass lets everything through. */
 const OPEN = 20000;
 
+/** The effects the stage plays: the Sound areas' own, and a corridor's (only ever picked by realistic sound). */
+export type StageEffect = SoundEffect | 'corridor';
+
 /** What each effect does at full amount: echo length (s) and how fast it dies away, its level, the dry level and the lowpass. */
-export const EFFECTS: Record<SoundEffect, { echo: number; decay: number; wet: number; dry: number; lowpass: number }> = {
+export const EFFECTS: Record<StageEffect, { echo: number; decay: number; wet: number; dry: number; lowpass: number }> = {
   none: { echo: 0, decay: 0, wet: 0, dry: 1, lowpass: OPEN },
   room: { echo: 0.5, decay: 4, wet: 0.3, dry: 1, lowpass: OPEN },
+  // (A corridor: a longer, brighter tail than a room's, flutter between close walls.)
+  corridor: { echo: 1.1, decay: 3.4, wet: 0.34, dry: 1, lowpass: OPEN },
   hall: { echo: 1.8, decay: 3, wet: 0.4, dry: 0.9, lowpass: OPEN },
   cave: { echo: 3.5, decay: 2.2, wet: 0.55, dry: 0.85, lowpass: OPEN },
   underwater: { echo: 0.8, decay: 3, wet: 0.25, dry: 0.9, lowpass: 650 },
@@ -29,7 +38,7 @@ export const EFFECTS: Record<SoundEffect, { echo: number; decay: number; wet: nu
 };
 
 /** The levels an effect at `mix` (0…1) comes to: 0 is no effect at all, 1 the full effect. */
-export function effectLevels(effect: SoundEffect, mix: number): { wet: number; dry: number; lowpass: number } {
+export function effectLevels(effect: StageEffect, mix: number): { wet: number; dry: number; lowpass: number } {
   const e = EFFECTS[effect] ?? EFFECTS.none;
   const m = Math.max(0, Math.min(1, mix));
   // (The lowpass moves evenly in pitch, not in Hz: half-way from 20 kHz to 650 Hz is about 3.6 kHz.)
@@ -65,9 +74,9 @@ export class SoundStage {
   /** Sounds from outside the sealed room the ears are in go here first: muffled, then on as any other. */
   readonly outside: GainNode;
   private muffle: BiquadFilterNode;
-  private echoes = new Map<SoundEffect, { conv: ConvolverNode; wet: GainNode }>();
+  private echoes = new Map<StageEffect, { conv: ConvolverNode; wet: GainNode; plugged: boolean; idleAt: number }>();
   /** What it's set to now (for tests and the console). */
-  effect: SoundEffect = 'none';
+  effect: StageEffect = 'none';
   mix = 1;
 
   constructor(private listener: THREE.AudioListener) {
@@ -105,19 +114,52 @@ export class SoundStage {
   }
 
   /** Fade to an effect at an amount. */
-  set(effect: SoundEffect, mix: number): void {
-    if (effect === this.effect && mix === this.mix) return;
+  set(effect: StageEffect, mix: number): void {
+    if (effect === this.effect && mix === this.mix) {
+      this.unplugIdle();
+      return;
+    }
     this.effect = effect;
     this.mix = mix;
     const lv = effectLevels(effect, mix);
     ramp(this.ctx, this.dry.gain, lv.dry);
     ramp(this.ctx, this.lowpass.frequency, lv.lowpass);
     if (EFFECTS[effect]?.echo && lv.wet > 0) this.echo(effect);
-    for (const [k, e] of this.echoes) ramp(this.ctx, e.wet.gain, k === effect ? lv.wet : 0);
+    for (const [k, e] of this.echoes) {
+      const on = k === effect && lv.wet > 0;
+      if (on && !e.plugged) {
+        this.lowpass.connect(e.conv);
+        e.plugged = true;
+      }
+      ramp(this.ctx, e.wet.gain, on ? lv.wet : 0);
+      e.idleAt = on ? Infinity : this.ctx.currentTime + FADE + EFFECTS[k].echo + 0.1;
+    }
+  }
+
+  /** Echoes faded out (and their tails done): unplugged, so they cost nothing. */
+  private unplugIdle(): void {
+    const now = this.ctx.currentTime;
+    for (const e of this.echoes.values()) {
+      if (!e.plugged || now < e.idleAt) continue;
+      this.lowpass.disconnect(e.conv);
+      e.plugged = false;
+    }
+  }
+
+  /** Echoes plugged in now (for tests and the console). */
+  get pluggedEchoes(): number {
+    let n = 0;
+    for (const e of this.echoes.values()) if (e.plugged) n++;
+    return n;
+  }
+
+  /** Unplug a sound altogether (it's out of range: nothing of it reaches the ears, so nothing is worked out). */
+  park(audio: THREE.Audio | THREE.PositionalAudio): void {
+    audio.gain.disconnect();
   }
 
   /** Where the levels are heading (for tests). */
-  levels(): { effect: SoundEffect; mix: number; dry: number; lowpass: number; wet: number } {
+  levels(): { effect: StageEffect; mix: number; dry: number; lowpass: number; wet: number } {
     return { effect: this.effect, mix: this.mix, ...effectLevels(this.effect, this.mix) };
   }
 
@@ -127,7 +169,7 @@ export class SoundStage {
     audio.gain.connect(this.plain);
   }
 
-  private echo(effect: SoundEffect): void {
+  private echo(effect: StageEffect): void {
     if (this.echoes.has(effect)) return;
     const e = EFFECTS[effect];
     const rate = this.ctx.sampleRate;
@@ -139,10 +181,9 @@ export class SoundStage {
     conv.buffer = buffer;
     const wet = this.ctx.createGain();
     wet.gain.value = 0;
-    this.lowpass.connect(conv);
     conv.connect(wet);
     wet.connect(this.ctx.destination);
-    this.echoes.set(effect, { conv, wet });
+    this.echoes.set(effect, { conv, wet, plugged: false, idleAt: Infinity });
   }
 
   /** Back to how the listener was. */

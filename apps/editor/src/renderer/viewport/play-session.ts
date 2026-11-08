@@ -7,7 +7,7 @@
  */
 import { SceneDoc, expandRepeats, posterOf, readComponent, type ParticlesData, type VfxData, type ColliderData, type GameRules, type GameValue, type EntityData, type GooglyEyesData, type ModelData, type PrinterData, type SceneFile, type SignData, type TerrainData } from '@cocoaworlds/core';
 import { buildMesh, isInvisibleMaterial, type Brush, type VoxelField, type WorldBrush } from '@cocoaworlds/geometry';
-import { GameWorld, initPhysics, POSE, AT, NPC, type BuildPrompt, type FrameSnapshot, type Hearing, type NavGrid, type BodyInfo, type ModelMesh, type SavedProgress, type Travel, type UiState, type PlayerInput, type PlayerStatus, type ScriptLog, type TriggerEvent } from '@cocoaworlds/runtime';
+import { GameWorld, initPhysics, POSE, AT, NPC, type AcousticVoice, type BuildPrompt, type FrameSnapshot, type Hearing, type NavGrid, type BodyInfo, type ModelMesh, type SavedProgress, type Travel, type UiState, type PlayerInput, type PlayerStatus, type ScriptLog, type TriggerEvent } from '@cocoaworlds/runtime';
 
 /** Field-of-view effects, degrees added to the camera's own; ease rates per second. */
 const FOV = { sprint: 8, fall: 10, weak: -14, easeIn: 6, easeOut: 4 };
@@ -32,6 +32,7 @@ import { EMITTER_DEFAULTS } from './particles';
 import { assetUrl } from '../assets';
 import { modelGeometry, modelInstance, type ModelInstance } from './models';
 import { SoundStage, ramp } from './area-sound';
+import { LeanPositionalAudio } from './lean-audio';
 import { allSurfaceFiles, materialSurfaces, surfaceFiles } from './surface-sounds';
 import { projectMaterials } from './project-materials';
 import { BaseView } from './base-view';
@@ -175,6 +176,7 @@ export class PlaySession {
 
     this.material = material;
     this.doc = doc;
+    this.realistic = doc.settings.acoustics !== false;
     this.makeSpareLights(doc);
     // Base building: build sites, ghosts and the plan's preview.
     if (this.world.base) {
@@ -562,7 +564,11 @@ export class PlaySession {
   private listener: THREE.AudioListener | null = null;
   private static buffers = new Map<string, Promise<AudioBuffer>>();
   /** Sounds playing now (for following moving objects and stopping). */
-  readonly sounds: { source: string; sound: string; audio: THREE.Audio | THREE.PositionalAudio; follow: string | null; followAt: number; volume: number; plain: boolean; outside: boolean; fire: boolean; ambient: boolean }[] = [];
+  readonly sounds: Playing[] = [];
+  /** Realistic sound (the scene's setting): walls muffle, sound goes round, places echo. */
+  private realistic = true;
+  /** Footsteps and hits: a few sounds kept and played again and again (no new nodes per step). */
+  private shots: { audio: LeanPositionalAudio; busy: boolean }[] = [];
 
   /** How things sound where the ears are (Sound areas, water): the effect chain every changed sound goes through. */
   stage: SoundStage | null = null;
@@ -606,7 +612,7 @@ export class PlaySession {
     if (this.disposed) return;
     let audio: THREE.Audio | THREE.PositionalAudio;
     if (e.at || e.follow) {
-      const pa = new THREE.PositionalAudio(listener);
+      const pa = new LeanPositionalAudio(listener, this.realistic && e.areaEffects !== false);
       // Full volume within a quarter of its range, fading to silence at the range.
       pa.setDistanceModel('linear');
       pa.setRefDistance(Math.max(1, e.range / 4));
@@ -622,7 +628,22 @@ export class PlaySession {
     this.group.add(audio);
     const fireTag = this.world.base?.config.ambience.fireTag ?? '';
     const fire = !!fireTag && !!this.doc.get(e.source)?.tags.includes(fireTag);
-    const entry = { source: e.source, sound: e.sound, audio, follow: e.follow, followAt: e.follow ? this.world.drawn(e.follow) : -1, volume: e.volume, plain: e.areaEffects === false, outside: false, fire, ambient: !!e.ambient };
+    const entry: Playing = { source: e.source, sound: e.sound, audio, follow: e.follow, followAt: e.follow ? this.world.drawn(e.follow) : -1, volume: e.volume, plain: e.areaEffects === false, outside: false, fire, ambient: !!e.ambient, voice: null, loop: e.loop, parked: false };
+    if (audio instanceof LeanPositionalAudio) {
+      if (e.follow && entry.followAt >= 0) this.followNow(entry);
+      // Realistic sound: heard through walls and round corners as it is at once, not a frame later.
+      if (this.realistic && !entry.plain) {
+        const v = (entry.voice = this.world.acoustics.add(audio.position, Math.max(2, e.range), e.volume));
+        audio.muffleNow(v.audible ? v.cutoff : 22000, v.audible ? v.gain : 0);
+        if (v.bent) audio.heardAt = new THREE.Vector3(v.vx, v.vy, v.vz);
+        v.changed = false;
+        // (A loop that starts out of range starts unplugged.)
+        if (!v.audible && e.loop) {
+          entry.parked = true;
+          this.stage?.park(audio);
+        }
+      }
+    }
     this.sounds.push(entry);
     // (A fire's loudness follows comfort: set on the next frame.)
     if (fire) this.comfortNow = -1;
@@ -641,9 +662,11 @@ export class PlaySession {
     }
   }
 
-  private dropSound(s: (typeof this.sounds)[number]): void {
+  private dropSound(s: Playing): void {
     const i = this.sounds.indexOf(s);
     if (i >= 0) this.sounds.splice(i, 1);
+    if (s.voice) this.world.acoustics.remove(s.voice);
+    s.voice = null;
     s.audio.removeFromParent();
     s.audio.disconnect?.();
   }
@@ -675,23 +698,105 @@ export class PlaySession {
       this.voices--;
       return;
     }
-    if (this.disposed) return;
-    const audio = new THREE.PositionalAudio(listener);
-    audio.setDistanceModel('linear');
+    if (this.disposed) {
+      this.voices--;
+      return;
+    }
+    // (One of the kept sounds that isn't playing; made the first time it's wanted.)
+    let shot = this.shots.find((x) => !x.busy);
+    if (!shot) {
+      const audio = new LeanPositionalAudio(listener, this.realistic);
+      audio.setDistanceModel('linear');
+      this.group.add(audio);
+      shot = { audio, busy: false };
+      const s = shot;
+      audio.onEnded = () => {
+        (audio as { isPlaying: boolean }).isPlaying = false;
+        s.busy = false;
+        this.voices--;
+      };
+      this.shots.push(shot);
+    }
+    shot.busy = true;
+    const audio = shot.audio;
     audio.setRefDistance(range / 4);
     audio.setMaxDistance(range);
     audio.position.set(...at);
     audio.setBuffer(buffer);
     audio.setPlaybackRate(0.92 + Math.random() * 0.16);
     audio.setVolume(Math.max(0, volume * k));
-    this.group.add(audio);
-    audio.onEnded = () => {
-      (audio as { isPlaying: boolean }).isPlaying = false;
-      this.voices--;
-      audio.removeFromParent();
-      audio.disconnect();
-    };
+    // Through walls: muffled as it is now (worked out once; it's over in a moment).
+    const ears = listener.getWorldPosition(this.ears);
+    const heard = this.realistic ? this.world.acoustics.probe(ears, audio.position, range) : { gain: 1, cutoff: 22000 };
+    audio.muffleNow(heard.cutoff, heard.gain);
     audio.play();
+  }
+
+  /** Put a sound that travels with a moving object where that object is now. */
+  private followNow(s: Playing): void {
+    const f = this.frame;
+    if (!f.present(s.followAt)) return;
+    const a = s.followAt * AT;
+    s.audio.position.set(f.bodyAt[a]!, f.bodyAt[a + 1]!, f.bodyAt[a + 2]!);
+  }
+
+  /**
+   * Realistic sound, each frame: the game's acoustics looks again at the sounds that are due (loudest first,
+   * within a small time budget) and those that changed are glided to their new muffle, volume and place. Sounds
+   * out of range that loop are unplugged (nothing of them is worked out); the loudest few get HRTF panning.
+   */
+  private listen(): void {
+    const listener = this.listener;
+    if (!listener?.parent || !this.realistic) return;
+    const a = this.world.acoustics;
+    const ears = listener.getWorldPosition(this.ears);
+    for (const s of this.sounds) {
+      const v = s.voice;
+      if (!v) continue;
+      const p = s.audio.position;
+      v.x = p.x;
+      v.y = p.y;
+      v.z = p.z;
+    }
+    a.frame(ears, this.world.time);
+    const now = this.world.time;
+    const hrtf = now >= this.nextHrtf;
+    if (hrtf) this.nextHrtf = now + 0.5;
+    let rank = 0;
+    if (hrtf) this.byWeight.length = 0;
+    for (const s of this.sounds) {
+      const v = s.voice;
+      if (!v || !(s.audio instanceof LeanPositionalAudio)) continue;
+      if (hrtf && v.audible) this.byWeight.push(s);
+      if (!v.changed) continue;
+      v.changed = false;
+      const audio = s.audio;
+      audio.muffleTo(v.audible ? v.cutoff : 22000, v.audible ? v.gain : 0);
+      if (v.bent) (audio.heardAt ??= new THREE.Vector3()).set(v.vx, v.vy, v.vz);
+      else audio.heardAt = null;
+      // (Looping and out of range: unplugged till it's back. One-off sounds play on to their end, silently.)
+      const park = !v.audible && s.loop;
+      if (park !== s.parked) {
+        s.parked = park;
+        if (park) this.stage!.park(audio);
+        else this.reroute(s);
+      }
+    }
+    if (hrtf) {
+      this.byWeight.sort((x, y) => y.voice!.weight - x.voice!.weight);
+      for (const s of this.byWeight) (s.audio as LeanPositionalAudio).setHrtf(rank++ < HRTF_VOICES && s.voice!.weight > 0.15);
+      for (const s of this.sounds) if (s.voice && !s.voice.audible) (s.audio as LeanPositionalAudio).setHrtf(false);
+    }
+  }
+
+  private nextHrtf = 0;
+  private byWeight: Playing[] = [];
+
+  /** Plug a sound back in where it belongs: straight out, through the muffle, or to the listener. */
+  private reroute(s: Playing): void {
+    if (!this.stage) return;
+    if (s.plain) this.stage.bypass(s.audio);
+    else this.stage.route(s.audio, s.outside);
   }
 
   /** Each frame: the effect and background sound for where the ears are now. */
@@ -706,7 +811,10 @@ export class PlaySession {
       for (const s of this.sounds) if (s.ambient) ramp(listener.context, s.audio.gain.gain, this.silentNow ? 0 : s.volume, 1.5);
     }
     if (this.silentNow) h.background = null;
-    this.stage.set(h.effect, h.mix);
+    // Where no Sound area says, realistic sound picks the echo from the place itself.
+    const env = this.realistic && !h.area && !h.underwater ? this.world.acoustics.environment : null;
+    if (env) this.stage.set(env.effect, env.mix);
+    else this.stage.set(h.effect, h.mix);
     if (h.room !== undefined) this.hearBase(h);
     const key = h.background ? `${h.background.sound}|${h.background.volume}` : '';
     if ((this.background?.key ?? '') === key) return;
@@ -737,7 +845,7 @@ export class PlaySession {
       const out = sealed && base.roomAt(s.audio.getWorldPosition(this.soundAt))?.id !== h.room!.id;
       if (out !== s.outside) {
         s.outside = out;
-        stage.route(s.audio, out);
+        if (!s.parked) stage.route(s.audio, out);
       }
     }
     if (this.background?.audio && this.bgOutside !== sealed) {
@@ -1050,6 +1158,7 @@ export class PlaySession {
       const a = s.followAt * AT;
       s.audio.position.set(f.bodyAt[a]!, f.bodyAt[a + 1]!, f.bodyAt[a + 2]!);
     }
+    this.listen();
     const uses = this.uses, notes = this.notes;
     this.uses = [];
     this.notes = [];
@@ -1366,6 +1475,12 @@ export class PlaySession {
       if (s.audio.isPlaying) s.audio.stop();
       this.dropSound(s);
     }
+    for (const s of this.shots) {
+      if (s.audio.isPlaying) s.audio.stop();
+      s.audio.removeFromParent();
+      s.audio.disconnect();
+    }
+    this.shots = [];
     if (this.background?.audio) this.dropBackground(this.background.audio);
     for (const a of [...this.fading]) this.dropBackground(a);
     this.background = null;
@@ -1386,6 +1501,30 @@ export class PlaySession {
 
 /** How long a background sound takes to fade out before it's stopped (ms, a little over the fade). */
 const FADE_MS = 400;
+
+/** Sounds that get the head-related (HRTF) panning at once: the loudest; the rest pan in plain stereo. */
+const HRTF_VOICES = 6;
+
+/** A sound playing (a Sound component's, a script's). */
+interface Playing {
+  source: string;
+  sound: string;
+  audio: THREE.Audio | THREE.PositionalAudio;
+  follow: string | null;
+  followAt: number;
+  volume: number;
+  /** Not changed by areas, water or walls (music, the interface). */
+  plain: boolean;
+  /** Outside the sealed room the ears are in (base building). */
+  outside: boolean;
+  fire: boolean;
+  ambient: boolean;
+  loop: boolean;
+  /** How it reaches the ears through the level (realistic sound), or null. */
+  voice: AcousticVoice | null;
+  /** Unplugged: out of range. */
+  parked: boolean;
+}
 
 /** A plain creature: a capsule 32 × 72 with a dark visor showing which way it faces (−Z). */
 function npcFigure(side: string): THREE.Object3D {

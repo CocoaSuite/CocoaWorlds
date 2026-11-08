@@ -92,6 +92,7 @@ export function validateScene(data: unknown): Result<SceneFile> {
   if (isObj(data.settings)) {
     const bad = validateUi(data.settings.ui);
     need(p, !bad, 'settings.ui', bad ?? '');
+    need(p, data.settings.acoustics === undefined || typeof data.settings.acoustics === 'boolean', 'settings.acoustics', 'Realistic sound is on or off.');
     const bg = data.settings.backgroundSound;
     need(p, bg === undefined || (isObj(bg) && isStr(bg.sound) && isNum(bg.volume) && bg.volume >= 0), 'settings.backgroundSound', 'The background sound needs a sound (its path, or empty) and a volume of 0 or more.');
   }

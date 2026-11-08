@@ -151,6 +151,12 @@ export interface SceneSettings {
   day?: DayCycle;
   /** The map's background sound (wind, birds, a hum), looping and heard everywhere while playing (missing: none). */
   backgroundSound?: BackgroundSound;
+  /**
+   * Sound that behaves like sound (missing: on): walls, floors and closed doors muffle it by their material, it
+   * travels round corners and through doorways, and places echo by their size and surfaces where no Sound
+   * area says otherwise. Off: every sound is heard straight, as before.
+   */
+  acoustics?: boolean;
   /** Base building: the game's own build pieces (JSON, as building/data/*.json) and base settings merged over base.json. */
   building?: { pieces?: unknown[]; base?: unknown };
 }
