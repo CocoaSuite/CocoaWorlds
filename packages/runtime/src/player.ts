@@ -611,10 +611,10 @@ export class Player {
   }
 
   /** What the player is pointing at within `reach` (skipping what `skip` says to), and how far away. */
-  aimAt(reach: number, skip?: (c: RAPIER.Collider) => boolean): { collider: RAPIER.Collider; distance: number } | null {
+  aimAt(reach: number, skip?: (c: RAPIER.Collider) => boolean, sensors = false): { collider: RAPIER.Collider; distance: number } | null {
     const [x, y, z] = this.eye();
     const d = this.lookDirection();
-    const hit = this.world.castRay(new RAPIER.Ray({ x, y, z }, { x: d[0], y: d[1], z: d[2] }), reach, true, RAPIER.QueryFilterFlags.EXCLUDE_SENSORS, SOLID, this.collider, undefined, skip ? (c) => !skip(c) : undefined);
+    const hit = this.world.castRay(new RAPIER.Ray({ x, y, z }, { x: d[0], y: d[1], z: d[2] }), reach, true, sensors ? undefined : RAPIER.QueryFilterFlags.EXCLUDE_SENSORS, SOLID, this.collider, undefined, skip ? (c) => !skip(c) : undefined);
     return hit ? { collider: hit.collider, distance: hit.timeOfImpact } : null;
   }
 

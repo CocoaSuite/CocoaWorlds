@@ -1586,6 +1586,11 @@ export class GameWorld {
     this.owner.set(p.collider.handle, id);
   }
 
+  private isPoster(c: RAPIER.Collider): boolean {
+    const id = this.owner.get(c.handle);
+    return !!id && this.posters.get(id)?.collider.handle === c.handle;
+  }
+
   /** Whether a poster or painting is hung on a wall now (null: it isn't one). */
   posterHung(id: string): boolean | null {
     return this.posters.get(id)?.hung ?? null;
@@ -2245,7 +2250,7 @@ export class GameWorld {
    * player's reach or the furthest a “When the player uses” stack reaches.
    */
   private useAim(): { id: string; targets: string[]; distance: number } | null {
-    const hit = this.player?.aimAt(Math.max(PLAYER.useReach, this.runner.useReach(), this.spotReach), (c) => this.isHeld(c));
+    const hit = this.player?.aimAt(Math.max(PLAYER.useReach, this.runner.useReach(), this.spotReach), (c) => this.isHeld(c) || (c.isSensor() && !this.isPoster(c)), true);
     const id = hit ? this.owner.get(hit.collider.handle) : undefined;
     if (!hit || !id || id === 'player') return null;
     const targets: string[] = [];
@@ -4295,7 +4300,8 @@ function slerp(a: Quat, b0: Quat, t: number): Quat {
 
 /** A poster's collider: a scroll lying along its width (X), or a flat sheet facing +Z. */
 function posterCollider(p: PosterData, flat: boolean, mesh?: ModelMesh): RAPIER.ColliderDesc {
-  if (flat) return RAPIER.ColliderDesc.cuboid(p.width / 2, p.height / 2, Math.max(0.25, p.thickness / 2));
+  // (An unrolled poster is a sheet: nothing bumps into it, but it can still be looked at and used.)
+  if (flat) return RAPIER.ColliderDesc.cuboid(p.width / 2, p.height / 2, Math.max(0.25, p.thickness / 2)).setSensor(p.rolls);
   if (p.scrollCollision !== 'cylinder' && p.scrollModel && mesh && mesh.positions.length >= 9) {
     // The scroll model as drawn: at its units and scale, centred on its box.
     const k = (p.scrollUnits === 'units' ? 1 : UNITS_PER_METRE) * (p.scrollScale > 0 ? p.scrollScale : 1);
