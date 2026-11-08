@@ -24,7 +24,11 @@ export function buildPoster(data: PosterData, onUpdate: () => void = () => {}): 
   const picture = data.picture ? projectMaterial(data.picture, onUpdate, { modelUv: true }) : new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.8 });
   const depth = Math.max(0.5, data.thickness);
   // (Box faces: +X, −X, +Y, −Y, +Z, −Z; the picture is on +Z.)
-  const flat = new THREE.Mesh(new THREE.BoxGeometry(data.width, data.height, depth), [back, back, back, back, picture, back]);
+  const box = new THREE.BoxGeometry(data.width, data.height, depth);
+  // (Picture textures aren't flipped on load, so the box's V runs the other way.)
+  const uv = box.getAttribute('uv') as THREE.BufferAttribute;
+  for (let i = 0; i < uv.count; i++) uv.setY(i, 1 - uv.getY(i));
+  const flat = new THREE.Mesh(box, [back, back, back, back, picture, back]);
   flat.castShadow = flat.receiveShadow = true;
   object.add(flat);
   let scroll: THREE.Group | null = null;

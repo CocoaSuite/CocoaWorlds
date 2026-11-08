@@ -1552,7 +1552,7 @@ export class GameWorld {
     const rb: RigidBodyData = { ...readComponent<RigidBodyData>('rigidBody', {}), motion: 'dynamic', mass: Math.min(MAX_CARRY, Math.max(0.01, data.mass)), friction: 0.8, pickUp: true };
     const body = this.world.createRigidBody(this.bodyDesc(rb).setTranslation(...t.position).setRotation(quatFromMatrix(placement)));
     const flat = data.hungAtStart || !data.rolls;
-    const col = this.world.createCollider(this.material(posterCollider(data, flat), rb), body);
+    const col = this.world.createCollider(this.material(posterCollider(data, flat, this.models.get(data.scrollModel)), rb), body);
     this.owner.set(col.handle, e.id);
     // (Always tracked as moving, so it is drawn where it is after it is taken down or hung.)
     this.track(e.id, 'point', 'dynamic', body);
@@ -1575,7 +1575,7 @@ export class GameWorld {
     const groups = p.collider.collisionGroups();
     this.owner.delete(p.collider.handle);
     this.world.removeCollider(p.collider, false);
-    p.collider = this.world.createCollider(this.material(posterCollider(p.data, flat), p.rb).setCollisionGroups(groups), b.body);
+    p.collider = this.world.createCollider(this.material(posterCollider(p.data, flat, this.models.get(p.data.scrollModel)), p.rb).setCollisionGroups(groups), b.body);
     this.owner.set(p.collider.handle, id);
   }
 
@@ -3462,7 +3462,7 @@ export class GameWorld {
     };
     if (b.poster) {
       const p = this.posters.get(b.info.id);
-      make(posterCollider(b.poster.data, !!p && (p.hung || !b.poster.data.rolls)));
+      make(posterCollider(b.poster.data, !!p && (p.hung || !b.poster.data.rolls), this.models.get(b.poster.data.scrollModel)));
     } else if (b.shape) {
       make(pointCollider(b.shape.collider, decomposeMat4(b.shape.matrix).scale.map((x) => Math.abs(x) * k) as Q3));
     } else if (b.model) {
@@ -4287,8 +4287,24 @@ function slerp(a: Quat, b0: Quat, t: number): Quat {
 }
 
 /** A poster's collider: a scroll lying along its width (X), or a flat sheet facing +Z. */
-function posterCollider(p: PosterData, flat: boolean): RAPIER.ColliderDesc {
+function posterCollider(p: PosterData, flat: boolean, mesh?: ModelMesh): RAPIER.ColliderDesc {
   if (flat) return RAPIER.ColliderDesc.cuboid(p.width / 2, p.height / 2, Math.max(0.25, p.thickness / 2));
+  if (p.scrollCollision !== 'cylinder' && p.scrollModel && mesh && mesh.positions.length >= 9) {
+    // The scroll model as drawn: at its units and scale, centred on its box.
+    const k = (p.scrollUnits === 'units' ? 1 : UNITS_PER_METRE) * (p.scrollScale > 0 ? p.scrollScale : 1);
+    const pts = new Float32Array(mesh.positions.length);
+    const min = [Infinity, Infinity, Infinity], max = [-Infinity, -Infinity, -Infinity];
+    for (let i = 0; i < pts.length; i++) {
+      pts[i] = mesh.positions[i]! * k;
+      min[i % 3] = Math.min(min[i % 3]!, pts[i]!);
+      max[i % 3] = Math.max(max[i % 3]!, pts[i]!);
+    }
+    const mid = [0, 1, 2].map((a) => (min[a]! + max[a]!) / 2);
+    if (p.scrollCollision === 'box') return RAPIER.ColliderDesc.cuboid(...([0, 1, 2].map((a) => Math.max(0.25, (max[a]! - min[a]!) / 2)) as Q3));
+    for (let i = 0; i < pts.length; i++) pts[i] = pts[i]! - mid[i % 3]!;
+    const h = hull(pts);
+    if (h) return h;
+  }
   const r = posterScrollRadius(p);
   return RAPIER.ColliderDesc.capsule(Math.max(0, p.width / 2 - r), r).setRotation({ x: 0, y: 0, z: Math.SQRT1_2, w: Math.SQRT1_2 });
 }

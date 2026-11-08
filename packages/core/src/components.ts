@@ -76,6 +76,8 @@ export type PosterData = {
   scrollModel: string;
   /** The scroll model's own scale, separate from the hung size. */
   scrollScale: number;
+  /** How the rolled scroll collides: a cylinder, or the scroll model's box or hull. */
+  scrollCollision: 'cylinder' | 'box' | 'hull';
   /** The scroll model's units, taken from the object's Model when that is the scroll. */
   scrollUnits?: ModelData['units'];
   thickness: number;
@@ -657,12 +659,20 @@ export const COMPONENTS: ComponentDef[] = [
       {
         key: 'scrollModel',
         label: e('Scroll model', 'Модель свитка'),
-        hint: e('How it looks rolled up: a model lying along X, centred. Empty: the object’s Model, or else a plain cylinder. It still collides as a cylinder.', 'Как выглядит свёрнутым: модель вдоль X, по центру. Пусто — Модель объекта, иначе простой цилиндр. Сталкивается всё равно как цилиндр.'),
+        hint: e('How it looks rolled up: a model lying along X, centred. Empty: the object’s Model, or else a plain cylinder. ', 'Как выглядит свёрнутым: модель вдоль X, по центру. Пусто — Модель объекта, иначе простой цилиндр.'),
         type: { kind: 'asset', asset: 'models' },
         default: '',
         when: { key: 'rolls', is: [true] },
       },
       { key: 'scrollScale', label: e('Scroll scale', 'Масштаб свитка'), hint: e('Size of the scroll model. Does not change the hung size.', 'Размер модели свитка. Не меняет размер в повешенном виде.'), type: { kind: 'number', min: 0.01, step: 0.1 }, default: 1, when: { key: 'rolls', is: [true] } },
+      {
+        key: 'scrollCollision',
+        label: e('Scroll collision', 'Столкновения свитка'),
+        hint: e('Cylinder: a plain tube. Box or Hull: from the scroll model.', 'Цилиндр: простая труба. Коробка или Оболочка: по модели свитка.'),
+        type: { kind: 'enum', options: [{ value: 'cylinder', label: e('Cylinder', 'Цилиндр') }, { value: 'box', label: e('Box', 'Коробка') }, { value: 'hull', label: e('Hull', 'Оболочка') }] },
+        default: 'cylinder',
+        when: { key: 'rolls', is: [true] },
+      },
       { key: 'thickness', label: e('Thickness', 'Толщина'), hint: e('Flat, from the wall out.', 'В плоском виде, от стены.'), type: { kind: 'number', min: 0.5, step: 0.5, unit: 'u' }, default: 0.5 },
       { key: 'frame', label: e('Frame / back', 'Рамка / оборот'), hint: e('The colour of the edges, the back and the rolled scroll.', 'Цвет краёв, оборота и свёрнутого свитка.'), type: { kind: 'color' }, default: '#e8e2d4' },
       { key: 'mass', label: e('Weight', 'Вес'), type: { kind: 'number', min: 0.01, max: 50, step: 0.5, unit: 'kg' }, default: 0.5 },

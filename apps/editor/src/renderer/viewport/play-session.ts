@@ -5,7 +5,7 @@
  * With a Player start in the scene you play as the player (first person); without one, Play is a physics
  * preview watched with the free camera.
  */
-import { SceneDoc, expandRepeats, readComponent, type ParticlesData, type ColliderData, type GameRules, type GameValue, type GooglyEyesData, type ModelData, type SceneFile, type SignData, type TerrainData } from '@cocoaworlds/core';
+import { SceneDoc, expandRepeats, posterOf, readComponent, type ParticlesData, type ColliderData, type GameRules, type GameValue, type GooglyEyesData, type ModelData, type SceneFile, type SignData, type TerrainData } from '@cocoaworlds/core';
 import { buildMesh, isInvisibleMaterial, type Brush, type VoxelField, type WorldBrush } from '@cocoaworlds/geometry';
 import { GameWorld, initPhysics, POSE, AT, NPC, type BuildPrompt, type FrameSnapshot, type Hearing, type NavGrid, type BodyInfo, type ModelMesh, type SavedProgress, type Travel, type UiState, type PlayerInput, type PlayerStatus, type ScriptLog, type TriggerEvent } from '@cocoaworlds/runtime';
 
@@ -93,6 +93,10 @@ export class PlaySession {
     for (const e of scene.entities) {
       const m = e.components.model as Partial<ModelData> | undefined;
       if (m?.model && m.collision !== 'none') wanted.add(m.model);
+      if (e.components.poster) {
+        const p = posterOf(e.components);
+        if (p.rolls && p.scrollModel && p.scrollCollision !== 'cylinder') wanted.add(p.scrollModel);
+      }
     }
     await Promise.all(
       [...wanted].map((path) =>
