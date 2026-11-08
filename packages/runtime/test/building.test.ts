@@ -53,7 +53,8 @@ describe('build pieces (JSON)', () => {
   it('the built-in pieces read without problems', () => {
     const h = fakeHost();
     expect(h.problems).toEqual([]);
-    expect(h.base.pieces.size).toBe(13);
+    expect(h.base.pieces.size).toBe(14);
+    expect([...h.base.pieces.values()].filter((d) => d.category === 'Concrete').every((d) => d.count === 1)).toBe(true);
     expect(piece(h, 'wood_wall')).toMatchObject({ material: 'plank', count: 4, size: [96, 96, 8], category: 'Wood', blueprint: 'Wood wall blueprint', turns: true });
     expect(piece(h, 'concrete_floor')).toMatchObject({ material: 'concrete powder', category: 'Concrete' });
     expect(piece(h, 'wood_door').turns).toBe(false);
@@ -304,6 +305,12 @@ describe('finished pieces', () => {
     expect(p.min[1]).toBeCloseTo(0);
     h.base.placePreview();
     expect(h.base.aimPlacement([101, 40, 300], [0, 0, -1])!.min[0]).not.toBeCloseTo(99);
+    // A window goes in a window frame's gap, the same way.
+    h.items.set('Window blueprint', 1);
+    h.base.add(piece(h, 'wood_window'), [0, 0, 300]);
+    h.base.startPlacing('window');
+    expect(h.base.aimPlacement([48, 56, 400], [0, 0, -1])).toMatchObject({ valid: true, min: [22, 40, 303] });
+    h.base.startPlacing('wood_door');
     // Doors go anywhere else too, on the grid.
     expect(h.base.aimPlacement([300, 300, 300], [0, -1, 0])).toMatchObject({ valid: true, min: [288, 0, 288] });
   });

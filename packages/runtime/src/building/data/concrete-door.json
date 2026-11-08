@@ -5,7 +5,7 @@
   "blueprint": "Concrete door frame blueprint",
   "material": "concrete powder",
   "materialLabel": "Bags of concrete powder",
-  "count": 3,
+  "count": 1,
   "health": 180,
   "size": [
     96,

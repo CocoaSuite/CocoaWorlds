@@ -32,10 +32,13 @@ export class BaseView {
       return m;
     }
     if (p.material) return this.material(p.material);
-    let m = this.solids.get(p.color);
+    // (See-through finished parts, glass: flat colour, no glow.)
+    const k = `${p.color}/${p.opacity}`;
+    let m = this.solids.get(k);
     if (!m) {
-      m = new THREE.MeshStandardMaterial({ color: p.color, roughness: 0.9, metalness: 0 });
-      this.solids.set(p.color, m);
+      const clear = p.opacity < 1;
+      m = new THREE.MeshStandardMaterial({ color: p.color, roughness: clear ? 0.2 : 0.9, metalness: 0, transparent: clear, opacity: p.opacity, depthWrite: !clear });
+      this.solids.set(k, m);
     }
     return m;
   }

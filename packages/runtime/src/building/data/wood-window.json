@@ -1,8 +1,8 @@
 {
   "id": "wood_window",
-  "label": "Wood window wall",
+  "label": "Wood window frame",
   "category": "Wood",
-  "blueprint": "Wood window wall blueprint",
+  "blueprint": "Wood window frame blueprint",
   "material": "plank",
   "materialLabel": "Planks",
   "count": 3,
@@ -15,34 +15,6 @@
   "mesh": {
     "parts": [
       {
-        "id": "post_a",
-        "at": [
-          3,
-          48,
-          4
-        ],
-        "size": [
-          6,
-          96,
-          8
-        ],
-        "color": "#6b4a2b"
-      },
-      {
-        "id": "post_b",
-        "at": [
-          93,
-          48,
-          4
-        ],
-        "size": [
-          6,
-          96,
-          8
-        ],
-        "color": "#6b4a2b"
-      },
-      {
         "id": "low",
         "at": [
           48,
@@ -50,9 +22,9 @@
           4
         ],
         "size": [
-          84,
+          96,
           40,
-          4
+          8
         ],
         "color": "#9a7246"
       },
@@ -64,26 +36,50 @@
           4
         ],
         "size": [
-          84,
+          96,
           24,
-          4
+          8
         ],
-        "color": "#946d42"
+        "color": "#9a7246"
       },
       {
-        "id": "sill",
+        "id": "side_a",
         "at": [
-          48,
-          41,
+          11,
+          56,
           4
         ],
         "size": [
-          84,
-          3,
+          22,
+          32,
           8
         ],
-        "color": "#6b4a2b"
+        "color": "#9a7246"
+      },
+      {
+        "id": "side_b",
+        "at": [
+          85,
+          56,
+          4
+        ],
+        "size": [
+          22,
+          32,
+          8
+        ],
+        "color": "#9a7246"
       }
     ]
-  }
+  },
+  "sockets": [
+    {
+      "fits": "window",
+      "at": [
+        22,
+        40,
+        3
+      ]
+    }
+  ]
 }

@@ -583,7 +583,7 @@ export class BaseSystem {
       color,
       material: look === 'solid' ? p.material : '',
       ghost: look !== 'solid',
-      opacity: look === 'solid' ? 1 : look === 'blueprint' ? g.opacity : g.placingOpacity,
+      opacity: look === 'solid' ? p.opacity : look === 'blueprint' ? g.opacity : g.placingOpacity,
     };
   }
 

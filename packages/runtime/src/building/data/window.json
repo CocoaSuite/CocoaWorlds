@@ -1,0 +1,35 @@
+{
+  "id": "window",
+  "label": "Window",
+  "category": "Glass",
+  "blueprint": "Window blueprint",
+  "material": "glass",
+  "materialLabel": "Glass panes",
+  "count": 1,
+  "health": 15,
+  "size": [
+    52,
+    32,
+    2
+  ],
+  "fits": "window",
+  "mesh": {
+    "parts": [
+      {
+        "id": "pane",
+        "at": [
+          26,
+          16,
+          1
+        ],
+        "size": [
+          52,
+          32,
+          2
+        ],
+        "color": "#a8d4e6",
+        "opacity": 0.35
+      }
+    ]
+  }
+}

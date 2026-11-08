@@ -36,9 +36,10 @@ Code: `packages/runtime/src/building/` (`defs.ts` JSON shapes, `grid.ts` edges a
 
 ## Pieces are JSON
 
-Built-in (`data/`), Concrete: large wall, small wall, door frame, window frame, foundation, thin floor (bags of
-concrete powder); Wood: wall, small wall, floor, thin floor, door frame, door, window wall (planks). Thin floors
-are 48 × 1 × 48 tiles to lay on the ground or a floor. A game adds pieces (or replaces one by id) with
+Built-in (`data/`), flat single-colour boxes. Concrete (1 bag of concrete powder each): large wall, small wall,
+door frame, window frame, foundation, thin floor. Wood (planks): wall, small wall, floor, thin floor, door frame,
+door, window frame. Glass (1 glass pane): window, see-through, goes in window frames the way doors go in door
+frames. Thin floors are 48 × 1 × 48 tiles to lay on the ground or a floor. A game adds pieces (or replaces one by id) with
 no code, in the scene file:
 
 ```json
@@ -58,7 +59,7 @@ fitting piece's corner in this piece's space), `sounds` (`add`, `built`, `broken
 
 Pieces can't overlap much (by their parts' boxes, so a door fits a frame's gap and walls meet at corners).
 Parts are boxes in the piece's own space, from its box's corner: `at` (the box's middle), `size`, `color`,
-`material`, `solid`, `swing` (`{ hinge: [x, z], angle }`).
+`material`, `solid`, `opacity` (finished, 1 opaque; glass ~0.35), `swing` (`{ hinge: [x, z], angle }`).
 
 `base` is merged over `data/base.json`: `grid` (48), `reach`, `placeReach`, `removeHold`, `every`, `touch`,
 `menuKey` (`KeyB`), `ghost` (`color`/`opacity` of placed blueprints, `placing`/`placingOpacity` of the ghost,

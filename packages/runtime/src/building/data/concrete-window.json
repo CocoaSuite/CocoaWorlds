@@ -5,7 +5,7 @@
   "blueprint": "Concrete window frame blueprint",
   "material": "concrete powder",
   "materialLabel": "Bags of concrete powder",
-  "count": 3,
+  "count": 1,
   "health": 180,
   "size": [
     96,
@@ -71,5 +71,15 @@
         "color": "#9a9a96"
       }
     ]
-  }
+  },
+  "sockets": [
+    {
+      "fits": "window",
+      "at": [
+        22,
+        40,
+        4
+      ]
+    }
+  ]
 }

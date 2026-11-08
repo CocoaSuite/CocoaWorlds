@@ -21,6 +21,8 @@ export interface PartDef {
   swing: { hinge: [number, number]; angle: number } | null;
   /** Blocks the player and props once finished (and, for a swinging part, shut). */
   solid: boolean;
+  /** How see-through it is finished (1: not at all; glass ~0.35). */
+  opacity: number;
 }
 
 export interface PieceDef {
@@ -76,6 +78,7 @@ function readPart(raw: unknown, i: number): PartDef {
     material: str(p.material),
     swing: swing ? { hinge, angle: num(swing.angle, 90) } : null,
     solid: p.solid !== false,
+    opacity: Math.max(0.05, Math.min(1, num(p.opacity, 1))),
   };
 }
 

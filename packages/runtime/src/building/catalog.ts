@@ -15,10 +15,11 @@ import concreteThinFloor from './data/concrete-thin-floor.json';
 import woodFloor from './data/wood-floor.json';
 import woodSmallWall from './data/wood-small-wall.json';
 import woodWall from './data/wood-wall.json';
+import window from './data/window.json';
 import woodWindow from './data/wood-window.json';
 import { readBaseConfig, readPieceDef, type BaseConfig, type PieceDef } from './defs';
 
-export const BUILT_IN_PIECES: unknown[] = [concreteWall, concreteSmallWall, concreteDoor, concreteWindow, concreteFloor, concreteThinFloor, woodWall, woodSmallWall, woodFloor, woodThinFloor, woodDoorFrame, woodDoor, woodWindow];
+export const BUILT_IN_PIECES: unknown[] = [concreteWall, concreteSmallWall, concreteDoor, concreteWindow, concreteFloor, concreteThinFloor, woodWall, woodSmallWall, woodFloor, woodThinFloor, woodDoorFrame, woodDoor, woodWindow, window];
 export const BUILT_IN_BASE: unknown = base;
 
 /** Every piece (built-in, then the game's, which replace built-ins of the same id) and the base settings. */
