@@ -29,6 +29,8 @@ export interface FaceSurface {
    * `face`: projected along the face's own plane, so textures follow slopes.
    */
   align: 'world' | 'face';
+  /** `#rrggbb` multiplied into the material's colour on this face (missing: none, as white). */
+  tint?: string;
 }
 
 export interface BrushFace {

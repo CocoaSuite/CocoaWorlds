@@ -26,22 +26,24 @@ function devTexture(base: string, tool?: string): THREE.CanvasTexture {
   return t;
 }
 
-/** A selected face: the brush entity and the index of the face in its saved face list. */
 /**
  * The material for a face's material name: a development colour, a COL face, a project texture (loaded in the
  * background: `onUpdate` is called when it arrives), or a colour from the name. Used by the editor and the game.
+ * A tint (`#rrggbb`) is multiplied into its colour.
  */
-export function sceneMaterial(name: string, onUpdate: () => void): THREE.Material {
+export function sceneMaterial(name: string, onUpdate: () => void, tint?: string): THREE.Material {
   const dev = devMaterial(name);
   // See-through in the editor so what's behind stays visible; hidden in the game.
   if (dev?.tool) return new THREE.MeshBasicMaterial({ map: devTexture(dev.base, 'COL'), transparent: true, opacity: 0.45, depthWrite: false, side: THREE.DoubleSide });
-  if (dev?.liquid) return new THREE.MeshStandardMaterial({ color: dev.base, roughness: 0.08, metalness: 0, transparent: true, opacity: 0.55, depthWrite: false, side: THREE.DoubleSide });
-  if (dev) return new THREE.MeshStandardMaterial({ map: devTexture(dev.base), roughness: 0.9, metalness: 0 });
-  if (isTexture(name)) return imageMaterial(name, onUpdate);
-  if (isMaterialId(name)) return projectMaterial(name, onUpdate);
-  return new THREE.MeshStandardMaterial({ color: hashColor(name), roughness: 0.9 });
+  if (isMaterialId(name)) return projectMaterial(name, onUpdate, { tint });
+  if (isTexture(name)) return imageMaterial(name, onUpdate, tint);
+  const k = new THREE.Color(tint ?? 0xffffff);
+  if (dev?.liquid) return new THREE.MeshStandardMaterial({ color: new THREE.Color(dev.base).multiply(k), roughness: 0.08, metalness: 0, transparent: true, opacity: 0.55, depthWrite: false, side: THREE.DoubleSide });
+  if (dev) return new THREE.MeshStandardMaterial({ map: devTexture(dev.base), color: k, roughness: 0.9, metalness: 0 });
+  return new THREE.MeshStandardMaterial({ color: hashColor(name).multiply(k), roughness: 0.9 });
 }
 
+/** A selected face: the brush entity and the index of the face in its saved face list. */
 export interface FaceRef {
   id: string;
   face: number;
@@ -116,12 +118,13 @@ export class WorldRenderer {
     this.faceGroup.renderOrder = 12;
   }
 
-  /** The Three.js material for a material name (shared with Play mode). */
-  material(name: string): THREE.Material {
-    let m = this.materials.get(name);
+  /** The Three.js material for a material name and tint (shared with Play mode). */
+  material(name: string, tint?: string): THREE.Material {
+    const key = tint ? `${name}\u0000${tint}` : name;
+    let m = this.materials.get(key);
     if (m) return m;
-    m = sceneMaterial(name, () => this.onUpdate());
-    this.materials.set(name, m);
+    m = sceneMaterial(name, () => this.onUpdate(), tint);
+    this.materials.set(key, m);
     return m;
   }
 
@@ -190,7 +193,7 @@ export class WorldRenderer {
     }
     if (r.mesh) {
       const m = r.mesh;
-      this.solidMesh = new THREE.Mesh(toGeometry(m), m.groups.map((g) => this.material(g.material)));
+      this.solidMesh = new THREE.Mesh(toGeometry(m), m.groups.map((g) => this.material(g.material, g.tint)));
       this.solidMesh.name = 'world-solids';
       this.solidMesh.castShadow = this.solidMesh.receiveShadow = true;
       // Faces where brushes touch are removed, so a wall has no bottom face at the floor: shadows are cast by
@@ -348,7 +351,8 @@ const loader = new THREE.TextureLoader();
  * (a 512-pixel image at the usual 0.25 scale covers 128 units). Grey until the image has loaded; pixels with
  * less than half opacity are cut out (fences, grilles).
  */
-function imageMaterial(path: string, loaded: () => void): THREE.MeshStandardMaterial {
+function imageMaterial(path: string, loaded: () => void, tint?: string): THREE.MeshStandardMaterial {
+  const white = new THREE.Color(tint ?? 0xffffff);
   const m = new THREE.MeshStandardMaterial({ color: 0x8a8a8a, roughness: 0.9, metalness: 0, alphaTest: 0.5 });
   m.name = path;
   void assetUrl(path)
@@ -362,7 +366,7 @@ function imageMaterial(path: string, loaded: () => void): THREE.MeshStandardMate
       tex.repeat.set(TEX_SIZE / Math.max(1, img.width), TEX_SIZE / Math.max(1, img.height));
       tex.needsUpdate = true;
       m.map = tex;
-      m.color.set(0xffffff);
+      m.color.copy(white);
       m.needsUpdate = true;
       loaded();
     })

@@ -3,7 +3,7 @@
  * selected, a field shows a value when they all agree; typing a value sets it on every selected face.
  */
 import type { FaceSurface } from '@cocoaworlds/geometry';
-import { Button, NumberField, Section, Segmented } from '@cocoaworlds/ui';
+import { Button, ColorField, Field, NumberField, Section, Segmented } from '@cocoaworlds/ui';
 import { brushOf } from '../brush/brushes';
 import { materialLabel } from '../viewport/project-materials';
 import { getLang, t } from '../i18n';
@@ -39,6 +39,7 @@ export function FaceInspector() {
   };
   const material = common((f) => f.material);
   const align = common((f) => f.align);
+  const tint = common((f) => f.tint ?? '#ffffff');
   const num = (get: (f: FaceSurface) => number) => common((f) => r(get(f)));
 
   const field = (key: string, label: string, aria: string, value: number | null, step: number, apply: (v: number) => void) => (
@@ -78,6 +79,12 @@ export function FaceInspector() {
           <span className="mono" data-testid="face-material">{materialName}</span>
         </div>
         <MaterialPicker label={t('face.material')} value={material} onChange={(m) => s.setFaces({ material: m }, undefined, 'Set material')} />
+        <Field label={t('insp.tint')}>
+          <div className="cw-row">
+            <ColorField label={t('insp.tint')} value={tint ?? t('face.mixed')} onChange={(v) => s.setFaces({ tint: v }, 'face-tint', 'Tint')} />
+            {tint !== '#ffffff' && <Button onClick={() => s.setFaces({ tint: '' }, undefined, 'Clear tint')}>{t('insp.tintClear')}</Button>}
+          </div>
+        </Field>
       </Section>
       <Section title={t('face.align')}>
         <div className="cw-f">

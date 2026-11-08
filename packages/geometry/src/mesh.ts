@@ -10,6 +10,8 @@ import { type V3 } from './vec';
 
 export interface MeshGroup {
   material: string;
+  /** `#rrggbb` the material is tinted with on these faces (missing: none). */
+  tint?: string;
   /** Range in `indices`. */
   start: number;
   count: number;
@@ -65,9 +67,11 @@ export function buildMesh(brushes: Brush[], opts: MeshOptions = {}): BrushMesh {
     const tree = new AabbTree(brushes.map((b) => bounds(b)));
     visible = all.filter((x) => !isCovered(x.poly, x.brush, perBrush, tree.near(polyBounds(x.poly), EPS)));
   }
+  // One group per material and tint.
   const byMat = new Map<string, typeof visible>();
   for (const x of visible) {
-    const k = x.poly.surface.material;
+    const t = x.poly.surface.tint;
+    const k = t ? `${x.poly.surface.material}\u0000${t}` : x.poly.surface.material;
     if (!byMat.has(k)) byMat.set(k, []);
     byMat.get(k)!.push(x);
   }
@@ -78,7 +82,9 @@ export function buildMesh(brushes: Brush[], opts: MeshOptions = {}): BrushMesh {
   const ring = opts.wearRing ?? 0;
   const shown = new Set(visible.map((x) => x.poly));
   const groups: MeshGroup[] = [];
-  for (const [material, list] of byMat) {
+  for (const list of byMat.values()) {
+    const material = list[0]!.poly.surface.material;
+    const tint = list[0]!.poly.surface.tint;
     const start = idx.length;
     for (const { poly, brush } of list) {
       const sm = opts.smooth?.(brush) ?? null;
@@ -114,7 +120,7 @@ export function buildMesh(brushes: Brush[], opts: MeshOptions = {}): BrushMesh {
         tb.push(brush);
       }
     }
-    groups.push({ material, start, count: idx.length - start });
+    groups.push({ material, ...(tint ? { tint } : {}), start, count: idx.length - start });
   }
   if (opts.smooth) smoothNormals(pos, nor, vb, opts.smooth);
   return {

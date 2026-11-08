@@ -271,12 +271,26 @@ export async function modelInstance(data: ModelData): Promise<ModelInstance> {
   const slots = slotsOf(m);
   const given = new Map<string, THREE.Material>();
   const swaps = data.materials ?? {};
+  // A tint: the file's own materials are copied for this object, with the tint multiplied into their colour.
+  const tint = data.tint && /^#[0-9a-f]{6}$/i.test(data.tint) && data.tint.toLowerCase() !== '#ffffff' ? data.tint : undefined;
+  const tinted = new Map<THREE.Material, THREE.Material>();
+  const ownTinted = (mat: THREE.Material): THREE.Material => {
+    const c = (mat as THREE.MeshStandardMaterial).color;
+    if (!tint || !(c instanceof THREE.Color)) return mat;
+    let t = tinted.get(mat);
+    if (!t) {
+      t = mat.clone();
+      (t as THREE.MeshStandardMaterial).color.multiply(new THREE.Color(tint));
+      tinted.set(mat, t);
+    }
+    return t;
+  };
   const swap = (mat: THREE.Material): THREE.Material => {
     const slot = slots.get(mat);
     const id = slot ? swaps[slot] : undefined;
-    if (!slot || !id) return mat;
+    if (!slot || !id) return ownTinted(mat);
     let pm = given.get(slot);
-    if (!pm) given.set(slot, (pm = projectMaterial(id, () => redraw(), { modelUv: true })));
+    if (!pm) given.set(slot, (pm = projectMaterial(id, () => redraw(), { modelUv: true, tint })));
     return pm;
   };
   inner.traverse((o) => {
@@ -345,6 +359,9 @@ export async function modelInstance(data: ModelData): Promise<ModelInstance> {
       pm.dispose();
     }
     given.clear();
+    // (Copies share the file's textures: only the copies themselves go.)
+    for (const t of tinted.values()) t.dispose();
+    tinted.clear();
   };
   return { object: root, mixer, play, dispose, movedParts, size: box.isEmpty() ? new THREE.Vector3(16, 16, 16) : box.getSize(new THREE.Vector3()), center: box.isEmpty() ? new THREE.Vector3() : box.getCenter(new THREE.Vector3()) };
 }

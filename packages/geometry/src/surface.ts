@@ -37,6 +37,11 @@ export function setSurface(b: Brush, patch: SurfacePatch, faces?: number[]): Bru
       if (patch.material !== undefined) s.material = patch.material;
       if (patch.rotation !== undefined) s.rotation = patch.rotation;
       if (patch.align !== undefined) s.align = patch.align;
+      if (patch.tint !== undefined) {
+        const t = normalTint(patch.tint);
+        if (t) s.tint = t;
+        else delete s.tint;
+      }
       if (patch.offset) s.offset = [patch.offset[0] ?? s.offset[0], patch.offset[1] ?? s.offset[1]];
       if (patch.scale) s.scale = [nonZero(patch.scale[0] ?? s.scale[0]), nonZero(patch.scale[1] ?? s.scale[1])];
       return { plane: f.plane, surface: s };
@@ -44,6 +49,12 @@ export function setSurface(b: Brush, patch: SurfacePatch, faces?: number[]): Bru
     // (An edited mesh or a plane keeps its corners: only the paint changes.)
     ...(b.mesh ? { mesh: { verts: b.mesh.verts.map((v) => [...v] as typeof v), polys: b.mesh.polys.map((p) => [...p]) } } : {}),
   };
+}
+
+/** A tint as stored: lower-case `#rrggbb`, or undefined for none (empty, white or not a colour). */
+export function normalTint(t: string | undefined): string | undefined {
+  const c = (t ?? '').trim().toLowerCase();
+  return /^#[0-9a-f]{6}$/.test(c) && c !== '#ffffff' ? c : undefined;
 }
 
 const nonZero = (n: number) => (Math.abs(n) < 1e-4 ? (n < 0 ? -1e-4 : 1e-4) : n);

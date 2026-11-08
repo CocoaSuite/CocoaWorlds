@@ -566,7 +566,7 @@ export class ViewportEngine {
     // Saved progress (kept values and items) carries over from the last Play of this project.
     this.saveId = saveId ?? null;
     this.playArgs = { scene, rules, values };
-    const session = await PlaySession.start(scene, (name) => this.world.material(name), rules, values, saveId ? loadProgress(saveId) : null, arrive);
+    const session = await PlaySession.start(scene, (name, tint) => this.world.material(name, tint), rules, values, saveId ? loadProgress(saveId) : null, arrive);
     if (token !== this.playToken || this.disposed) {
       // Stopped while loading.
       session.dispose();

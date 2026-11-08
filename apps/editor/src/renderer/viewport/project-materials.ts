@@ -30,6 +30,8 @@ interface Live {
   repeat: [number, number];
   /** On a model: its images cover the model's own texture coordinates once (no face scale). */
   modelUv: boolean;
+  /** Multiplied into the material's colour (a brush face's or a model's tint). */
+  tint: THREE.Color | null;
 }
 const live = new Map<THREE.Material, Live>();
 const listeners = new Set<() => void>();
@@ -67,11 +69,11 @@ export function materialLabel(id: string, lang: Lang): string {
 }
 
 /** A new Three.js material showing project material `id` (it follows later edits of it). */
-export function projectMaterial(id: string, onUpdate: () => void, opts: { modelUv?: boolean } = {}): THREE.MeshStandardMaterial {
+export function projectMaterial(id: string, onUpdate: () => void, opts: { modelUv?: boolean; tint?: string } = {}): THREE.MeshStandardMaterial {
   // (Physical: so a material can be glass. Without refraction it draws as a standard one.)
   const m = new THREE.MeshPhysicalMaterial();
   m.name = id;
-  const l: Live = { id, m, onUpdate, version: 0, repeat: [1, 1], modelUv: !!opts.modelUv };
+  const l: Live = { id, m, onUpdate, version: 0, repeat: [1, 1], modelUv: !!opts.modelUv, tint: opts.tint ? new THREE.Color(opts.tint) : null };
   live.set(m, l);
   restyle(l);
   return m;
@@ -253,6 +255,7 @@ function restyle(l: Live): void {
   const livePics = liveMaps.get(d.id);
   const has = (role: MapRole) => !!(livePics?.[role] ?? d[MAP_FIELDS[role]]);
   m.color.set(d.color);
+  if (l.tint) m.color.multiply(l.tint);
   setShading(m, d.mapping ?? 'face', d.tile ?? 128, d.wear ?? null, d.bevel ?? 0, d.blend ? { distance: d.blend, noise: d.blendNoise ?? 0.5, size: d.blendSize ?? 24 } : null);
   // (Rooms' reflection probes, when scene reflections are on.)
   withProbes(m);

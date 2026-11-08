@@ -88,7 +88,7 @@ export class PlaySession {
   private signs = new Map<string, { holder: THREE.Group; sign: SignObject; data: SignData }>();
   private signVersion = 0;
 
-  static async start(scene: SceneFile, material: (name: string) => THREE.Material, rules?: GameRules, values?: GameValue[], saved?: SavedProgress | null, arrive?: Travel | null): Promise<PlaySession> {
+  static async start(scene: SceneFile, material: (name: string, tint?: string) => THREE.Material, rules?: GameRules, values?: GameValue[], saved?: SavedProgress | null, arrive?: Travel | null): Promise<PlaySession> {
     await initPhysics();
     // The triangles of models that collide by their own shape (read from the files, which are loaded already).
     const models = new Map<string, ModelMesh>();
@@ -129,10 +129,10 @@ export class PlaySession {
     }
     // Invisible colliders (COL) collide but aren't drawn in the game.
     const hidden = new THREE.MeshBasicMaterial({ visible: false });
-    return new PlaySession(scene, (name) => (isInvisibleMaterial(name) ? hidden : material(name)), rules, values, models, terrains, trunks, saved ?? null, arrive ?? null);
+    return new PlaySession(scene, (name, tint) => (isInvisibleMaterial(name) ? hidden : material(name, tint)), rules, values, models, terrains, trunks, saved ?? null, arrive ?? null);
   }
 
-  private constructor(scene: SceneFile, material: (name: string) => THREE.Material, rules: GameRules | undefined, values: GameValue[] | undefined, models: Map<string, ModelMesh>, terrains: Map<string, ModelMesh[]>, trunks: Map<string, { width: number; height: number }>, saved: SavedProgress | null, arrive: Travel | null) {
+  private constructor(scene: SceneFile, material: (name: string, tint?: string) => THREE.Material, rules: GameRules | undefined, values: GameValue[] | undefined, models: Map<string, ModelMesh>, terrains: Map<string, ModelMesh[]>, trunks: Map<string, { width: number; height: number }>, saved: SavedProgress | null, arrive: Travel | null) {
     this.group.name = 'play';
     this.world = GameWorld.create(scene, { rules, values, models, terrains, trunks, saved, arrive, surfaces: materialSurfaces(projectMaterials()) });
     // (Loaded now, so the first footstep or thud isn't late.)
@@ -150,7 +150,7 @@ export class PlaySession {
     this.levelPieces = level.pieces.flatMap(([, ps]) => ps);
     if (level.mesh) {
       const m = level.mesh;
-      const levelMesh = new THREE.Mesh(toGeometry(m), m.groups.map((g) => material(g.material)));
+      const levelMesh = new THREE.Mesh(toGeometry(m), m.groups.map((g) => material(g.material, g.tint)));
       levelMesh.castShadow = levelMesh.receiveShadow = true;
       for (const mat of levelMesh.material as THREE.Material[]) mat.shadowSide = THREE.DoubleSide;
       this.group.add(levelMesh);
@@ -516,7 +516,7 @@ export class PlaySession {
     }
   }
 
-  private material: (name: string) => THREE.Material;
+  private material: (name: string, tint?: string) => THREE.Material;
   /** The scene being played (read only outside). */
   doc!: SceneDoc;
 
@@ -902,7 +902,7 @@ export class PlaySession {
       const brushes = this.world.bodyBrushes(b.id);
       if (!brushes.length) return;
       const m = buildMesh(brushes, { wearRing: WEAR_RING });
-      obj = new THREE.Mesh(toGeometry(m), m.groups.map((g) => this.material(g.material)));
+      obj = new THREE.Mesh(toGeometry(m), m.groups.map((g) => this.material(g.material, g.tint)));
     } else {
       // A point object with a collision shape: draw its model if it has one, else the shape, placed like the
       // entity (scale in the shape).
@@ -975,7 +975,7 @@ export class PlaySession {
     const brushes = this.world.bodyBrushes(b.id);
     if (!brushes.length) return;
     const m = buildMesh(brushes, { wearRing: WEAR_RING });
-    const obj = new THREE.Mesh(toGeometry(m), m.groups.map((g) => this.material(g.material)));
+    const obj = new THREE.Mesh(toGeometry(m), m.groups.map((g) => this.material(g.material, g.tint)));
     obj.matrixAutoUpdate = false;
     obj.castShadow = obj.receiveShadow = true;
     this.group.add(obj);

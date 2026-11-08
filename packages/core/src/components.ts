@@ -27,6 +27,8 @@ export type ModelData = {
   collision: ModelCollision;
   /** Project materials in place of the model's own, by the name of the material slot in the file. */
   materials?: Record<string, string>;
+  /** `#rrggbb` multiplied into every material's colour (white: none). */
+  tint?: string;
 };
 export type ConveyorData = { speed: number; direction: 'north' | 'south' | 'east' | 'west' };
 export type BreakableData = { health: number };
@@ -276,6 +278,13 @@ export const COMPONENTS: ComponentDef[] = [
       },
       { key: 'animation', label: e('Animation', 'Анимация'), hint: e('Plays from the start, looping (empty: none).', 'Играет с начала, по кругу (пусто — нет).'), type: { kind: 'text' }, default: '' },
       { key: 'castShadows', label: e('Shadows', 'Тени'), type: { kind: 'boolean' }, default: true },
+      {
+        key: 'tint',
+        label: e('Tint', 'Оттенок'),
+        hint: e('Multiplied into the colour of every material on the model (its own and those painted on it). White: none.', 'Умножается на цвет всех материалов модели (её собственных и нанесённых). Белый — без оттенка.'),
+        type: { kind: 'color' },
+        default: '#ffffff',
+      },
       {
         key: 'collision',
         label: e('Collision', 'Столкновения'),

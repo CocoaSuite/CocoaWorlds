@@ -4,7 +4,7 @@ import { PaintPanel } from '../viewport/PaintPanel';
 import { useState } from 'react';
 import { shown, stored, type AxisKind } from '../axes';
 import { PIVOT, aoOf, bloomOf, dayOf, backgroundSoundOf, gameRules, pivotOf, sceneSettings, worldBoundsOf, type EmptyClass, type EntityData, type SceneSettings as SceneSettingsData, type Transform, type Vec3 } from '@cocoaworlds/core';
-import { brushBounds } from '../brush/brushes';
+import { brushBounds, brushOf } from '../brush/brushes';
 import { Button, ColorField, Field, NumberField, PanelHeader, Section, Switch } from '@cocoaworlds/ui';
 import { storeProgress } from '../game/progress';
 import { t } from '../i18n';
@@ -81,8 +81,27 @@ function BrushEntity({ e }: { e: EntityData }) {
           <span>{t('insp.smooth')}</span>
           <Switch label={t('insp.smooth')} checked={!!e.components.smooth} onChange={(v) => s.setSmooth(e.id, v)} />
         </div>
+        <BrushTint e={e} />
       </Section>
     </>
+  );
+}
+
+/** A brush's tint: set on every face (the Face tool tints faces one by one). */
+function BrushTint({ e }: { e: EntityData }) {
+  const s = useEditor.getState();
+  const faces = brushOf(e)?.brush.faces ?? [];
+  if (!faces.length) return null;
+  const first = faces[0]!.surface.tint ?? '#ffffff';
+  const mixed = faces.some((f) => (f.surface.tint ?? '#ffffff') !== first);
+  const set = (v: string) => s.setFaceSurfaces(faces.map((_, i) => ({ id: e.id, face: i, patch: { tint: v } })), 'Tint', `tint-${e.id}`);
+  return (
+    <Field label={t('insp.tint')}>
+      <div className="cw-row">
+        <ColorField label={t('insp.tint')} value={mixed ? t('face.mixed') : first} onChange={set} />
+        {(mixed || first !== '#ffffff') && <Button onClick={() => set('')}>{t('insp.tintClear')}</Button>}
+      </div>
+    </Field>
   );
 }
 
