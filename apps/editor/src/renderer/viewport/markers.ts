@@ -152,7 +152,7 @@ export function buildMarker(e: EntityData): Marker {
     const data = readComponent<PrinterData>('printer', e.components.printer);
     const printer = buildPrinter(data);
     const rig = new PrinterRig(data, printer.object);
-    rig.setParts(printer.head, printer.gantry);
+    rig.setParts(printer.head, printer.gantry, printer.lift);
     rig.update(1, null, []);
     group.add(printer.object);
     group.userData.dispose = () => {

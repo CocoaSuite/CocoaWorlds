@@ -418,6 +418,10 @@ Lights in copies: `makeCopy` registers each light part (`copiedLights()`, kept a
 `PlaySession.spareLights` are made ahead in `SceneLighting.update(…, spare)` for lights inside templates named by
 spawn/print blocks and lent to copied lights in `driveLights` (dark while printing).
 
+Kinematics: a fixed-bed printer: `lift` (up only, rides four lead screws), `gantry` (front-back on the lift's
+rails), `head` (left-right); `PrinterRig.moveParts` moves each by its total minus that of the moving part it is
+inside. Template model with these node names: the built-in printer exported as GLB (metres).
+
 Next, if wanted: the shop screen bundled with the computer UI (catalogue, prices, Buy → Print); a custom printer
 model sample; an e2e test of a print in Play.
 

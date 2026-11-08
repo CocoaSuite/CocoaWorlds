@@ -198,7 +198,7 @@ export class PlaySession {
       const mover = this.world.bodyOf(e.id);
       // Batched: still for good. No body, or a fixed one that can't break and that no script names (scripts can
       // hide or show it); everything else is drawn by itself so it can change.
-      // (A printer's own model moves its head and gantry.)
+      // (A printer's own model moves its head, gantry and lift.)
       const fixed = !e.components.printer && (!mover || (!bodies.has(mover) && !e.components.breakable && !e.components.script && !scripted.includes(e.id)));
       if (fixed) {
         const k = batchKey(data);
@@ -304,7 +304,7 @@ export class PlaySession {
       const built = buildPrinter(data);
       holder.add(built.object);
       const rig = new PrinterRig(data, built.object);
-      rig.setParts(built.head, built.gantry);
+      rig.setParts(built.head, built.gantry, built.lift);
       this.printers.push({ id: e.id, data, rig, built });
     }
 
@@ -924,7 +924,7 @@ export class PlaySession {
         if (!inst || !holder) continue;
         p.rig = new PrinterRig(p.data, holder);
         const part = (name: string) => (name.trim() ? (inst.object.getObjectByName(name.trim()) ?? null) : null);
-        p.rig.setParts(part(p.data.head), part(p.data.gantry));
+        p.rig.setParts(part(p.data.head), part(p.data.gantry), part(p.data.lift));
       }
       const print = prints.get(p.id) ?? null;
       const meshes: THREE.Mesh[] = [];

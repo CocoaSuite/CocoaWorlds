@@ -99,9 +99,13 @@ export type PrinterData = {
   layerSeconds: number;
   /** The filament's colour: the cut top of a print and the layer just laid. */
   filament: string;
-  /** Parts of the printer's own model that move: the print head (left-right and front-back) and the gantry it rides (rises with the layers, front-back). */
+  /**
+   * Parts of the printer's own model that move: the lift (rises with the layers), the gantry riding it
+   * (front-back) and the head riding the gantry (left-right). Each moves with the ones it is inside.
+   */
   head: string;
   gantry: string;
+  lift: string;
   /** A sound looping while it prints ('' : none). */
   sound: string;
   volume: number;
@@ -752,7 +756,8 @@ export const COMPONENTS: ComponentDef[] = [
       { key: 'layerSeconds', label: e('Each layer takes', 'Слой печатается за'), type: { kind: 'number', min: 0.02, step: 0.05, unit: 's' }, default: 0.4 },
       { key: 'filament', label: e('Filament colour', 'Цвет пластика'), hint: e('The cut top of a print and the layer just laid.', 'Срез печати сверху и только что уложенный слой.'), type: { kind: 'color' }, default: '#1d9e75' },
       { key: 'head', label: e('Head part', 'Часть «головка»'), hint: e('In its own Model: the part that moves left-right and front-back. Empty: none.', 'В своей Модели: часть, что ходит влево-вправо и вперёд-назад. Пусто — нет.'), type: { kind: 'text' }, default: '', group: e('Own model', 'Своя модель') },
-      { key: 'gantry', label: e('Gantry part', 'Часть «портал»'), hint: e('In its own Model: the part that rises with the layers and moves front-back with the head. Empty: none.', 'В своей Модели: часть, что поднимается со слоями и ходит вперёд-назад с головкой. Пусто — нет.'), type: { kind: 'text' }, default: '', group: e('Own model', 'Своя модель') },
+      { key: 'gantry', label: e('Gantry part', 'Часть «портал»'), hint: e('In its own Model: the bar the head rides; moves front-back (and up with the layers, unless it is inside the lift). Empty: none.', 'В своей Модели: балка, по которой ходит головка; ходит вперёд-назад (и вверх со слоями, если не внутри подъёмника). Пусто — нет.'), type: { kind: 'text' }, default: '', group: e('Own model', 'Своя модель') },
+      { key: 'lift', label: e('Lift part', 'Часть «подъёмник»'), hint: e('In its own Model: the frame that climbs one layer at a time (up only), carrying the gantry. Empty: none.', 'В своей Модели: рама, что поднимается на слой за раз (только вверх) и несёт портал. Пусто — нет.'), type: { kind: 'text' }, default: '', group: e('Own model', 'Своя модель') },
       { key: 'sound', label: e('Printing sound', 'Звук печати'), hint: e('Loops while it prints.', 'Звучит по кругу во время печати.'), type: { kind: 'asset', asset: 'sounds' }, default: '' },
       { key: 'volume', label: e('Volume', 'Громкость'), type: { kind: 'number', min: 0, max: 4, step: 0.1 }, default: 1 },
     ],

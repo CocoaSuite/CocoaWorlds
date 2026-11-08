@@ -232,8 +232,9 @@ filament colour (the cut top of a print and the layer just laid), and an optiona
 Without a Model it draws the built-in printer, which collides (base, plate, posts) so finished prints rest on the
 plate; with one, that model replaces the whole printer (give it a collision setting so prints land on its plate)
 and the parts named
-**Head part** and **Gantry part** move: the gantry rises with the layers and slides front-back, the head slides
-left-right (on the gantry, if it is inside it). Model the head with its nozzle tip resting on the middle of the
+**Lift part**, **Gantry part** and **Head part** move like a fixed-bed printer: the lift climbs the corner lead
+screws one layer at a time (up only), the gantry slides front-back on the lift's rails, the head slides left-right
+on the gantry. Each moves with the parts it is inside (without a lift, the gantry rises itself). Model the head with its nozzle tip resting on the middle of the
 plate. Prints are drawn cut at the layer being laid: layer lines on the sides, the cut top in the filament
 colour, and the head goes round each layer's outline (the copy's triangles cut at that height) and a zig-zag
 fill at its own pace, slower for bigger prints, gliding to the next layer without jumps. Shadows and ambient occlusion leave a print out until it is done.

@@ -15,10 +15,11 @@ export interface PrinterObject {
   object: THREE.Group;
   head: THREE.Object3D;
   gantry: THREE.Object3D;
+  lift: THREE.Object3D;
   dispose(): void;
 }
 
-const FRAME = 0x3a3a38, POST = 0x5f5e5a, PLATE = 0x888780, HEAD = 0xd85a30, NOZZLE = 0xba7517;
+const FRAME = 0x3a3a38, POST = 0x5f5e5a, PLATE = 0x888780, HEAD = 0xd85a30, NOZZLE = 0xba7517, LIFT = 0x7f77dd, SCREW = 0xb4b2a9;
 const NOZZLE_LEN = PRINTER_NOZZLE;
 /** The head's speed along a layer for a tiny print (u/s); it drops as prints get bigger. */
 const HEAD_SPEED = 150;
@@ -34,7 +35,7 @@ export function buildPrinter(data: PrinterData): PrinterObject {
     mats.push(m);
     return m;
   };
-  const frameM = mat(FRAME), postM = mat(POST), plateM = mat(PLATE), headM = mat(HEAD), nozzleM = mat(NOZZLE);
+  const frameM = mat(FRAME), postM = mat(POST), plateM = mat(PLATE), headM = mat(HEAD), nozzleM = mat(NOZZLE), liftM = mat(LIFT), screwM = mat(SCREW);
   const box = (w: number, h: number, d: number, m: THREE.Material, x: number, y: number, z: number, parent: THREE.Object3D = object) => {
     const g = new THREE.BoxGeometry(Math.max(0.1, w), Math.max(0.1, h), Math.max(0.1, d));
     geos.push(g);
@@ -49,13 +50,35 @@ export function buildPrinter(data: PrinterData): PrinterObject {
   const halfW = data.size[0] / 2 + margin;
   const color = { base: frameM, plate: plateM, post: postM, top: postM };
   for (const f of printerFrame(data)) box(f.size[0], f.size[1], f.size[2], color[f.part], f.center[0], f.center[1], f.center[2]);
-  // The gantry: a bar across, with a block at each end riding the sides; the head rides the bar.
+  // Lead screws inside the corner posts: the lift climbs them.
+  const [, , depth] = data.size;
+  const halfD = depth / 2 + margin;
+  const inset = 4;
+  const topY = by + data.size[1] + NOZZLE_LEN + 12;
+  for (const sx of [-1, 1])
+    for (const sz of [-1, 1]) {
+      const g = new THREE.CylinderGeometry(0.6, 0.6, topY - by, 8);
+      geos.push(g);
+      const screw = new THREE.Mesh(g, screwM);
+      screw.position.set(bx + sx * (halfW - inset), by + (topY - by) / 2, bz + sz * (halfD - inset));
+      object.add(screw);
+    }
+  // The lift: a frame round the print, a nut block on each screw, rails along the sides. Up only.
+  const lift = new THREE.Group();
+  lift.name = 'printer-lift';
+  object.add(lift);
+  const railY = by + NOZZLE_LEN + 5;
+  for (const sx of [-1, 1]) box(2.5, 2.5, halfD * 2 - inset * 2, liftM, bx + sx * (halfW - inset), railY, bz, lift);
+  for (const sz of [-1, 1]) box(halfW * 2 - inset * 2, 2, 2, liftM, bx, railY, bz + sz * (halfD - inset), lift);
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) box(5, 4, 5, liftM, bx + sx * (halfW - inset), railY, bz + sz * (halfD - inset), lift);
+  // The gantry: a bar across, a carriage on each rail. Front-back.
   const gantry = new THREE.Group();
   gantry.name = 'printer-gantry';
-  object.add(gantry);
-  const barY = by + NOZZLE_LEN + 7;
-  box(halfW * 2 - post, 2.5, 2.5, frameM, bx, barY, bz + 5, gantry);
-  for (const sx of [-1, 1]) box(4, 6, 8, postM, bx + sx * (halfW - post / 2 - 2), barY, bz + 3, gantry);
+  lift.add(gantry);
+  const barY = railY + 2.5;
+  box(halfW * 2 - inset * 2, 2.5, 2.5, frameM, bx, barY, bz + 5, gantry);
+  for (const sx of [-1, 1]) box(4, 3, 8, postM, bx + sx * (halfW - inset), barY, bz + 3, gantry);
+  // The head on the bar. Left-right.
   const head = new THREE.Group();
   head.name = 'printer-head';
   gantry.add(head);
@@ -70,6 +93,7 @@ export function buildPrinter(data: PrinterData): PrinterObject {
     object,
     head,
     gantry,
+    lift,
     dispose() {
       for (const g of geos) g.dispose();
       for (const m of mats) m.dispose();
@@ -104,8 +128,10 @@ interface PatchedMesh {
 export class PrinterRig {
   private head: THREE.Object3D | null = null;
   private gantry: THREE.Object3D | null = null;
+  private lift: THREE.Object3D | null = null;
   private headRest = new THREE.Vector3();
   private gantryRest = new THREE.Vector3();
+  private liftRest = new THREE.Vector3();
   /** The head's offset from rest in the printer's space now (eased back to resting when idle). */
   private offset = new THREE.Vector3();
   private patched = new Map<THREE.Mesh, PatchedMesh>();
@@ -130,11 +156,13 @@ export class PrinterRig {
   }
 
   /** The parts that move (null: that one doesn't). Their resting place is taken now. */
-  setParts(head: THREE.Object3D | null, gantry: THREE.Object3D | null): void {
+  setParts(head: THREE.Object3D | null, gantry: THREE.Object3D | null, lift: THREE.Object3D | null = null): void {
     this.head = head;
     this.gantry = gantry;
+    this.lift = lift;
     if (head) this.headRest.copy(head.position);
     if (gantry) this.gantryRest.copy(gantry.position);
+    if (lift) this.liftRest.copy(lift.position);
   }
 
   /** One frame: `print` is the print on this printer (null: idle) and `meshes` what draws its copy. */
@@ -319,11 +347,24 @@ export class PrinterRig {
       const world = part.getWorldPosition(tmpV).add(d.clone().applyMatrix3(tmpN));
       part.position.copy(part.parent.worldToLocal(world));
     };
-    if (this.gantry) place(this.gantry, this.gantryRest, new THREE.Vector3(0, o.y, o.z));
-    if (this.head) {
-      let onGantry = false;
-      for (let x = this.head.parent; x; x = x.parent) if (x === this.gantry) onGantry = true;
-      place(this.head, this.headRest, onGantry ? new THREE.Vector3(o.x, 0, 0) : o.clone());
+    // How far each part moves in all (the lift rises, the gantry also slides front-back, the head also left-right);
+    // each is moved by what that adds to the moving part it is inside.
+    const parts: [THREE.Object3D | null, THREE.Vector3, THREE.Vector3][] = [
+      [this.lift, this.liftRest, new THREE.Vector3(0, o.y, 0)],
+      [this.gantry, this.gantryRest, new THREE.Vector3(0, o.y, o.z)],
+      [this.head, this.headRest, o.clone()],
+    ];
+    for (const [part, rest, total] of parts) {
+      if (!part) continue;
+      let carried = new THREE.Vector3();
+      for (let x = part.parent; x; x = x.parent) {
+        const carrier = parts.find(([p]) => p === x);
+        if (carrier) {
+          carried = carrier[2];
+          break;
+        }
+      }
+      place(part, rest, total.clone().sub(carried));
     }
   }
 
