@@ -353,12 +353,12 @@ function ModelMaterials({ entity, path, value }: { entity: string; path: string;
 }
 
 /** A project material or texture, or none: a compact dropdown (the full picker is in the Paint tool). */
-function MaterialSelect({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
+export function MaterialSelect({ label, value, onChange, none }: { label: string; value: string; onChange: (v: string) => void; none?: string }) {
   const materials = useEditor((s) => s.session?.project.settings.materials) ?? [];
   const textures = useEditor((s) => s.assets.textures);
   return (
     <select className="cw-input cw-select" aria-label={label} value={value} onChange={(ev) => onChange(ev.target.value)}>
-      <option value="">{t('field.none')}</option>
+      <option value="">{none ?? t('field.none')}</option>
       {materials.length > 0 && (
         <optgroup label={t('assets.materials')}>
           {materials.map((m) => (

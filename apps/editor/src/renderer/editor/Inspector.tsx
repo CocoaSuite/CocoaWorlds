@@ -10,9 +10,8 @@ import { storeProgress } from '../game/progress';
 import { t } from '../i18n';
 import { BrushInspector, MultiBrushActions } from './BrushInspector';
 import { FaceInspector } from './FaceInspector';
-import { MaterialPicker } from './MaterialPicker';
 import { buildingCatalog } from '@cocoaworlds/runtime';
-import { ComponentsSection } from './ComponentsSection';
+import { ComponentsSection, MaterialSelect } from './ComponentsSection';
 import { PrefabSection } from './PrefabSection';
 import { isGroup } from '../scene-ops';
 import { clearsGrass } from '../viewport/foliage';
@@ -352,14 +351,9 @@ function BuildingLooks() {
     <>
       <p className="cw-hint">{t('insp.buildingLooksHint')}</p>
       {sections.map((sec) => (
-        <div key={sec} className="cw-row">
-          <MaterialPicker label={sec} value={looks[sec] ?? null} onChange={(m) => set(sec, m)} />
-          {looks[sec] && (
-            <Button size="sm" onClick={() => set(sec, '')}>
-              {t('insp.flatColour')}
-            </Button>
-          )}
-        </div>
+        <Field key={sec} label={sec}>
+          <MaterialSelect label={sec} value={looks[sec] ?? ''} onChange={(m) => set(sec, m)} none={t('insp.flatColour')} />
+        </Field>
       ))}
     </>
   );
