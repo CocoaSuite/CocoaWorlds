@@ -27,7 +27,7 @@ export interface BaseHost {
   /** The ground's height under (x, z), looking down from `fromY`; finished pieces count as ground (null: nothing there). */
   groundAt(x: number, z: number, fromY: number): number | null;
   setBlocker(key: string, box: BlockerBox | null): void;
-  /** Props (their ids) tagged `tag` that touch the box, loose or carried. */
+  /** Props (their ids) of material `tag` (named after it or tagged with it) that touch the box, loose or carried. */
   propsIn(box: BlockerBox, tag: string): string[];
   /** Take a prop out of the game: it went into a blueprint. */
   consume(id: string): void;

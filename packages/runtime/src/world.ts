@@ -4333,12 +4333,15 @@ export class GameWorld {
     }
   }
 
-  /** An object's tags (a copy made while playing has its original's). */
-  private tagsOf(id: string): string[] {
-    return (this.doc.get(id) ?? this.doc.get(id.split('#')[0]!))?.tags ?? [];
+  /** Whether an object is of a building material: named after it (“Plank”, “Plank 2”, “concrete powder bag”) or tagged with it. */
+  private isMaterial(id: string, want: string): boolean {
+    // (A copy made while playing is its original's.)
+    const e = this.doc.get(id) ?? this.doc.get(id.split('#')[0]!);
+    if (!e) return false;
+    return e.name.trim().toLowerCase().startsWith(want) || e.tags.some((t) => t.trim().toLowerCase() === want);
   }
 
-  /** Props tagged `tag` (or inside something that is) touching a box: the loose physics objects to take away. */
+  /** Props of material `tag` (or inside something that is) touching a box: the loose physics objects to take away. */
   private propsIn(box: BlockerBox, tag: string): string[] {
     const want = tag.trim().toLowerCase();
     const q = { x: 0, y: Math.sin(box.yaw / 2), z: 0, w: Math.cos(box.yaw / 2) };
@@ -4356,7 +4359,7 @@ export class GameWorld {
       for (let x: string | null | undefined = id; x; x = this.parentOf.get(x)) {
         const b = this.bodies.get(x);
         if (!prop && b?.info.motion === 'dynamic' && !this.printing.has(x)) prop = x;
-        if (this.tagsOf(x).some((t) => t.trim().toLowerCase() === want)) tagged = true;
+        if (this.isMaterial(x, want)) tagged = true;
       }
       if (prop && tagged && !out.includes(prop) && !this.npcs.has(prop)) out.push(prop);
     }

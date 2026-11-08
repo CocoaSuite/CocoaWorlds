@@ -280,7 +280,10 @@ describe('in the game world', () => {
   it('planks touching it are used up; four finish it, and then it blocks', () => {
     const planks = [10, 30, 50, 70].map((x, i) => plank(`plank${i}`, x));
     const spare = plank('spare', 48, 30);
-    const crate = brush('crate', [80, 30, -4], [92, 42, 4], { rigidBody: { motion: 'dynamic', mass: 2 } });
+    // (Named after the material counts too, untagged.)
+    planks[3]!.name = 'Plank 4';
+    planks[3]!.tags = [];
+    const crate = brush('crate of planks', [80, 30, -4], [92, 42, 4], { rigidBody: { motion: 'dynamic', mass: 2 } });
     const w = game([...planks, spare, crate]);
     const id = w.base!.add(w.base!.pieces.get('wood_wall')!, wall, 0);
     run(w, 0.3);

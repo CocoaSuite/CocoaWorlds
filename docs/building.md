@@ -16,9 +16,10 @@ Code: `packages/runtime/src/building/` (`defs.ts` JSON shapes, `grid.ts` edges a
    A click places it as a blueprint at 0%. Blueprints stand on what's under them: the ground, or a finished
    piece (a wall on a foundation, a second wall on top of the first). The item is kept: buy once, place many
    (`consumeBlueprint: true` makes each placing use one).
-2. **Fill.** Every prop tagged with the piece's `material` (tag `plank`, `concrete powder`; any case) that touches
+2. **Fill.** Every physics prop whose name starts with the piece's `material` (“Plank”, “Plank 2”, “Concrete
+   powder bag”; any case), or that is tagged with it, that touches
    the blueprint, loose or carried, is used up: it goes into the blueprint and out of the game. Each counts one,
-   whatever its size, until the piece has `count`. Untagged props and props of another material are left alone.
+   whatever its size, until the piece has `count`. Other props are left alone.
    Aimed at, the HUD shows `Wood wall · 50%`, a bar and what's still needed.
 3. **Finish.** The last prop finishes it: solid, it blocks the player and props, and its sound plays.
 
