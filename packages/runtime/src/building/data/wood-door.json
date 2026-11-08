@@ -5,103 +5,57 @@
   "blueprint": "Wood door blueprint",
   "material": "plank",
   "materialLabel": "Planks",
-  "count": 3,
-  "health": 60,
+  "count": 2,
+  "health": 40,
   "size": [
-    96,
-    96,
-    8
+    52,
+    80,
+    4
   ],
   "opens": true,
+  "openTime": 0.45,
+  "fits": "door",
   "mesh": {
     "parts": [
       {
-        "id": "jamb_a",
-        "at": [
-          3,
-          48,
-          4
-        ],
-        "size": [
-          6,
-          96,
-          8
-        ],
-        "color": "#6b4a2b"
-      },
-      {
-        "id": "jamb_b",
-        "at": [
-          93,
-          48,
-          4
-        ],
-        "size": [
-          6,
-          96,
-          8
-        ],
-        "color": "#6b4a2b"
-      },
-      {
-        "id": "side_a",
-        "at": [
-          14,
-          48,
-          4
-        ],
-        "size": [
-          16,
-          96,
-          4
-        ],
-        "color": "#946d42"
-      },
-      {
-        "id": "side_b",
-        "at": [
-          82,
-          48,
-          4
-        ],
-        "size": [
-          16,
-          96,
-          4
-        ],
-        "color": "#946d42"
-      },
-      {
-        "id": "header",
-        "at": [
-          48,
-          88,
-          4
-        ],
-        "size": [
-          52,
-          16,
-          4
-        ],
-        "color": "#6b4a2b"
-      },
-      {
         "id": "leaf",
         "at": [
-          48,
+          26,
           40,
-          4
+          2
         ],
         "size": [
           52,
           80,
-          3
+          4
         ],
         "color": "#9a7246",
         "swing": {
           "hinge": [
-            22,
-            4
+            0,
+            2
+          ],
+          "angle": 90
+        }
+      },
+      {
+        "id": "knob",
+        "at": [
+          46,
+          38,
+          2
+        ],
+        "size": [
+          3,
+          3,
+          9
+        ],
+        "color": "#3a2a16",
+        "solid": false,
+        "swing": {
+          "hinge": [
+            0,
+            2
           ],
           "angle": 90
         }

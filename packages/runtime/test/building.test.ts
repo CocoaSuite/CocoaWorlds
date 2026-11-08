@@ -53,7 +53,7 @@ describe('build pieces (JSON)', () => {
   it('the built-in pieces read without problems', () => {
     const h = fakeHost();
     expect(h.problems).toEqual([]);
-    expect(h.base.pieces.size).toBe(10);
+    expect(h.base.pieces.size).toBe(13);
     expect(piece(h, 'wood_wall')).toMatchObject({ material: 'plank', count: 4, size: [96, 96, 8], category: 'Wood', blueprint: 'Wood wall blueprint', turns: true });
     expect(piece(h, 'concrete_floor')).toMatchObject({ material: 'concrete powder', category: 'Concrete' });
     expect(piece(h, 'wood_door').turns).toBe(false);
@@ -269,19 +269,43 @@ describe('finished pieces', () => {
     expect(h.events.at(-1)).toMatchObject({ type: 'base.broken', site: id, piece: 'wood_wall' });
   });
 
-  it('E opens and shuts a finished door: the leaf swings and stops blocking', () => {
+  it('E opens and shuts a finished door smoothly: it stops blocking once it moves, and blocks again shut', () => {
     const h = fakeHost();
-    const id = h.base.add(piece(h, 'wood_door'), wall, {}, undefined, 3);
+    const id = h.base.add(piece(h, 'wood_door'), wall, {}, undefined, 2);
     expect(h.blockers.has(`${id}:leaf`)).toBe(true);
     expect(h.base.prompt({ site: id, distance: 1 })!.label).toBe('Open');
     expect(h.base.press({ site: id, distance: 1 })).toBe(true);
-    expect(h.blockers.has(`${id}:leaf`)).toBe(false);
-    const leaf = h.base.parts().find((p) => p.key === `${id}:leaf`)!;
-    expect(leaf.yaw).toBeCloseTo(Math.PI / 2);
     expect(h.events.at(-1)).toMatchObject({ type: 'base.door', open: true });
-    // (Walls don't open; nor does an unfinished door.)
+    const leaf = () => h.base.parts().find((p) => p.key === `${id}:leaf`)!;
+    h.advance(0.2);
+    expect(leaf().yaw).toBeGreaterThan(0.1);
+    expect(leaf().yaw).toBeLessThan(Math.PI / 2 - 0.1);
+    expect(h.blockers.has(`${id}:leaf`)).toBe(false);
+    h.advance(0.5);
+    expect(leaf().yaw).toBeCloseTo(Math.PI / 2);
+    h.base.press({ site: id, distance: 1 });
+    h.advance(0.7);
+    expect(leaf().yaw).toBeCloseTo(0);
+    expect(h.blockers.has(`${id}:leaf`)).toBe(true);
+    // (Walls don't open.)
     const w = h.base.add(piece(h, 'wood_wall'), [200, 0, 0], {}, undefined, 4);
     expect(h.base.press({ site: w, distance: 1 })).toBe(false);
+  });
+
+  it('a door aimed at a door frame goes in its gap, turned with it; one door per frame', () => {
+    const h = fakeHost();
+    h.items.set('Wood door blueprint', 1);
+    h.base.add(piece(h, 'concrete_door'), [96, 0, 48], { yaw: 1 });
+    h.base.startPlacing('wood_door');
+    // (The frame, turned: 10 across x, 96 along z.)
+    const p = h.base.aimPlacement([101, 40, 300], [0, 0, -1])!;
+    expect(p).toMatchObject({ valid: true, turn: { yaw: 1, tilt: 0 } });
+    expect(p.min[0]).toBeCloseTo(99);
+    expect(p.min[1]).toBeCloseTo(0);
+    h.base.placePreview();
+    expect(h.base.aimPlacement([101, 40, 300], [0, 0, -1])!.min[0]).not.toBeCloseTo(99);
+    // Doors go anywhere else too, on the grid.
+    expect(h.base.aimPlacement([300, 300, 300], [0, -1, 0])).toMatchObject({ valid: true, min: [288, 0, 288] });
   });
 });
 
@@ -289,7 +313,7 @@ describe('saving', () => {
   it('blueprints, finished pieces, health and doors come back (unfinished ones fill again from the props in them)', () => {
     const h = fakeHost();
     const a = h.base.add(piece(h, 'wood_wall'), wall, {}, undefined, 2);
-    const b = h.base.add(piece(h, 'wood_door'), [200, 0, 0], { yaw: 1 }, undefined, 3);
+    const b = h.base.add(piece(h, 'wood_door'), [200, 0, 0], { yaw: 1 }, undefined, 2);
     const c = h.base.add(piece(h, 'concrete_floor'), [0, 0, 100], {}, undefined, 4);
     h.base.press({ site: b, distance: 1 });
     h.base.damage(c, 50);

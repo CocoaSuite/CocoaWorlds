@@ -47,6 +47,8 @@ export interface Site {
   /** Finished: health left. */
   health: number;
   open: boolean;
+  /** How far its swinging parts are open (0 shut … 1 open), moving smoothly towards `open`. */
+  swing: number;
 }
 
 export interface SiteSave {
@@ -189,15 +191,50 @@ export class BaseSystem {
     return null;
   }
 
-  /** Whether something already takes up (most of) this space. */
-  private blocked(min: V3, size: V3): boolean {
-    for (const s of this.sites.values()) if (overlapShare(min, size, s.min, this.sizeOf(s)) > OVERLAP) return true;
+  /** A piece's boxes (shut) as world boxes (min, size): what it really takes up, so a door fits in a frame's gap. */
+  private boxes(def: PieceDef, min: V3, t: Turn): [V3, V3][] {
+    const ghost: Site = { id: '', def, min, turn: t, filled: 0, health: 1, open: false, swing: 0 };
+    return def.mesh.parts.map((p) => {
+      const d = this.pose(ghost, p, 'solid');
+      const odd = Math.round(d.yaw / (Math.PI / 2)) % 2 !== 0;
+      const size: V3 = odd ? [d.size[2], d.size[1], d.size[0]] : [...d.size];
+      return [[d.center[0] - size[0] / 2, d.center[1] - size[1] / 2, d.center[2] - size[2] / 2], size];
+    });
+  }
+
+  /** Whether something already takes up (most of) the space a piece would. */
+  private blocked(def: PieceDef, min: V3, t: Turn): boolean {
+    const mine = this.boxes(def, min, t);
+    const vol = (bs: [V3, V3][]) => bs.reduce((a, [, z]) => a + z[0] * z[1] * z[2], 0);
+    const size = turnedSize(def.size, t);
+    for (const s of this.sites.values()) {
+      if (!overlapShare(min, size, s.min, this.sizeOf(s))) continue;
+      const theirs = this.boxes(s.def, s.min, s.turn);
+      let both = 0;
+      for (const [am, as] of mine) for (const [bm, bs] of theirs) both += overlapShare(am, as, bm, bs) * Math.min(as[0] * as[1] * as[2], bs[0] * bs[1] * bs[2]);
+      if (both > OVERLAP * Math.max(1e-6, Math.min(vol(mine), vol(theirs)))) return true;
+    }
     return false;
+  }
+
+  /** Where a piece goes in a free socket of the site aimed at (null: none for it). */
+  private socketFor(def: PieceDef, on: Site): { min: V3; turn: Turn } | null {
+    if (!def.fits) return null;
+    for (const k of on.def.sockets) {
+      if (k.fits !== def.fits) continue;
+      const t = { ...on.turn };
+      const c = this.middle(on), z0 = on.def.size;
+      const off = turn([k.at[0] + def.size[0] / 2 - z0[0] / 2, k.at[1] + def.size[1] / 2 - z0[1] / 2, k.at[2] + def.size[2] / 2 - z0[2] / 2], t);
+      const z = turnedSize(def.size, t);
+      const min: V3 = [c[0] + off[0] - z[0] / 2, c[1] + off[1] - z[1] / 2, c[2] + off[2] - z[2] / 2];
+      if (!this.blocked(def, min, t)) return { min, turn: t };
+    }
+    return null;
   }
 
   /** A new blueprint (`filled`: finished already, for scripts and loading). */
   add(def: PieceDef, min: V3, t: Partial<Turn> = {}, id = `site${this.next++}`, filled = 0): string {
-    const s: Site = { id, def, min: [...min], turn: normTurn(t), filled: Math.max(0, Math.min(def.count, filled)), health: def.health, open: false };
+    const s: Site = { id, def, min: [...min], turn: normTurn(t), filled: Math.max(0, Math.min(def.count, filled)), health: def.health, open: false, swing: 0 };
     this.sites.set(id, s);
     this.changed(s);
     return id;
@@ -286,7 +323,9 @@ export class BaseSystem {
           on = s;
         }
       }
-      if (hit) {
+      const socket = on ? this.socketFor(def, on) : null;
+      if (socket) this.preview = { piece: def.id, min: socket.min, turn: socket.turn, valid: true };
+      else if (hit) {
         const p: V3 = [eye[0] + dir[0] * hit.distance, eye[1] + dir[1] * hit.distance, eye[2] + dir[2] * hit.distance];
         const t = this.placingTurn;
         const size = turnedSize(def.size, t);
@@ -302,7 +341,7 @@ export class BaseSystem {
             min[i] = base + Math.round((p[1] - size[1] / 2 - base) / g) * g;
           } else min[i] = Math.round((p[i]! - size[i]! / 2) / g) * g;
         }
-        this.preview = { piece: def.id, min, turn: { ...t }, valid: !this.blocked(min, size) };
+        this.preview = { piece: def.id, min, turn: { ...t }, valid: !this.blocked(def, min, t) };
       }
     }
     if (was !== JSON.stringify(this.preview)) this.version++;
@@ -370,6 +409,16 @@ export class BaseSystem {
    * blueprint's count aren't its own, so the next blueprint they touch can have them.
    */
   tick(dt: number): void {
+    // Doors swing smoothly; a door blocks only while shut.
+    for (const s of this.sites.values()) {
+      const to = s.open ? 1 : 0;
+      if (s.swing === to) continue;
+      const was = s.swing;
+      const step = s.def.openTime > 0 ? dt / s.def.openTime : 1;
+      s.swing = to > s.swing ? Math.min(1, s.swing + step) : Math.max(0, s.swing - step);
+      this.version++;
+      if (was === 0 || s.swing === 0) this.syncBlockers(s);
+    }
     this.lookIn -= dt;
     if (this.lookIn > 0) return;
     this.lookIn = this.config.every;
@@ -415,7 +464,7 @@ export class BaseSystem {
     const s = this.sites.get(aim.site);
     if (!s || !this.built(s) || !s.def.opens) return false;
     s.open = !s.open;
-    this.changed(s);
+    this.version++;
     this.host.emit({ type: 'base.door', site: s.id, open: s.open, time: this.host.time() });
     if (s.def.sounds.door) this.host.playSound(s.def.sounds.door, this.middle(s), 0.9, 700);
     return true;
@@ -496,7 +545,7 @@ export class BaseSystem {
     const now: string[] = [];
     if (this.built(s))
       s.def.mesh.parts.forEach((p) => {
-        if (!p.solid || (p.swing && s.open)) return;
+        if (!p.solid || (p.swing && s.swing > 0)) return;
         const d = this.pose(s, p, 'solid');
         this.host.setBlocker(d.key, { center: d.center, half: [d.size[0] / 2, d.size[1] / 2, d.size[2] / 2], yaw: d.yaw, site: s.id });
         now.push(d.key);
@@ -511,8 +560,10 @@ export class BaseSystem {
     const size0 = s.def.size;
     let [lx, ly, lz] = p.at;
     let swing = 0;
-    if (p.swing && s.open && s.turn.tilt === 0) {
-      swing = p.swing.angle * deg;
+    if (p.swing && s.swing > 0 && s.turn.tilt === 0) {
+      // (Eased: starts and stops gently.)
+      const e = s.swing * s.swing * (3 - 2 * s.swing);
+      swing = p.swing.angle * deg * e;
       const [hx, hz] = p.swing.hinge;
       const dx = lx - hx, dz = lz - hz;
       lx = hx + dx * Math.cos(swing) + dz * Math.sin(swing);
@@ -549,7 +600,7 @@ export class BaseSystem {
     const p = this.preview;
     const def = p && this.pieces.get(p.piece);
     if (p && def) {
-      const ghost: Site = { id: 'preview', def, min: p.min, turn: p.turn, filled: 0, health: def.health, open: false };
+      const ghost: Site = { id: 'preview', def, min: p.min, turn: p.turn, filled: 0, health: def.health, open: false, swing: 0 };
       for (const part of def.mesh.parts) out.push(this.pose(ghost, part, p.valid ? 'placing' : 'invalid'));
     }
     return out;
@@ -575,13 +626,14 @@ export class BaseSystem {
       const min = Array.isArray(r?.min) && r.min.length === 3 ? (r.min.map((v) => Number(v) || 0) as V3) : null;
       if (!def || !min) continue;
       const t = normTurn({ yaw: r.yaw, tilt: r.tilt });
-      if (this.blocked(min, turnedSize(def.size, t))) continue;
+      if (this.blocked(def, min, t)) continue;
       // (Unfinished: empty until the props lying in it are found again.)
       const done = Math.round(Number(r.filled) || 0) >= def.count;
       const id = this.add(def, min, t, String(r.id), done ? def.count : 0);
       const s = this.sites.get(id)!;
       s.health = Math.max(1, Math.min(def.health, Number(r.health) || def.health));
       s.open = r.open === true;
+      s.swing = s.open ? 1 : 0;
       this.changed(s);
     }
     this.next = Math.max(this.next, Math.round(Number(b.next) || 1));

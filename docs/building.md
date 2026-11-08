@@ -30,12 +30,15 @@ Code: `packages/runtime/src/building/` (`defs.ts` JSON shapes, `grid.ts` edges a
 - **Remove a blueprint:** hold E on it for `removeHold` seconds (1). The props in it stay.
 - **Knock a piece down:** finished pieces have `health`. Weapon hits (the crowbar: 10 a swing), bullets, blasts
   (**Make an explosion**) and **Damage everything within** blocks wear it down; at 0 it is gone.
-- **Doors:** E opens and shuts a finished `opens` piece.
+- **Doors:** the door is a piece of its own. Aimed at a door frame, its ghost goes in the frame's gap (turned with
+  the frame; one door per frame); elsewhere it goes on the grid like anything else. E opens and shuts a finished
+  door: it swings smoothly over `openTime` seconds and blocks only while shut.
 
 ## Pieces are JSON
 
-Built-in (`data/`), Concrete: large wall, small wall, door frame, window frame, foundation (bags of concrete
-powder); Wood: wall, small wall, floor, door, window wall (planks). A game adds pieces (or replaces one by id) with
+Built-in (`data/`), Concrete: large wall, small wall, door frame, window frame, foundation, thin floor (bags of
+concrete powder); Wood: wall, small wall, floor, thin floor, door frame, door, window wall (planks). Thin floors
+are 48 × 1 × 48 tiles to lay on the ground or a floor. A game adds pieces (or replaces one by id) with
 no code, in the scene file:
 
 ```json
@@ -48,9 +51,12 @@ no code, in the scene file:
 A piece: `id`, `label`, `category` (menu section), `blueprint` (the item that owns it; default “*label*
 blueprint”), `icon` (a project image for its card; missing: drawn from its boxes), `consumeBlueprint`, `size` (its
 box: x along, y up, z across; missing: round its parts), `turns` (T tips it; doors don't), `material` (the
-name/tag), `materialLabel` (plural, for the HUD), `count`, `health`, `opens`, `sounds` (`add`, `built`, `broken`,
+name/tag), `materialLabel` (plural, for the HUD), `count`, `health`, `opens` and `openTime` (s), `fits` (the
+socket kind it goes in, `door`), `sockets` (`[{ fits, at }]`: places in it that a piece fits, `at` being the
+fitting piece's corner in this piece's space), `sounds` (`add`, `built`, `broken`,
 `door`) and `mesh.parts`.
 
+Pieces can't overlap much (by their parts' boxes, so a door fits a frame's gap and walls meet at corners).
 Parts are boxes in the piece's own space, from its box's corner: `at` (the box's middle), `size`, `color`,
 `material`, `solid`, `swing` (`{ hinge: [x, z], angle }`).
 

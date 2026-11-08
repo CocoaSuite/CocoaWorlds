@@ -1,0 +1,99 @@
+{
+  "id": "wood_door_frame",
+  "label": "Wood door frame",
+  "category": "Wood",
+  "blueprint": "Wood door frame blueprint",
+  "material": "plank",
+  "materialLabel": "Planks",
+  "count": 3,
+  "health": 60,
+  "size": [
+    96,
+    96,
+    8
+  ],
+  "sockets": [
+    {
+      "fits": "door",
+      "at": [
+        22,
+        0,
+        2
+      ]
+    }
+  ],
+  "mesh": {
+    "parts": [
+      {
+        "id": "jamb_a",
+        "at": [
+          3,
+          48,
+          4
+        ],
+        "size": [
+          6,
+          96,
+          8
+        ],
+        "color": "#6b4a2b"
+      },
+      {
+        "id": "jamb_b",
+        "at": [
+          93,
+          48,
+          4
+        ],
+        "size": [
+          6,
+          96,
+          8
+        ],
+        "color": "#6b4a2b"
+      },
+      {
+        "id": "side_a",
+        "at": [
+          14,
+          48,
+          4
+        ],
+        "size": [
+          16,
+          96,
+          4
+        ],
+        "color": "#946d42"
+      },
+      {
+        "id": "side_b",
+        "at": [
+          82,
+          48,
+          4
+        ],
+        "size": [
+          16,
+          96,
+          4
+        ],
+        "color": "#946d42"
+      },
+      {
+        "id": "header",
+        "at": [
+          48,
+          88,
+          4
+        ],
+        "size": [
+          52,
+          16,
+          4
+        ],
+        "color": "#6b4a2b"
+      }
+    ]
+  }
+}

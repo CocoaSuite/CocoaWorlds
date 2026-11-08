@@ -46,8 +46,13 @@ export interface PieceDef {
   count: number;
   /** Damage it takes to knock the finished piece down. */
   health: number;
-  /** E opens and shuts the finished piece (its `swing` parts move). */
+  /** E opens and shuts the finished piece (its `swing` parts turn smoothly, over `openTime` seconds). */
   opens: boolean;
+  openTime: number;
+  /** What kind of socket it fits ('door': a door fits a door frame; '' : none). Aimed at a free socket of its kind, it goes in it. */
+  fits: string;
+  /** Places in it that a piece fits: the kind, and the fitting piece's corner in this piece's space. */
+  sockets: { fits: string; at: [number, number, number] }[];
   mesh: { parts: PartDef[] };
   /** Sounds (project paths; '' none): a prop used up, finished, knocked down, a door. */
   sounds: { add: string; built: string; broken: string; door: string };
@@ -107,6 +112,9 @@ export function readPieceDef(raw: unknown): PieceDef {
     count: Math.max(1, Math.round(num(d.count, 1))),
     health: Math.max(1, num(d.health, 50)),
     opens: d.opens === true,
+    openTime: Math.max(0, num(d.openTime, 0.4)),
+    fits: str(d.fits),
+    sockets: (Array.isArray(d.sockets) ? d.sockets : []).map((r) => obj(r)).filter((r) => str(r.fits)).map((r) => ({ fits: str(r.fits), at: v3(r.at, [0, 0, 0]) })),
     mesh: { parts },
     sounds: { add: str(sounds.add), built: str(sounds.built), broken: str(sounds.broken), door: str(sounds.door) },
   };
