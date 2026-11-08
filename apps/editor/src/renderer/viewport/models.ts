@@ -137,6 +137,17 @@ export function loadModel(path: string): Promise<LoadedModel> {
       const bytes = await (await fetch(url)).arrayBuffer();
       const gltf = await loader.parseAsync(bytes, '');
       await addTangents(gltf.scene);
+      // Models step back a hair in depth: where one touches a level face flush (a pillar under a beam), the level
+      // face is drawn instead of the two flickering. (Blender exports two-sided, so a cap seen from below fights too.)
+      gltf.scene.traverse((o) => {
+        const mesh = o as THREE.Mesh;
+        if (!mesh.isMesh) return;
+        for (const m of Array.isArray(mesh.material) ? mesh.material : [mesh.material]) {
+          m.polygonOffset = true;
+          m.polygonOffsetFactor = 1;
+          m.polygonOffsetUnits = 1;
+        }
+      });
       return { scene: gltf.scene, animations: gltf.animations, collision: splitCollision(gltf.scene, gltf.animations) };
     })();
     p.catch(() => cache.delete(path));
