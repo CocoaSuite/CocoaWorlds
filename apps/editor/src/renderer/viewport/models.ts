@@ -146,6 +146,15 @@ export function loadModel(path: string): Promise<LoadedModel> {
           m.polygonOffset = true;
           m.polygonOffsetFactor = 1;
           m.polygonOffsetUnits = 1;
+          // A see-through picture (holes in a pole, leaves): cut out, not blended, so it sorts and shadows right.
+          const s = m as THREE.MeshStandardMaterial;
+          if (s.map && m.transparent && m.opacity >= 1) {
+            m.transparent = false;
+            m.depthWrite = true;
+            m.alphaTest = 0.5;
+            m.alphaToCoverage = true;
+            m.needsUpdate = true;
+          }
         }
       });
       return { scene: gltf.scene, animations: gltf.animations, collision: splitCollision(gltf.scene, gltf.animations) };
