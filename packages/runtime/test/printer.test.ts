@@ -50,17 +50,18 @@ function scene(): { s: SceneFile; crate: EntityData; printer: EntityData } {
 const values = [{ name: 'Printed', type: 'number' as const, initial: 0, show: false }];
 
 describe('3D printer', () => {
-  it('prints on the plate, lets go when done, then prints the next one', () => {
+  it('prints one thing at a time: ignored while printing, and while anything is in its print space', () => {
     const { s, crate, printer } = scene();
     const w = GameWorld.create(s, { values });
     expect(w.scriptProblems).toEqual([]);
     run(w, 0.1);
+    expect(w.printerBusy(printer.id)).toBe(false);
     send(w, 'buy');
     send(w, 'buy');
     const first = w.prints();
     expect(first).toHaveLength(1);
     expect(first[0]!.printer).toBe(printer.id);
-    expect(w.printQueue(printer.id)).toBe(1);
+    expect(w.printerBusy(printer.id)).toBe(true);
     const copy = first[0]!.copy;
     expect(copy.startsWith(`${crate.id}#`)).toBe(true);
     // Standing on the plate (bottom at its top, middle over its middle), held still while it prints.
@@ -72,18 +73,23 @@ describe('3D printer', () => {
     expect(w.positionOf(copy)![1]).toBeCloseTo(48, 3);
     expect(w.prints()[0]!.done).toBeGreaterThan(0.5);
     expect(w.gameValues()[0]!.value).toBe(0);
-    // Done: it rests on the plate (not through it), the printer's “print done” ran, the next print began.
+    // Done: it rests on the plate (not through it) and the printer's “print done” ran. The second buy was ignored.
     run(w, 1.5);
     expect(w.gameValues()[0]!.value).toBe(1);
     expect(w.positionOf(copy)![1]).toBeGreaterThan(46);
     expect(w.positionOf(copy)![1]).toBeLessThan(50);
-    const second = w.prints();
-    expect(second).toHaveLength(1);
-    expect(second[0]!.copy).not.toBe(copy);
-    expect(w.printQueue(printer.id)).toBe(0);
-    run(w, 2);
-    expect(w.gameValues()[0]!.value).toBe(2);
     expect(w.prints()).toEqual([]);
+    // The finished print is still in it: ignored again.
+    expect(w.printerBusy(printer.id)).toBe(true);
+    send(w, 'buy');
+    expect(w.prints()).toEqual([]);
+    // Taken out: it prints.
+    w.remove(copy);
+    run(w, 0.1);
+    expect(w.printerBusy(printer.id)).toBe(false);
+    send(w, 'buy');
+    expect(w.prints()).toHaveLength(1);
+    expect(w.prints()[0]!.copy).not.toBe(copy);
   });
 
   it('a print under way is kept with the world and goes on after loading', () => {
@@ -91,13 +97,11 @@ describe('3D printer', () => {
     const w1 = GameWorld.create(s, { values, rules: { saveWorld: true } });
     run(w1, 0.1);
     send(w1, 'buy');
-    send(w1, 'buy');
     run(w1, 0.8);
     const copy = w1.prints()[0]!.copy;
     const saved = store(w1);
     const kept = saved.world!.home!;
     expect(kept.printers?.[printer.id]?.job?.[0]).toBeDefined();
-    expect(kept.printers?.[printer.id]?.queue).toHaveLength(1);
     expect(kept.copies).toEqual([]);
 
     const w2 = GameWorld.create(s, { values, rules: { saveWorld: true }, saved });
@@ -107,9 +111,8 @@ describe('3D printer', () => {
     expect(again[0]!.done).toBeGreaterThan(0.4);
     expect(w2.positionOf(copy)![1]).toBeCloseTo(48, 3);
     run(w2, 1.2);
-    expect(w2.prints()[0]?.copy).not.toBe(copy);
-    expect(w2.prints()).toHaveLength(1);
-    expect(w2.printQueue(printer.id)).toBe(0);
+    expect(w2.prints()).toEqual([]);
+    expect(w2.positionOf(copy)![1]).toBeGreaterThan(46);
   });
 
   it('a printed prop keeps what is inside it: brushes and models ride its body', () => {

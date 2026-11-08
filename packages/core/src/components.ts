@@ -722,8 +722,8 @@ export const COMPONENTS: ComponentDef[] = [
     name: 'printer',
     label: e('3D printer', '3D-принтер'),
     description: e(
-      'Prints copies of objects layer by layer: the Print block (Objects) puts a copy of an object on it, the print rises from the plate and the head traces each layer; when it is done the copy is a normal object (it can be picked up) and “When a print is done” runs. More prints wait their turn. Its Model is the printer (Add › 3D printer brings a ready-made one); the parts named below move.',
-      'Печатает копии объектов слой за слоем: блок «Напечатать» (Объекты) ставит на него копию объекта, печать растёт от стола, а головка обводит каждый слой; когда готово, копия становится обычным объектом (её можно взять) и срабатывает «Когда печать готова». Остальные печати ждут очереди. Его Модель и есть принтер («Добавить › 3D-принтер» ставит готовый); названные ниже части двигаются.',
+      'Prints copies of objects layer by layer: the Print block (Objects) puts a copy of an object on it, the print rises from the plate and the head traces each layer; when it is done the copy is a normal object (it can be picked up) and “When a print is done” runs. It prints one thing at a time: while printing, or with anything in its print space, Print blocks are ignored. Its Model is the printer (Add › 3D printer brings a ready-made one); the parts named below move.',
+      'Печатает копии объектов слой за слоем: блок «Напечатать» (Объекты) ставит на него копию объекта, печать растёт от стола, а головка обводит каждый слой; когда готово, копия становится обычным объектом (её можно взять) и срабатывает «Когда печать готова». Печатает по одной вещи: пока печатает или пока в области печати что-то есть, блоки «Напечатать» не срабатывают. Его Модель и есть принтер («Добавить › 3D-принтер» ставит готовый); названные ниже части двигаются.',
     ),
     appliesTo: 'point',
     conflicts: ['poster', 'npc', 'seat', 'hidingSpot', 'stake'],

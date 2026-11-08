@@ -401,7 +401,7 @@ errands (walk to, wander), a frozen player, what is carried (dropped).
 ### 27. Shop printing: 3D printers
 
 Status: first working version (2026-11-08). Component `printer` (`packages/core/src/components.ts`, Add ›
-3D printer); `GameWorld.print` / `prints()` / `printQueue()` and the print queue, freezing the copy (fixed, colliders
+3D printer); `GameWorld.print` / `prints()` / `printerBusy()` (one at a time: ignored while printing or with anything in the print space, `printSpaceTaken`), freezing the copy (fixed, colliders
 off, not carryable) until its layers are done, `print.start` / `print.done` bus events, `printed` script event,
 `SavedScene.printers` (`packages/runtime/src/world.ts`, section “3D printers”); `print` block and `printed` event
 (`packages/scripting`, `editor/script`). Drawing: `viewport/printer.ts` (`buildPrinter`, `PrinterRig`: head/gantry

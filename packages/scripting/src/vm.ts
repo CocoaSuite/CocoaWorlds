@@ -95,7 +95,7 @@ export interface ScriptHost {
   isInside?(zone: string, what: string): boolean;
   /** Make a copy of `template` at a place (an object, or 'aim'); returns the copy's id, or null if it couldn't. */
   spawn?(template: string, place: Value, owner: string): string | null;
-  /** Print a copy of `template` on `printer`: the copy's id when it starts now, null when it waits its turn (or can't). */
+  /** Print a copy of `template` on `printer`: the copy's id when it starts now, null when the printer ignores it (busy, or something in its print space). */
   print?(template: string, printer: string, owner: string): string | null;
   /** What the player holds (an object id), or null. */
   held?(): string | null;

@@ -137,7 +137,7 @@ export interface SavedScene {
   /** Props stuck in the ground. */
   stakes?: string[];
   /** 3D printers: the print under way (what of, the copy's number, seconds printed) and the prints waiting. */
-  printers?: Record<string, { job?: [template: string, n: number, t: number]; queue?: string[] }>;
+  printers?: Record<string, { job?: [template: string, n: number, t: number] }>;
   /** The time of day (hours). */
   hour?: number;
   /** Scripts, by object: variables that changed, and limited stacks that have had their run. */
@@ -734,7 +734,7 @@ export class GameWorld {
     const printers: NonNullable<SavedScene['printers']> = {};
     for (const [id, p] of this.printers) {
       const job = p.job && !p.job.atStart ? ([p.job.template, p.job.n, r(p.job.t)] as [string, number, number]) : undefined;
-      if (job || p.queue.length) printers[id] = { ...(job ? { job } : {}), ...(p.queue.length ? { queue: [...p.queue] } : {}) };
+      if (job) printers[id] = { job };
     }
     if (Object.keys(printers).length) out.printers = printers;
     // (Parts of copies the start blocks make again count; other copies taken away are simply not made again.)
@@ -842,7 +842,6 @@ export class GameWorld {
     for (const [id, s] of Object.entries(save.printers && typeof save.printers === 'object' ? save.printers : {})) {
       const p = this.printers.get(id);
       if (!p || !s || typeof s !== 'object') continue;
-      p.queue = Array.isArray(s.queue) ? s.queue.filter((x): x is string => typeof x === 'string' && !!this.doc.get(x)) : [];
       const [template, n, t] = Array.isArray(s.job) ? s.job : [];
       if (typeof template === 'string' && this.doc.get(template) && Number.isInteger(n) && n! >= 1 && !this.names.has(`${template}#${n}`)) {
         this.startPrint(id, template, n, num(t));
@@ -1055,7 +1054,7 @@ export class GameWorld {
     for (const e of doc.entities) {
       if (!e.components.printer || !shown(e)) continue;
       const data = readComponent<PrinterData>('printer', e.components.printer);
-      this.printers.set(e.id, { data, job: null, queue: [] });
+      this.printers.set(e.id, { data, job: null });
     }
     const info = { objects, rules, globals: values.map((v) => ({ name: v.name, type: v.type })), signs: new Set(this.signs.keys()), lights: new Set(this.lights.keys()), printers: new Set(this.printers.keys()) };
     this.scriptInfo = info;
@@ -3305,21 +3304,47 @@ export class GameWorld {
 
   // ── 3D printers ──
 
-  /** Printers: their settings, the print under way and the prints waiting (objects to copy). */
-  private printers = new Map<string, { data: PrinterData; job: PrintJob | null; queue: string[] }>();
+  /** Printers: their settings and the print under way. */
+  private printers = new Map<string, { data: PrinterData; job: PrintJob | null }>();
   /** Bodies of prints under way (they don't move, collide or get picked up), with their body type to go back to. */
   private printing = new Map<string, RAPIER.RigidBodyType>();
 
-  /** Print a copy of `template` on `printer`: the copy, or null when it waits its turn. */
+  /**
+   * Print a copy of `template` on `printer`: the copy, or null when the printer ignores it (it is printing, or
+   * something is in its print space: a finished print, a prop, the player).
+   */
   print(template: string, printer: string): string | null {
     if (!this.doc.get(template)) throw new Error(`${this.names.get(template) ?? 'That object'} can't be printed: only objects placed in the scene can.`);
     const p = this.printers.get(printer);
     if (!p) throw new Error(`${this.names.get(printer) ?? 'That object'} is not a 3D printer.`);
-    if (p.job) {
-      p.queue.push(template);
-      return null;
-    }
+    if (p.job || this.printSpaceTaken(printer, p.data)) return null;
     return this.startPrint(printer, template);
+  }
+
+  /** Whether a printer can't start: printing, or anything but the printer itself in its print space. */
+  printerBusy(id: string): boolean | undefined {
+    const p = this.printers.get(id);
+    return p ? !!p.job || this.printSpaceTaken(id, p.data) : undefined;
+  }
+
+  /** Anything (a body, the player) in the print space above the plate, other than the printer and its parts. */
+  private printSpaceTaken(id: string, data: PrinterData): boolean {
+    const m = this.doc.worldMatrix(id);
+    const t = decomposeMat4(m);
+    const k = t.scale.map(Math.abs);
+    // (From a little above the plate, so the plate itself isn't counted.)
+    const lift = 0.5, h = Math.max(1, data.size[1] - lift);
+    const c = applyMat4(m, [data.bed[0], data.bed[1] + lift + h / 2, data.bed[2]]);
+    const q = quatFromMatrix(composeTransform({ position: t.position, rotation: t.rotation, scale: [1, 1, 1] }));
+    const box = new RAPIER.Cuboid(Math.max(0.1, (data.size[0] * k[0]!) / 2 - 0.1), Math.max(0.1, (h * k[1]!) / 2 - 0.1), Math.max(0.1, (data.size[2] * k[2]!) / 2 - 0.1));
+    let taken = false;
+    this.world.intersectionsWithShape({ x: c[0], y: c[1], z: c[2] }, q, box, (col) => {
+      if (col.isSensor() || !col.isEnabled() || col.parent()?.handle === this.standInBody.handle) return true;
+      for (let x: string | null | undefined = this.owner.get(col.handle); x; x = this.parentOf.get(x)) if (x === id) return true;
+      taken = true;
+      return false;
+    });
+    return taken;
   }
 
   /** Prints under way, for drawing: the printer, the copy and its parts, how far along (0–1). */
@@ -3327,11 +3352,6 @@ export class GameWorld {
     const out: { printer: string; copy: string; parts: string[]; done: number }[] = [];
     for (const [id, p] of this.printers) if (p.job) out.push({ printer: id, copy: p.job.copy, parts: this.made.get(p.job.copy)?.parts ?? [p.job.copy], done: Math.min(1, p.job.t / p.job.seconds) });
     return out;
-  }
-
-  /** How many prints wait on a printer (not counting the one under way); undefined: not a printer. */
-  printQueue(id: string): number | undefined {
-    return this.printers.get(id)?.queue.length;
   }
 
   /** Start printing: the copy stands on the plate, still and untouchable until done (`t`: seconds already printed). */
@@ -3359,7 +3379,7 @@ export class GameWorld {
     return copy;
   }
 
-  /** Prints go on; a finished one is let go (it falls and can be picked up) and the next one starts. */
+  /** Prints go on; a finished one is let go (it falls and can be picked up). */
   private stepPrinters(dt: number): void {
     for (const [id, p] of this.printers) {
       const job = p.job;
@@ -3380,10 +3400,6 @@ export class GameWorld {
       if (!gone) {
         this.bus.emit({ type: 'print.done', printer: id, copy: job.copy, time: this.time });
         this.runner.dispatch({ type: 'printed', target: id, copy: job.copy });
-      }
-      while (!p.job && p.queue.length) {
-        const next = p.queue.shift()!;
-        if (this.doc.get(next)) this.startPrint(id, next);
       }
     }
   }

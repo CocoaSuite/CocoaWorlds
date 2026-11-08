@@ -111,7 +111,7 @@ type StatementKind_ =
   | { id: string; kind: 'spawn'; template: Ref; at: Place }
   /**
    * Print a copy of an object on a 3D printer (an object with the Printer component): it rises layer by layer
-   * and is a normal object once done. While the printer is busy the print waits its turn.
+   * and is a normal object once done. While the printer is printing, or anything is in its print space, the block is ignored.
    */
   | { id: string; kind: 'print'; template: Ref; printer: Ref }
   /** Take an object out of the game. */

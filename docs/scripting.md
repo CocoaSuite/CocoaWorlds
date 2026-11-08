@@ -223,7 +223,7 @@ the player can carry with E.
 
 | Block | What it does |
 |---|---|
-| Print a copy of *object* on the printer *printer* | Like Make a copy, but the copy stands on the printer's plate (bottom on it, middle over its middle) and rises layer by layer; until it is done it doesn't move, collide or get picked up. While the printer is busy, the print waits its turn (the new copy is then empty) |
+| Print a copy of *object* on the printer *printer* | Like Make a copy, but the copy stands on the printer's plate (bottom on it, middle over its middle) and rises layer by layer; until it is done it doesn't move, collide or get picked up. One at a time: while the printer is printing, or anything is in its print space (a finished print not yet taken out, a prop, the player), the block is ignored (the new copy is then empty) |
 | When this printer finishes a print | Runs on the printer when a print is done; *the thing that entered* is the printed copy, now a normal object (with Physics it falls and can be carried) |
 
 **3D printer** (component, Add › 3D printer): the print space (width, height, depth), where the build plate's
@@ -247,7 +247,7 @@ ahead (eight at most in all), so lit copies don't stall the game; more lit copie
 
 A shop: keep the things for sale hidden somewhere as originals, show a list on a screen (Screens workspace), and
 on **When the player picks a row** check the cash, change it, and print the picked thing. With **Keep the world**
-on, a print under way and the prints waiting are saved with the printer and carry on after loading.
+on, a print under way is saved with the printer and carry on after loading.
 
 ## Saved progress and the real clock
 
