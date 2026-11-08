@@ -95,6 +95,8 @@ export interface ScriptHost {
   isInside?(zone: string, what: string): boolean;
   /** Make a copy of `template` at a place (an object, or 'aim'); returns the copy's id, or null if it couldn't. */
   spawn?(template: string, place: Value, owner: string): string | null;
+  /** Print a copy of `template` on `printer`: the copy's id when it starts now, null when it waits its turn (or can't). */
+  print?(template: string, printer: string, owner: string): string | null;
   /** What the player holds (an object id), or null. */
   held?(): string | null;
   /** Whether the player holds `what` or a copy of it (null: anything). */
@@ -179,6 +181,8 @@ export type RunnerEvent =
   | { type: 'die' }
   /** A breakable object's health reached 0. */
   | { type: 'breaks'; target: string }
+  /** A 3D printer finished printing `copy`. */
+  | { type: 'printed'; target: string; copy: string }
   /** A shot, swing or blast hit `targets` (what was hit and everything it is inside). */
   | { type: 'hit'; targets: string[] }
   /** A creature died. */
@@ -373,6 +377,8 @@ export class ScriptRunner {
           if (ev.kind === 'press' && ev.key === e.key && e.targets.includes(inst.program.owner) && e.distance <= ev.reach) this.spawn(inst, h, null);
         } else if (e.type === 'breaks') {
           if (ev.kind === 'breaks' && inst.program.owner === e.target) this.spawn(inst, h, null);
+        } else if (e.type === 'printed') {
+          if (ev.kind === 'printed' && inst.program.owner === e.target) this.spawn(inst, h, e.copy);
         } else if (e.type === 'dies') {
           if (ev.kind === 'dies' && inst.program.owner === e.target) this.spawn(inst, h, null);
         } else if (e.type === 'does') {
@@ -685,6 +691,18 @@ export class ScriptRunner {
           if (!template || typeof template !== 'object' || place === null) break;
           try {
             t.copy = this.host.spawn?.(template.ref, place, t.inst.program.owner) ?? null;
+          } catch (e) {
+            return this.fail(t, (e as Error).message);
+          }
+          break;
+        }
+        case 'print': {
+          const printer = s.pop();
+          const template = s.pop();
+          t.copy = null;
+          if (!template || typeof template !== 'object' || !printer || typeof printer !== 'object') break;
+          try {
+            t.copy = this.host.print?.(template.ref, printer.ref, t.inst.program.owner) ?? null;
           } catch (e) {
             return this.fail(t, (e as Error).message);
           }

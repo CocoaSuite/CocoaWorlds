@@ -5,7 +5,7 @@
  * With a Player start in the scene you play as the player (first person); without one, Play is a physics
  * preview watched with the free camera.
  */
-import { SceneDoc, expandRepeats, posterOf, readComponent, type ParticlesData, type VfxData, type ColliderData, type GameRules, type GameValue, type GooglyEyesData, type ModelData, type SceneFile, type SignData, type TerrainData } from '@cocoaworlds/core';
+import { SceneDoc, expandRepeats, posterOf, readComponent, type ParticlesData, type VfxData, type ColliderData, type GameRules, type GameValue, type GooglyEyesData, type ModelData, type PrinterData, type SceneFile, type SignData, type TerrainData } from '@cocoaworlds/core';
 import { buildMesh, isInvisibleMaterial, type Brush, type VoxelField, type WorldBrush } from '@cocoaworlds/geometry';
 import { GameWorld, initPhysics, POSE, AT, NPC, type BuildPrompt, type FrameSnapshot, type Hearing, type NavGrid, type BodyInfo, type ModelMesh, type SavedProgress, type Travel, type UiState, type PlayerInput, type PlayerStatus, type ScriptLog, type TriggerEvent } from '@cocoaworlds/runtime';
 
@@ -24,6 +24,7 @@ import { WEAR_RING, buildLevel } from './world-build';
 import { toGeometry } from './world-render';
 import { buildSign, type SignObject } from './sign';
 import { buildPoster, type PosterObject } from './poster';
+import { PrinterRig, buildPrinter, type PrinterObject } from './printer';
 import { buildGooglyEyes, type GooglyEyes } from './googly-eyes';
 import { Effects } from './effects';
 import { VfxRenderer, effectById, type VfxHandle } from './vfx';
@@ -196,7 +197,8 @@ export class PlaySession {
       const mover = this.world.bodyOf(e.id);
       // Batched: still for good. No body, or a fixed one that can't break and that no script names (scripts can
       // hide or show it); everything else is drawn by itself so it can change.
-      const fixed = !mover || (!bodies.has(mover) && !e.components.breakable && !e.components.script && !scripted.includes(e.id));
+      // (A printer's own model moves its head and gantry.)
+      const fixed = !e.components.printer && (!mover || (!bodies.has(mover) && !e.components.breakable && !e.components.script && !scripted.includes(e.id)));
       if (fixed) {
         const k = batchKey(data);
         const b = stillModels.get(k) ?? { data, copies: [] };
@@ -284,6 +286,25 @@ export class PlaySession {
       if (!e.components.sign || !shown(e.id)) continue;
       const data = readComponent<SignData>('sign', e.components.sign);
       this.addSign(e.id, data, doc.worldMatrix(e.id));
+    }
+
+    // 3D printers: the built-in one, or the object's own model (its parts found once it has loaded).
+    for (const e of doc.entities) {
+      if (!e.components.printer || !shown(e.id)) continue;
+      const data = readComponent<PrinterData>('printer', e.components.printer);
+      if (this.modelOf(e.id)) {
+        this.printers.push({ id: e.id, data, rig: null, built: null });
+        continue;
+      }
+      const holder = new THREE.Group();
+      holder.matrixAutoUpdate = false;
+      holder.matrix.fromArray(doc.worldMatrix(e.id));
+      this.group.add(holder);
+      const built = buildPrinter(data);
+      holder.add(built.object);
+      const rig = new PrinterRig(data, built.object);
+      rig.setParts(built.head, built.gantry);
+      this.printers.push({ id: e.id, data, rig, built });
     }
 
     // Googly eyes on what draws their object: a creature where it walks, or where the object stands (carried
@@ -814,6 +835,36 @@ export class PlaySession {
 
   private motion = new THREE.Matrix4();
 
+  /** 3D printers: what moves their parts and cuts their prints (null: its own model hasn't loaded yet). */
+  private printers: { id: string; data: PrinterData; rig: PrinterRig | null; built: PrinterObject | null }[] = [];
+
+  /** Printers' heads and gantries, and the prints on them cut at the layer being laid. */
+  private updatePrinters(dt: number): void {
+    const prints = new Map(this.world.prints().map((p) => [p.printer, p]));
+    for (const p of this.printers) {
+      if (!p.rig) {
+        const inst = this.models.get(p.id);
+        const holder = inst?.object.parent;
+        if (!inst || !holder) continue;
+        p.rig = new PrinterRig(p.data, holder);
+        const part = (name: string) => (name.trim() ? (inst.object.getObjectByName(name.trim()) ?? null) : null);
+        p.rig.setParts(part(p.data.head), part(p.data.gantry));
+      }
+      const print = prints.get(p.id) ?? null;
+      const meshes: THREE.Mesh[] = [];
+      if (print) {
+        const parts = new Set(print.parts);
+        for (const m of this.movers) {
+          if (!parts.has(m.id)) continue;
+          m.obj.traverse((o) => {
+            if (o instanceof THREE.Mesh && o.name !== 'print-cap') meshes.push(o);
+          });
+        }
+      }
+      p.rig.update(dt, print, meshes);
+    }
+  }
+
   /** Posters and paintings drawn, and whether each was last drawn hung. */
   private posterViews: { id: string; view: PosterObject; hung: boolean | null }[] = [];
 
@@ -896,6 +947,7 @@ export class PlaySession {
       m.obj.matrix.copy(motion.fromArray(f.bodyPose, m.i * POSE).multiply(m.base));
       m.obj.matrixWorldNeedsUpdate = true;
     }
+    if (this.printers.length) this.updatePrinters(dt);
     for (const p of this.posterViews) {
       const hung = this.world.posterHung(p.id);
       if (hung === null || hung === p.hung) continue;
@@ -1247,6 +1299,10 @@ export class PlaySession {
     this.world.dispose();
     for (const s of this.signs.values()) s.sign.dispose();
     for (const p of this.posterViews) p.view.dispose();
+    for (const p of this.printers) {
+      p.rig?.dispose();
+      p.built?.dispose();
+    }
     for (const { eyes } of this.eyes) eyes.dispose();
     this.group.traverse((o) => {
       // (Googly eyes share one dome.)

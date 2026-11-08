@@ -85,6 +85,27 @@ export type PosterData = {
   mass: number;
   hungAtStart: boolean;
 };
+/**
+ * A 3D printer (component `printer`): “Print” blocks make copies of objects on it, layer by layer. Its own Model,
+ * when it has one, is drawn instead of the built-in printer, with the parts named here moved by the print.
+ */
+export type PrinterData = {
+  /** The space a print fits in (u): width, height, depth. */
+  size: [number, number, number];
+  /** The middle of the build plate's top, in the printer's own space (u): prints stand there. */
+  bed: [number, number, number];
+  /** How thick a layer is (u), and how long one takes (s). */
+  layerHeight: number;
+  layerSeconds: number;
+  /** The filament's colour: the cut top of a print and the layer just laid. */
+  filament: string;
+  /** Parts of the printer's own model that move: the print head (left-right and front-back) and the gantry it rides (rises with the layers, front-back). */
+  head: string;
+  gantry: string;
+  /** A sound looping while it prints ('' : none). */
+  sound: string;
+  volume: number;
+};
 /** A prop that sticks into the ground (component `stake`) when it hits it hard enough, tip first. */
 export type StakeData = {
   /** Which way its tip points, in its own axes. */
@@ -691,6 +712,27 @@ export const COMPONENTS: ComponentDef[] = [
       { key: 'frame', label: e('Frame / back', 'Рамка / оборот'), hint: e('The colour of the edges, the back and the rolled scroll.', 'Цвет краёв, оборота и свёрнутого свитка.'), type: { kind: 'color' }, default: '#e8e2d4' },
       { key: 'mass', label: e('Weight', 'Вес'), type: { kind: 'number', min: 0.01, max: 50, step: 0.5, unit: 'kg' }, default: 0.5 },
       { key: 'hungAtStart', label: e('Hung at start', 'Повешена в начале'), hint: e('Starts flat and fixed where it is placed (put it against a wall, picture out).', 'Начинает плоской и неподвижной на своём месте (поставьте у стены, картинкой наружу).'), type: { kind: 'boolean' }, default: false },
+    ],
+  },
+  {
+    name: 'printer',
+    label: e('3D printer', '3D-принтер'),
+    description: e(
+      'Prints copies of objects layer by layer: the Print block (Objects) puts a copy of an object on it, the print rises from the plate and the head traces each layer; when it is done the copy is a normal object (it can be picked up) and “When a print is done” runs. More prints wait their turn. With a Model of its own, the model is drawn instead of the built-in printer, and the parts named below move.',
+      'Печатает копии объектов слой за слоем: блок «Напечатать» (Объекты) ставит на него копию объекта, печать растёт от стола, а головка обводит каждый слой; когда готово, копия становится обычным объектом (её можно взять) и срабатывает «Когда печать готова». Остальные печати ждут очереди. Если у него есть своя Модель, рисуется она вместо встроенного принтера, а названные ниже части двигаются.',
+    ),
+    appliesTo: 'point',
+    conflicts: ['poster', 'npc', 'seat', 'hidingSpot', 'stake'],
+    fields: [
+      { key: 'size', label: e('Print space', 'Область печати'), hint: e('Width, height and depth of what fits.', 'Ширина, высота и глубина того, что помещается.'), type: { kind: 'vec3', step: 4, min: 4 }, default: [40, 40, 40] },
+      { key: 'bed', label: e('Build plate', 'Стол'), hint: e('The middle of the plate’s top, from the object’s origin.', 'Середина верха стола от начала объекта.'), type: { kind: 'vec3', step: 1 }, default: [0, 6, 0] },
+      { key: 'layerHeight', label: e('Layer height', 'Высота слоя'), type: { kind: 'number', min: 0.1, step: 0.25, unit: 'u' }, default: 1 },
+      { key: 'layerSeconds', label: e('Each layer takes', 'Слой печатается за'), type: { kind: 'number', min: 0.02, step: 0.05, unit: 's' }, default: 0.4 },
+      { key: 'filament', label: e('Filament colour', 'Цвет пластика'), hint: e('The cut top of a print and the layer just laid.', 'Срез печати сверху и только что уложенный слой.'), type: { kind: 'color' }, default: '#1d9e75' },
+      { key: 'head', label: e('Head part', 'Часть «головка»'), hint: e('In its own Model: the part that moves left-right and front-back. Empty: none.', 'В своей Модели: часть, что ходит влево-вправо и вперёд-назад. Пусто — нет.'), type: { kind: 'text' }, default: '', group: e('Own model', 'Своя модель') },
+      { key: 'gantry', label: e('Gantry part', 'Часть «портал»'), hint: e('In its own Model: the part that rises with the layers and moves front-back with the head. Empty: none.', 'В своей Модели: часть, что поднимается со слоями и ходит вперёд-назад с головкой. Пусто — нет.'), type: { kind: 'text' }, default: '', group: e('Own model', 'Своя модель') },
+      { key: 'sound', label: e('Printing sound', 'Звук печати'), hint: e('Loops while it prints.', 'Звучит по кругу во время печати.'), type: { kind: 'asset', asset: 'sounds' }, default: '' },
+      { key: 'volume', label: e('Volume', 'Громкость'), type: { kind: 'number', min: 0, max: 4, step: 0.1 }, default: 1 },
     ],
   },
   {

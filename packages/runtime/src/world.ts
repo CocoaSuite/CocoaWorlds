@@ -44,6 +44,8 @@ import {
   type ModelData,
   type PosterData,
   type StakeData,
+  type PrinterData,
+  worldBoundsOf,
   posterScrollRadius,
   posterOf,
   type UiSettings,
@@ -133,6 +135,8 @@ export interface SavedScene {
   posters?: Record<string, boolean>;
   /** Props stuck in the ground. */
   stakes?: string[];
+  /** 3D printers: the print under way (what of, the copy's number, seconds printed) and the prints waiting. */
+  printers?: Record<string, { job?: [template: string, n: number, t: number]; queue?: string[] }>;
   /** The time of day (hours). */
   hour?: number;
   /** Scripts, by object: variables that changed, and limited stacks that have had their run. */
@@ -716,7 +720,16 @@ export class GameWorld {
       if (scale !== 1) sb.scale = r(scale);
       out.bodies[id] = sb;
     }
-    for (const [id, c] of this.made) if (!c.atStart && !this.gone.has(id)) out.copies.push([c.template, c.n, c.at.map((x) => r(x)) as Q3]);
+    // (A print under way is saved with its printer and printed again from there.)
+    const printingCopies = new Set([...this.printers.values()].map((p) => p.job?.copy).filter((x): x is string => !!x));
+    for (const [id, c] of this.made) if (!c.atStart && !this.gone.has(id) && !printingCopies.has(id)) out.copies.push([c.template, c.n, c.at.map((x) => r(x)) as Q3]);
+    for (const id of this.printing.keys()) delete out.bodies[id];
+    const printers: NonNullable<SavedScene['printers']> = {};
+    for (const [id, p] of this.printers) {
+      const job = p.job && !p.job.atStart ? ([p.job.template, p.job.n, r(p.job.t)] as [string, number, number]) : undefined;
+      if (job || p.queue.length) printers[id] = { ...(job ? { job } : {}), ...(p.queue.length ? { queue: [...p.queue] } : {}) };
+    }
+    if (Object.keys(printers).length) out.printers = printers;
     // (Parts of copies the start blocks make again count; other copies taken away are simply not made again.)
     const again = new Set<string>();
     for (const c of this.made.values()) if (c.atStart) for (const x of c.parts) again.add(x);
@@ -819,6 +832,18 @@ export class GameWorld {
         this.signVersion++;
       }
     for (const [id, hung] of Object.entries(save.posters ?? {})) if (typeof hung === 'boolean') this.setPosterHung(id, hung);
+    for (const [id, s] of Object.entries(save.printers && typeof save.printers === 'object' ? save.printers : {})) {
+      const p = this.printers.get(id);
+      if (!p || !s || typeof s !== 'object') continue;
+      p.queue = Array.isArray(s.queue) ? s.queue.filter((x): x is string => typeof x === 'string' && !!this.doc.get(x)) : [];
+      const [template, n, t] = Array.isArray(s.job) ? s.job : [];
+      if (typeof template === 'string' && this.doc.get(template) && Number.isInteger(n) && n! >= 1 && !this.names.has(`${template}#${n}`)) {
+        this.startPrint(id, template, n, num(t));
+        this.made.get(p.job!.copy)!.atStart = false;
+        p.job!.atStart = false;
+        this.restoredCopies = Math.max(this.restoredCopies, n!);
+      }
+    }
     for (const id of Array.isArray(save.stakes) ? save.stakes : []) {
       const k = this.stakes.get(id), b = this.bodies.get(id);
       if (!k || !b || k.stuck) continue;
@@ -1020,7 +1045,8 @@ export class GameWorld {
     this.dayOn = day.enabled;
     this.showDay = day.showDay;
     this.showClock = !!day.showClock;
-    const info = { objects, rules, globals: values.map((v) => ({ name: v.name, type: v.type })), signs: new Set(this.signs.keys()), lights: new Set(this.lights.keys()) };
+    for (const e of doc.entities) if (e.components.printer && shown(e)) this.printers.set(e.id, { data: readComponent<PrinterData>('printer', e.components.printer), job: null, queue: [] });
+    const info = { objects, rules, globals: values.map((v) => ({ name: v.name, type: v.type })), signs: new Set(this.signs.keys()), lights: new Set(this.lights.keys()), printers: new Set(this.printers.keys()) };
     this.scriptInfo = info;
     const programs: Program[] = [];
     const scripts: [string, Script][] = [];
@@ -1242,6 +1268,7 @@ export class GameWorld {
         const along = !follow || !ref ? null : ref === 'player' ? 'player' : this.bodyOf(ref);
         this.bus.emit({ type: 'vfx', effect, at: [at[0], at[1], at[2]], follow: along, time: this.time });
       },
+      print: (template, printer) => this.print(template, printer),
       explode: (place, radius, damage, owner) => {
         const at = this.placePoint(place);
         if (at && radius > 0) this.weapons.explode([at[0], at[1], at[2]], { ...BLAST, blast: radius, damage, push: Math.max(400, radius * 3) }, owner, 'an explosion');
@@ -1971,6 +1998,7 @@ export class GameWorld {
       this.accumulator -= STEP;
       this.time += STEP;
       this.base?.tick(STEP);
+      if (this.printing.size) this.stepPrinters(STEP);
       if (this.hoursPerSecond) this.passHours(this.hoursPerSecond * STEP);
       n++;
       this.events.drainCollisionEvents((h1, h2, started) => this.onContact(h1, h2, started));
@@ -2682,6 +2710,7 @@ export class GameWorld {
     for (const t of targets) {
       const b = this.bodies.get(t);
       if (!b) continue;
+      if (this.printing.has(t)) return null;
       if (b.info.motion !== 'dynamic' || b.rb?.pickUp === false || (!this.posters.has(t) && b.body.mass() > MAX_CARRY)) return null;
       return t;
     }
@@ -3209,6 +3238,114 @@ export class GameWorld {
     this.bus.emit({ type: 'spawn', template, copy: copyId, time: this.time });
     for (const [id, s, w] of sounds) this.startSound(id, s, this.bodyOf(id) ? null : [w[12]!, w[13]!, w[14]!]);
     return copyId;
+  }
+
+  // ── 3D printers ──
+
+  /** Printers: their settings, the print under way and the prints waiting (objects to copy). */
+  private printers = new Map<string, { data: PrinterData; job: PrintJob | null; queue: string[] }>();
+  /** Bodies of prints under way (they don't move, collide or get picked up), with their body type to go back to. */
+  private printing = new Map<string, RAPIER.RigidBodyType>();
+
+  /** Print a copy of `template` on `printer`: the copy, or null when it waits its turn. */
+  print(template: string, printer: string): string | null {
+    if (!this.doc.get(template)) throw new Error(`${this.names.get(template) ?? 'That object'} can't be printed: only objects placed in the scene can.`);
+    const p = this.printers.get(printer);
+    if (!p) throw new Error(`${this.names.get(printer) ?? 'That object'} is not a 3D printer.`);
+    if (p.job) {
+      p.queue.push(template);
+      return null;
+    }
+    return this.startPrint(printer, template);
+  }
+
+  /** Prints under way, for drawing: the printer, the copy and its parts, how far along (0–1). */
+  prints(): { printer: string; copy: string; parts: string[]; done: number }[] {
+    const out: { printer: string; copy: string; parts: string[]; done: number }[] = [];
+    for (const [id, p] of this.printers) if (p.job) out.push({ printer: id, copy: p.job.copy, parts: this.made.get(p.job.copy)?.parts ?? [p.job.copy], done: Math.min(1, p.job.t / p.job.seconds) });
+    return out;
+  }
+
+  /** How many prints wait on a printer (not counting the one under way); undefined: not a printer. */
+  printQueue(id: string): number | undefined {
+    return this.printers.get(id)?.queue.length;
+  }
+
+  /** Start printing: the copy stands on the plate, still and untouchable until done (`t`: seconds already printed). */
+  private startPrint(id: string, template: string, n?: number, t = 0): string {
+    const p = this.printers.get(id)!;
+    const m = this.doc.worldMatrix(id);
+    const bed = applyMat4(m, p.data.bed);
+    const b = this.templateBounds(template);
+    const pivot = pivotOf(this.doc, template, boundsOfEntity);
+    // (Its bottom on the plate, the middle of it over the plate's middle.)
+    const at: Q3 = b ? [bed[0] + pivot[0] - (b.min[0] + b.max[0]) / 2, bed[1] + pivot[1] - b.min[1], bed[2] + pivot[2] - (b.min[2] + b.max[2]) / 2] : [bed[0], bed[1], bed[2]];
+    const copy = this.makeCopy(template, at, n);
+    const height = b ? Math.max(p.data.layerHeight, b.max[1] - b.min[1]) : p.data.size[1];
+    const layers = Math.max(1, Math.ceil(height / Math.max(0.01, p.data.layerHeight)));
+    p.job = { template, copy, n: this.made.get(copy)!.n, t, seconds: layers * Math.max(0.01, p.data.layerSeconds), atStart: !this.started };
+    for (const part of this.made.get(copy)!.parts) {
+      const body = this.bodies.get(part);
+      if (!body) continue;
+      this.printing.set(part, body.body.bodyType());
+      if (body.info.kind !== 'zone') body.body.setBodyType(RAPIER.RigidBodyType.Fixed, false);
+      for (let i = 0; i < body.body.numColliders(); i++) body.body.collider(i).setEnabled(false);
+    }
+    if (p.data.sound) this.bus.emit({ type: 'sound', sound: p.data.sound, at: [bed[0], bed[1], bed[2]], follow: null, volume: p.data.volume, loop: true, range: 768, source: `${id}:print`, time: this.time });
+    this.bus.emit({ type: 'print.start', printer: id, copy, template, time: this.time });
+    return copy;
+  }
+
+  /** Prints go on; a finished one is let go (it falls and can be picked up) and the next one starts. */
+  private stepPrinters(dt: number): void {
+    for (const [id, p] of this.printers) {
+      const job = p.job;
+      if (!job) continue;
+      job.t += dt;
+      const gone = this.gone.has(job.copy);
+      if (!gone && job.t < job.seconds) continue;
+      for (const part of this.made.get(job.copy)?.parts ?? []) {
+        const was = this.printing.get(part);
+        this.printing.delete(part);
+        const body = this.bodies.get(part);
+        if (was === undefined || !body) continue;
+        for (let i = 0; i < body.body.numColliders(); i++) body.body.collider(i).setEnabled(true);
+        body.body.setBodyType(was, true);
+      }
+      p.job = null;
+      if (p.data.sound) this.bus.emit({ type: 'sound.stop', source: `${id}:print`, time: this.time });
+      if (!gone) {
+        this.bus.emit({ type: 'print.done', printer: id, copy: job.copy, time: this.time });
+        this.runner.dispatch({ type: 'printed', target: id, copy: job.copy });
+      }
+      while (!p.job && p.queue.length) {
+        const next = p.queue.shift()!;
+        if (this.doc.get(next)) this.startPrint(id, next);
+      }
+    }
+  }
+
+  /** Where an object (and everything in it) is now, as the scene has it: brushes, models and collision shapes. */
+  private templateBounds(id: string): { min: [number, number, number]; max: [number, number, number] } | null {
+    return worldBoundsOf(this.doc, id, (x) => {
+      const brush = boundsOfEntity(x);
+      if (brush) return brush;
+      if (x.components.collider) {
+        const c = readComponent<ColliderData>('collider', x.components.collider);
+        return { min: [c.offset[0] - c.size[0] / 2, c.offset[1] - c.size[1] / 2, c.offset[2] - c.size[2] / 2], max: [c.offset[0] + c.size[0] / 2, c.offset[1] + c.size[1] / 2, c.offset[2] + c.size[2] / 2] };
+      }
+      const data = x.components.model ? readComponent<ModelData>('model', x.components.model) : null;
+      const mesh = data ? this.models.get(data.model) : undefined;
+      if (!data || !mesh || mesh.positions.length < 3) return null;
+      const k = unitsOf(data), pos = mesh.positions;
+      const min: [number, number, number] = [Infinity, Infinity, Infinity], max: [number, number, number] = [-Infinity, -Infinity, -Infinity];
+      for (let i = 0; i < pos.length; i++) {
+        const a = i % 3, v = pos[i]! * k;
+        if (v < min[a]!) min[a] = v;
+        if (v > max[a]!) max[a] = v;
+      }
+      return { min, max };
+    });
   }
 
   /** Take an object (and everything inside it) out of the game. */
@@ -4489,6 +4626,16 @@ function modelColliders(data: ModelData, mesh: ModelMesh, scale: Q3, moves: bool
   if (data.collision === 'exact' && !moves && mesh.indices.length >= 3) return [{ desc: RAPIER.ColliderDesc.trimesh(pts, mesh.indices) }];
   const h = hull(pts);
   return h ? [{ desc: h }] : [];
+}
+
+/** A print under way: what of, its copy (and number), seconds printed of how many, made by the start blocks. */
+interface PrintJob {
+  template: string;
+  copy: string;
+  n: number;
+  t: number;
+  seconds: number;
+  atStart: boolean;
 }
 
 const unitsOf = (data: ModelData) => (data.units === 'units' ? 1 : UNITS_PER_METRE);

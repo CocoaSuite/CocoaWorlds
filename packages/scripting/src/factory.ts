@@ -24,6 +24,7 @@ export function newEvent(kind: EventKind, zone: Ref = self): EventBlock {
     case 'use':
     case 'die':
     case 'breaks':
+    case 'printed':
     case 'hit':
     case 'dies':
     case 'hides':
@@ -117,6 +118,8 @@ export function newStatement(kind: StatementKind, opts: { target?: Ref; variable
       return { id: id(), kind, target, text: text('Text') };
     case 'spawn':
       return { id: id(), kind, template: target, at: { self: true } };
+    case 'print':
+      return { id: id(), kind, template: target, printer: { self: true } };
     case 'remove':
     case 'physical':
       return { id: id(), kind, target };

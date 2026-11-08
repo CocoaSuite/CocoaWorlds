@@ -21,6 +21,9 @@ export type GameEvent =
   | { type: 'player.die'; cause: string; time: number }
   | { type: 'score'; score: number; by: number; time: number }
   | { type: 'spawn'; template: string; copy: string; time: number }
+  /** A 3D printer started printing a copy of an object, or finished it. */
+  | { type: 'print.start'; printer: string; copy: string; template: string; time: number }
+  | { type: 'print.done'; printer: string; copy: string; time: number }
   | { type: 'break'; target: string; time: number }
   /**
    * A sound starts. `at` is where (null: everywhere, not in 3D); `follow` is a moving object it travels with;

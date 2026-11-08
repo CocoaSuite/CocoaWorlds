@@ -17,6 +17,8 @@ export interface SceneInfo {
   signs?: Set<string>;
   /** Objects that are lights (for the light blocks). */
   lights?: Set<string>;
+  /** Objects that are 3D printers (for the Print block). */
+  printers?: Set<string>;
   /** The screen UI: screens and their elements by id (missing: not checked). */
   ui?: { screens: Map<string, string>; elements: Map<string, { name: string; kind: string }> };
   /** The items the player can carry (missing: not checked). */
@@ -76,6 +78,7 @@ export type Op =
   | { op: 'settext' }
   /** Pops the place, then the template: make a copy; the stack remembers it as “the new copy”. */
   | { op: 'spawn' }
+  | { op: 'print' }
   /** Pushes the new copy (or nothing). */
   | { op: 'copy' }
   /** Pops an object; pushes its variable called `name` (nothing if it has none). */
@@ -156,6 +159,7 @@ export type CompiledEvent =
   | { kind: 'useHolding'; item: string | null; reach: number }
   | { kind: 'die' }
   | { kind: 'breaks' }
+  | { kind: 'printed' }
   | { kind: 'hit' }
   | { kind: 'dies' }
   | { kind: 'hides' | 'unhides' | 'found' | 'sits' | 'stands' }
@@ -281,6 +285,7 @@ class HandlerCompiler {
       else if (reach !== null && (!ev.item || item)) event = { kind: 'useHolding', item: item === 'self' ? this.owner : item, reach };
     }
     else if (ev.kind === 'breaks') event = { kind: 'breaks' };
+    else if (ev.kind === 'printed') event = { kind: 'printed' };
     else if (ev.kind === 'hit') event = { kind: 'hit' };
     else if (ev.kind === 'dies') event = { kind: 'dies' };
     else if (ev.kind === 'hides' || ev.kind === 'unhides' || ev.kind === 'found' || ev.kind === 'sits' || ev.kind === 'stands') event = { kind: ev.kind };
@@ -698,6 +703,16 @@ class HandlerCompiler {
         this.pushPlace(s.at, s.id);
         this.emit({ op: 'spawn' });
         break;
+      case 'print': {
+        if ('player' in s.template) this.problem(s.id, 'Pick an object to print.');
+        this.pushRef(s.template, s.id);
+        const r = 'player' in s.printer ? null : this.resolveRef(s.printer, s.id);
+        if ('player' in s.printer || (r && r !== 'other' && r !== 'held' && this.scene.printers && !this.scene.printers.has(r)))
+          this.problem(s.id, `${(r && this.scene.objects.get(r)?.name) ?? 'This'} is not a 3D printer. Pick one, or add a 3D printer to it.`);
+        this.emit(r === null ? { op: 'push', v: null } : { op: 'ref', ref: s.printer });
+        this.emit({ op: 'print' });
+        break;
+      }
       case 'remove':
       case 'physical':
         this.actTarget(s.target, s.id);

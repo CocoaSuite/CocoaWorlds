@@ -397,3 +397,18 @@ waiting stacks: `ScriptRunner.saveState`/`loadState`, a stack resumes only if it
 unchanged), `lightSet`, `glows`, `sides`, `ui`, `trains`, `stoppedSounds`, `silent`, `noSaving`, and the
 player's hotbar `slot`. List in docs/scripting.md. Tests: `world-save.test.ts`. Not kept: creatures' current
 errands (walk to, wander), a frozen player, what is carried (dropped).
+
+### 27. Shop printing: 3D printers
+
+Status: first working version (2026-11-08). Component `printer` (`packages/core/src/components.ts`, Add ›
+3D printer); `GameWorld.print` / `prints()` / `printQueue()` and the print queue, freezing the copy (fixed, colliders
+off, not carryable) until its layers are done, `print.start` / `print.done` bus events, `printed` script event,
+`SavedScene.printers` (`packages/runtime/src/world.ts`, section “3D printers”); `print` block and `printed` event
+(`packages/scripting`, `editor/script`). Drawing: `viewport/printer.ts` (`buildPrinter`, `PrinterRig`: head/gantry
+motion, materials cut at the layer via `onBeforeCompile`, back-face cap, layer slicing for the head's path),
+`viewport/play-session.ts` (`updatePrinters`), `viewport/markers.ts` (built-in printer in the editor). Tests:
+`packages/runtime/test/printer.test.ts`. Docs: `docs/scripting.md` (3D printers and a shop).
+
+Next, if wanted: the shop screen bundled with the computer UI (catalogue, prices, Buy → Print); a custom printer
+model sample; an e2e test of a print in Play.
+

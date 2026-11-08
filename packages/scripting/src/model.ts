@@ -109,6 +109,11 @@ type StatementKind_ =
   | { id: string; kind: 'setText'; target: Ref; text: Expr }
   /** Make a copy of an object (and everything inside it) at a place; it runs its own scripts. */
   | { id: string; kind: 'spawn'; template: Ref; at: Place }
+  /**
+   * Print a copy of an object on a 3D printer (an object with the Printer component): it rises layer by layer
+   * and is a normal object once done. While the printer is busy the print waits its turn.
+   */
+  | { id: string; kind: 'print'; template: Ref; printer: Ref }
   /** Take an object out of the game. */
   | { id: string; kind: 'remove'; target: Ref }
   /** Grow or shrink to `factor` times its starting size, around its pivot. */
@@ -225,6 +230,8 @@ export type EventBlock = { limit?: EventLimit } & (
   | { id: string; kind: 'atHour'; hour: Expr }
   /** The player's health reached 0 (they start again at the Player start). */
   | { id: string; kind: 'die' }
+  /** This 3D printer finished a print (“the thing that entered” is the printed copy). */
+  | { id: string; kind: 'printed' }
   /** This breakable object's health reached 0 (it is removed after this starts). */
   | { id: string; kind: 'breaks' }
   /** Hit by a shot, a swing or a blast (this object or anything inside it). */

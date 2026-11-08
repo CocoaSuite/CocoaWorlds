@@ -219,6 +219,27 @@ A Light's **On at start** setting makes it start switched off. Point objects ins
 models, sounds, particles) ride with it in Play, so a model with Physics and a Light inside it is a floodlight
 the player can carry with E.
 
+## 3D printers and a shop
+
+| Block | What it does |
+|---|---|
+| Print a copy of *object* on the printer *printer* | Like Make a copy, but the copy stands on the printer's plate (bottom on it, middle over its middle) and rises layer by layer; until it is done it doesn't move, collide or get picked up. While the printer is busy, the print waits its turn (the new copy is then empty) |
+| When this printer finishes a print | Runs on the printer when a print is done; *the thing that entered* is the printed copy, now a normal object (with Physics it falls and can be carried) |
+
+**3D printer** (component, Add › 3D printer): the print space (width, height, depth), where the build plate's
+top middle is, layer height and seconds per layer (a print takes its height ÷ layer height × seconds), the
+filament colour (the cut top of a print and the layer just laid), and an optional sound looping while it prints.
+Without a Model it draws the built-in printer; with one, that model is drawn instead and the parts named
+**Head part** and **Gantry part** move: the gantry rises with the layers and slides front-back, the head slides
+left-right (on the gantry, if it is inside it). Model the head with its nozzle tip resting on the middle of the
+plate. Prints are drawn cut at the layer being laid: layer lines on the sides, the cut top in the filament
+colour, and the head traces each layer's outline (the copy's triangles cut at that height) and then a zig-zag
+fill.
+
+A shop: keep the things for sale hidden somewhere as originals, show a list on a screen (Screens workspace), and
+on **When the player picks a row** check the cash, change it, and print the picked thing. With **Keep the world**
+on, a print under way and the prints waiting are saved with the printer and carry on after loading.
+
 ## Saved progress and the real clock
 
 Game values marked **kept** start the next game with their last value; **Forget saved progress** starts over;

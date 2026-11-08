@@ -446,6 +446,7 @@ function EventRow({ ev, onRemove, onCopy, pick }: { ev: EventBlock; onRemove: ()
     );
   else if (ev.kind === 'die') content = w('die');
   else if (ev.kind === 'breaks') content = w('breaks');
+  else if (ev.kind === 'printed') content = w('printed');
   else if (ev.kind === 'hit') content = w('hit');
   else if (ev.kind === 'dies') content = w('dies');
   else if (ev.kind === 'hides' || ev.kind === 'unhides' || ev.kind === 'found' || ev.kind === 'sits' || ev.kind === 'stands') content = w(ev.kind);
@@ -830,6 +831,13 @@ function statementWords(s: Statement, set: (patch: Record<string, unknown>, merg
         <>
           {w('spawn')} <RefSlot value={s.template} onChange={(template) => set({ template })} label={w('spawn')} /> {w('at')}{' '}
           <RefSlot value={s.at} allowPlayer allowAim onChange={(at) => set({ at })} label={`${w('spawn')} ${w('at')}`} />
+        </>
+      );
+    case 'print':
+      return (
+        <>
+          {w('printWord')} <RefSlot value={s.template} onChange={(template) => set({ template })} label={w('printWord')} /> {w('onPrinter')}{' '}
+          <RefSlot value={s.printer} onChange={(printer) => set({ printer })} label={`${w('printWord')} ${w('onPrinter')}`} />
         </>
       );
     case 'remove':
