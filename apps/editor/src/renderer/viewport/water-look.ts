@@ -159,7 +159,7 @@ export class WaterDepth {
     // Without the water itself (and without anything see-through, which doesn't hide the bottom).
     scene.traverseVisible((o) => {
       const mat = (o as THREE.Mesh).material as THREE.Material | THREE.Material[] | undefined;
-      if (mat && !(Array.isArray(mat) ? mat : [mat]).some((x) => !x.transparent || x.depthWrite) && !waters.includes(o)) waters.push(o);
+      if (((o as THREE.Sprite).isSprite || (mat && !(Array.isArray(mat) ? mat : [mat]).some((x) => !x.transparent || x.depthWrite))) && !waters.includes(o)) waters.push(o);
     });
     for (const w of waters) {
       w.visible = false;

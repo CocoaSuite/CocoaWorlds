@@ -48,7 +48,8 @@ export class AoRenderer {
       p._overrideVisibility = () => {
         hide();
         scene.traverse((o) => {
-          if (o.userData.noAo && o.visible) {
+          // (Sprites too: drawn with this pass's own material they become flat black squares.)
+          if ((o.userData.noAo || (o as THREE.Sprite).isSprite) && o.visible) {
             o.visible = false;
             p._visibilityCache.push(o);
           }
