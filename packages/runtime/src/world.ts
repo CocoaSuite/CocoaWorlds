@@ -743,7 +743,7 @@ export class GameWorld {
     }
     const lights: Record<string, boolean> = {};
     for (const [id, l] of this.lights) {
-      const e = this.doc.get(id);
+      const e = this.doc.get(this.copyOf.get(id) ?? id);
       if (e && l.on !== (readComponent<LightData>('light', e.components.light).on !== false)) lights[id] = l.on;
     }
     if (Object.keys(lights).length) out.lights = lights;
@@ -3213,6 +3213,13 @@ export class GameWorld {
         this.spawnedSigns.push({ id, matrix: world });
       }
       if (e.components.sound) sounds.push([id, readComponent<SoundData>('sound', e.components.sound), world]);
+      if (e.components.light) {
+        // A light in the copy: as set up on the original (switched off at start stays off), carried by what it is in.
+        const l = readComponent<LightData>('light', e.components.light);
+        const still = (v: number[]): Fade => ({ from: v, to: v, t0: 0, t1: 0 });
+        this.lights.set(id, { on: l.on !== false, intensity: still([l.intensity]), range: still([l.range]), angle: still([l.angle]), color: still(rgbOf(l.color)) });
+        this.copyLightAt.set(id, world);
+      }
     }
     for (const [u, { brushes, points, riders }] of units) {
       const id = ids.get(u)!;
@@ -3245,7 +3252,7 @@ export class GameWorld {
     // Scripts of the copy.
     const objects = new Map(this.scriptInfo.objects);
     for (const e of parts) objects.set(ids.get(e.id)!, { name: e.name, isZone: !!e.components.trigger });
-    const info = { ...this.scriptInfo, objects, signs: new Set(this.signs.keys()) };
+    const info = { ...this.scriptInfo, objects, signs: new Set(this.signs.keys()), lights: new Set(this.lights.keys()) };
     for (const e of parts) {
       const script = e.components.script as unknown as Script | undefined;
       if (!script?.handlers) continue;
@@ -3380,6 +3387,16 @@ export class GameWorld {
       }
       return { min, max };
     });
+  }
+
+  /** Lights in copies made while playing, and where each was placed (world matrix). */
+  private copyLightAt = new Map<string, number[]>();
+
+  /** Lights in copies that are still in the game (for drawing): each one's id and where it was placed. */
+  copiedLights(): { id: string; matrix: number[] }[] {
+    const out: { id: string; matrix: number[] }[] = [];
+    for (const [id, matrix] of this.copyLightAt) if (!this.gone.has(id)) out.push({ id, matrix });
+    return out;
   }
 
   /** A brush carried by a body (inside a copied prop with Physics): it collides and is drawn with it. */

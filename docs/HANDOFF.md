@@ -414,6 +414,10 @@ collides (`printerFrame` in core, shared by drawing and `GameWorld.addPrinterFra
 the plate; copies of props with Physics keep their insides (`makeCopy` carriers: brushes join the body via
 `carryBrush`, models become riders; `PlaySession.addCarriedBrushes`).
 
+Lights in copies: `makeCopy` registers each light part (`copiedLights()`, kept and switched like scene lights);
+`PlaySession.spareLights` are made ahead in `SceneLighting.update(…, spare)` for lights inside templates named by
+spawn/print blocks and lent to copied lights in `driveLights` (dark while printing).
+
 Next, if wanted: the shop screen bundled with the computer UI (catalogue, prices, Buy → Print); a custom printer
 model sample; an e2e test of a print in Play.
 

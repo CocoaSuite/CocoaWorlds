@@ -239,7 +239,10 @@ colour, and the head goes round each layer's outline (the copy's triangles cut a
 fill at its own pace, slower for bigger prints, gliding to the next layer without jumps. Shadows and ambient occlusion leave a print out until it is done.
 
 A copied or printed prop with Physics keeps what is inside it: brushes become part of its body (they collide
-and move with it) and models ride it.
+and move with it) and models ride it. Lights inside copies come along as set up on the original (a light off at
+start stays off, same colour, brightness, reach and cone) and ride what they are in; a light in a print stays dark
+until the print is done. Each light inside an object that a Make a copy or Print block names gets two lights made
+ahead (eight at most in all), so lit copies don't stall the game; more lit copies than that stay dark.
 
 A shop: keep the things for sale hidden somewhere as originals, show a list on a screen (Screens workspace), and
 on **When the player picks a row** check the cash, change it, and print the picked thing. With **Keep the world**

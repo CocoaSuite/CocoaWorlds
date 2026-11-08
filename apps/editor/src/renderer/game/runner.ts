@@ -243,7 +243,7 @@ export class GameRunner {
       this.saveProgress();
     }
     // (The game's scene never changes: the lights are built again only if what stays put grew.)
-    this.lighting.update(this.doc, (id) => this.doc.worldMatrix(id), play.levelBounds(), this.scene, true);
+    this.lighting.update(this.doc, (id) => this.doc.worldMatrix(id), play.levelBounds(), this.scene, true, play.spareLights);
     play.driveLights(this.lighting);
     this.lighting.setDay(play.dayHour);
     this.lighting.applyTo(this.scene);

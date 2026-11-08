@@ -5,7 +5,7 @@
  * With a Player start in the scene you play as the player (first person); without one, Play is a physics
  * preview watched with the free camera.
  */
-import { SceneDoc, expandRepeats, posterOf, readComponent, type ParticlesData, type VfxData, type ColliderData, type GameRules, type GameValue, type GooglyEyesData, type ModelData, type PrinterData, type SceneFile, type SignData, type TerrainData } from '@cocoaworlds/core';
+import { SceneDoc, expandRepeats, posterOf, readComponent, type ParticlesData, type VfxData, type ColliderData, type GameRules, type GameValue, type EntityData, type GooglyEyesData, type ModelData, type PrinterData, type SceneFile, type SignData, type TerrainData } from '@cocoaworlds/core';
 import { buildMesh, isInvisibleMaterial, type Brush, type VoxelField, type WorldBrush } from '@cocoaworlds/geometry';
 import { GameWorld, initPhysics, POSE, AT, NPC, type BuildPrompt, type FrameSnapshot, type Hearing, type NavGrid, type BodyInfo, type ModelMesh, type SavedProgress, type Travel, type UiState, type PlayerInput, type PlayerStatus, type ScriptLog, type TriggerEvent } from '@cocoaworlds/runtime';
 
@@ -175,6 +175,7 @@ export class PlaySession {
 
     this.material = material;
     this.doc = doc;
+    this.makeSpareLights(doc);
     // Base building: build sites, ghosts and the plan's preview.
     if (this.world.base) {
       this.baseView = new BaseView(material);
@@ -392,6 +393,38 @@ export class PlaySession {
     if (inst) eyes.rideModel(inst.object);
   }
 
+  /**
+   * Lights made ahead for lights in copies (made while playing: a printed lamp), switched off until one borrows
+   * them: two for each light inside an object that a script copies or prints, at most eight in all.
+   */
+  readonly spareLights: { id: string; light: unknown; matrix: number[]; source: string }[] = [];
+  /** Which copied light has borrowed each spare light. */
+  private lent = new Map<string, string>();
+
+  private makeSpareLights(doc: SceneDoc): void {
+    const templates = new Set<string>();
+    const walk = (x: unknown): void => {
+      if (!x || typeof x !== 'object') return;
+      if (Array.isArray(x)) return x.forEach(walk);
+      const o = x as Record<string, unknown>;
+      const t = o.template as { entity?: unknown } | undefined;
+      if ((o.kind === 'spawn' || o.kind === 'print') && typeof t?.entity === 'string') templates.add(t.entity);
+      for (const v of Object.values(o)) walk(v);
+    };
+    for (const e of doc.entities) if (e.components.script) walk(e.components.script);
+    walk(doc.settings.ui);
+    for (const t of templates) {
+      if (!doc.get(t)) continue;
+      for (const e of doc.subtree(t)) {
+        let shownIn = true;
+        for (let x: EntityData | undefined = e; x && x.id !== t; x = x.parent ? doc.get(x.parent) : undefined) if (!x.visible) shownIn = false;
+        // (Suns are left out: a copied sun would be taken for the scene's sun.)
+        if (!e.components.light || !shownIn || (e.components.light as { kind?: string }).kind === 'directional') continue;
+        for (let k = 0; k < 2 && this.spareLights.length < 8; k++) this.spareLights.push({ id: `spare:${e.id}:${k}`, light: e.components.light, matrix: doc.worldMatrix(e.id), source: e.id });
+      }
+    }
+  }
+
   /** Lights' starting places, and the body each rides with. */
   private lightAt = new Map<string, { start: THREE.Matrix4; body: string | null; i: number }>();
   private lightNow = new THREE.Matrix4();
@@ -415,6 +448,35 @@ export class PlaySession {
       }
       lighting.drive(id, { ...s, on }, world);
     }
+    if (!this.spareLights.length) return;
+    // Lights in copies borrow a spare light made from the same original (off while it prints).
+    const copies = this.world.copiedLights();
+    const live = new Set(copies.map((c) => c.id));
+    for (const [spare, copy] of this.lent) if (!live.has(copy)) this.lent.delete(spare);
+    const printing = new Set(this.world.prints().flatMap((p) => p.parts));
+    const borrowed = new Map([...this.lent].map(([spare, copy]) => [copy, spare]));
+    for (const c of copies) {
+      let spare = borrowed.get(c.id);
+      if (!spare) {
+        const source = c.id.split('#')[0]!;
+        spare = this.spareLights.find((x) => x.source === source && !this.lent.has(x.id))?.id;
+        if (!spare) continue;
+        this.lent.set(spare, c.id);
+      }
+      const s = this.world.lightOf(c.id);
+      if (!s) continue;
+      const body = this.world.bodyOf(c.id);
+      const start = new THREE.Matrix4().fromArray(c.matrix);
+      let world: THREE.Matrix4 | null = start;
+      let on = s.on && !printing.has(c.id);
+      if (body) {
+        const i = this.world.drawn(body), f = this.frame;
+        if (!f.present(i) || !f.visible(i)) on = false;
+        else world = this.lightNow.fromArray(f.bodyPose, i * POSE).multiply(start);
+      }
+      lighting.drive(spare, { ...s, on }, world);
+    }
+    for (const x of this.spareLights) if (!this.lent.has(x.id)) lighting.drive(x.id, { on: false, intensity: 0, range: 1, angle: 1, color: [0, 0, 0] }, null);
   }
 
   /** Materials made glow by scripts: each model's own copies, with the glow they were made with. */

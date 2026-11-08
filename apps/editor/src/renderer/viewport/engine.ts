@@ -380,7 +380,7 @@ export class ViewportEngine {
       }
       bounds = this.editBounds;
     }
-    this.lighting.update(this.doc, (id) => this.mats.get(id) ?? this.doc!.worldMatrix(id), bounds, this.scene);
+    this.lighting.update(this.doc, (id) => this.mats.get(id) ?? this.doc!.worldMatrix(id), bounds, this.scene, false, this.play?.spareLights);
     this.play?.driveLights(this.lighting);
     this.lighting.setDay(this.play ? this.play.dayHour : null);
     this.lighting.applyTo(this.scene);

@@ -100,7 +100,8 @@ export class SceneLighting {
    * `levelBounds` the level's extent (for the sun's shadows). `still`: the doc never changes (an exported game), so
    * once built for it only a change of the bounds builds again (nothing is compared each frame).
    */
-  update(doc: SceneDoc, worldOf: (id: string) => number[], levelBounds: THREE.Box3, scene: THREE.Scene, still = false): void {
+  /** `spare`: lights made ahead (switched off) for copies made while playing to borrow, so none compiles anything then. */
+  update(doc: SceneDoc, worldOf: (id: string) => number[], levelBounds: THREE.Box3, scene: THREE.Scene, still = false, spare: { id: string; light: unknown; matrix: number[] }[] = []): void {
     const bKey = levelBounds.isEmpty() ? '' : [...levelBounds.min.toArray(), ...levelBounds.max.toArray()].map(Math.round).join(',');
     if (still && doc === this.stillDoc && bKey === this.boundsKey && this.key) return;
     this.stillDoc = still ? doc : null;
@@ -108,9 +109,9 @@ export class SceneLighting {
       for (let x: EntityData | undefined = e; x; x = x.parent ? doc.get(x.parent) : undefined) if (!x.visible) return false;
       return true;
     };
-    const lights = doc.entities.filter((e) => e.components.light && shown(e));
+    const lights = [...doc.entities.filter((e) => e.components.light && shown(e)).map((e) => ({ id: e.id, light: e.components.light, matrix: worldOf(e.id) })), ...spare];
     const settings = sceneSettings(doc.settings);
-    const key = JSON.stringify([settings, lights.map((e) => [e.components.light, worldOf(e.id)])]);
+    const key = JSON.stringify([settings, lights.map((e) => [e.id, e.light, e.matrix])]);
     if (key === this.key && bKey === this.boundsKey) return;
     this.key = key;
     this.boundsKey = bKey;
@@ -130,8 +131,8 @@ export class SceneLighting {
     const radius = levelBounds.isEmpty() ? 1024 : Math.max(256, levelBounds.getSize(new THREE.Vector3()).length() / 2);
     this.shadowRadius = radius;
     for (const e of lights) {
-      const l = readComponent<LightData>('light', e.components.light);
-      const m = new THREE.Matrix4().fromArray(worldOf(e.id));
+      const l = readComponent<LightData>('light', e.light as Record<string, unknown>);
+      const m = new THREE.Matrix4().fromArray(e.matrix);
       const pos = new THREE.Vector3().setFromMatrixPosition(m);
       const forward = new THREE.Vector3(0, 0, -1).transformDirection(m);
       const color = new THREE.Color(l.color);

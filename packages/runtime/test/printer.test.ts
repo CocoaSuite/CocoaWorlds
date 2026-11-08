@@ -116,7 +116,9 @@ describe('3D printer', () => {
     lid.parent = crate.id;
     const badge = newEntity('badge', { model: { model: 'badge.glb', collision: 'none' } as never }, { position: [308, 8, 316] });
     badge.parent = crate.id;
-    s.entities.push(lid, badge);
+    const lamp = newEntity('lamp', { light: { kind: 'point', color: '#ffaa55', intensity: 3, range: 300, on: false } as never }, { position: [308, 12, 308] });
+    lamp.parent = crate.id;
+    s.entities.push(lid, badge, lamp);
     const w = GameWorld.create(s, { values });
     run(w, 0.1);
     send(w, 'buy');
@@ -126,6 +128,11 @@ describe('3D printer', () => {
     expect(w.riders(copy).map((r) => r.id)).toEqual([`${badge.id}#1`]);
     expect(w.bodyOf(`${lid.id}#1`)).toBe(copy);
     expect(w.bodyOf(`${badge.id}#1`)).toBe(copy);
+    // Its light comes along as set up on the original: switched off, as bright and as far-reaching, carried by it.
+    const light = `${lamp.id}#1`;
+    expect(w.copiedLights().map((c) => c.id)).toEqual([light]);
+    expect(w.lightOf(light)).toMatchObject({ on: false, intensity: 3, range: 300 });
+    expect(w.bodyOf(light)).toBe(copy);
     void printer;
   });
 });
