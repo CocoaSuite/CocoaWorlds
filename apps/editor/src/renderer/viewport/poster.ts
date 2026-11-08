@@ -39,13 +39,13 @@ export function buildPoster(data: PosterData, onUpdate: () => void = () => {}): 
     scroll.add(cylinder);
     object.add(scroll);
     if (data.scrollModel) {
-      // The scroll model in place of the cylinder once it has loaded: centred and scaled so it is as long (X) as the poster is wide.
+      // The scroll model in place of the cylinder once it has loaded: centred, at its own scale.
       const holder = scroll;
       void modelInstance({ model: data.scrollModel, units: 'metres', animation: '', castShadows: true, collision: 'none' })
         .then((inst) => {
           if (gone) return inst.dispose();
           model = inst;
-          const k = data.width / Math.max(1e-3, inst.size.x);
+          const k = data.scrollScale > 0 ? data.scrollScale : 1;
           inst.object.scale.multiplyScalar(k);
           inst.object.position.copy(inst.center).multiplyScalar(-k);
           holder.remove(cylinder!);

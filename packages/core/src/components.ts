@@ -72,8 +72,10 @@ export type PosterData = {
   width: number;
   height: number;
   rolls: boolean;
-  /** The rolled scroll's look: a model lying along X, fitted to the width ('' : a plain cylinder). */
+  /** The rolled scroll's look: a model lying along X ('' : a plain cylinder). */
   scrollModel: string;
+  /** The scroll model's own scale, separate from the hung size. */
+  scrollScale: number;
   thickness: number;
   frame: string;
   mass: number;
@@ -653,11 +655,12 @@ export const COMPONENTS: ComponentDef[] = [
       {
         key: 'scrollModel',
         label: e('Scroll model', 'Модель свитка'),
-        hint: e('How it looks rolled up: a model lying along X, centred, scaled to the width. Empty: the object’s Model, or else a plain cylinder. It still collides as a cylinder.', 'Как выглядит свёрнутым: модель вдоль X, по центру, подгоняется под ширину. Пусто — Модель объекта, иначе простой цилиндр. Сталкивается всё равно как цилиндр.'),
+        hint: e('How it looks rolled up: a model lying along X, centred. Empty: the object’s Model, or else a plain cylinder. It still collides as a cylinder.', 'Как выглядит свёрнутым: модель вдоль X, по центру. Пусто — Модель объекта, иначе простой цилиндр. Сталкивается всё равно как цилиндр.'),
         type: { kind: 'asset', asset: 'models' },
         default: '',
         when: { key: 'rolls', is: [true] },
       },
+      { key: 'scrollScale', label: e('Scroll scale', 'Масштаб свитка'), hint: e('Size of the scroll model. Does not change the hung size.', 'Размер модели свитка. Не меняет размер в повешенном виде.'), type: { kind: 'number', min: 0.01, step: 0.1 }, default: 1, when: { key: 'rolls', is: [true] } },
       { key: 'thickness', label: e('Thickness', 'Толщина'), hint: e('Flat, from the wall out.', 'В плоском виде, от стены.'), type: { kind: 'number', min: 0.5, step: 0.5, unit: 'u' }, default: 0.5 },
       { key: 'frame', label: e('Frame / back', 'Рамка / оборот'), hint: e('The colour of the edges, the back and the rolled scroll.', 'Цвет краёв, оборота и свёрнутого свитка.'), type: { kind: 'color' }, default: '#e8e2d4' },
       { key: 'mass', label: e('Weight', 'Вес'), type: { kind: 'number', min: 0.01, max: 50, step: 0.5, unit: 'kg' }, default: 0.5 },
