@@ -56,14 +56,19 @@ export function buildPoster(data: PosterData, onUpdate: () => void = () => {}): 
           inst.object.position.copy(inst.center).multiplyScalar(-k);
           holder.remove(cylinder!);
           holder.add(inst.object);
+          setHung(hungNow);
           onUpdate();
         })
         .catch(() => {});
     }
   }
+  // The unused look is moved to a layer no camera draws instead of being hidden: hidden things aren't prepared
+  // ahead, so hanging a poster stalled the game while its picture's shader was built.
+  let hungNow = data.hungAtStart;
   const setHung = (hung: boolean) => {
-    flat.visible = hung || !scroll;
-    if (scroll) scroll.visible = !hung;
+    hungNow = hung;
+    flat.traverse((o) => o.layers.set(hung || !scroll ? 0 : UNSEEN));
+    scroll?.traverse((o) => o.layers.set(hung ? UNSEEN : 0));
   };
   setHung(data.hungAtStart);
   return {
@@ -91,4 +96,15 @@ function sheet(w: number, h: number, half: number): THREE.BufferGeometry {
   front.dispose();
   backside.dispose();
   return g;
+}
+
+const UNSEEN = 31;
+
+/** Sends the textures of everything in `obj`, drawn yet or not, to the GPU now (not at its first frame). */
+export function uploadTextures(r: THREE.WebGLRenderer, obj: THREE.Object3D): void {
+  obj.traverse((o) => {
+    const m = (o as THREE.Mesh).material;
+    if (!m) return;
+    for (const x of Array.isArray(m) ? m : [m]) for (const v of Object.values(x)) if ((v as THREE.Texture)?.isTexture && (v as THREE.Texture).image) r.initTexture(v as THREE.Texture);
+  });
 }

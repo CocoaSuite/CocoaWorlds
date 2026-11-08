@@ -2,6 +2,7 @@
  * The editor viewport: draws the level, grid and gizmos, handles camera navigation, picking, transform dragging
  * and the brush tool. Renders on demand (only after something changes) so an idle editor costs no GPU time.
  */
+import { uploadTextures } from './poster';
 import { FrameLog } from './frame-log';
 import { SceneReflections, sceneProbes } from './reflections';
 import { GroundBlend } from './ground-blend';
@@ -1830,6 +1831,7 @@ export class ViewportEngine {
     // (Reflections first: switching them on changes the shaders of shiny materials.)
     this.reflections?.prime(this.scene, eye, this.reflectOn(), [this.grid.object]);
     this.renderer.compile(play.group, cam, this.scene);
+    uploadTextures(this.renderer, play.group);
     // Models that load later are compiled in the background before they appear.
     play.warm = (o) => this.renderer.compileAsync(o, cam, this.scene);
   }

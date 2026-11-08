@@ -144,8 +144,8 @@ export function buildMarker(e: EntityData): Marker {
     group.add(poster.object);
     group.userData.dispose = poster.dispose;
     lines.push(segs([[-6, 0, 0], [6, 0, 0], [0, -6, 0], [0, 6, 0], [0, 0, 0], [0, 0, 8]], baseColor));
-    const d = poster.flat.visible ? data.thickness : posterScrollRadius(data) * 2;
-    pick = new THREE.Mesh(new THREE.BoxGeometry(Math.max(8, data.width), Math.max(8, poster.flat.visible ? data.height : d), Math.max(8, d)), pickMat);
+    const d = poster.flat.layers.isEnabled(0) ? data.thickness : posterScrollRadius(data) * 2;
+    pick = new THREE.Mesh(new THREE.BoxGeometry(Math.max(8, data.width), Math.max(8, poster.flat.layers.isEnabled(0) ? data.height : d), Math.max(8, d)), pickMat);
   } else if (model?.model) {
     // The model itself (once loaded), a small cross at the origin for selection colour, and a pick box that
     // grows to fit the model.

@@ -2,6 +2,7 @@
  * An exported game (B4): one scene played full-window, with the same game code, controls, display and screen
  * UI as Play in the editor. Saved progress is kept in this browser's storage (a desktop game has its own).
  */
+import { uploadTextures } from '../viewport/poster';
 import { SceneReflections, sceneProbes } from '../viewport/reflections';
 import { GroundBlend } from '../viewport/ground-blend';
 import { SceneDoc, expandRepeats, type GameRules, type GameValue, type MaterialDef, type PlantDef, type SceneFile, type SurfaceSounds, type VfxEffect } from '@cocoaworlds/core';
@@ -262,6 +263,7 @@ export class GameRunner {
         this.warmed = play;
         this.reflections.prime(this.scene, this.cam.getWorldPosition(new THREE.Vector3()), play.doc.settings.reflections !== false);
         this.renderer.compile(play.group, this.cam, this.scene);
+        uploadTextures(this.renderer, play.group);
         play.warm = (o) => this.renderer.compileAsync(o, this.cam, this.scene);
       }
       // (The time of day changed the light enough: capture again, easing in.)
