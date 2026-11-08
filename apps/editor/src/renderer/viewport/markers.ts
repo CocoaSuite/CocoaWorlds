@@ -21,7 +21,7 @@ import spawnIcon from '../assets/empty/Finish.png';
 import audioIcon from '../assets/empty/AudioEmitter.png';
 
 const ICONS: Record<EmptyClass, string> = { point: pointIcon, assetSpawn: spawnIcon, audioEmitter: audioIcon };
-const ICON_PX = 32;
+const ICON_SIZE = 32;
 const iconTextures = new Map<EmptyClass, THREE.Texture>();
 
 function iconTexture(c: EmptyClass): THREE.Texture {
@@ -36,12 +36,12 @@ function iconTexture(c: EmptyClass): THREE.Texture {
 
 const worldScale = new THREE.Vector3();
 
-/** A camera-facing icon that stays the same size on screen. */
+/** A camera-facing icon of a set size in the world. */
 function iconSprite(c: EmptyClass): THREE.Sprite {
-  const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: iconTexture(c), sizeAttenuation: false, transparent: true }));
+  const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: iconTexture(c), transparent: true }));
   sprite.name = 'empty-icon';
-  sprite.onBeforeRender = (renderer) => {
-    const k = (ICON_PX * 2) / Math.max(1, renderer.domElement.clientHeight);
+  sprite.onBeforeRender = () => {
+    const k = ICON_SIZE;
     sprite.parent?.getWorldScale(worldScale);
     sprite.scale.set(k / (worldScale.x || 1), k / (worldScale.y || 1), 1);
     sprite.updateMatrixWorld();
