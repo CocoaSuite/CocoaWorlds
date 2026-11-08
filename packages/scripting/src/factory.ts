@@ -127,6 +127,8 @@ export function newStatement(kind: StatementKind, opts: { target?: Ref; variable
     case 'freezePlayer':
     case 'unfreezePlayer':
     case 'unhide':
+    case 'silence':
+    case 'unsilence':
       return { id: id(), kind };
     case 'viewFrom':
       return { id: id(), kind, target, seconds: num(3) };

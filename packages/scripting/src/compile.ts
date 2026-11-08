@@ -141,7 +141,7 @@ export const USE_REACH = 96;
 export type GameAction = 'hurt' | 'heal' | 'addScore' | 'giveArmour';
 export type GameValue = 'health' | 'score' | 'armour';
 
-export type ActionName = 'move' | 'turn' | 'turnTo' | 'return' | 'show' | 'hide' | 'turnOn' | 'turnOff' | 'startTrain' | 'stopTrain' | 'walkTo' | 'runAway' | 'wander' | 'setSide' | 'freeze' | 'unfreeze' | 'viewFrom' | 'remove' | 'scale' | 'physical' | 'push' | 'moveTo' | 'teleport' | 'damage' | 'place' | 'pickUp' | 'drop' | 'unhide';
+export type ActionName = 'move' | 'turn' | 'turnTo' | 'return' | 'show' | 'hide' | 'turnOn' | 'turnOff' | 'startTrain' | 'stopTrain' | 'walkTo' | 'runAway' | 'wander' | 'setSide' | 'freeze' | 'unfreeze' | 'viewFrom' | 'remove' | 'scale' | 'physical' | 'push' | 'moveTo' | 'teleport' | 'damage' | 'place' | 'pickUp' | 'drop' | 'unhide' | 'silence' | 'unsilence';
 
 export type CompiledEvent =
   | { kind: 'start' }
@@ -723,6 +723,11 @@ class HandlerCompiler {
       case 'unhide':
         this.emit({ op: 'ref', ref: { player: true } });
         this.emit({ op: 'act', name: 'unhide', argc: 0 });
+        break;
+      case 'silence':
+      case 'unsilence':
+        this.emit({ op: 'ref', ref: { player: true } });
+        this.emit({ op: 'act', name: s.kind, argc: 0 });
         break;
       case 'freezePlayer':
       case 'unfreezePlayer':

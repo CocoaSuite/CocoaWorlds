@@ -181,6 +181,7 @@ isn't picked up by plain Use (the stack comes first), so its stack does it: *Whe
 |---|---|
 | Play sound *file* at *place* volume *n* | Plays once; in 3D at an object, the player or where the player looks, or everywhere |
 | Stop the sounds of *object* | Stops its Sound component and what its scripts played |
+| Silence the world / Bring the world's sounds back | The background sound and Sound components fade out and stay silent; footsteps, hits and Play sound blocks are still heard (a silent day) |
 
 See [rendering.md](rendering.md#sound) for the Sound component, the scene's background sound and Sound
 areas (echo, muffling). Sounds played by blocks are changed by Sound areas and water.

@@ -370,3 +370,15 @@ Status: done (2026-11-08). Signs in a copy were never drawn (Play only drew the 
 `drainChanges().signs` lists them with their place, `PlaySession.addSign` draws them, point objects in a copy ride the
 nearest body they are inside (`unitOf`), and a removed sign is reported in `removed`. Test: `weapons.test.ts` "a copy
 of a bomb".
+
+### 24. Footsteps, hits, surface kinds, the silent world
+
+Status: done (2026-11-08). `core/surfaces.ts`: surface kinds, `guessSurface`, `SurfaceSounds` (project setting
+`surfaceSounds`), `MaterialDef.sound`, Physics `surface`. Runtime: `surfaceAt` (brush faces by plane, moving
+bodies mapped back to where their faces were noted; terrain triangles by layer weights), `surfaceOf`, events
+`step` and `hit`; hits from velocity change across the physics step (`noteVelocities`/`listenForHits`, see the
+limits in rendering.md). `silent` + blocks `silence`/`unsilence` (Sound component events carry `ambient`).
+Editor: `viewport/surface-sounds.ts` (registry, set by the store and the game runner, exported in GameData),
+`PlaySession.surfaceSound`, Inspector › Surface sounds (`editor/SurfaceSounds.tsx`), Materials › Sounds like.
+Test: `packages/runtime/test/sounds.test.ts`. Not heard in the app yet. Not done: ladder and swimming sounds,
+creatures' footsteps, scraping/rolling loops, breaking sounds.

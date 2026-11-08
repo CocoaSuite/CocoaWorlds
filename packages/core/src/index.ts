@@ -15,3 +15,4 @@ export * from './materials';
 export * from './repeat';
 export * from './plants';
 export * from './moments';
+export * from './surfaces';

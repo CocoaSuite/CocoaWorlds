@@ -881,6 +881,8 @@ function statementWords(s: Statement, set: (patch: Record<string, unknown>, merg
     case 'unfreezePlayer':
     case 'unhide':
     case 'drop':
+    case 'silence':
+    case 'unsilence':
       return w(s.kind);
     case 'place':
       return (

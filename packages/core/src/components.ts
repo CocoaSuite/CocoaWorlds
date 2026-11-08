@@ -1,3 +1,4 @@
+import { SURFACES, SURFACE_LABELS } from './surfaces';
 /**
  * Built-in components: what each one stores, its defaults, and how the Inspector shows it.
  * Components are plain JSON on the entity (`components.light = { ... }`). The editor draws its fields from
@@ -375,6 +376,13 @@ export const COMPONENTS: ComponentDef[] = [
         hint: e('The player picks it up with Use, drops it with Use again and throws it with Fire. Only things of 50 kg or less; a Use script on it takes priority.', 'Игрок поднимает его клавишей «Использовать», отпускает ею же и бросает выстрелом. Только до 50 кг; скрипт на использование важнее.'),
         type: { kind: 'boolean' },
         default: true,
+      },
+      {
+        key: 'surface',
+        label: e('Sounds like', 'Звучит как'),
+        hint: e('What it sounds like when it hits something. From its material: what its faces or model are made of.', 'Как звучит при ударе. «По материалу»: из чего сделаны его грани или модель.'),
+        type: { kind: 'enum', options: [{ value: '', label: e('From its material', 'По материалу') }, ...SURFACES.filter((s) => s !== 'generic').map((s) => ({ value: s, label: e(...SURFACE_LABELS[s]) })), { value: 'generic', label: e(...SURFACE_LABELS.generic) }] },
+        default: '',
       },
     ],
   },
@@ -1039,6 +1047,8 @@ export interface RigidBodyData {
   lockRotation: boolean;
   /** The player can pick it up with Use (and throw it with Fire) when it weighs 50 kg or less. */
   pickUp: boolean;
+  /** What it sounds like when it hits something ('': from its material). */
+  surface?: string;
   [k: string]: unknown;
 }
 

@@ -30,6 +30,8 @@ import { EMITTER_DEFAULTS } from './particles';
 import { assetUrl } from '../assets';
 import { modelGeometry, modelInstance, type ModelInstance } from './models';
 import { SoundStage, ramp } from './area-sound';
+import { allSurfaceFiles, materialSurfaces, surfaceFiles } from './surface-sounds';
+import { projectMaterials } from './project-materials';
 import { BaseView } from './base-view';
 import type { SceneLighting } from './scene-lighting';
 
@@ -110,7 +112,7 @@ export class PlaySession {
       if (f) loaded.push([e.id, file, f]);
     }
     linkTerrainTiles(new SceneDoc(scene));
-    for (const [id, file, f] of loaded) terrains.set(id, terrainChunks(file, f).map(({ mesh }) => ({ positions: mesh.positions, indices: mesh.indices })));
+    for (const [id, file, f] of loaded) terrains.set(id, terrainChunks(file, f).map(({ mesh }) => ({ positions: mesh.positions, indices: mesh.indices, weights: mesh.weights })));
     // Trees' trunks collide (their crowns don't).
     const trunks = new Map<string, { width: number; height: number }>();
     for (const e of scene.entities) {
@@ -125,7 +127,9 @@ export class PlaySession {
 
   private constructor(scene: SceneFile, material: (name: string) => THREE.Material, rules: GameRules | undefined, values: GameValue[] | undefined, models: Map<string, ModelMesh>, terrains: Map<string, ModelMesh[]>, trunks: Map<string, { width: number; height: number }>, saved: SavedProgress | null, arrive: Travel | null) {
     this.group.name = 'play';
-    this.world = GameWorld.create(scene, { rules, values, models, terrains, trunks, saved, arrive });
+    this.world = GameWorld.create(scene, { rules, values, models, terrains, trunks, saved, arrive, surfaces: materialSurfaces(projectMaterials()) });
+    // (Loaded now, so the first footstep or thud isn't late.)
+    for (const f of allSurfaceFiles()) void PlaySession.load(f).catch(() => {});
     // (Blasts light their surroundings with lights made now: adding lights later would compile every material again.)
     this.effects = new Effects(this.world.hasBlasts ? 2 : 0);
     // The same copies the game world made (Repeat groups).
@@ -283,6 +287,8 @@ export class PlaySession {
     this.world.bus.on('use', (e) => void this.uses.push(e.target));
     this.world.bus.on('player.die', (e) => void this.notes.push(`The player died (${e.cause}) and starts again`));
     this.world.bus.on('sound', (e) => void this.startSound(e));
+    this.world.bus.on('step', (e) => void this.surfaceSound(e.kind === 'step' ? 'steps' : 'soft', e.surface, e.at, e.volume, 256));
+    this.world.bus.on('hit', (e) => void this.surfaceSound(e.hard ? 'hard' : 'soft', e.surface, e.at, e.volume, 1024));
     this.group.add(this.effects.group);
     this.world.bus.on('shot', (e) => {
       const yaw = this.world.player?.input.yaw ?? 0;
@@ -438,7 +444,7 @@ export class PlaySession {
   private listener: THREE.AudioListener | null = null;
   private static buffers = new Map<string, Promise<AudioBuffer>>();
   /** Sounds playing now (for following moving objects and stopping). */
-  readonly sounds: { source: string; sound: string; audio: THREE.Audio | THREE.PositionalAudio; follow: string | null; followAt: number; volume: number; plain: boolean; outside: boolean; fire: boolean }[] = [];
+  readonly sounds: { source: string; sound: string; audio: THREE.Audio | THREE.PositionalAudio; follow: string | null; followAt: number; volume: number; plain: boolean; outside: boolean; fire: boolean; ambient: boolean }[] = [];
 
   /** How things sound where the ears are (Sound areas, water): the effect chain every changed sound goes through. */
   stage: SoundStage | null = null;
@@ -469,7 +475,7 @@ export class PlaySession {
     return p;
   }
 
-  private async startSound(e: { sound: string; at: [number, number, number] | null; follow: string | null; volume: number; loop: boolean; range: number; source: string; areaEffects?: boolean }): Promise<void> {
+  private async startSound(e: { sound: string; at: [number, number, number] | null; follow: string | null; volume: number; loop: boolean; range: number; source: string; areaEffects?: boolean; ambient?: boolean }): Promise<void> {
     const listener = this.listener;
     if (!listener || this.disposed) return;
     let buffer: AudioBuffer;
@@ -494,11 +500,11 @@ export class PlaySession {
     if (e.areaEffects === false) this.stage?.bypass(audio);
     audio.setBuffer(buffer);
     audio.setLoop(e.loop);
-    audio.setVolume(e.volume);
+    audio.setVolume(e.ambient && this.world.silent ? 0 : e.volume);
     this.group.add(audio);
     const fireTag = this.world.base?.config.ambience.fireTag ?? '';
     const fire = !!fireTag && !!this.doc.get(e.source)?.tags.includes(fireTag);
-    const entry = { source: e.source, sound: e.sound, audio, follow: e.follow, followAt: e.follow ? this.world.drawn(e.follow) : -1, volume: e.volume, plain: e.areaEffects === false, outside: false, fire };
+    const entry = { source: e.source, sound: e.sound, audio, follow: e.follow, followAt: e.follow ? this.world.drawn(e.follow) : -1, volume: e.volume, plain: e.areaEffects === false, outside: false, fire, ambient: !!e.ambient };
     this.sounds.push(entry);
     // (A fire's loudness follows comfort: set on the next frame.)
     if (fire) this.comfortNow = -1;
@@ -529,6 +535,46 @@ export class PlaySession {
   private soundAt = new THREE.Vector3();
   private bgOutside = false;
   private comfortNow = -1;
+  private silentNow = false;
+  /** Footsteps and hits playing now (no more than 8 at once). */
+  private voices = 0;
+  private lastFile = new Map<string, string>();
+
+  /** A footstep or hit: one of the surface's files (not the same twice running), a little higher or lower each time. */
+  private async surfaceSound(kind: 'steps' | 'soft' | 'hard', surface: string, at: [number, number, number], volume: number, range: number): Promise<void> {
+    const listener = this.listener;
+    const { files, volume: k } = surfaceFiles(surface, kind);
+    if (!listener || !files.length || this.voices >= 8) return;
+    const key = `${surface}/${kind}`;
+    const choices = files.length > 1 ? files.filter((f) => f !== this.lastFile.get(key)) : files;
+    const file = choices[Math.floor(Math.random() * choices.length)]!;
+    this.lastFile.set(key, file);
+    this.voices++;
+    let buffer: AudioBuffer;
+    try {
+      buffer = await PlaySession.load(file);
+    } catch {
+      this.voices--;
+      return;
+    }
+    if (this.disposed) return;
+    const audio = new THREE.PositionalAudio(listener);
+    audio.setDistanceModel('linear');
+    audio.setRefDistance(range / 4);
+    audio.setMaxDistance(range);
+    audio.position.set(...at);
+    audio.setBuffer(buffer);
+    audio.setPlaybackRate(0.92 + Math.random() * 0.16);
+    audio.setVolume(Math.max(0, volume * k));
+    this.group.add(audio);
+    audio.onEnded = () => {
+      (audio as { isPlaying: boolean }).isPlaying = false;
+      this.voices--;
+      audio.removeFromParent();
+      audio.disconnect();
+    };
+    audio.play();
+  }
 
   /** Each frame: the effect and background sound for where the ears are now. */
   private hear(): void {
@@ -536,6 +582,12 @@ export class PlaySession {
     if (!listener?.parent || !this.stage) return;
     const h = this.world.hearing(listener.getWorldPosition(this.ears));
     this.hearingNow = h;
+    // A silent world: the background fades out, and so do Sound components (footsteps and hits stay).
+    if (this.world.silent !== this.silentNow) {
+      this.silentNow = this.world.silent;
+      for (const s of this.sounds) if (s.ambient) ramp(listener.context, s.audio.gain.gain, this.silentNow ? 0 : s.volume, 1.5);
+    }
+    if (this.silentNow) h.background = null;
     this.stage.set(h.effect, h.mix);
     if (h.room !== undefined) this.hearBase(h);
     const key = h.background ? `${h.background.sound}|${h.background.volume}` : '';
@@ -581,7 +633,7 @@ export class PlaySession {
     const ctx = this.listener!.context;
     ramp(ctx, stage.plain.gain, 1 - cfg.ambience.music * comfort, 1.5);
     const fire = 1 + cfg.ambience.fire * (comfort * 2 - 1);
-    for (const s of this.sounds) if (s.fire) ramp(ctx, s.audio.gain.gain, s.volume * Math.max(0, fire), 1.5);
+    for (const s of this.sounds) if (s.fire) ramp(ctx, s.audio.gain.gain, this.silentNow ? 0 : s.volume * Math.max(0, fire), 1.5);
   }
 
   /** A background loop, heard everywhere, fading in. */

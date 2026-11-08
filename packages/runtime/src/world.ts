@@ -17,6 +17,11 @@ import {
   readComponent,
   type ColliderData,
   type EntityData,
+  type Surface,
+  type TerrainData,
+  guessSurface,
+  isSurface,
+  SOFT_SURFACES,
   type RigidBodyData,
   type SceneFile,
   type TriggerData,
@@ -162,6 +167,8 @@ export interface ModelMesh {
   indices: Uint32Array;
   /** The file's collision meshes (Auto collision), model space. */
   parts?: ModelPart[];
+  /** Terrains: four layer weights (0–1) per corner, for what the ground sounds like where it is stood on. */
+  weights?: Float32Array;
 }
 /** One collision mesh: `exact` collides by its triangles; `moves` follows the model's animation. */
 export interface ModelPart {
@@ -250,6 +257,8 @@ type Quat = { x: number; y: number; z: number; w: number };
 
 /** The heaviest thing the player can pick up (kg). */
 const MAX_CARRY = 50;
+/** How sharply something must be stopped to make a sound (u/s; about 1.5 m/s). */
+const HIT_SPEED = 60;
 /** “Make an explosion”: a blast with no weapon behind it (size, damage and push filled in). */
 const BLAST: WeaponDef = { kind: 'projectile', damage: 0, rate: 1, automatic: false, range: 0, spread: 0, pellets: 1, ammo: '', speed: 0, arc: false, blast: 0, push: 0, sound: '' };
 /** Radians a held object turns per pixel of mouse movement. */
@@ -284,6 +293,8 @@ interface Body {
   poster?: { data: PosterData; matrix: number[] };
   /** Physics settings, when it has a Physics component. */
   rb?: RigidBodyData;
+  /** Velocity before the physics step (dynamic bodies awake), for hearing hits. */
+  v0?: Float64Array;
   /** Copies made while playing: models carried by this unit, and where they were placed. */
   riders?: { id: string; matrix: number[] }[];
   /** Where it was before the last physics step (x, y, z, then the rotation x, y, z, w), for drawing in between. */
@@ -461,6 +472,8 @@ export class GameWorld {
       trunks?: Map<string, { width: number; height: number }>;
       saved?: SavedProgress | null;
       clock?: () => number;
+      /** What each material sounds like (by id); missing ones are guessed from their names. */
+      surfaces?: Map<string, Surface>;
       arrive?: Travel | null;
       /** Base building: extra pieces and settings (JSON, as `settings.building` of the scene). */
       building?: { pieces?: unknown[]; base?: unknown };
@@ -468,6 +481,7 @@ export class GameWorld {
   ): GameWorld {
     const w = new GameWorld(scene, gameRules({ game: options.rules }), options.values ?? [], options.models ?? new Map(), options.terrains ?? new Map(), options.trunks ?? new Map());
     if (options.clock) w.clock = options.clock;
+    if (options.surfaces) w.surfaces = options.surfaces;
     w.sceneName = scene.name;
     if (w.rules.building) w.initBase(options.building ?? (scene.settings as { building?: { pieces?: unknown[]; base?: unknown } }).building);
     if (options.saved || options.arrive?.worlds) w.loadProgress(options.saved ?? { values: {} }, options.arrive ?? null);
@@ -1213,6 +1227,7 @@ export class GameWorld {
       if (!desc) continue;
       const c = this.world.createCollider(desc.setFriction(0.6), body);
       this.owner.set(c.handle, id);
+      this.noteFaces(c, b, body);
     }
     // Models and Collision shapes inside: their shapes, placed on the unit's body. A model with no collision of
     // its own gets a box when it is what scripts name, so it can still be knocked about once it falls and tumbles.
@@ -1254,6 +1269,7 @@ export class GameWorld {
         desc.setFriction(0.6);
         const c = this.world.createCollider(desc, body);
         this.owner.set(c.handle, s.id);
+        this.faceInfo.set(c.handle, { faces: piece.faces, body: null });
         this.stats.staticPieces++;
         const belt = conveyors.get(s.id);
         if (belt) {
@@ -1296,6 +1312,7 @@ export class GameWorld {
     const body = this.world.createRigidBody(this.bodyDesc(rb).setTranslation(c[0]!, c[1]!, c[2]!));
     const col = this.world.createCollider(this.material(desc, rb), body);
     this.owner.set(col.handle, e.id);
+    this.noteFaces(col, brush, body);
     this.track(e.id, 'brush', rb.motion, body, [brush]);
     this.bodies.get(e.id)!.rb = rb;
   }
@@ -1339,10 +1356,16 @@ export class GameWorld {
         .setTranslation(t.position[0], t.position[1], t.position[2])
         .setRotation(quatFromMatrix(composeTransform({ position: [0, 0, 0], rotation: t.rotation, scale: [1, 1, 1] }))),
     );
+    const td = readComponent<TerrainData>('terrain', this.doc.get(id)?.components.terrain);
+    const layers = ([0, 1, 2, 3] as const).map((i) => {
+      const tex = String(td[`texture${i}`] ?? '');
+      return tex ? this.materialSurface(tex) : (['grass', 'dirt', 'stone', 'sand'] as const)[i];
+    });
     for (const p of parts) {
       if (p.indices.length < 3) continue;
       const c = this.world.createCollider(RAPIER.ColliderDesc.trimesh(p.positions, p.indices).setFriction(0.8), body);
       this.owner.set(c.handle, id);
+      if (p.weights) this.groundInfo.set(c.handle, { indices: p.indices, weights: p.weights, layers });
       const min = [Infinity, Infinity, Infinity], max = [-Infinity, -Infinity, -Infinity];
       for (let i = 0; i < p.positions.length; i += 3) {
         const w = applyMat4(m, [p.positions[i]!, p.positions[i + 1]!, p.positions[i + 2]!]);
@@ -1747,7 +1770,9 @@ export class GameWorld {
       this.floatBodies();
       this.carryOnBelts();
       this.syncStandIns();
+      this.noteVelocities();
       this.world.step(this.events);
+      this.listenForHits();
       if (this.held) this.stickHeld();
       this.accumulator -= STEP;
       this.time += STEP;
@@ -2029,6 +2054,7 @@ export class GameWorld {
   private playerNoise(): void {
     const p = this.player!;
     const v = p.velocity;
+    this.footsteps();
     if (p.landingSpeed > 300) this.noise(p.feetPosition, NOISE.landing);
     if (!p.onGround || p.crouched || p.input.walk || Math.hypot(v.x, v.z) < 100 || this.time < this.nextStep) return;
     this.nextStep = this.time + 0.35;
@@ -2799,6 +2825,10 @@ export class GameWorld {
       this.frozen = name === 'freeze';
       return null;
     }
+    if (name === 'silence' || name === 'unsilence') {
+      this.silent = name === 'silence';
+      return null;
+    }
     if (name === 'drop') return this.dropHeld(), null;
     if (name === 'unhide') return this.leaveHiding(), null;
     if (name === 'teleport') this.stopHiding();
@@ -3046,7 +3076,7 @@ export class GameWorld {
   private startSound(id: string, s: SoundData, at: Q3 | null): void {
     if (!s.sound || !s.playOnStart) return;
     const p = at ?? this.placePoint({ ref: id });
-    this.bus.emit({ type: 'sound', sound: s.sound, at: p, follow: this.bodyOf(id), volume: s.volume, loop: s.loop, range: s.range, source: id, areaEffects: s.areaEffects !== false, time: this.time });
+    this.bus.emit({ type: 'sound', sound: s.sound, at: p, follow: this.bodyOf(id), volume: s.volume, loop: s.loop, range: s.range, source: id, areaEffects: s.areaEffects !== false, ambient: true, time: this.time });
     const loud = Number(s.loudness) || 0;
     if (loud > 0) {
       if (p) this.noise(this.v3(p), loud, this.spots.has(id) ? id : null);
@@ -3064,6 +3094,178 @@ export class GameWorld {
       const p = this.placePoint({ ref: id });
       if (p) this.noise(this.v3(p), s.loudness, this.spots.has(id) ? id : null);
     }
+  }
+
+  // ── What things sound like: footsteps, hits ──
+
+  /** The world is silent (a block): the background and Sound components fall quiet; footsteps and hits stay. */
+  silent = false;
+  /** What each material sounds like, by id (set by whoever starts the game). */
+  surfaces = new Map<string, Surface>();
+  /** Brush colliders: their faces (world space when made) and the body that moves them, if any. */
+  private faceInfo = new Map<number, { faces: { plane: Plane; surface: { material: string } }[]; body: { body: RAPIER.RigidBody; t: RAPIER.Vector; q: RAPIER.Rotation } | null }>();
+  /** Terrain colliders: each corner's layer weights and what each layer sounds like. */
+  private groundInfo = new Map<number, { indices: Uint32Array; weights: Float32Array; layers: Surface[] }>();
+  private surfaceCache = new Map<string, Surface>();
+
+  private noteFaces(c: RAPIER.Collider, brush: Brush, body: RAPIER.RigidBody): void {
+    this.faceInfo.set(c.handle, { faces: brush.faces, body: { body, t: { ...body.translation() }, q: { ...body.rotation() } } });
+  }
+
+  private materialSurface(material: string): Surface {
+    return this.surfaces.get(material) ?? guessSurface(material.split('/').pop() ?? material);
+  }
+
+  /** What an object sounds like as a whole: its Physics setting, its faces' commonest material, its model, its name. */
+  surfaceOf(id: string): Surface {
+    const cached = this.surfaceCache.get(id);
+    if (cached) return cached;
+    const base = id.split('#')[0]!;
+    const e = this.doc.get(base);
+    const rb = e?.components.rigidBody as { surface?: unknown } | undefined;
+    let s: Surface = 'generic';
+    if (isSurface(rb?.surface)) s = rb.surface;
+    else if (e?.components.npc) s = 'flesh';
+    else {
+      const count = new Map<string, number>();
+      const b = this.bodies.get(id)?.body;
+      for (let i = 0; b && i < b.numColliders(); i++) for (const f of this.faceInfo.get(b.collider(i).handle)?.faces ?? []) count.set(f.surface.material, (count.get(f.surface.material) ?? 0) + 1);
+      const top = [...count].sort((a, z) => z[1] - a[1])[0]?.[0];
+      if (top) s = this.materialSurface(top);
+      if (s === 'generic' && e?.components.model) {
+        const m = readComponent<ModelData>('model', e.components.model);
+        const mat = Object.values(m.materials ?? {})[0];
+        s = mat ? this.materialSurface(mat) : guessSurface(m.model.split('/').pop() ?? '');
+      }
+      if (s === 'generic' && e) s = guessSurface(e.name);
+    }
+    this.surfaceCache.set(id, s);
+    return s;
+  }
+
+  /** What is under a point of a collider: the face of a brush there, the painted ground of a terrain, or the object. */
+  surfaceAt(handle: number, at: { x: number; y: number; z: number }, feature?: number): Surface {
+    const id = this.owner.get(handle);
+    const rb = id ? (this.doc.get(id.split('#')[0]!)?.components.rigidBody as { surface?: unknown } | undefined) : undefined;
+    if (isSurface(rb?.surface)) return rb.surface;
+    const f = this.faceInfo.get(handle);
+    if (f?.faces.length) {
+      let p = at;
+      if (f.body) {
+        // (Back to where the body was when its faces were noted.)
+        const t = f.body.body.translation(), q = f.body.body.rotation();
+        const local = rotate(conj(q), { x: at.x - t.x, y: at.y - t.y, z: at.z - t.z });
+        const w = rotate(f.body.q, local);
+        p = { x: w.x + f.body.t.x, y: w.y + f.body.t.y, z: w.z + f.body.t.z };
+      }
+      let best = f.faces[0]!, gap = Infinity;
+      for (const face of f.faces) {
+        const d = Math.abs(face.plane.n[0] * p.x + face.plane.n[1] * p.y + face.plane.n[2] * p.z - face.plane.d);
+        if (d < gap) [best, gap] = [face, d];
+      }
+      return this.materialSurface(best.surface.material);
+    }
+    const g = this.groundInfo.get(handle);
+    if (g && feature !== undefined && feature * 3 + 2 < g.indices.length) {
+      const w = [0, 0, 0, 0];
+      for (let k = 0; k < 3; k++) {
+        const v = g.indices[feature * 3 + k]!;
+        for (let l = 0; l < 4; l++) w[l]! += g.weights[v * 4 + l] ?? 0;
+      }
+      return g.layers[w.indexOf(Math.max(...w))] ?? 'dirt';
+    }
+    if (g) return g.layers[0] ?? 'dirt';
+    return id ? this.surfaceOf(id) : 'generic';
+  }
+
+  private stepLeft = 0;
+  private wasOnGround = true;
+
+  /** The player's footsteps: one every stride on the ground, a thump on landing, a scuff on jumping. */
+  private footsteps(): void {
+    const p = this.player!;
+    const v = p.velocity;
+    const feet = p.feetPosition;
+    const under = (): Surface => {
+      if (p.waterLevel >= 1) return 'water';
+      const hit = this.world.castRayAndGetNormal(new RAPIER.Ray({ x: feet.x, y: feet.y + 4, z: feet.z }, { x: 0, y: -1, z: 0 }), 20, true, undefined, undefined, p.collider);
+      if (!hit) return 'generic';
+      return this.surfaceAt(hit.collider.handle, { x: feet.x, y: feet.y + 4 - hit.timeOfImpact, z: feet.z }, hit.featureId);
+    };
+    const step = (kind: 'step' | 'land' | 'jump', volume: number) => this.bus.emit({ type: 'step', kind, surface: under(), at: [feet.x, feet.y, feet.z], volume, time: this.time });
+    if (p.landingSpeed > 120) step('land', Math.min(1, 0.35 + p.landingSpeed / 900));
+    else if (this.wasOnGround && !p.onGround && v.y > 100 && !p.onLadder) step('jump', 0.35);
+    this.wasOnGround = p.onGround;
+    const speed = Math.hypot(v.x, v.z);
+    if (!p.onGround || p.waterLevel >= 2 || speed < 20) {
+      this.stepLeft = Math.min(this.stepLeft, 12);
+      return;
+    }
+    // (Longer strides the faster the player goes; quieter crouching and walking.)
+    const sprint = speed > 250, walk = p.crouched || speed < 130;
+    this.stepLeft -= speed * STEP;
+    if (this.stepLeft > 0) return;
+    this.stepLeft += p.crouched ? 36 : walk ? 44 : sprint ? 70 : 56;
+    step('step', p.crouched ? 0.2 : walk ? 0.4 : sprint ? 0.85 : 0.6);
+  }
+
+  /** Velocities just before a physics step: what the step changes beyond gravity is what things hit. */
+  private noteVelocities(): void {
+    for (const b of this.bodies.values()) {
+      if (b.info.motion !== 'dynamic' || b.info.kind === 'zone' || b.body.isSleeping() || !b.body.isDynamic()) {
+        b.v0 = undefined;
+        continue;
+      }
+      const v = b.body.linvel();
+      (b.v0 ??= new Float64Array(3)).set([v.x, v.y, v.z]);
+    }
+  }
+
+  private hits = new Map<string, { last: number; since: number; count: number; quietUntil: number }>();
+
+  /**
+   * Hits: a body the step slowed sharply (its velocity changed against the way it was going). No sound for
+   * small knocks, nothing more often than every 0.09 s per object, and an object chattering (resting badly,
+   * squeezed in a pile) is quiet for a second after five hits in one: no Source-style buzzing piles.
+   */
+  private listenForHits(): void {
+    const g = this.world.gravity;
+    let left = 4;
+    for (const b of this.bodies.values()) {
+      const v0 = b.v0;
+      if (!v0 || !b.body.isDynamic() || b.info.id === this.held?.id) continue;
+      const v = b.body.linvel(), k = b.body.gravityScale() * STEP;
+      const dx = v.x - v0[0]! - g.x * k, dy = v.y - v0[1]! - g.y * k, dz = v.z - v0[2]! - g.z * k;
+      const dv = Math.hypot(dx, dy, dz), was = Math.hypot(v0[0]!, v0[1]!, v0[2]!);
+      if (dv < HIT_SPEED || was < HIT_SPEED * 0.5 || dx * v0[0]! + dy * v0[1]! + dz * v0[2]! > -0.3 * dv * was) continue;
+      const id = b.info.id;
+      const h = this.hits.get(id) ?? { last: -1, since: -1, count: 0, quietUntil: 0 };
+      this.hits.set(id, h);
+      if (this.time < h.quietUntil || this.time - h.last < 0.09) continue;
+      if (this.time - h.since > 1) [h.since, h.count] = [this.time, 0];
+      if (++h.count > 5) {
+        h.quietUntil = this.time + 1;
+        continue;
+      }
+      h.last = this.time;
+      const t = b.body.translation();
+      let volume = Math.min(1, 0.15 + (dv - HIT_SPEED) / 400);
+      // (Landing on something soft is quieter.)
+      const touched = this.touching(b.body);
+      if (touched !== null && SOFT_SURFACES.includes(this.surfaceAt(touched, t))) volume *= 0.6;
+      this.bus.emit({ type: 'hit', source: id, surface: this.surfaceOf(id), at: [t.x, t.y, t.z], volume, hard: dv > 260, time: this.time });
+      if (--left <= 0) break;
+    }
+  }
+
+  /** A collider the body is touching (not its own), if any. */
+  private touching(body: RAPIER.RigidBody): number | null {
+    let found: number | null = null;
+    for (let i = 0; i < body.numColliders() && found === null; i++)
+      this.world.contactPairsWith(body.collider(i), (o) => {
+        if (found === null && o.parent()?.handle !== body.handle) found = o.handle;
+      });
+    return found;
   }
 
   /** The moving body an object belongs to (itself, or the unit it is part of), if any. */
@@ -4121,4 +4323,11 @@ function sampled(positions: ArrayLike<number>, m: number[]): number[][] {
 /** An angle as a turn between −π and π. */
 function turnOf(a: number): number {
   return a - Math.PI * 2 * Math.round(a / (Math.PI * 2));
+}
+
+const conj = (q: Quat): Quat => ({ x: -q.x, y: -q.y, z: -q.z, w: q.w });
+/** A vector turned by a quaternion. */
+function rotate(q: Quat, v: { x: number; y: number; z: number }): { x: number; y: number; z: number } {
+  const tx = 2 * (q.y * v.z - q.z * v.y), ty = 2 * (q.z * v.x - q.x * v.z), tz = 2 * (q.x * v.y - q.y * v.x);
+  return { x: v.x + q.w * tx + q.y * tz - q.z * ty, y: v.y + q.w * ty + q.z * tx - q.x * tz, z: v.z + q.w * tz + q.x * ty - q.y * tx };
 }

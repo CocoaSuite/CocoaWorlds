@@ -52,6 +52,7 @@ import {
   materialsOf,
   plantsOf,
   type PlantDef,
+  type SurfaceSounds,
   type SceneSettings,
   setSceneSettingsCmd,
 } from '@cocoaworlds/core';
@@ -86,6 +87,7 @@ import { useShallow } from 'zustand/react/shallow';
 import type { AssetEntry, AssetKind, OpenedProject, PrefabEntry } from '../shared/api';
 import { setAssetProject } from './assets';
 import { setProjectPlants } from './viewport/plants';
+import { setSurfaceSounds } from './viewport/surface-sounds';
 import { addTerrainField, forgetTerrains, saveTerrains, terrainField } from './viewport/terrains';
 import { besideTile, newTileBeside } from './viewport/terrain-tiles';
 import { materialSheet, projectMaterialDef, setProjectMaterials } from './viewport/project-materials';
@@ -303,6 +305,8 @@ interface Actions {
   stopPlaying(): void;
   /** Switch a built-in game system on or off for the whole project (saved to the project file at once). */
   setGameRule(rule: keyof GameRules, on: boolean): Promise<void>;
+  /** Each surface kind's footstep and hit sounds (saved to the project file at once). */
+  setSurfaceSounds(next: SurfaceSounds): Promise<void>;
   /** Change the scene's settings (lighting, sky, fog, gravity), with undo. */
   setSceneSettings(patch: Partial<SceneSettings>, label: string, mergeKey?: string): void;
   /** The snapping grid's size (u; saved with the project). */
@@ -1466,6 +1470,14 @@ export const useEditor = create<State & Actions>()((set, get) => ({
     get().log('info', 'Project', `${what} is now ${on ? 'on' : 'off'} for this project.`);
   },
 
+  async setSurfaceSounds(next) {
+    const session = get().session;
+    if (!session) return;
+    const r = await window.cocoa.projects.saveSettings(session.dir, { ...session.project.settings, surfaceSounds: next });
+    if (!r.ok) return void get().log('error', 'Project', r.error);
+    set({ session: { ...get().session!, project: r.value }, rev: get().rev + 1 });
+  },
+
   openDialog(dialog) {
     set({ dialog });
   },
@@ -1830,6 +1842,13 @@ useEditor.subscribe((s) => {
   if (list === shownMaterials) return;
   shownMaterials = list;
   setProjectMaterials(list ?? []);
+});
+let shownSurfaceSounds: SurfaceSounds | undefined;
+useEditor.subscribe((s) => {
+  const ss = s.session?.project.settings.surfaceSounds;
+  if (ss === shownSurfaceSounds) return;
+  shownSurfaceSounds = ss;
+  setSurfaceSounds(ss);
 });
 let shownPlants: PlantDef[] | undefined;
 useEditor.subscribe((s) => {

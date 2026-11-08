@@ -1,4 +1,5 @@
 /** Inspector for the selection (CocoaCanvas right panel). Scene settings when nothing is selected. */
+import { SurfaceSoundsEditor } from './SurfaceSounds';
 import { PaintPanel } from '../viewport/PaintPanel';
 import { useState } from 'react';
 import { shown, stored, type AxisKind } from '../axes';
@@ -263,6 +264,9 @@ function SceneSettings() {
         <p className="cw-hint">{t('insp.bgSoundHint')}</p>
       </Fold>
       <GameRulesSection />
+      <Fold id="surfaceSounds" title={t('ss.title')}>
+        <SurfaceSoundsEditor />
+      </Fold>
     </>
   );
 }

@@ -672,3 +672,11 @@ button.cw-sec.cw-fold { width: 100%; border: 0; border-top: 1px solid var(--line
 .cw-save-menu button:hover { background: rgba(255, 255, 255, 0.06); }
 .cw-save-menu button:focus-visible { outline: 2px solid var(--accent, #4b9cff); outline-offset: 1px; }
 .cw-save-when { font-size: 12px; color: var(--mute); margin-top: 4px; }
+
+.cw-ss { padding: 6px 0; border-top: 1px solid var(--line); }
+.cw-ss-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.cw-ss-head .cw-input { width: 64px; }
+.cw-ss-row { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin-top: 4px; }
+.cw-ss-row > .cw-muted { width: 84px; }
+.cw-ss-chip { font: inherit; font-size: 11px; padding: 1px 6px; border-radius: 4px; border: 1px solid var(--line); background: transparent; color: inherit; cursor: pointer; }
+.cw-ss-add { flex: 1; min-width: 100px; }

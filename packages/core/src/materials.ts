@@ -4,6 +4,7 @@
  * conveyors). Kept in the project file, so every scene shares them. Faces refer to a material by its id
  * (`mat/…`), which never changes, so a material can be renamed freely.
  */
+import { isSurface } from './surfaces';
 import { newId } from './ids';
 
 export const MATERIAL_PREFIX = 'mat/';
@@ -32,6 +33,8 @@ export interface MaterialDef {
   emissiveStrength?: number;
   /** 1 = solid; less is see-through (glass, water). */
   opacity?: number;
+  /** What it sounds like underfoot and when hit (missing: guessed from its name). */
+  sound?: import('./surfaces').Surface;
   /** Pixels of the image under half opacity are cut out (fences, grilles, leaves). On unless switched off. */
   cutout?: boolean;
   /** Seen from both sides (thin things: leaves, flags). */
@@ -175,6 +178,7 @@ export function validateMaterials(list: unknown): string | null {
     if (!inRange(m.emissiveStrength, 0, 10)) return `${label}: glow strength must be between 0 and 10.`;
     if (!inRange(m.normalStrength, 0, 2)) return `${label}: bump strength must be between 0 and 2.`;
     if (!inRange(m.opacity, 0, 1)) return `${label}: opacity must be between 0 and 1.`;
+    if (m.sound !== undefined && !isSurface(m.sound)) return `${label}: its sound must be a kind of surface (wood, metal …).`;
     if (m.scale !== undefined && !(isNum(m.scale) && m.scale > 0)) return `${label}: the image scale must be above 0.`;
     if (m.cutout !== undefined && typeof m.cutout !== 'boolean') return `${label}: cut-out must be on or off.`;
     if (m.doubleSided !== undefined && typeof m.doubleSided !== 'boolean') return `${label}: two-sided must be on or off.`;

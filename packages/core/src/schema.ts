@@ -39,6 +39,8 @@ export interface ProjectSettings {
   favouriteMaterials?: string[];
   /** Skies saved from the Sky workspace, for any scene (missing: none). */
   skies?: SavedSky[];
+  /** Each surface kind's footstep and hit sounds (missing: silent). */
+  surfaceSounds?: import('./surfaces').SurfaceSounds;
 }
 
 /** A value every script in the game shares, defined once for the project. */

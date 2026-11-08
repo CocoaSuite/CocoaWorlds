@@ -119,6 +119,9 @@ export type Statement =
   /** Scripted scenes: the player can't move (or can again); the view looks through an object for a while. */
   | { id: string; kind: 'freezePlayer' }
   | { id: string; kind: 'unfreezePlayer' }
+  /** Background sound and Sound components fall silent (footsteps, hits and sounds blocks play stay). */
+  | { id: string; kind: 'silence' }
+  | { id: string; kind: 'unsilence' }
   /** Out of the hiding spot the player is in. */
   | { id: string; kind: 'unhide' }
   | { id: string; kind: 'viewFrom'; target: Ref; seconds: Expr }

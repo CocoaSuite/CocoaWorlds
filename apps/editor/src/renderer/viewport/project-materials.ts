@@ -17,6 +17,9 @@ const UNITS_PER_TILE = TEX_SIZE * 0.25;
 
 let defs = new Map<string, MaterialDef>();
 
+/** The project's materials now. */
+export const projectMaterials = (): Iterable<MaterialDef> => defs.values();
+
 interface Live {
   id: string;
   m: THREE.MeshStandardMaterial;

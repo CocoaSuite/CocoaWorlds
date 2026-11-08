@@ -24,7 +24,11 @@ export type GameEvent =
    * `source` is the object making it (for stopping); `range` is how far it carries (units); `areaEffects`
    * false: Sound areas and water don't change it (music, interface sounds; missing: they do).
    */
-  | { type: 'sound'; sound: string; at: [number, number, number] | null; follow: string | null; volume: number; loop: boolean; range: number; source: string; areaEffects?: boolean; time: number }
+  | { type: 'sound'; sound: string; at: [number, number, number] | null; follow: string | null; volume: number; loop: boolean; range: number; source: string; areaEffects?: boolean; ambient?: boolean; time: number }
+  /** A footstep, landing or jump of the player on a surface (volume 0–1). */
+  | { type: 'step'; kind: 'step' | 'land' | 'jump'; surface: string; at: [number, number, number]; volume: number; time: number }
+  /** Something hit something: `source` is what moved, `surface` what it sounds like (volume 0–1; `hard`: a big hit). */
+  | { type: 'hit'; source: string; surface: string; at: [number, number, number]; volume: number; hard: boolean; time: number }
   | { type: 'sound.stop'; source: string; time: number }
   /** Play an animation of an object's model (the game world has no models; whoever draws them plays it). */
   | { type: 'anim'; target: string; name: string; loop: boolean; time: number }

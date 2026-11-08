@@ -3,12 +3,14 @@
  * (sphere, cube or wall, turned with the mouse), and its settings on the right. Materials belong to the
  * project, so every scene can use them; changes show at once on every face that uses one, and are undoable.
  */
-import { newMaterial, newWear, type MaterialDef, type WearDef } from '@cocoaworlds/core';
+import { SURFACES, newMaterial, newWear, type MaterialDef, type Surface, type WearDef } from '@cocoaworlds/core';
 import { Button, ColorField, ContextMenu, NumberField, Segmented, Switch } from '@cocoaworlds/ui';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { brushOf } from '../brush/brushes';
 import { t } from '../i18n';
+import { surfaceGuess } from '../viewport/surface-sounds';
+import { surfaceLabel } from './SurfaceSounds';
 import { useEditor } from '../store';
 import { projectMaterial, releaseMaterial, tickMaterials } from '../viewport/project-materials';
 import type { FaceRef } from '../viewport/world-render';
@@ -477,6 +479,16 @@ function MaterialProps({
           {t('mat.cutout')}
         </label>
       )}
+      <Row label={t('mat.sound')}>
+        <select className="cw-input" aria-label={t('mat.sound')} value={m.sound ?? ''} onChange={(e) => edit({ sound: (e.currentTarget.value || undefined) as Surface | undefined }, 'Material sound')}>
+          <option value="">{`${t('mat.soundGuess')} (${surfaceLabel(surfaceGuess(m))})`}</option>
+          {SURFACES.map((s) => (
+            <option key={s} value={s}>
+              {surfaceLabel(s)}
+            </option>
+          ))}
+        </select>
+      </Row>
       <Row label={t('mat.mapping')}>
         <select className="cw-input" aria-label={t('mat.mapping')} value={m.mapping ?? 'face'} onChange={(e) => edit({ mapping: e.currentTarget.value === 'face' ? undefined : (e.currentTarget.value as 'world' | 'object') }, 'Material mapping')}>
           <option value="face">{t('mat.mapFace')}</option>

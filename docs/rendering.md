@@ -90,6 +90,26 @@ Models (GLB, glTF) can be imported the same way; see Models below.
 - **Stop the sounds of [object]**: its Sound component and anything its scripts played. Removing an object
   stops its sounds too.
 
+### Footsteps and hits
+
+- **Surface sounds** (Inspector with nothing selected): for each kind of surface (Wood, Metal, Stone, Concrete,
+  Tile, Dirt, Grass, Gravel, Sand, Snow, Mud, Water, Glass, Carpet, Plastic, Cardboard, Leaves, Flesh,
+  Generic) lists of **Steps**, **Soft hits** and **Hard hits**, and a volume. Each time one file is picked at
+  random (not the same twice running), a little higher or lower. Kinds with no files use Generic; hard hits
+  with none use the soft ones. No sounds ship with the engine.
+- What a surface is: the material's **Sounds like** (Materials workspace; unset, it is guessed from the
+  material's name and folder: "Oak planks" is wood). A **Physics** object's **Sounds like** overrides it for
+  that object. Terrains sound like each painted layer's material (unset layers: grass, dirt, stone, sand).
+  Models: their first painted material, else the model's or object's name. Creatures are Flesh.
+- **Footsteps**: one every stride while the player moves on the ground (quieter crouching and walking,
+  louder sprinting), a thump on landing (louder from higher), a scuff on jumping. In shallow water: Water.
+- **Hits**: when a physics object is stopped sharply (about 1.5 m/s or more); louder the harder, Hard hits
+  above about 6.5 m/s, quieter landing on soft ground. Never more than every 0.09 s per object; an object
+  hitting more than five times in a second (a pile squeezing itself, something wedged) is quiet for a
+  second; at most four new hits a step and eight playing at once. Things lying still or carried make none.
+- **Silence the world** / **Bring the world's sounds back** (Sound blocks): the background sound and
+  Sound components fade out (1.5 s) and stay silent; footsteps, hits and sounds blocks play are still heard.
+
 ### Background sound and Sound areas
 
 - **Background sound** (Inspector with nothing selected › Sound): a sound and volume that loop everywhere

@@ -1,6 +1,7 @@
 /** Structural validation for files read from disk. Returns readable problems instead of throwing deep inside the editor. */
 import { isFiniteVec3 } from './math';
 import { validateMaterials } from './materials';
+import { isSurface } from './surfaces';
 import { validateUi } from './ui';
 import type { EntityData, ProjectFile, SceneFile } from './schema';
 
@@ -49,6 +50,11 @@ export function validateProject(data: unknown): Result<ProjectFile> {
       );
     need(p, ok, 'settings.values', 'Each game value needs a name, a type (number, yes/no or text), a starting value of that type, and whether it is shown.');
     if (ok) need(p, new Set((vs as { name: string }[]).map((v) => v.name)).size === vs.length, 'settings.values', 'Two game values have the same name.');
+  }
+  if (isObj(s) && s.surfaceSounds !== undefined) {
+    const ss = s.surfaceSounds;
+    const list = (v: unknown) => v === undefined || (Array.isArray(v) && v.every(isStr));
+    need(p, isObj(ss) && Object.entries(ss).every(([k, v]) => isSurface(k) && isObj(v) && list(v.steps) && list(v.soft) && list(v.hard) && (v.volume === undefined || isNum(v.volume))), 'settings.surfaceSounds', 'Surface sounds must be lists of sound files for each kind of surface.');
   }
   if (isObj(s)) {
     const bad = validateMaterials(s.materials);
