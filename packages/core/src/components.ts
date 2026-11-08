@@ -106,6 +106,28 @@ export type PrinterData = {
   sound: string;
   volume: number;
 };
+/**
+ * The built-in printer's still parts (base, build plate, corner posts, top frame) as boxes in the printer's own
+ * space: what the editor and the game draw, and what the game collides with (the plate holds finished prints).
+ */
+export function printerFrame(data: Pick<PrinterData, 'size' | 'bed'>): { part: 'base' | 'plate' | 'post' | 'top'; center: [number, number, number]; size: [number, number, number] }[] {
+  const [W, H, D] = data.size;
+  const [bx, by, bz] = data.bed;
+  const margin = 6, post = 3;
+  const halfW = W / 2 + margin, halfD = D / 2 + margin;
+  const top = by + H + PRINTER_NOZZLE + 12;
+  const baseH = Math.max(1, by - 2);
+  const out: ReturnType<typeof printerFrame> = [
+    { part: 'base', center: [bx, baseH / 2, bz], size: [halfW * 2, baseH, halfD * 2] },
+    { part: 'plate', center: [bx, by - 1, bz], size: [W + 4, 2, D + 4] },
+  ];
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) out.push({ part: 'post', center: [bx + sx * halfW, top / 2, bz + sz * halfD], size: [post, top, post] });
+  for (const sz of [-1, 1]) out.push({ part: 'top', center: [bx, top, bz + sz * halfD], size: [halfW * 2 + post, post, post] });
+  for (const sx of [-1, 1]) out.push({ part: 'top', center: [bx + sx * halfW, top, bz], size: [post, post, halfD * 2 + post] });
+  return out;
+}
+/** The built-in printer's nozzle length (u): the head's body starts this far above the nozzle's tip. */
+export const PRINTER_NOZZLE = 3;
 /** A prop that sticks into the ground (component `stake`) when it hits it hard enough, tip first. */
 export type StakeData = {
   /** Which way its tip points, in its own axes. */

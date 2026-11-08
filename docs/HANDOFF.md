@@ -409,6 +409,11 @@ motion, materials cut at the layer via `onBeforeCompile`, back-face cap, layer s
 `viewport/play-session.ts` (`updatePrinters`), `viewport/markers.ts` (built-in printer in the editor). Tests:
 `packages/runtime/test/printer.test.ts`. Docs: `docs/scripting.md` (3D printers and a shop).
 
+Fixes (same day): prints are left out of shadows and AO (`userData.noAo`) until done; the built-in printer
+collides (`printerFrame` in core, shared by drawing and `GameWorld.addPrinterFrame`), so finished prints rest on
+the plate; copies of props with Physics keep their insides (`makeCopy` carriers: brushes join the body via
+`carryBrush`, models become riders; `PlaySession.addCarriedBrushes`).
+
 Next, if wanted: the shop screen bundled with the computer UI (catalogue, prices, Buy → Print); a custom printer
 model sample; an e2e test of a print in Play.
 

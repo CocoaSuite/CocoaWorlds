@@ -804,8 +804,10 @@ export class PlaySession {
         this.movers.push({ id: b.id, i: this.world.drawn(b.id), obj: holder, base: holder.matrix.clone() });
         this.attachModel(holder, model, b.id);
         this.eyesOn(b.id, holder, this.eyesIn(b.id, holder.matrix));
+        this.addCarriedBrushes(b);
         return;
       }
+      this.addCarriedBrushes(b);
       const shape = this.world.pointShape(b.id);
       if (!shape) return;
       const c = shape.collider;
@@ -825,6 +827,18 @@ export class PlaySession {
     this.group.add(obj);
     this.movers.push({ id: b.id, i: this.world.drawn(b.id), obj, base });
     if (b.kind !== 'brush' && b.kind !== 'unit') this.eyesOn(b.id, obj, this.eyesIn(b.id, base));
+  }
+
+  /** Brushes a point object's body carries (inside a copied prop with Physics), drawn where they started and moved with it. */
+  private addCarriedBrushes(b: BodyInfo): void {
+    const brushes = this.world.bodyBrushes(b.id);
+    if (!brushes.length) return;
+    const m = buildMesh(brushes, { wearRing: WEAR_RING });
+    const obj = new THREE.Mesh(toGeometry(m), m.groups.map((g) => this.material(g.material)));
+    obj.matrixAutoUpdate = false;
+    obj.castShadow = obj.receiveShadow = true;
+    this.group.add(obj);
+    this.movers.push({ id: b.id, i: this.world.drawn(b.id), obj, base: new THREE.Matrix4() });
   }
 
   /** Where a body's own object sits in what draws the body (placed at `base`): exact for objects of the scene. */

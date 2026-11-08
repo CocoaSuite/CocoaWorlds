@@ -229,12 +229,17 @@ the player can carry with E.
 **3D printer** (component, Add › 3D printer): the print space (width, height, depth), where the build plate's
 top middle is, layer height and seconds per layer (a print takes its height ÷ layer height × seconds), the
 filament colour (the cut top of a print and the layer just laid), and an optional sound looping while it prints.
-Without a Model it draws the built-in printer; with one, that model is drawn instead and the parts named
+Without a Model it draws the built-in printer, which collides (base, plate, posts) so finished prints rest on the
+plate; with one, that model replaces the whole printer (give it a collision setting so prints land on its plate)
+and the parts named
 **Head part** and **Gantry part** move: the gantry rises with the layers and slides front-back, the head slides
 left-right (on the gantry, if it is inside it). Model the head with its nozzle tip resting on the middle of the
 plate. Prints are drawn cut at the layer being laid: layer lines on the sides, the cut top in the filament
 colour, and the head traces each layer's outline (the copy's triangles cut at that height) and then a zig-zag
-fill.
+fill. Shadows and ambient occlusion leave a print out until it is done.
+
+A copied or printed prop with Physics keeps what is inside it: brushes become part of its body (they collide
+and move with it) and models ride it.
 
 A shop: keep the things for sale hidden somewhere as originals, show a list on a screen (Screens workspace), and
 on **When the player picks a row** check the cash, change it, and print the picked thing. With **Keep the world**

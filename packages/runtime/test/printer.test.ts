@@ -70,10 +70,11 @@ describe('3D printer', () => {
     expect(w.positionOf(copy)![1]).toBeCloseTo(48, 3);
     expect(w.prints()[0]!.done).toBeGreaterThan(0.5);
     expect(w.gameValues()[0]!.value).toBe(0);
-    // Done: it falls off the (empty) plate to the floor, the printer's “print done” ran, the next print began.
+    // Done: it rests on the built-in printer's plate (not through it), the printer's “print done” ran, the next print began.
     run(w, 1.5);
     expect(w.gameValues()[0]!.value).toBe(1);
-    expect(w.positionOf(copy)![1]).toBeLessThan(20);
+    expect(w.positionOf(copy)![1]).toBeGreaterThan(46);
+    expect(w.positionOf(copy)![1]).toBeLessThan(50);
     const second = w.prints();
     expect(second).toHaveLength(1);
     expect(second[0]!.copy).not.toBe(copy);
@@ -104,8 +105,27 @@ describe('3D printer', () => {
     expect(again[0]!.done).toBeGreaterThan(0.4);
     expect(w2.positionOf(copy)![1]).toBeCloseTo(48, 3);
     run(w2, 1.2);
-    expect(w2.positionOf(copy)![1]).toBeLessThan(20);
+    expect(w2.prints()[0]?.copy).not.toBe(copy);
     expect(w2.prints()).toHaveLength(1);
     expect(w2.printQueue(printer.id)).toBe(0);
+  });
+
+  it('a printed prop keeps what is inside it: brushes and models ride its body', () => {
+    const { s, crate, printer } = scene();
+    const lid = brush('lid', [300, 16, 300], [316, 18, 316]);
+    lid.parent = crate.id;
+    const badge = newEntity('badge', { model: { model: 'badge.glb', collision: 'none' } as never }, { position: [308, 8, 316] });
+    badge.parent = crate.id;
+    s.entities.push(lid, badge);
+    const w = GameWorld.create(s, { values });
+    run(w, 0.1);
+    send(w, 'buy');
+    const copy = w.prints()[0]!.copy;
+    expect(w.prints()[0]!.parts).toEqual(expect.arrayContaining([copy, `${lid.id}#1`, `${badge.id}#1`]));
+    expect(w.bodyBrushes(copy)).toHaveLength(2);
+    expect(w.riders(copy).map((r) => r.id)).toEqual([`${badge.id}#1`]);
+    expect(w.bodyOf(`${lid.id}#1`)).toBe(copy);
+    expect(w.bodyOf(`${badge.id}#1`)).toBe(copy);
+    void printer;
   });
 });

@@ -8,7 +8,7 @@
  * in the filament's colour so the cut looks solid. The head traces the copy's outline at the cut (a slice of its
  * triangles), then fills it in with a zig-zag. The editor and the game draw the printer the same way.
  */
-import type { PrinterData } from '@cocoaworlds/core';
+import { PRINTER_NOZZLE, printerFrame, type PrinterData } from '@cocoaworlds/core';
 import * as THREE from 'three';
 
 export interface PrinterObject {
@@ -19,8 +19,7 @@ export interface PrinterObject {
 }
 
 const FRAME = 0x3a3a38, POST = 0x5f5e5a, PLATE = 0x888780, HEAD = 0xd85a30, NOZZLE = 0xba7517;
-/** How high the head's body starts above the nozzle's tip (u), and the nozzle's length. */
-const NOZZLE_LEN = 3;
+const NOZZLE_LEN = PRINTER_NOZZLE;
 
 /** The built-in printer, in the printer's own space (its plate's top middle at `bed`). */
 export function buildPrinter(data: PrinterData): PrinterObject {
@@ -43,19 +42,11 @@ export function buildPrinter(data: PrinterData): PrinterObject {
     parent.add(b);
     return b;
   };
-  const [W, H, D] = data.size;
   const [bx, by, bz] = data.bed;
   const margin = 6, post = 3;
-  const halfW = W / 2 + margin, halfD = D / 2 + margin;
-  const top = by + H + NOZZLE_LEN + 12;
-  // Base under the plate, and the plate.
-  const baseH = Math.max(1, by - 2);
-  box(halfW * 2, baseH, halfD * 2, frameM, bx, baseH / 2, bz);
-  box(W + 4, 2, D + 4, plateM, bx, by - 1, bz);
-  // Corner posts and the top frame.
-  for (const sx of [-1, 1]) for (const sz of [-1, 1]) box(post, top, post, postM, bx + sx * halfW, top / 2, bz + sz * halfD);
-  for (const sz of [-1, 1]) box(halfW * 2 + post, post, post, postM, bx, top, bz + sz * halfD);
-  for (const sx of [-1, 1]) box(post, post, halfD * 2 + post, postM, bx + sx * halfW, top, bz);
+  const halfW = data.size[0] / 2 + margin;
+  const color = { base: frameM, plate: plateM, post: postM, top: postM };
+  for (const f of printerFrame(data)) box(f.size[0], f.size[1], f.size[2], color[f.part], f.center[0], f.center[1], f.center[2]);
   // The gantry: a bar across, with a block at each end riding the sides; the head rides the bar.
   const gantry = new THREE.Group();
   gantry.name = 'printer-gantry';
@@ -98,6 +89,7 @@ interface PatchedMesh {
   mesh: THREE.Mesh;
   material: THREE.Material | THREE.Material[];
   castShadow: boolean;
+  noAo: unknown;
   clones: THREE.Material[];
   cap: THREE.Mesh | null;
   tris: Float32Array;
@@ -343,8 +335,10 @@ export class PrinterRig {
       cap.raycast = () => {};
       mesh.add(cap);
     }
-    this.patched.set(mesh, { mesh, material: original, castShadow: mesh.castShadow, clones, cap, tris });
+    this.patched.set(mesh, { mesh, material: original, castShadow: mesh.castShadow, noAo: mesh.userData.noAo, clones, cap, tris });
+    // (Shadows and occlusion are measured from the whole mesh, not the cut: the part not yet printed would show in them.)
     mesh.castShadow = false;
+    mesh.userData.noAo = true;
     return true;
   }
 
@@ -364,6 +358,8 @@ export class PrinterRig {
     for (const p of this.patched.values()) {
       p.mesh.material = p.material;
       p.mesh.castShadow = p.castShadow;
+      if (p.noAo === undefined) delete p.mesh.userData.noAo;
+      else p.mesh.userData.noAo = p.noAo;
       if (p.cap) p.mesh.remove(p.cap);
       for (const c of p.clones) c.dispose();
     }

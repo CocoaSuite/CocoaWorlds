@@ -45,6 +45,7 @@ import {
   type PosterData,
   type StakeData,
   type PrinterData,
+  printerFrame,
   worldBoundsOf,
   posterScrollRadius,
   posterOf,
@@ -1045,7 +1046,13 @@ export class GameWorld {
     this.dayOn = day.enabled;
     this.showDay = day.showDay;
     this.showClock = !!day.showClock;
-    for (const e of doc.entities) if (e.components.printer && shown(e)) this.printers.set(e.id, { data: readComponent<PrinterData>('printer', e.components.printer), job: null, queue: [] });
+    for (const e of doc.entities) {
+      if (!e.components.printer || !shown(e)) continue;
+      const data = readComponent<PrinterData>('printer', e.components.printer);
+      this.printers.set(e.id, { data, job: null, queue: [] });
+      // The built-in printer collides (its own model collides by its Model settings).
+      if (!(e.components.model as { model?: string } | undefined)?.model) this.addPrinterFrame(e.id, data, doc.worldMatrix(e.id));
+    }
     const info = { objects, rules, globals: values.map((v) => ({ name: v.name, type: v.type })), signs: new Set(this.signs.keys()), lights: new Set(this.lights.keys()), printers: new Set(this.printers.keys()) };
     this.scriptInfo = info;
     const programs: Program[] = [];
@@ -3176,7 +3183,20 @@ export class GameWorld {
       this.parentOf.set(id, e.id === template ? null : (ids.get(e.parent ?? '') ?? null));
       const world = multiply(shift, this.doc.worldMatrix(e.id));
       const brushData = e.components.brush as unknown as (BrushData & { role?: string }) | undefined;
-      if (brushData?.faces) {
+      // Inside a part of the copy that has a body of its own (a prop with Physics): carried by it, drawn with it.
+      let carrier: string | null = null;
+      if (e.id !== template && !e.components.rigidBody && !ownBody(e) && !e.components.poster)
+        for (let p = e.parent; p && ids.has(p) && !carrier; p = this.doc.get(p)?.parent ?? null) {
+          const b = this.bodies.get(ids.get(p)!);
+          if (b && (b.info.kind === 'brush' || b.info.kind === 'point')) carrier = ids.get(p)!;
+        }
+      if (carrier) {
+        const b = this.bodies.get(carrier)!;
+        this.unitOf.set(id, carrier);
+        if (brushData?.faces) {
+          if (brushData.role !== 'subtract') this.carryBrush(carrier, id, brushToWorld(fromData({ faces: brushData.faces, mesh: brushData.mesh }), world));
+        } else if (e.components.model) (b.riders ??= []).push({ id, matrix: world });
+      } else if (brushData?.faces) {
         const brush = brushToWorld(fromData({ faces: brushData.faces, mesh: brushData.mesh }), world);
         if (e.components.trigger) this.addTrigger(copy, brush, false);
         else if (e.components.rigidBody) this.addBrushBody(copy, brush);
@@ -3246,6 +3266,20 @@ export class GameWorld {
   private printers = new Map<string, { data: PrinterData; job: PrintJob | null; queue: string[] }>();
   /** Bodies of prints under way (they don't move, collide or get picked up), with their body type to go back to. */
   private printing = new Map<string, RAPIER.RigidBodyType>();
+
+  /** The built-in printer's still parts as one fixed body (the plate holds finished prints; posts stop the player). */
+  private addPrinterFrame(id: string, data: PrinterData, m: number[]): void {
+    const t = decomposeMat4(m);
+    const q = quatFromMatrix(composeTransform({ position: t.position, rotation: t.rotation, scale: [1, 1, 1] }));
+    const body = this.world.createRigidBody(RAPIER.RigidBodyDesc.fixed().setTranslation(t.position[0], t.position[1], t.position[2]).setRotation(q));
+    const k = t.scale.map(Math.abs);
+    for (const f of printerFrame(data)) {
+      const desc = RAPIER.ColliderDesc.cuboid((f.size[0] * k[0]!) / 2, (f.size[1] * k[1]!) / 2, (f.size[2] * k[2]!) / 2)
+        .setTranslation(f.center[0] * k[0]!, f.center[1] * k[1]!, f.center[2] * k[2]!)
+        .setFriction(0.6);
+      this.owner.set(this.world.createCollider(desc, body).handle, id);
+    }
+  }
 
   /** Print a copy of `template` on `printer`: the copy, or null when it waits its turn. */
   print(template: string, printer: string): string | null {
@@ -3346,6 +3380,18 @@ export class GameWorld {
       }
       return { min, max };
     });
+  }
+
+  /** A brush carried by a body (inside a copied prop with Physics): it collides and is drawn with it. */
+  private carryBrush(carrier: string, id: string, brush: Brush): void {
+    const b = this.bodies.get(carrier)!;
+    const vs = vertices(brush);
+    if (vs.length >= 4) {
+      const pts = new Float32Array(vs.flatMap((v) => applyMat4(b.startInverse, v)));
+      const desc = hull(pts);
+      if (desc) this.owner.set(this.world.createCollider(this.material(desc, b.rb ?? readComponent<RigidBodyData>('rigidBody', {})), b.body).handle, id);
+    }
+    b.brushes.push(brush);
   }
 
   /** Take an object (and everything inside it) out of the game. */
