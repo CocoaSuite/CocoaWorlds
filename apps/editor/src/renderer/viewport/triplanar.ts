@@ -254,7 +254,9 @@ void bevelNormal(inout vec3 n) {
   float det = dot(dpx, r1);
   vec3 g = (ex * r1 + ey * r2) * sign(det) / max(abs(det), 1e-8);
   float gl = length(g);
-  if (gl < 1e-6) return;
+  // (A distance to an edge changes one unit per unit across the face. Much less is rounding noise, on faces too
+  // small for a ring where the distance is 0 all over: leaning by it gave random normals in streaks.)
+  if (gl < 0.5) return;
   // (A quarter circle: flat inside, leaning to 45 degrees right at the edge.)
   float lean = 1.0 - sqrt(max(0.0, 1.0 - (1.0 - t) * (1.0 - t)));
   n = normalize(n - (g / gl) * (1.0 - t) * (0.6 + 0.4 * (1.0 - lean)));
