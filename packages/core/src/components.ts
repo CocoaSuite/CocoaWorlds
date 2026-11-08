@@ -76,6 +76,8 @@ export type PosterData = {
   scrollModel: string;
   /** The scroll model's own scale, separate from the hung size. */
   scrollScale: number;
+  /** The scroll model's units, taken from the object's Model when that is the scroll. */
+  scrollUnits?: ModelData['units'];
   thickness: number;
   frame: string;
   mass: number;
@@ -85,8 +87,8 @@ export type PosterData = {
 /** A poster's data with its scroll model filled in from the object's Model when it has none of its own. */
 export function posterOf(components: Record<string, unknown>): PosterData {
   const data = readComponent<PosterData>('poster', components.poster as Record<string, unknown>);
-  const model = (components.model as { model?: unknown } | undefined)?.model;
-  return !data.scrollModel && typeof model === 'string' && model ? { ...data, scrollModel: model } : data;
+  const m = components.model as { model?: unknown; units?: ModelData['units'] } | undefined;
+  return !data.scrollModel && typeof m?.model === 'string' && m.model ? { ...data, scrollModel: m.model, scrollUnits: m.units } : data;
 }
 export const posterScrollRadius = (p: Pick<PosterData, 'height'>): number => Math.max(1.5, Math.min(6, p.height / 24));
 export type Text = Record<Lang, string>;

@@ -41,7 +41,7 @@ export function buildPoster(data: PosterData, onUpdate: () => void = () => {}): 
     if (data.scrollModel) {
       // The scroll model in place of the cylinder once it has loaded: centred, at its own scale.
       const holder = scroll;
-      void modelInstance({ model: data.scrollModel, units: 'metres', animation: '', castShadows: true, collision: 'none' })
+      void modelInstance({ model: data.scrollModel, units: data.scrollUnits ?? 'metres', animation: '', castShadows: true, collision: 'none' })
         .then((inst) => {
           if (gone) return inst.dispose();
           model = inst;
