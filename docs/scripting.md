@@ -235,8 +235,8 @@ its moving parts in **Lift part**, **Gantry part** and **Head part** (`lift`, `g
 move like a fixed-bed printer: the lift climbs one layer at a time (up only), the gantry slides front-back on it,
 the head slides left-right on the gantry. Each moves with the parts it is inside (without a lift, the gantry rises
 itself). The nozzle is the head's lowest point, found by itself. Without a Model nothing is drawn but prints still
-rise. Prints are drawn cut at the layer being laid: layer lines on the sides, the cut top in the filament
-colour, and the head goes round each layer's outline (the copy's triangles cut at that height) and a zig-zag
+rise. Prints are drawn cut at the layer being laid: layer lines on the sides, the cut top filled with a lid in the
+filament colour (from the outlines of the cut, so open models look solid too), and the head goes round each layer's outline (the copy's triangles cut at that height) and a zig-zag
 fill at its own pace, slower for bigger prints, gliding to the next layer without jumps. Shadows and ambient occlusion leave a print out until it is done.
 
 A copied or printed prop with Physics keeps what is inside it: brushes become part of its body (they collide

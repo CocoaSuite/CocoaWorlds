@@ -52,6 +52,9 @@ export class PrinterRig {
   private patched = new Map<THREE.Mesh, PatchedMesh>();
   private uniforms = { uPrintTop: { value: 1e9 }, uPrintLayer: { value: 1 }, uPrintFresh: { value: new THREE.Color() } };
   private capMat: THREE.MeshBasicMaterial;
+  /** The cut's top filled in (made again each layer). */
+  private lid: THREE.Mesh | null = null;
+  private lidMat: THREE.MeshStandardMaterial;
   private bounds = new THREE.Box3();
   private boundsOk = false;
   private layer = -1;
@@ -67,6 +70,7 @@ export class PrinterRig {
     private root: THREE.Object3D,
   ) {
     this.uniforms.uPrintFresh.value.set(data.filament).lerp(new THREE.Color(0xffffff), 0.45);
+    this.lidMat = new THREE.MeshStandardMaterial({ color: new THREE.Color(data.filament).lerp(new THREE.Color(0xffffff), 0.25), roughness: 0.8, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 });
     this.capMat = clipMaterial(new THREE.MeshBasicMaterial({ color: new THREE.Color(data.filament).multiplyScalar(0.7), side: THREE.BackSide }), this.uniforms, false);
   }
 
@@ -156,6 +160,7 @@ export class PrinterRig {
     if (layer !== this.layer) {
       this.layer = layer;
       this.slice(b.min.y + (layer + 0.5) * lh, layer);
+      this.makeLid(top);
       // (The new layer's path is taken up where the head is now, not from its start.)
       this.along = this.nearestAlong(this.offset.x + t.x, this.offset.z + t.z);
     }
@@ -192,23 +197,7 @@ export class PrinterRig {
 
   /** This layer's path: the copy's triangles cut at height `y` (world), chained into an outline, then a zig-zag over it. */
   private slice(y: number, layer: number): void {
-    const segs: number[] = [];
-    for (const p of this.patched.values()) {
-      const t = p.tris;
-      for (let i = 0; i < t.length; i += 9) {
-        let n = 0;
-        const hit: number[] = [];
-        for (let e = 0; e < 3; e++) {
-          const a = i + e * 3, c = i + ((e + 1) % 3) * 3;
-          const ya = t[a + 1]!, yc = t[c + 1]!;
-          if ((ya - y) * (yc - y) >= 0 || ya === yc) continue;
-          const u = (y - ya) / (yc - ya);
-          hit.push(t[a]! + (t[c]! - t[a]!) * u, t[a + 2]! + (t[c + 2]! - t[a + 2]!) * u);
-          n++;
-        }
-        if (n === 2) segs.push(hit[0]!, hit[1]!, hit[2]!, hit[3]!);
-      }
-    }
+    const segs = this.cut(y);
     // (World x, z to the printer's own plane.)
     const pts: number[] = [];
     const v = new THREE.Vector3();
@@ -274,6 +263,110 @@ export class PrinterRig {
     }
     this.path = path;
     this.lengths = lengths;
+  }
+
+  /**
+   * The copy's triangles cut at height `y` (world): segments x0, z0, x1, z1. (Each edge is cut the same way from
+   * both triangles that share it, so the ends of neighbouring segments meet exactly.)
+   */
+  private cut(y: number): number[] {
+    const segs: number[] = [];
+    for (const p of this.patched.values()) {
+      const t = p.tris;
+      for (let i = 0; i < t.length; i += 9) {
+        let n = 0;
+        const hit: number[] = [];
+        for (let e = 0; e < 3; e++) {
+          let a = i + e * 3, c = i + ((e + 1) % 3) * 3;
+          if (t[a + 1]! > t[c + 1]! || (t[a + 1] === t[c + 1] && (t[a]! > t[c]! || (t[a] === t[c] && t[a + 2]! > t[c + 2]!)))) [a, c] = [c, a];
+          const ya = t[a + 1]!, yc = t[c + 1]!;
+          if ((ya - y) * (yc - y) >= 0 || ya === yc) continue;
+          const u = (y - ya) / (yc - ya);
+          hit.push(t[a]! + (t[c]! - t[a]!) * u, t[a + 2]! + (t[c + 2]! - t[a + 2]!) * u);
+          n++;
+        }
+        if (n === 2) segs.push(hit[0]!, hit[1]!, hit[2]!, hit[3]!);
+      }
+    }
+    return segs;
+  }
+
+  /** The lid: the cut at the top of the layer, filled (closed outlines only; holes stay open). */
+  private makeLid(top: number): void {
+    this.dropLid();
+    // (A hair under the top, so no corner sits exactly on the cut. Faces lying exactly at the top are kept whole:
+    // the cut drops only what is a little above it.)
+    const segs = this.cut(top - 1e-3);
+    const key = (x: number, z: number) => `${Math.round(x * 1e4)},${Math.round(z * 1e4)}`;
+    const from = new Map<string, number[]>();
+    const n = segs.length / 4;
+    for (let s = 0; s < n; s++)
+      for (const end of [0, 1]) {
+        const k = key(segs[s * 4 + end * 2]!, segs[s * 4 + end * 2 + 1]!);
+        const list = from.get(k) ?? [];
+        list.push(s * 2 + end);
+        from.set(k, list);
+      }
+    // Outlines: from a segment's far end to the next segment starting there, until back where it began.
+    const used = new Uint8Array(n);
+    const loops: THREE.Vector2[][] = [];
+    for (let s0 = 0; s0 < n; s0++) {
+      if (used[s0]) continue;
+      const loop: THREE.Vector2[] = [];
+      let s = s0, end = 0, closed = false;
+      for (let guard = 0; guard < n + 1; guard++) {
+        used[s] = 1;
+        loop.push(new THREE.Vector2(segs[s * 4 + end * 2]!, segs[s * 4 + end * 2 + 1]!));
+        const fx = segs[s * 4 + (1 - end) * 2]!, fz = segs[s * 4 + (1 - end) * 2 + 1]!;
+        const next = (from.get(key(fx, fz)) ?? []).find((x) => (x >> 1) !== s && !used[x >> 1]);
+        if (next === undefined) {
+          closed = s !== s0 && (from.get(key(fx, fz)) ?? []).includes(s0 * 2);
+          break;
+        }
+        s = next >> 1;
+        end = next & 1;
+      }
+      if (closed && loop.length >= 3) loops.push(loop);
+    }
+    if (!loops.length) return;
+    // Which outlines are holes: inside an odd number of others. Each hole goes with the smallest outline round it.
+    const area = (l: THREE.Vector2[]) => Math.abs(THREE.ShapeUtils.area(l));
+    const inside = (p: THREE.Vector2, l: THREE.Vector2[]) => {
+      let c = false;
+      for (let i = 0, j = l.length - 1; i < l.length; j = i++)
+        if (l[i]!.y > p.y !== l[j]!.y > p.y && p.x < ((l[j]!.x - l[i]!.x) * (p.y - l[i]!.y)) / (l[j]!.y - l[i]!.y) + l[i]!.x) c = !c;
+      return c;
+    };
+    const around = loops.map((l, i) => loops.map((o, j) => (j !== i && area(o) > area(l) && inside(l[0]!, o) ? j : -1)).filter((j) => j >= 0));
+    const pos: number[] = [];
+    const v = new THREE.Vector3();
+    loops.forEach((outer, i) => {
+      if (around[i]!.length % 2) return;
+      const holes = loops.filter((_, j) => around[j]!.length === around[i]!.length + 1 && around[j]!.includes(i) && around[j]!.every((k) => k === i || around[i]!.includes(k)));
+      const contour = THREE.ShapeUtils.isClockWise(outer) ? [...outer].reverse() : outer;
+      const hs = holes.map((h) => (THREE.ShapeUtils.isClockWise(h) ? h : [...h].reverse()));
+      const all = [...contour, ...hs.flat()];
+      for (const tri of THREE.ShapeUtils.triangulateShape(contour, hs))
+        for (const k of [tri[0]!, tri[2]!, tri[1]!]) {
+          this.toPrinter(v.set(all[k]!.x, top, all[k]!.y));
+          pos.push(v.x, v.y, v.z);
+        }
+    });
+    if (!pos.length) return;
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    geo.computeVertexNormals();
+    this.lid = new THREE.Mesh(geo, this.lidMat);
+    this.lid.name = 'print-lid';
+    this.lid.raycast = () => {};
+    this.root.add(this.lid);
+  }
+
+  private dropLid(): void {
+    if (!this.lid) return;
+    this.lid.removeFromParent();
+    this.lid.geometry.dispose();
+    this.lid = null;
   }
 
   /** A world point in the printer's own space. */
@@ -375,6 +468,7 @@ export class PrinterRig {
 
   /** The print is done (or gone): its meshes are drawn as they are again. */
   private finish(): void {
+    this.dropLid();
     for (const p of this.patched.values()) {
       p.mesh.material = p.material;
       p.mesh.castShadow = p.castShadow;
@@ -396,6 +490,7 @@ export class PrinterRig {
   dispose(): void {
     this.finish();
     this.capMat.dispose();
+    this.lidMat.dispose();
   }
 }
 
@@ -411,7 +506,7 @@ export function clipMaterial<T extends THREE.Material>(m: T, u: { uPrintTop: { v
     shader.uniforms.uPrintLayer = u.uPrintLayer;
     shader.uniforms.uPrintFresh = u.uPrintFresh;
     shader.vertexShader = 'varying float vPrintY;\n' + shader.vertexShader.replace('#include <project_vertex>', '#include <project_vertex>\nvPrintY = (modelMatrix * vec4(transformed, 1.0)).y;');
-    let frag = 'varying float vPrintY;\nuniform float uPrintTop;\nuniform float uPrintLayer;\nuniform vec3 uPrintFresh;\n' + shader.fragmentShader.replace(/void\s+main\s*\(\s*\)\s*\{/, (s) => `${s}\n  if (vPrintY > uPrintTop) discard;`);
+    let frag = 'varying float vPrintY;\nuniform float uPrintTop;\nuniform float uPrintLayer;\nuniform vec3 uPrintFresh;\n' + shader.fragmentShader.replace(/void\s+main\s*\(\s*\)\s*\{/, (s) => `${s}\n  if (vPrintY > uPrintTop + uPrintLayer * 0.01) discard;`);
     if (lines)
       frag = frag.replace(
         '#include <color_fragment>',
