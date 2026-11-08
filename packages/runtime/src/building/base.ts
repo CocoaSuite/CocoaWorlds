@@ -29,7 +29,7 @@ export interface BaseHost {
   setBlocker(key: string, box: BlockerBox | null): void;
   /** Props (their ids) of material `tag` (named after it or tagged with it) that touch the box, loose or carried. */
   propsIn(box: BlockerBox, tag: string): string[];
-  /** Take a prop out of the game: it went into a blueprint. */
+  /** Take a prop out of the game: it went into a finished piece. */
   consume(id: string): void;
   emit(e: GameEvent): void;
   playSound(sound: string, at: V3, volume: number, range: number): void;
@@ -42,7 +42,7 @@ export interface Site {
   spot: Spot;
   /** Ground height at the spot's middle. */
   y: number;
-  /** Props put in so far (def.count: finished). */
+  /** Props in it now (def.count: finished). */
   filled: number;
   /** Finished: health left. */
   health: number;
@@ -113,6 +113,8 @@ export class BaseSystem {
   private blockers = new Map<string, string[]>();
   private next = 1;
   private lookIn = 0;
+  /** Props in a blueprint (not yet used up): prop → site. */
+  private claims = new Map<string, string>();
   /** The blueprint E is held on, and for how long. */
   private removing: { site: string; t: number } | null = null;
   /** Goes up whenever something drawn changes (for whoever draws). */
@@ -206,16 +208,26 @@ export class BaseSystem {
     this.blockers.delete(id);
     this.sites.delete(id);
     if (this.removing?.site === id) this.removing = null;
+    for (const [p, site] of this.claims) if (site === id) this.claims.delete(p);
     this.version++;
   }
 
-  /** One more prop in a blueprint; the last one finishes it. */
-  private fill(s: Site): void {
-    s.filled++;
+  /**
+   * A blueprint now holds `n` props. Short of its count they stay where they are (taken out again, it goes back
+   * down); at its count they are all used up together and it is finished.
+   */
+  private setFilled(s: Site, props: string[]): void {
+    const n = Math.min(props.length, s.def.count);
+    if (n === s.filled) return;
     const t = this.host.time();
-    this.host.emit({ type: 'base.progress', site: s.id, piece: s.def.id, filled: s.filled, count: s.def.count, time: t });
-    if (s.def.sounds.add) this.host.playSound(s.def.sounds.add, this.middle(s), 0.8, 600);
+    if (n > s.filled && s.def.sounds.add) this.host.playSound(s.def.sounds.add, this.middle(s), 0.8, 600);
+    s.filled = n;
+    this.host.emit({ type: 'base.progress', site: s.id, piece: s.def.id, filled: n, count: s.def.count, time: t });
     if (this.built(s)) {
+      for (const p of props) {
+        this.host.consume(p);
+        this.claims.delete(p);
+      }
       s.health = s.def.health;
       this.host.emit({ type: 'base.built', site: s.id, piece: s.def.id, time: t });
       if (s.def.sounds.built) this.host.playSound(s.def.sounds.built, this.middle(s), 1, 900);
@@ -296,19 +308,36 @@ export class BaseSystem {
     return hurt === null ? null : { site: s.id, icon: 'hammer', title: d.label, label: '', progress: hurt, missing: '' };
   }
 
+  /**
+   * Every `every` seconds: which props are in which blueprint. A prop counts for one blueprint only: the one it
+   * is already in while it still touches it, else the oldest one it touches that has room. Props past a
+   * blueprint's count aren't its own, so the next blueprint they touch can have them.
+   */
   tick(dt: number): void {
     this.lookIn -= dt;
     if (this.lookIn > 0) return;
     this.lookIn = this.config.every;
-    for (const s of [...this.sites.values()]) {
-      if (this.built(s)) continue;
-      const box = this.space(s);
-      for (const prop of this.host.propsIn(box, s.def.material)) {
-        if (this.built(s) || !this.sites.has(s.id)) break;
-        this.host.consume(prop);
-        this.fill(s);
+    const open = [...this.sites.values()].filter((s) => !this.built(s));
+    const touching = new Map(open.map((s) => [s.id, this.host.propsIn(this.space(s), s.def.material)]));
+    const claims = new Map<string, string>();
+    const held = new Map<string, string[]>(open.map((s) => [s.id, []]));
+    // (Kept: still touching the blueprint it was in.)
+    for (const [prop, site] of this.claims)
+      if (touching.get(site)?.includes(prop)) {
+        claims.set(prop, site);
+        held.get(site)!.push(prop);
+      }
+    for (const s of open) {
+      const mine = held.get(s.id)!;
+      for (const prop of touching.get(s.id)!) {
+        if (mine.length >= s.def.count) break;
+        if (claims.has(prop)) continue;
+        claims.set(prop, s.id);
+        mine.push(prop);
       }
     }
+    this.claims = claims;
+    for (const s of open) this.setFilled(s, held.get(s.id)!);
   }
 
   // ── Shapes ──
@@ -407,7 +436,9 @@ export class BaseSystem {
       const spot = parseSpot(String(r?.spot));
       const y = Number(r?.y) || 0;
       if (!def || !spot || spot.kind !== def.snap || this.taken(spot, y)) continue;
-      const id = this.add(def, spot, y, String(r.id), Math.round(Number(r.filled) || 0));
+      // (Unfinished: empty until the props lying in it are found again.)
+      const done = Math.round(Number(r.filled) || 0) >= def.count;
+      const id = this.add(def, spot, y, String(r.id), done ? def.count : 0);
       const s = this.sites.get(id)!;
       s.health = Math.max(1, Math.min(def.health, Number(r.health) || def.health));
       s.open = r.open === true;

@@ -256,8 +256,8 @@ user's numbers.
 Status: rewritten Nov 2026 (the old stage-by-stage build sites, rooms, sealing, comfort, sleep-to-save, the wedge
 and the knock are gone). Game rule `building`. Blueprint items place see-through blueprints on the grid (edges for
 walls/doors/windows, cells for floors/foundations); props tagged with the piece's `material` (`plank`,
-`concrete powder`) are used up on touching it, one each, until `count`; then it is solid. Hold E on a blueprint to
-remove it; finished pieces have `health` and are knocked down by weapon hits, blasts and damage blocks. Doors open
+`concrete powder`) count while touching it (one blueprint each), and once `count` are in they are used up and it is solid.
+Hold E on a blueprint to remove it; finished pieces have `health` and are knocked down by weapon hits, blasts and damage blocks. Doors open
 with E. Data: `packages/runtime/src/building/data/*.json` plus `settings.building` in a scene. Design and API:
 `docs/building.md`. Tests: `packages/runtime/test/building.test.ts`.
 

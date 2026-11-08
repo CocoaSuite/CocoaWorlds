@@ -17,13 +17,14 @@ Code: `packages/runtime/src/building/` (`defs.ts` JSON shapes, `grid.ts` edges a
    piece (a wall on a foundation, a second wall on top of the first). The item is kept: buy once, place many
    (`consumeBlueprint: true` makes each placing use one).
 2. **Fill.** Every physics prop whose name starts with the piece's `material` (“Plank”, “Plank 2”, “Concrete
-   powder bag”; any case), or that is tagged with it, that touches
-   the blueprint, loose or carried, is used up: it goes into the blueprint and out of the game. Each counts one,
-   whatever its size, until the piece has `count`. Other props are left alone.
+   powder bag”; any case), or that is tagged with it, counts while it touches the blueprint, loose or carried:
+   one each, whatever its size. It stays where it is; take it out again and the % goes back down. Other props are
+   left alone. A prop counts for one blueprint only: the one it is already in while it still touches it, else the
+   oldest one it touches that has room (props past a blueprint's count go to the next one they touch).
    Aimed at, the HUD shows `Wood wall · 50%`, a bar and what's still needed.
-3. **Finish.** The last prop finishes it: solid, it blocks the player and props, and its sound plays.
+3. **Finish.** Once `count` props are in at once, they are all used up together and the piece is solid.
 
-- **Remove a blueprint:** hold E on it for `removeHold` seconds (1). What was put in is lost.
+- **Remove a blueprint:** hold E on it for `removeHold` seconds (1). The props in it stay.
 - **Knock a piece down:** finished pieces have `health`. Weapon hits (the crowbar: 10 a swing), bullets, blasts
   (**Make an explosion**) and **Damage everything within** blocks wear it down; at 0 it is gone. Aimed at, a damaged piece shows its
   health bar.
@@ -59,12 +60,13 @@ space a blueprint takes props in is the box round all its parts, `touch` units b
 
 ## Events and API
 
-Events: `base.placed {site, piece}`, `base.progress {site, piece, filled, count}`, `base.built`, `base.removed`
+Events: `base.placed {site, piece}`, `base.progress {site, piece, filled, count}` (up or down), `base.built`, `base.removed`
 (E held), `base.broken` (knocked down), `base.door {site, open}`.
 
 `world.base` (`BaseSystem`): `allSites()`, `site(id)` (`filled`, `health`, `open`, `spot`, `y`), `built(s)`,
 `fraction(s)`, `add(def, spot, y, id?, filled?)`, `remove(id)`, `damage(id, amount)`, `space(s)`, `pieces`,
 `config`, `save()` / `load()`. Finished pieces' colliders are owned by `@base:<site>`, so weapons find them.
 
-Saved in progress as `base` (per scene, `v: 2`). Bases saved by the old build-site system are not loaded. Props used
-up are taken out of the game like any removed object (kept as removed when the game keeps the world).
+Saved in progress as `base` (per scene, `v: 2`): finished pieces as finished, blueprints empty (they fill again from
+the props lying in them, which stay where they were when the game keeps the world). Bases saved by the old
+build-site system are not loaded. Props used up are taken out of the game like any removed object.

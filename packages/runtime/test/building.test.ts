@@ -15,8 +15,8 @@ function fakeHost() {
   const events: GameEvent[] = [];
   const blockers = new Map<string, BlockerBox>();
   const consumed: string[] = [];
-  /** Props by tag, as the world would find them touching a blueprint. */
-  const props = new Map<string, string[]>();
+  /** Props touching each blueprint (by site), with their material, as the world would find them. */
+  const props = new Map<string, [id: string, material: string][]>();
   let t = 0;
   let hand = '';
   let ground = 0;
@@ -27,10 +27,10 @@ function fakeHost() {
     selectedItem: () => hand,
     groundAt: () => ground,
     setBlocker: (k, b) => void (b ? blockers.set(k, b) : blockers.delete(k)),
-    propsIn: (_box, tag) => [...(props.get(tag) ?? [])],
+    propsIn: (box, tag) => (props.get(box.site) ?? []).filter(([, m]) => m === tag).map(([id]) => id),
     consume: (id) => {
       consumed.push(id);
-      for (const [k, list] of props) props.set(k, list.filter((x) => x !== id));
+      for (const [k, list] of props) props.set(k, list.filter(([x]) => x !== id));
     },
     emit: (e) => void events.push(e),
     playSound: () => {},
@@ -122,27 +122,58 @@ describe('placing blueprints', () => {
 });
 
 describe('filling blueprints', () => {
-  it('props of its material are used up one each until it is finished; then it blocks', () => {
+  it('props of its material count while in it; at its count they are used up together and it blocks', () => {
     const h = fakeHost();
     const id = h.base.add(piece(h, 'wood_wall'), wall, 0);
-    h.props.set('plank', ['p1', 'p2']);
-    h.props.set('concrete powder', ['bag']);
+    h.props.set(id, [['p1', 'plank'], ['p2', 'plank'], ['bag', 'concrete powder']]);
     h.advance(0.2);
-    expect(h.consumed).toEqual(['p1', 'p2']);
+    // (Not used up yet: they stay where they are.)
+    expect(h.consumed).toEqual([]);
     expect(h.base.fraction(h.base.site(id)!)).toBe(0.5);
     expect(h.base.prompt({ site: id, distance: 1 })).toMatchObject({ title: 'Wood wall · 50%', label: 'Hold to remove', progress: 0.5, missing: '2 more planks' });
     expect(h.blockers.size).toBe(0);
-    h.props.set('plank', ['p3', 'p4', 'p5']);
+    // Taken out again: back down.
+    h.props.set(id, [['p1', 'plank']]);
+    h.advance(0.2);
+    expect(h.base.site(id)!.filled).toBe(1);
+    h.props.set(id, [['p1', 'plank'], ['p2', 'plank'], ['p3', 'plank'], ['p4', 'plank'], ['p5', 'plank']]);
     h.advance(0.2);
     // (Full at four: the fifth plank is left alone.)
     expect(h.consumed).toEqual(['p1', 'p2', 'p3', 'p4']);
     expect(h.base.built(h.base.site(id)!)).toBe(true);
-    expect(h.events.filter((e) => e.type === 'base.progress')).toHaveLength(4);
+    expect(h.events.filter((e) => e.type === 'base.progress').map((e) => (e as { filled: number }).filled)).toEqual([2, 1, 4]);
     expect(h.events.at(-1)).toMatchObject({ type: 'base.built', site: id });
     expect(h.blockers.size).toBe(piece(h, 'wood_wall').mesh.parts.length);
     expect([...h.blockers.values()][0]!.site).toBe(id);
     // A finished, undamaged wall has nothing to say.
     expect(h.base.prompt({ site: id, distance: 1 })).toBeNull();
+  });
+
+  it('a prop touching two blueprints counts for one only; past its count, to the next', () => {
+    const h = fakeHost();
+    const a = h.base.add(piece(h, 'wood_wall'), wall, 0);
+    const b = h.base.add(piece(h, 'wood_wall'), { kind: 'edge', axis: 'z', x: 0, z: 0 }, 0);
+    h.props.set(a, [['p1', 'plank']]);
+    h.advance(0.2);
+    // p1 is in a: touching b as well now, it stays a's.
+    h.props.set(a, [['p1', 'plank']]);
+    h.props.set(b, [['p1', 'plank'], ['p2', 'plank']]);
+    h.advance(0.2);
+    expect(h.base.site(a)!.filled).toBe(1);
+    expect(h.base.site(b)!.filled).toBe(1);
+    // Out of a: b can have it.
+    h.props.set(a, []);
+    h.advance(0.2);
+    expect(h.base.site(a)!.filled).toBe(0);
+    expect(h.base.site(b)!.filled).toBe(2);
+    // Five planks touching both: a (the older) has four and finishes; b gets the fifth and keeps its own.
+    const five: [string, string][] = ['q1', 'q2', 'q3', 'q4', 'q5'].map((x) => [x, 'plank']);
+    h.props.set(a, five);
+    h.props.set(b, [['p1', 'plank'], ['p2', 'plank'], ...five]);
+    h.advance(0.2);
+    expect(h.base.built(h.base.site(a)!)).toBe(true);
+    expect(h.consumed).toEqual(['q1', 'q2', 'q3', 'q4']);
+    expect(h.base.site(b)!.filled).toBe(3);
   });
 
   it('its drawn boxes are the flat blueprint colour until finished', () => {
@@ -162,9 +193,11 @@ describe('filling blueprints', () => {
     expect(b.half[0]).toBeCloseTo(47.5 + 4);
   });
 
-  it('holding E on a blueprint removes it (what was put in is lost)', () => {
+  it('holding E on a blueprint removes it (the props in it stay)', () => {
     const h = fakeHost();
-    const id = h.base.add(piece(h, 'wood_wall'), wall, 0, undefined, 2);
+    const id = h.base.add(piece(h, 'wood_wall'), wall, 0);
+    h.props.set(id, [['p1', 'plank']]);
+    h.advance(0.2);
     for (let k = 0; k < 30; k++) h.base.hold({ site: id, distance: 1 }, true, 1 / 60);
     expect(h.base.prompt({ site: id, distance: 1 })!.label).toBe('Removing…');
     h.base.hold(null, false, 1 / 60);
@@ -173,6 +206,7 @@ describe('filling blueprints', () => {
     for (let k = 0; k < 40; k++) h.base.hold({ site: id, distance: 1 }, true, 1 / 60);
     expect(h.base.site(id)).toBeUndefined();
     expect(h.events.at(-1)).toMatchObject({ type: 'base.removed', site: id });
+    expect(h.consumed).toEqual([]);
     // Finished pieces aren't removed this way.
     const done = h.base.add(piece(h, 'wood_wall'), wall, 0, undefined, 4);
     for (let k = 0; k < 120; k++) h.base.hold({ site: done, distance: 1 }, true, 1 / 60);
@@ -213,7 +247,7 @@ describe('finished pieces', () => {
 });
 
 describe('saving', () => {
-  it('blueprints, how full they are, health and doors come back', () => {
+  it('blueprints, finished pieces, health and doors come back (unfinished ones fill again from the props in them)', () => {
     const h = fakeHost();
     const a = h.base.add(piece(h, 'wood_wall'), wall, 0, undefined, 2);
     const b = h.base.add(piece(h, 'wood_door'), { kind: 'edge', axis: 'z', x: 1, z: 0 }, 0, undefined, 3);
@@ -225,7 +259,8 @@ describe('saving', () => {
     const h2 = fakeHost();
     h2.base.load(save);
     expect(h2.base.allSites()).toHaveLength(3);
-    expect(h2.base.site(a)!.filled).toBe(2);
+    expect(h2.base.site(a)!.filled).toBe(0);
+    expect(h2.base.built(h2.base.site(b)!)).toBe(true);
     expect(h2.base.site(b)!.open).toBe(true);
     expect(h2.base.site(c)!.health).toBe(200);
     expect(h2.base.site(c)!.spot).toEqual({ kind: 'cell', x: 0, z: 0 });
@@ -277,7 +312,7 @@ describe('in the game world', () => {
     expect(w.buildPrompt()!.title).toMatch(/0%$/);
   });
 
-  it('planks touching it are used up; four finish it, and then it blocks', () => {
+  it('planks in it stay until there are four; then they are used up and it blocks', () => {
     const planks = [10, 30, 50, 70].map((x, i) => plank(`plank${i}`, x));
     const spare = plank('spare', 48, 30);
     // (Named after the material counts too, untagged.)
@@ -286,6 +321,11 @@ describe('in the game world', () => {
     const crate = brush('crate of planks', [80, 30, -4], [92, 42, 4], { rigidBody: { motion: 'dynamic', mass: 2 } });
     const w = game([...planks, spare, crate]);
     const id = w.base!.add(w.base!.pieces.get('wood_wall')!, wall, 0);
+    const two = game(planks.slice(0, 2));
+    const id2 = two.base!.add(two.base!.pieces.get('wood_wall')!, wall, 0);
+    run(two, 0.3);
+    expect(two.base!.site(id2)!.filled).toBe(2);
+    for (const p of planks.slice(0, 2)) expect(two.positionOf(p.id)).not.toBeNull();
     run(w, 0.3);
     const s = w.base!.site(id)!;
     expect(s.filled).toBe(4);
@@ -328,6 +368,8 @@ describe('in the game world', () => {
     const saved = JSON.parse(JSON.stringify(w.progress()!));
     expect(Object.keys(saved.base)).toEqual(['base']);
     const w2 = game([p], undefined, saved);
+    expect(w2.base!.site(id)).toBeDefined();
+    run(w2, 0.2);
     expect(w2.base!.site(id)!.filled).toBe(1);
   });
 });

@@ -2,8 +2,8 @@
  * Base building, blueprint style: what a build piece is, as plain JSON.
  *
  * A blueprint item in hand shows a ghost on the build grid; a click places it as a see-through blueprint at 0%.
- * Props tagged with the piece's material (a plank, a bag of concrete powder) are used up when they touch it, one
- * each, until it has `count` of them; then it is finished and solid. Finished pieces have health: hits and blasts
+ * Props of the piece's material (a plank, a bag of concrete powder) put into it count one each; once `count` of
+ * them are in at once they are used up together and it is finished and solid. Finished pieces have health: hits and blasts
  * knock them down. New materials and pieces are new JSON files: nothing here knows about wood or concrete.
  */
 import type { SnapKind } from './grid';
@@ -103,7 +103,7 @@ export interface BaseConfig {
   /** How far E reaches a piece, and how far a blueprint item places one. */
   reach: number;
   placeReach: number;
-  /** Seconds E is held on an unfinished blueprint to remove it (what was put in is lost). */
+  /** Seconds E is held on an unfinished blueprint to remove it (the props in it stay where they are). */
   removeHold: number;
   /** How often blueprints look for props touching them (s). */
   every: number;
