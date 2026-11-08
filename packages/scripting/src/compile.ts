@@ -56,8 +56,10 @@ export type Op =
    * scale [factor, seconds] · push [dx, dy, dz, strength] · moveTo [place, seconds, gap] · teleport [place] ·
    * damage [amount] · others none.
    */
-  | { op: 'act'; name: ActionName; argc: number }
-  | { op: 'wait' }
+  | { op: 'act'; name: ActionName; argc: number; go?: true }
+  | { op: 'wait'; go?: true }
+  /** Wait for the blocks started together. */
+  | { op: 'together' }
   /** Pops the target ref (or null for everyone). */
   | { op: 'send'; message: string }
   | { op: 'log' }
@@ -224,6 +226,7 @@ class HandlerCompiler {
   private temps = 0;
   private stmt = '';
   private waits = false;
+  private go = false;
 
   constructor(
     private owner: string,
@@ -254,6 +257,7 @@ class HandlerCompiler {
   }
 
   private emit(op: Op): number {
+    if (this.go && (op.op === 'act' || op.op === 'wait')) op = { ...op, go: true };
     this.code.push(op);
     this.blocks.push(this.stmt);
     return this.code.length - 1;
@@ -445,7 +449,16 @@ class HandlerCompiler {
   }
 
   private statements(list: Statement[]): void {
-    for (const s of list) this.statement(s);
+    const outer = this.go;
+    list.forEach((s, i) => {
+      const last = !!s.and && !list[i + 1]?.and;
+      // (Blocks holding other blocks still run theirs in order.)
+      this.go = (!!s.and || !!list[i + 1]?.and) && !('body' in s || 'then' in s || 'options' in s);
+      this.statement(s);
+      this.go = false;
+      if (last) this.emit({ op: 'together' });
+    });
+    this.go = outer;
   }
 
   private statement(s: Statement): void {

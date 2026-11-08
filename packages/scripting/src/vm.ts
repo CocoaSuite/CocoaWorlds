@@ -152,6 +152,8 @@ interface Thread {
   other: string | null;
   waitUntil: number;
   waitFor: (() => boolean) | null;
+  /** Blocks started together, still going. */
+  together: (() => boolean)[];
   /** The loop block it last jumped back through (a runaway loop is reported there). */
   loop: string | null;
   /** The copy this stack made last (“the new copy”). */
@@ -287,7 +289,7 @@ export class ScriptRunner {
       this.threads = this.threads.filter((t) => !(t.inst === inst && t.handler === h));
       this.running.add(this.key(inst, h));
       const wait = typeof st.wait === 'number' && Number.isFinite(st.wait) ? st.wait : 0;
-      this.threads.push({ inst, handler: h, pc: st.pc, stack: st.stack, temps: st.temps, other: st.other ?? null, waitUntil: this.host.now() + wait, waitFor: null, loop: null, copy: st.copy ?? null, pick: typeof st.pick === 'string' ? st.pick : '' });
+      this.threads.push({ inst, handler: h, pc: st.pc, stack: st.stack, temps: st.temps, other: st.other ?? null, waitUntil: this.host.now() + wait, waitFor: null, together: [], loop: null, copy: st.copy ?? null, pick: typeof st.pick === 'string' ? st.pick : '' });
     }
   }
 
@@ -480,7 +482,7 @@ export class ScriptRunner {
     if (this.running.has(k) || this.spentNow(inst, handler)) return;
     if (handler.limit) inst.spent.set(handler.id, this.host.day?.() ?? 1);
     this.running.add(k);
-    this.threads.push({ inst, handler, pc: 0, stack: [], temps: new Array(handler.temps).fill(0), other, waitUntil: 0, waitFor: null, loop: null, copy: null, pick });
+    this.threads.push({ inst, handler, pc: 0, stack: [], temps: new Array(handler.temps).fill(0), other, waitUntil: 0, waitFor: null, together: [], loop: null, copy: null, pick });
   }
 
   private runAll(): void {
@@ -621,7 +623,9 @@ export class ScriptRunner {
           }
           // Its own object was removed (or broke): this stack ends here.
           if (!this.threads.includes(t)) return;
-          if (wait && !wait()) {
+          if (wait && op.go) {
+            t.together.push(wait);
+          } else if (wait && !wait()) {
             t.waitFor = wait;
             return;
           }
@@ -629,8 +633,22 @@ export class ScriptRunner {
         }
         case 'wait': {
           const sec = Math.max(0, num(s.pop()!));
-          t.waitUntil = this.host.now() + sec;
+          const until = this.host.now() + sec;
+          if (op.go) {
+            t.together.push(() => this.host.now() >= until);
+            break;
+          }
+          t.waitUntil = until;
           return; // even “Wait 0” lets the frame finish
+        }
+        case 'together': {
+          const all = t.together;
+          t.together = [];
+          t.waitFor = () => {
+            for (let i = all.length - 1; i >= 0; i--) if (all[i]!()) all.splice(i, 1);
+            return !all.length;
+          };
+          return;
         }
         case 'send': {
           const to = s.pop();

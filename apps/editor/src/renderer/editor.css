@@ -267,6 +267,9 @@ code { font: 12px var(--mono); color: var(--fg); }
 .cw-blk-problem.error { color: var(--bad); }
 .cw-blk-problem.warning { color: var(--cw-warn); }
 .cw-list { display: flex; flex-direction: column; }
+.cw-blk-and { align-self: flex-start; height: 8px; margin: 0 0 0 10px; padding: 0 8px; border: 0; background: none; color: transparent; font-size: 11px; font-weight: 700; line-height: 8px; text-transform: uppercase; cursor: pointer; }
+.cw-blk-and:hover { height: 16px; line-height: 16px; color: var(--mute); }
+.cw-blk-and.on { height: 16px; line-height: 16px; color: var(--accent); }
 .cw-add-blk { align-self: flex-start; margin-top: 4px; padding: 2px 8px; font-size: 12px; color: var(--mute); background: transparent; border: 1px dashed var(--line); border-radius: 6px; }
 .cw-add-blk:hover { color: var(--fg); border-color: var(--mute); }
 .cw-script .cw-input { height: 24px; padding: 2px 6px; font-size: 12px; }

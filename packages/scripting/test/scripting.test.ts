@@ -534,3 +534,26 @@ describe('how often a stack runs', () => {
     expect(host.log).toHaveLength(1);
   });
 });
+
+describe('blocks joined with “and”', () => {
+  it('start together; the next block waits for both', () => {
+    const mv = (seconds: number, and?: boolean) => ({ ...newStatement('move', { target: entity('door') }), seconds: num(seconds), ...(and ? { and } : {}) }) as Statement;
+    const s = script([
+      handler(
+        newEvent('start'),
+        mv(1),
+        mv(2, true),
+        { ...newStatement('wait'), seconds: num(0.5), and: true } as Statement,
+        { ...newStatement('log'), text: text('done') } as Statement,
+      ),
+    ]);
+    const { host, runFor } = run([['me', s]]);
+    runFor(0.2);
+    expect(host.acts.length).toBe(2);
+    runFor(1.5);
+    expect(host.log).toEqual([]);
+    runFor(0.5);
+    expect(host.log.map((l) => l.split(' ')[1])).toEqual(['done']);
+    expect(Number(host.log[0]!.split(' ')[0])).toBeLessThanOrEqual(2.1);
+  });
+});

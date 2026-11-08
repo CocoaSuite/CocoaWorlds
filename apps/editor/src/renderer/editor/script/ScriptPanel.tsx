@@ -554,8 +554,15 @@ function List({ listKey, list }: { listKey: string; list: Statement[] }) {
   const c = useC();
   return (
     <div className="cw-list">
-      {list.map((s) => (
-        <StatementRow key={s.id} s={s} listKey={listKey} />
+      {list.map((s, i) => (
+        <Fragment key={s.id}>
+          {i > 0 && (
+            <button type="button" className={`cw-blk-and${s.and ? ' on' : ''}`} aria-pressed={!!s.and} onClick={() => c.update((sc) => replaceBlock(sc, s.id, (b) => ({ ...b, and: s.and ? undefined : true }) as Statement), s.and ? 'Run blocks in turn' : 'Run blocks together')}>
+              {w('and')}
+            </button>
+          )}
+          <StatementRow s={s} listKey={listKey} />
+        </Fragment>
       ))}
       <button
         type="button"

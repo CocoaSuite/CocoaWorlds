@@ -68,7 +68,10 @@ export type LightProp = 'intensity' | 'range' | 'angle' | 'color';
 export type Direction = 'up' | 'down' | 'north' | 'south' | 'east' | 'west';
 export type Axis = 'up' | 'north' | 'east';
 
-export type Statement =
+/** `and`: it starts along with the block above, and the next block waits for both. */
+export type Statement = StatementKind_ & { and?: boolean };
+
+type StatementKind_ =
   | { id: string; kind: 'move'; target: Ref; direction: Direction; distance: Expr; seconds: Expr }
   | { id: string; kind: 'turn'; target: Ref; axis: Axis; degrees: Expr; seconds: Expr }
   /** Turn to an angle measured from how it started (a door: 90 open, 0 shut), however far it has turned. */
