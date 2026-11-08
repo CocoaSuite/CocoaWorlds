@@ -143,6 +143,8 @@ type StatementKind_ =
   /** Play a sound file (`assets/sounds/…`) once, at a place (heard in 3D) or everywhere (null). */
   /** `loudness`: how loud for hunting creatures (0 or missing: they don't hear it). */
   | { id: string; kind: 'playSound'; sound: string; at: Place | null; volume: Expr; loudness?: Expr }
+  /** Play an effect from the VFX workspace at a place; `follow`: it moves with that object (or the player). */
+  | { id: string; kind: 'playEffect'; effect: string; at: Place; follow: boolean }
   /** A noise hunting creatures may hear: loudness 1 carries as far as their Hears you up to. */
   | { id: string; kind: 'noise'; at: Place; loudness: Expr }
   /** A blast at a place: hurts, breaks and throws what is within `radius`, less towards the edge (walls stop it). */

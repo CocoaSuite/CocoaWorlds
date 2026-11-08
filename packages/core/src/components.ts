@@ -104,6 +104,8 @@ export type FieldType =
   | { kind: 'material' }
   /** A project plant ('' for none). */
   | { kind: 'plant' }
+  /** A project effect from the VFX workspace ('' for none). */
+  | { kind: 'effect' }
   | { kind: 'vec3'; step?: number; min?: number }
   | { kind: 'text' }
   /** A project asset of one kind, by its project path (empty: none). */
@@ -796,6 +798,21 @@ export const COMPONENTS: ComponentDef[] = [
     ],
   },
   {
+    name: 'vfx',
+    label: e('Effect', 'Эффект'),
+    description: e(
+      'Plays one of the project’s effects (made in the VFX workspace) here, moving with the object. Turn on and Turn off blocks start and stop it; the Play effect block plays one anywhere.',
+      'Проигрывает здесь эффект проекта (из раздела «Эффекты») и движется с объектом. Блоки «Включить» и «Выключить» запускают и останавливают его; блок «Показать эффект» проигрывает эффект где угодно.',
+    ),
+    appliesTo: 'any',
+    fields: [
+      { key: 'effect', label: e('Effect', 'Эффект'), type: { kind: 'effect' }, default: '' },
+      { key: 'on', label: e('On at the start', 'Включено в начале'), type: { kind: 'boolean' }, default: true },
+      { key: 'loop', label: e('Repeat', 'Повторять'), hint: e('Play again and again while on (looping effects always repeat).', 'Играть снова и снова, пока включено (зацикленные эффекты повторяются всегда).'), type: { kind: 'boolean' }, default: true },
+      { key: 'offset', label: e('Offset', 'Смещение'), hint: e('Where it plays, from the object’s pivot.', 'Где он играет, от центра объекта.'), type: { kind: 'vec3', step: 1 }, default: [0, 0, 0] },
+    ],
+  },
+  {
     name: 'charger',
     label: e('Charger', 'Зарядник'),
     description: e(
@@ -1139,6 +1156,14 @@ export interface ChargerData {
   gives: 'health' | 'armour';
   capacity: number;
   rate: number;
+  [k: string]: unknown;
+}
+
+export interface VfxData {
+  effect: string;
+  on: boolean;
+  loop: boolean;
+  offset: [number, number, number];
   [k: string]: unknown;
 }
 

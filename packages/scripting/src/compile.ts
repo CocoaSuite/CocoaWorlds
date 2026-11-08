@@ -82,6 +82,8 @@ export type Op =
   | { op: 'varof'; name: string }
   /** Pops loudness, volume, then the place (null: everywhere): play `sound`. */
   | { op: 'sound'; sound: string }
+  /** Pops the place: play an effect there. */
+  | { op: 'vfx'; effect: string; follow: boolean }
   /** Pops loudness, then the place: a noise. */
   | { op: 'noise' }
   | { op: 'explode' }
@@ -798,6 +800,11 @@ class HandlerCompiler {
         if (s.loudness) this.expect(s.loudness, 'number', 'How loud it is for creatures must be a number (0: they don’t hear it).');
         else this.emit({ op: 'push', v: 0 });
         this.emit({ op: 'sound', sound: s.sound });
+        break;
+      case 'playEffect':
+        if (!s.effect) this.problem(s.id, 'Pick an effect (make one in the VFX workspace).');
+        this.pushPlace(s.at, s.id);
+        this.emit({ op: 'vfx', effect: s.effect, follow: s.follow });
         break;
       case 'explode':
         this.pushPlace(s.at, s.id);

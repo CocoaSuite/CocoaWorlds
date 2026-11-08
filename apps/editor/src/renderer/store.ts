@@ -53,6 +53,8 @@ import {
   type MaterialDef,
   materialsOf,
   plantsOf,
+  effectsOf,
+  type VfxEffect,
   type PlantDef,
   type SurfaceSounds,
   type SceneSettings,
@@ -89,6 +91,7 @@ import { useShallow } from 'zustand/react/shallow';
 import type { AssetEntry, AssetKind, OpenedProject, PrefabEntry } from '../shared/api';
 import { setAssetProject } from './assets';
 import { setProjectPlants } from './viewport/plants';
+import { setProjectEffects } from './viewport/vfx';
 import { setSurfaceSounds } from './viewport/surface-sounds';
 import { addTerrainField, forgetTerrains, saveTerrains, terrainField } from './viewport/terrains';
 import { besideTile, newTileBeside } from './viewport/terrain-tiles';
@@ -193,7 +196,7 @@ interface State {
   /** The bottom workspace's open tab. */
   bottomTab: 'script' | 'assets' | 'console' | 'problems';
   /** Which workspace fills the window: the scene (3D view and panels) or the screen UI editor. */
-  workspace: 'scene' | 'screens' | 'materials' | 'plants' | 'sky';
+  workspace: 'scene' | 'screens' | 'materials' | 'plants' | 'sky' | 'vfx';
   /** While playing: the blocks each object's script is running (for highlighting). */
   activeBlocks: Map<string, string[]>;
 }
@@ -330,6 +333,8 @@ interface Actions {
   setPlants(plants: PlantDef[], label: string, mergeKey?: string): void;
   /** The project's saved skies (Sky workspace), as one undo step. */
   setSkies(skies: SavedSky[], label: string): void;
+  /** The project's effects (VFX workspace), as one undo step (edits with the same key merge). */
+  setEffects(effects: VfxEffect[], label: string, mergeKey?: string): void;
   /** A plant object where the view is looking. */
   placePlant(id: string): void;
   /** Change a material without an undo step (baked map paths: they follow the graph, not the user). */
@@ -1422,6 +1427,19 @@ export const useEditor = create<State & Actions>()((set, get) => ({
     get().execute({ label, apply: () => put(list), revert: () => put(before) });
   },
 
+  setEffects(list, label, mergeKey) {
+    const dir = get().session?.dir;
+    if (!dir) return;
+    const before = effectsOf(get().session!.project.settings);
+    const put = (next: VfxEffect[]) => {
+      const s = get().session;
+      if (s?.dir !== dir) return;
+      set({ session: { ...s, project: { ...s.project, settings: { ...s.project.settings, effects: next } } }, rev: get().rev + 1 });
+      saveProjectSoon(get);
+    };
+    get().execute({ label, mergeKey, apply: () => put(list), revert: () => put(before) });
+  },
+
   setPlants(list, label, mergeKey) {
     const dir = get().session?.dir;
     if (!dir) return;
@@ -1856,6 +1874,13 @@ useEditor.subscribe((s) => {
   if (ss === shownSurfaceSounds) return;
   shownSurfaceSounds = ss;
   setSurfaceSounds(ss);
+});
+let shownEffects: VfxEffect[] | undefined;
+useEditor.subscribe((s) => {
+  const list = s.session?.project.settings.effects;
+  if (list === shownEffects) return;
+  shownEffects = list;
+  setProjectEffects(list ?? []);
 });
 let shownPlants: PlantDef[] | undefined;
 useEditor.subscribe((s) => {

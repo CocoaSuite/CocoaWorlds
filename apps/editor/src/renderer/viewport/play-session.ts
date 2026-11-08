@@ -5,7 +5,7 @@
  * With a Player start in the scene you play as the player (first person); without one, Play is a physics
  * preview watched with the free camera.
  */
-import { SceneDoc, expandRepeats, posterOf, readComponent, type ParticlesData, type ColliderData, type GameRules, type GameValue, type GooglyEyesData, type ModelData, type SceneFile, type SignData, type TerrainData } from '@cocoaworlds/core';
+import { SceneDoc, expandRepeats, posterOf, readComponent, type ParticlesData, type VfxData, type ColliderData, type GameRules, type GameValue, type GooglyEyesData, type ModelData, type SceneFile, type SignData, type TerrainData } from '@cocoaworlds/core';
 import { buildMesh, isInvisibleMaterial, type Brush, type VoxelField, type WorldBrush } from '@cocoaworlds/geometry';
 import { GameWorld, initPhysics, POSE, AT, NPC, type BuildPrompt, type FrameSnapshot, type Hearing, type NavGrid, type BodyInfo, type ModelMesh, type SavedProgress, type Travel, type UiState, type PlayerInput, type PlayerStatus, type ScriptLog, type TriggerEvent } from '@cocoaworlds/runtime';
 
@@ -26,6 +26,7 @@ import { buildSign, type SignObject } from './sign';
 import { buildPoster, type PosterObject } from './poster';
 import { buildGooglyEyes, type GooglyEyes } from './googly-eyes';
 import { Effects } from './effects';
+import { VfxRenderer, effectById, type VfxHandle } from './vfx';
 import { EMITTER_DEFAULTS } from './particles';
 import { assetUrl } from '../assets';
 import { modelGeometry, modelInstance, type ModelInstance } from './models';
@@ -254,6 +255,26 @@ export class PlaySession {
       this.emitters.push({ data: readComponent<ParticlesData>('particles', e.components.particles), holder, body, bodyAt: body ? this.world.drawn(body) : -1, owed: 0 });
     }
 
+    // Effects from the VFX workspace on objects (carried by what moves them; Turn on / Turn off start and stop them).
+    for (const e of doc.entities) {
+      if (!e.components.vfx) continue;
+      let shownE = true;
+      for (let x = doc.get(e.id); x; x = x.parent ? doc.get(x.parent) : undefined) if (!x.visible) shownE = false;
+      if (!shownE) continue;
+      const data = readComponent<VfxData>('vfx', e.components.vfx);
+      const fx = effectById(data.effect);
+      if (!fx) continue;
+      const holder = new THREE.Group();
+      holder.matrixAutoUpdate = false;
+      holder.matrix.fromArray(doc.worldMatrix(e.id));
+      this.group.add(holder);
+      const body = this.world.bodyOf(e.id);
+      if (body) this.movers.push({ id: body, i: this.world.drawn(body), obj: holder, base: holder.matrix.clone() });
+      const handle = this.vfx.play(fx, { follow: holder, offset: data.offset, repeat: data.loop, keep: true });
+      handle.player.on = data.on;
+      this.vfxOn.push({ data, handle, body, bodyAt: body ? this.world.drawn(body) : -1, was: data.on });
+    }
+
     // Text signs, where they stand (redrawn when blocks change their text).
     const shown = (id: string) => {
       for (let x = doc.get(id); x; x = x.parent ? doc.get(x.parent) : undefined) if (!x.visible) return false;
@@ -294,6 +315,18 @@ export class PlaySession {
     this.world.bus.on('step', (e) => void this.surfaceSound(e.kind === 'step' ? 'steps' : 'soft', e.surface, e.at, e.volume, 256));
     this.world.bus.on('hit', (e) => void this.surfaceSound(e.hard ? 'hard' : 'soft', e.surface, e.at, e.volume, 1024));
     this.group.add(this.effects.group);
+    this.group.add(this.vfx.group);
+    this.world.bus.on('vfx', (e) => {
+      const fx = effectById(e.effect);
+      if (!fx) return;
+      const at = new THREE.Vector3(...e.at);
+      const follow = e.follow && e.follow !== 'player' ? this.moverObject(e.follow) : null;
+      if (follow) {
+        follow.updateWorldMatrix(true, false);
+        const off = follow.worldToLocal(at.clone());
+        this.vfx.play(fx, { follow, offset: [off.x, off.y, off.z] });
+      } else this.vfx.play(fx, { matrix: new THREE.Matrix4().makeTranslation(at) });
+    });
     this.world.bus.on('shot', (e) => {
       const yaw = this.world.player?.input.yaw ?? 0;
       this.effects.tracer(e.from, e.to, e.by === 'player', [Math.cos(yaw), 0, -Math.sin(yaw)]);
@@ -807,6 +840,13 @@ export class PlaySession {
     this.updateGlow();
     this.emit(dt);
     this.effects.tick(dt);
+    for (const c of this.vfxOn) {
+      const on = c.body ? (this.world.switchedOn(c.body) ?? c.data.on) && this.frame.visible(c.bodyAt) : c.data.on;
+      if (on && !c.was) c.handle.player.reset();
+      c.was = on;
+      c.handle.player.on = on;
+    }
+    this.vfx.update(dt);
     const changes = this.world.drainChanges();
     for (const b of changes.spawned) {
       this.addMover(b);
@@ -1014,6 +1054,8 @@ export class PlaySession {
   }
 
   private effects: Effects;
+  private vfx = new VfxRenderer();
+  private vfxOn: { data: VfxData; handle: VfxHandle; body: string | null; bodyAt: number; was: boolean }[] = [];
   private missingAnims = new Set<string>();
   private npcViews = new Map<string, { holder: THREE.Group; inner: THREE.Group; figure: boolean }>();
 
@@ -1076,6 +1118,7 @@ export class PlaySession {
     const moving = new Set<THREE.Object3D>(this.movers.map((m) => m.obj));
     for (const v of this.npcViews.values()) moving.add(v.holder);
     moving.add(this.effects.group);
+    moving.add(this.vfx.group);
     if (this.body) moving.add(this.body);
     const now = this.boundsNow.makeEmpty();
     for (const o of this.group.children) if (!moving.has(o)) now.union(this.boundsBox.setFromObject(o));
@@ -1185,6 +1228,7 @@ export class PlaySession {
     this.restoreFov();
     this.baseView?.dispose();
     this.effects.dispose();
+    this.vfx.clear();
     this.foliage.dispose();
     this.terrains.dispose();
     this.plants.dispose();

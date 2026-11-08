@@ -1,5 +1,6 @@
 /** The main editor window: CocoaCanvas frame (top bar, scene list, stage, inspector) plus the bottom workspace. Mockup 01. */
 import { SkyPanel } from './SkyPanel';
+import { VfxPanel } from './VfxPanel';
 import { UvPane } from './UvPanel';
 import { RECIPES, type Recipe } from '@cocoaworlds/scripting';
 import { Button, Dialog } from '@cocoaworlds/ui';
@@ -42,6 +43,7 @@ export function EditorScreen() {
       {workspace === 'materials' && <MaterialsPanel />}
       {workspace === 'plants' && <PlantsPanel />}
       {workspace === 'sky' && <SkyPanel />}
+      {workspace === 'vfx' && <VfxPanel />}
       <div className={`cw-mid${playing ? ' cw-playing' : ''}`} hidden={workspace !== 'scene'}>
         {/* While playing, editing panels are inert: the game runs from a snapshot of the scene. */}
         <div className="cw-inert-wrap" inert={playing}>

@@ -164,6 +164,8 @@ function FieldEditor({ entity, component, field, value }: { entity: string; comp
     );
   } else if (ty.kind === 'boolean') {
     input = <Switch label={label} checked={!!value} onChange={(v) => set(v)} />;
+  } else if (ty.kind === 'effect') {
+    input = <EffectSelect label={label} value={String(value ?? '')} onChange={(v) => set(v)} />;
   } else if (ty.kind === 'plant') {
     input = <PlantSelect label={label} value={String(value ?? '')} onChange={(v) => set(v)} />;
   } else if (ty.kind === 'material') {
@@ -376,6 +378,26 @@ function MaterialSelect({ label, value, onChange }: { label: string; value: stri
         </optgroup>
       )}
     </select>
+  );
+}
+
+/** A project effect (VFX workspace), or none. */
+function EffectSelect({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
+  const effects = useEditor((s) => s.session?.project.settings.effects) ?? [];
+  return (
+    <span className="cw-row-pick">
+      <select className="cw-input cw-select" aria-label={label} value={value} onChange={(ev) => onChange(ev.target.value)}>
+        <option value="">{t('field.none')}</option>
+        {effects.map((x) => (
+          <option key={x.id} value={x.id}>
+            {x.name}
+          </option>
+        ))}
+      </select>
+      <Button size="sm" onClick={() => useEditor.getState().setWorkspace('vfx')}>
+        {getLang() === 'ru' ? 'Изменить' : 'Edit'}
+      </Button>
+    </span>
   );
 }
 

@@ -148,6 +148,8 @@ export function newStatement(kind: StatementKind, opts: { target?: Ref; variable
       return { id: id(), kind, target, amount: num(10) };
     case 'playSound':
       return { id: id(), kind, sound: '', at: { self: true }, volume: num(1), loudness: num(0) };
+    case 'playEffect':
+      return { id: id(), kind, effect: '', at: { self: true }, follow: false };
     case 'explode':
       return { id: id(), kind, at: { self: true }, radius: num(256), amount: num(80) };
     case 'noise':

@@ -55,6 +55,8 @@ export interface ScriptHost {
   setDay?(day: number): void;
   /** Play a sound at a place (an object, the player, 'aim') or everywhere (null). */
   playSound?(sound: string, place: Value, volume: number, owner: string, loudness?: number): void;
+  /** Play an effect (by id) at a place; `follow`: it moves with that object. */
+  playEffect?(effect: string, place: Value, follow: boolean, owner: string): void;
   /** A noise at a place, this loud for hunting creatures. */
   noise?(place: Value, loudness: number, owner: string): void;
   explode?(place: Value, radius: number, damage: number, owner: string): void;
@@ -715,6 +717,11 @@ export class ScriptRunner {
           const spread = Math.max(0, num(s.pop() ?? 0));
           const place = s.pop() ?? null;
           this.host.hint?.(place, spread, sure, op.as);
+          break;
+        }
+        case 'vfx': {
+          const place = s.pop() ?? null;
+          if (op.effect) this.host.playEffect?.(op.effect, place, op.follow, t.inst.program.owner);
           break;
         }
         case 'sound': {

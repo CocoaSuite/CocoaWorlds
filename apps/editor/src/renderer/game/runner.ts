@@ -4,7 +4,7 @@
  */
 import { SceneReflections, sceneProbes } from '../viewport/reflections';
 import { GroundBlend } from '../viewport/ground-blend';
-import { SceneDoc, expandRepeats, type GameRules, type GameValue, type MaterialDef, type PlantDef, type SceneFile, type SurfaceSounds } from '@cocoaworlds/core';
+import { SceneDoc, expandRepeats, type GameRules, type GameValue, type MaterialDef, type PlantDef, type SceneFile, type SurfaceSounds, type VfxEffect } from '@cocoaworlds/core';
 import { isInvisibleMaterial } from '@cocoaworlds/geometry';
 import * as THREE from 'three';
 import { brushBounds } from '../brush/brushes';
@@ -15,6 +15,7 @@ import type { Travel } from '@cocoaworlds/runtime';
 import { SceneLighting } from '../viewport/scene-lighting';
 import { setProjectMaterials, tickMaterials } from '../viewport/project-materials';
 import { setProjectPlants } from '../viewport/plants';
+import { setProjectEffects } from '../viewport/vfx';
 import { setSurfaceSounds } from '../viewport/surface-sounds';
 import { sceneMaterial } from '../viewport/world-render';
 import { hudOf, type Hud } from '../ui/Hud';
@@ -32,6 +33,8 @@ export interface GameData {
   values: GameValue[];
   /** The project's materials (older exports have none). */
   materials?: MaterialDef[];
+  /** The project's effects (VFX workspace). */
+  effects?: VfxEffect[];
   /** The project's plants the game uses. */
   plants?: PlantDef[];
   /** Each surface kind's footstep and hit sounds. */
@@ -116,6 +119,7 @@ export class GameRunner {
   async start(): Promise<void> {
     setProjectMaterials(this.data.materials ?? []);
     setProjectPlants(this.data.plants ?? []);
+    setProjectEffects(this.data.effects ?? []);
     setSurfaceSounds(this.data.surfaceSounds);
     await this.begin();
     this.lockPointer();

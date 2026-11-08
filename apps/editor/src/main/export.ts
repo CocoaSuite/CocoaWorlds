@@ -7,7 +7,7 @@
  */
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
-import { gameRules, materialsOf, plantsOf, validateProject, validateScene, type ProjectFile, type SceneFile } from '@cocoaworlds/core';
+import { effectsOf, gameRules, materialsOf, plantsOf, validateProject, validateScene, type ProjectFile, type SceneFile } from '@cocoaworlds/core';
 
 export type ExportTarget = 'web' | 'win32' | 'darwin' | 'linux';
 
@@ -59,7 +59,7 @@ export async function gameData(projectDir: string): Promise<{ project: ProjectFi
   return {
     project,
     scene,
-    data: { format: 'cocoaworlds.game', name: project.name, id: project.id, scene, start: stem(scenePath), scenes, rules: gameRules(project.settings), values: project.settings.values ?? [], materials, plants, surfaceSounds: project.settings.surfaceSounds },
+    data: { format: 'cocoaworlds.game', name: project.name, id: project.id, scene, start: stem(scenePath), scenes, rules: gameRules(project.settings), values: project.settings.values ?? [], materials, plants, effects: effectsOf(project.settings).filter((x) => sceneJson.includes(`"${x.id}"`)), surfaceSounds: project.settings.surfaceSounds },
   };
 }
 

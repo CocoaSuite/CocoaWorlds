@@ -858,6 +858,15 @@ function statementWords(s: Statement, set: (patch: Record<string, unknown>, merg
           <ExprSlot expr={s.radius} type="number" label={`${w('explode')} ${w('blastSize')}`} /> {w('units')}, {w('damage')} <ExprSlot expr={s.amount} type="number" label={`${w('explode')} ${w('damage')}`} />
         </>
       );
+    case 'playEffect':
+      return (
+        <>
+          {w('playEffect')} <EffectSlot value={s.effect} onChange={(effect) => set({ effect })} /> {w('atWord')} <RefSlot value={s.at} allowPlayer allowAim onChange={(at) => at && set({ at })} label={`${w('playEffect')} ${w('atWord')}`} />{' '}
+          <label className="cw-mini-check">
+            <input type="checkbox" checked={s.follow} onChange={(e) => set({ follow: e.target.checked })} /> {w('followIt')}
+          </label>
+        </>
+      );
     case 'noise':
       return (
         <>
@@ -1282,6 +1291,21 @@ function ItemSlot({ value, onChange, label, allowAny }: { value: string; onChang
       {allowAny && value && !items.some((x) => x.name === value) && <option value={value}>{value} ?</option>}
       {items.map((x) => (
         <option key={x.name} value={x.name}>
+          {x.name}
+        </option>
+      ))}
+    </select>
+  );
+}
+
+/** An effect from the VFX workspace. */
+function EffectSlot({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const effects = useEditor((s) => s.session?.project.settings.effects) ?? [];
+  return (
+    <select className="cw-input cw-ref" aria-label={w('playEffect')} value={value} onChange={(e) => onChange(e.target.value)}>
+      {!effects.some((x) => x.id === value) && <option value={value}>{value ? `${value} ?` : w('pickEffect')}</option>}
+      {effects.map((x) => (
+        <option key={x.id} value={x.id}>
           {x.name}
         </option>
       ))}

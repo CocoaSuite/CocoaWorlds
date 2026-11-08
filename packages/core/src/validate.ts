@@ -3,6 +3,7 @@ import { isFiniteVec3 } from './math';
 import { validateMaterials } from './materials';
 import { isSurface } from './surfaces';
 import { validateUi } from './ui';
+import { isEffect } from './vfx';
 import type { EntityData, ProjectFile, SceneFile } from './schema';
 
 export interface Problem {
@@ -59,6 +60,7 @@ export function validateProject(data: unknown): Result<ProjectFile> {
   if (isObj(s)) {
     const bad = validateMaterials(s.materials);
     need(p, !bad, 'settings.materials', bad ?? '');
+    need(p, s.effects === undefined || (Array.isArray(s.effects) && s.effects.every(isEffect)), 'settings.effects', 'Each effect needs an id, a name, a length, whether it repeats, and a list of layers.');
   }
   if (Array.isArray(data.scenes) && isStr(data.startScene)) {
     need(p, data.scenes.includes(data.startScene), 'startScene', 'Start scene is not in the scene list.');

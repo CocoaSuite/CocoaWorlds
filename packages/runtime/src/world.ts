@@ -1224,6 +1224,13 @@ export class GameWorld {
         const follow = place && typeof place === 'object' && place.ref !== 'player' ? this.bodyOf(place.ref) : null;
         this.bus.emit({ type: 'sound', sound, at, follow, volume, loop: false, range: 2048, source: owner, time: this.time });
       },
+      playEffect: (effect, place, follow) => {
+        const at = this.placePoint(place);
+        if (!at) return;
+        const ref = place && typeof place === 'object' ? (place.ref as string) : null;
+        const along = !follow || !ref ? null : ref === 'player' ? 'player' : this.bodyOf(ref);
+        this.bus.emit({ type: 'vfx', effect, at: [at[0], at[1], at[2]], follow: along, time: this.time });
+      },
       explode: (place, radius, damage, owner) => {
         const at = this.placePoint(place);
         if (at && radius > 0) this.weapons.explode([at[0], at[1], at[2]], { ...BLAST, blast: radius, damage, push: Math.max(400, radius * 3) }, owner, 'an explosion');

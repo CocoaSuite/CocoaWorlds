@@ -39,6 +39,8 @@ export interface ProjectSettings {
   favouriteMaterials?: string[];
   /** Skies saved from the Sky workspace, for any scene (missing: none). */
   skies?: SavedSky[];
+  /** Effects made in the VFX workspace, shared by every scene (missing: none). */
+  effects?: import('./vfx').VfxEffect[];
   /** Each surface kind's footstep and hit sounds (missing: silent). */
   surfaceSounds?: import('./surfaces').SurfaceSounds;
 }
