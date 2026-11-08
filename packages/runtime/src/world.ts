@@ -257,8 +257,10 @@ type Quat = { x: number; y: number; z: number; w: number };
 
 /** The heaviest thing the player can pick up (kg). */
 const MAX_CARRY = 50;
-/** How sharply something must be stopped to make a sound (u/s; about 1.5 m/s). */
-const HIT_SPEED = 60;
+/** How sharply something must be stopped to make a sound (u/s; about 0.6 m/s: set down gently, a soft tap). */
+const HIT_SPEED = 24;
+/** A hit this sharp is as loud as it gets (u/s; about 10 m/s: thrown hard, or a long fall). */
+const HIT_FULL = 420;
 /** “Make an explosion”: a blast with no weapon behind it (size, damage and push filled in). */
 const BLAST: WeaponDef = { kind: 'projectile', damage: 0, rate: 1, automatic: false, range: 0, spread: 0, pellets: 1, ammo: '', speed: 0, arc: false, blast: 0, push: 0, sound: '' };
 /** Radians a held object turns per pixel of mouse movement. */
@@ -3222,6 +3224,7 @@ export class GameWorld {
   }
 
   private hits = new Map<string, { last: number; since: number; count: number; quietUntil: number }>();
+  private heldTouching = false;
 
   /**
    * Hits: a body the step slowed sharply (its velocity changed against the way it was going). No sound for
@@ -3233,10 +3236,18 @@ export class GameWorld {
     let left = 4;
     for (const b of this.bodies.values()) {
       const v0 = b.v0;
-      if (!v0 || !b.body.isDynamic() || b.info.id === this.held?.id) continue;
+      if (!v0 || !b.body.isDynamic()) continue;
+      const held = b.info.id === this.held?.id;
       const v = b.body.linvel(), k = b.body.gravityScale() * STEP;
       const dx = v.x - v0[0]! - g.x * k, dy = v.y - v0[1]! - g.y * k, dz = v.z - v0[2]! - g.z * k;
       const dv = Math.hypot(dx, dy, dz), was = Math.hypot(v0[0]!, v0[1]!, v0[2]!);
+      // (Something carried sounds only as it first touches, not while it is pressed against things.)
+      if (held) {
+        const now = this.touching(b.body) !== null;
+        const fresh = now && !this.heldTouching;
+        this.heldTouching = now;
+        if (!fresh) continue;
+      }
       if (dv < HIT_SPEED || was < HIT_SPEED * 0.5 || dx * v0[0]! + dy * v0[1]! + dz * v0[2]! > -0.3 * dv * was) continue;
       const id = b.info.id;
       const h = this.hits.get(id) ?? { last: -1, since: -1, count: 0, quietUntil: 0 };
@@ -3249,7 +3260,8 @@ export class GameWorld {
       }
       h.last = this.time;
       const t = b.body.translation();
-      let volume = Math.min(1, 0.15 + (dv - HIT_SPEED) / 400);
+      // Set down gently: barely heard; thrown: full. (Curved, so soft hits stay soft.)
+      let volume = 0.04 + 0.96 * Math.min(1, (dv - HIT_SPEED) / (HIT_FULL - HIT_SPEED)) ** 1.2;
       // (Landing on something soft is quieter.)
       const touched = this.touching(b.body);
       if (touched !== null && SOFT_SURFACES.includes(this.surfaceAt(touched, t))) volume *= 0.6;

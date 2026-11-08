@@ -39,6 +39,18 @@ describe('hits', () => {
     expect(hits.every((h) => h.t < 2)).toBe(true);
   });
 
+  it('louder the faster: set down gently is a soft tap, a long drop is loud', () => {
+    const gentle = GameWorld.create(scene(floor(), crate('crate', 2)), { surfaces });
+    const soft = listen(gentle, 'hit');
+    run(gentle, 2);
+    const high = GameWorld.create(scene(floor(), crate('crate', 200)), { surfaces });
+    const loud = listen(high, 'hit');
+    run(high, 3);
+    expect(soft.length).toBe(1);
+    expect(soft[0]!.volume).toBeLessThan(0.2);
+    expect(loud[0]!.volume).toBeGreaterThan(0.85);
+  });
+
   it('a pile does not buzz: few hits, none once settled, and nothing at all from things lying still', () => {
     const crates = Array.from({ length: 12 }, (_, i) => crate(`c${i}`, 30 + i * 26, (i % 3) * 6 - 6));
     const w = GameWorld.create(scene(floor(), ...crates), { surfaces });

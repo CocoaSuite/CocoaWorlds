@@ -103,10 +103,12 @@ Models (GLB, glTF) can be imported the same way; see Models below.
   Models: their first painted material, else the model's or object's name. Creatures are Flesh.
 - **Footsteps**: one every stride while the player moves on the ground (quieter crouching and walking,
   louder sprinting), a thump on landing (louder from higher), a scuff on jumping. In shallow water: Water.
-- **Hits**: when a physics object is stopped sharply (about 1.5 m/s or more); louder the harder, Hard hits
-  above about 6.5 m/s, quieter landing on soft ground. Never more than every 0.09 s per object; an object
-  hitting more than five times in a second (a pile squeezing itself, something wedged) is quiet for a
-  second; at most four new hits a step and eight playing at once. Things lying still or carried make none.
+- **Hits**: when a physics object is stopped (from about 0.6 m/s). The volume follows the speed: set down
+  gently it is a soft tap, thrown or dropped from high it is full (about 10 m/s); Hard hits above about
+  6.5 m/s; quieter landing on soft ground. Something carried sounds as it first touches, not while pressed
+  against things. Never more than every 0.09 s per object; an object hitting more than five times in a
+  second (a pile squeezing itself, something wedged) is quiet for a second; at most four new hits a step and
+  eight playing at once. Things lying still make none.
 - **Silence the world** / **Bring the world's sounds back** (Sound blocks): the background sound and
   Sound components fade out (1.5 s) and stay silent; footsteps, hits and sounds blocks play are still heard.
 
