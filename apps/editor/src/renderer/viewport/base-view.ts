@@ -17,8 +17,33 @@ export class BaseView {
   private ghosts = new Map<string, THREE.Material>();
   private version = -1;
 
-  constructor(private material: (name: string) => THREE.Material) {
+  constructor(
+    private material: (name: string) => THREE.Material,
+    base?: BaseSystem,
+  ) {
     this.group.name = 'base';
+    if (base) this.preload(base);
+  }
+
+  /**
+   * Every material a piece can be drawn with (finished, blueprint, ghost), on hidden boxes in the group: Play
+   * compiles and uploads them before its first frame, so finishing a piece doesn't stall the game.
+   */
+  private preload(base: BaseSystem): void {
+    const warm = new THREE.Group();
+    warm.name = 'base-preload';
+    warm.visible = false;
+    const add = (p: Partial<DrawnPart>) => {
+      const m = new THREE.Mesh(unit, this.materialOf({ ghost: false, material: '', color: '#ffffff', opacity: 1, ...p } as DrawnPart));
+      m.castShadow = m.receiveShadow = !p.ghost;
+      warm.add(m);
+    };
+    const g = base.config.ghost;
+    add({ ghost: true, color: g.color, opacity: g.opacity });
+    add({ ghost: true, color: g.placing, opacity: g.placingOpacity });
+    add({ ghost: true, color: g.invalid, opacity: g.placingOpacity });
+    for (const d of base.pieces.values()) for (const p of d.mesh.parts) add({ color: p.color, material: p.material || base.config.looks[d.category] || '', opacity: p.opacity });
+    this.group.add(warm);
   }
 
   private materialOf(p: DrawnPart): THREE.Material {

@@ -180,7 +180,7 @@ export class PlaySession {
     this.makeSpareLights(doc);
     // Base building: blueprints (with their % tags), finished pieces and the ghost being placed.
     if (this.world.base) {
-      this.baseView = new BaseView(material);
+      this.baseView = new BaseView(material, this.world.base);
       this.group.add(this.baseView.group);
     }
     for (const b of this.world.movingBodies()) if (doc.get(b.id)) this.addMover(b);
