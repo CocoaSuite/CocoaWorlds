@@ -152,6 +152,8 @@ export function newStatement(kind: StatementKind, opts: { target?: Ref; variable
       return { id: id(), kind, effect: '', at: { self: true }, follow: false };
     case 'explode':
       return { id: id(), kind, at: { self: true }, radius: num(256), amount: num(80) };
+    case 'damageNear':
+      return { id: id(), kind, at: { self: true }, radius: num(128), amount: num(10) };
     case 'noise':
       return { id: id(), kind, at: { self: true }, loudness: num(1) };
     case 'hint':

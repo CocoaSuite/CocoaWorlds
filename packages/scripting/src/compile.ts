@@ -87,6 +87,7 @@ export type Op =
   /** Pops loudness, then the place: a noise. */
   | { op: 'noise' }
   | { op: 'explode' }
+  | { op: 'damageNear' }
   /** Pops sureness, spread, then the place: a hint for hunting creatures. */
   | { op: 'hint'; as: 'sound' | 'sighting' | 'event' }
   /** Pops an object: stop its sounds. */
@@ -811,6 +812,12 @@ class HandlerCompiler {
         this.expect(s.radius, 'number', 'The size must be a number of units.');
         this.expect(s.amount, 'number', 'Damage must be a number.');
         this.emit({ op: 'explode' });
+        break;
+      case 'damageNear':
+        this.pushPlace(s.at, s.id);
+        this.expect(s.radius, 'number', 'The range must be a number of units.');
+        this.expect(s.amount, 'number', 'Damage must be a number.');
+        this.emit({ op: 'damageNear' });
         break;
       case 'noise':
         this.pushPlace(s.at, s.id);

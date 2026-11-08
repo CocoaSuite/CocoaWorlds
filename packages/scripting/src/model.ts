@@ -149,6 +149,8 @@ type StatementKind_ =
   | { id: string; kind: 'noise'; at: Place; loudness: Expr }
   /** A blast at a place: hurts, breaks and throws what is within `radius`, less towards the edge (walls stop it). */
   | { id: string; kind: 'explode'; at: Place; radius: Expr; amount: Expr }
+  /** Everything (the player too) within `radius` of a place takes `amount`, except the place's own object. */
+  | { id: string; kind: 'damageNear'; at: Place; radius: Expr; amount: Expr }
   /** The Director: tell hunting creatures the player is roughly at a place (give or take `spread`), this sure (0–1). */
   | { id: string; kind: 'hint'; at: Place; spread: Expr; sure: Expr; as: 'sound' | 'sighting' | 'event' }
   /** Stop the sounds an object is making (its Sound component and what its scripts played). */

@@ -1235,6 +1235,11 @@ export class GameWorld {
         const at = this.placePoint(place);
         if (at && radius > 0) this.weapons.explode([at[0], at[1], at[2]], { ...BLAST, blast: radius, damage, push: Math.max(400, radius * 3) }, owner, 'an explosion');
       },
+      damageNear: (place, radius, damage, owner) => {
+        const at = this.placePoint(place);
+        const ref = place && typeof place === 'object' ? (place.ref as string) : null;
+        if (at && radius > 0 && damage > 0) this.weapons.hurtNear([at[0], at[1], at[2]], radius, damage, owner, ref ?? undefined);
+      },
       noise: (place, loudness, owner) => {
         const at = this.placePoint(place);
         const ref = place && typeof place === 'object' ? place.ref : null;

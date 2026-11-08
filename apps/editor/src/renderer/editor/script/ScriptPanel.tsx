@@ -858,6 +858,13 @@ function statementWords(s: Statement, set: (patch: Record<string, unknown>, merg
           <ExprSlot expr={s.radius} type="number" label={`${w('explode')} ${w('blastSize')}`} /> {w('units')}, {w('damage')} <ExprSlot expr={s.amount} type="number" label={`${w('explode')} ${w('damage')}`} />
         </>
       );
+    case 'damageNear':
+      return (
+        <>
+          {w('damageNear')} <ExprSlot expr={s.radius} type="number" label={`${w('damageNear')} ${w('units')}`} /> {w('units')} {w('ofWord')}{' '}
+          <RefSlot value={s.at} allowPlayer onChange={(at) => at && set({ at })} label={w('damageNear')} />, {w('by')} <ExprSlot expr={s.amount} type="number" label={`${w('damageNear')} ${w('by')}`} />
+        </>
+      );
     case 'playEffect':
       return (
         <>

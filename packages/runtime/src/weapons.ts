@@ -194,6 +194,25 @@ export class Weapons {
     }
   }
 
+  /** Everything within `r` of `c` takes `damage` in full (no push, walls don't block); `skip`: left out. */
+  hurtNear(c: V3, r: number, damage: number, by: string, skip?: string): void {
+    const found: RAPIER.Collider[] = [];
+    this.host.world.intersectionsWithShape({ x: c[0], y: c[1], z: c[2] }, { x: 0, y: 0, z: 0, w: 1 }, new RAPIER.Ball(r), (col) => {
+      found.push(col);
+      return true;
+    });
+    const hurt = new Set<string>();
+    for (const col of found) {
+      if (this.host.passes(col)) continue;
+      const id = this.host.ownerOf(col.handle);
+      if (!id || id === 'player' || id === skip || hurt.has(id)) continue;
+      hurt.add(id);
+      this.host.damage(id, damage, by, 'damage');
+    }
+    const p = this.host.playerCentre();
+    if (p && skip !== 'player' && Math.hypot(p[0] - c[0], p[1] - c[1], p[2] - c[2]) < r) this.host.damage('player', damage, by, 'damage');
+  }
+
   /** Whether a blast at `c` reaches `to` away without a wall between (the target's own collider doesn't count). */
   private reaches(c: V3, to: V3, dist: number, own: number | null, player = false): boolean {
     if (dist < 1) return true;

@@ -180,6 +180,26 @@ describe('weapons', () => {
   });
 });
 
+describe('“Damage everything in range”', () => {
+  it('hurts what is near and the player when close, but not itself or what is far', () => {
+    const n = (value: number) => ({ id: `n${value}`, kind: 'number' as const, value });
+    const hazard = newEntity('hazard', { breakable: { health: 100 }, collider: { shape: 'box', size: [16, 16, 16] } }, { position: [0, 8, -60] });
+    hazard.components.script = { version: 1, variables: [], handlers: [{ id: 'h', event: { id: 'e', kind: 'start' }, body: [
+      { id: 'w', kind: 'wait', seconds: n(0.1) },
+      { id: 'd', kind: 'damageNear', at: { self: true }, radius: n(128), amount: n(20) },
+    ] }] } as Script as never;
+    const near = brush('near', [-16, 0, -140], [16, 32, -110], { breakable: { health: 100 } });
+    const far = brush('far', [-16, 0, -640], [16, 32, -610], { breakable: { health: 100 } });
+    const w = GameWorld.create(scene([], floor(), hazard, near, far, spawn()));
+    run(w, 0.4);
+    expect(w.healthOf(near.id)).toBe(80);
+    expect(w.healthOf(far.id)).toBe(100);
+    expect(w.healthOf(hazard.id)).toBe(100);
+    expect(w.playerStatus()!.health).toBeLessThan(100);
+    w.dispose();
+  });
+});
+
 describe('“Make an explosion”', () => {
   it('a bomb on a timer blows up where it is: breaks and throws what is near, hurts the player when close, and goes', () => {
     const n = (value: number) => ({ id: `n${value}`, kind: 'number' as const, value });
