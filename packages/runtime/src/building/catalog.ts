@@ -3,13 +3,15 @@
  * the scene's `settings.building.pieces` (same shape) and `settings.building.base` (merged over base.json).
  */
 import base from './data/base.json';
+import concreteFloor from './data/concrete-floor.json';
 import concreteWall from './data/concrete-wall.json';
-import door from './data/door.json';
-import windowPiece from './data/window.json';
+import woodDoor from './data/wood-door.json';
+import woodFloor from './data/wood-floor.json';
 import woodWall from './data/wood-wall.json';
+import woodWindow from './data/wood-window.json';
 import { readBaseConfig, readPieceDef, type BaseConfig, type PieceDef } from './defs';
 
-export const BUILT_IN_PIECES: unknown[] = [woodWall, concreteWall, door, windowPiece];
+export const BUILT_IN_PIECES: unknown[] = [woodWall, woodFloor, woodDoor, woodWindow, concreteWall, concreteFloor];
 export const BUILT_IN_BASE: unknown = base;
 
 /** Every piece (built-in, then the game's, which replace built-ins of the same id) and the base settings. */

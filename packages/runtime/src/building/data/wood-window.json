@@ -1,0 +1,19 @@
+{
+  "id": "wood_window",
+  "label": "Wood window wall",
+  "blueprint": "Wood window blueprint",
+  "snap": "edge",
+  "material": "plank",
+  "materialLabel": "Planks",
+  "count": 3,
+  "health": 50,
+  "mesh": {
+    "parts": [
+      { "id": "post_a", "at": [3, 52, 0], "size": [6, 104, 6], "color": "#6b4a2b" },
+      { "id": "post_b", "at": [93, 52, 0], "size": [6, 104, 6], "color": "#6b4a2b" },
+      { "id": "low", "at": [48, 20, 4], "size": [96, 40, 2], "color": "#9a7246" },
+      { "id": "high", "at": [48, 92, 4], "size": [96, 24, 2], "color": "#946d42" },
+      { "id": "sill", "at": [48, 41, 2], "size": [84, 3, 8], "color": "#6b4a2b" }
+    ]
+  }
+}

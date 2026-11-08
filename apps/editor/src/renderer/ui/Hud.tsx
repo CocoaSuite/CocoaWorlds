@@ -35,7 +35,7 @@ export interface Hud {
   messages: string[];
   /** Looking at something usable: its prompt word ('' for plain “Use”), else null. */
   use: string | null;
-  /** Base building: what E (or a click, with a plan in hand) does at a build site, door or window. */
+  /** Base building: the blueprint aimed at (how full it is), the one in hand's ghost, a door or a damaged piece. */
   build: BuildPrompt | null;
   /** Other keys that do something at what's looked at or held, with their prompt words. */
   keys: { key: string; prompt: string }[];
@@ -136,10 +136,13 @@ export function HudView({ hud }: { hud: Hud }) {
         <div className={`cw-ov cw-build-prompt${hud.build.missing ? ' missing' : ''}`} data-testid="build-prompt" role="status">
           <BuildIcon name={hud.build.icon} />
           <div className="cw-build-text">
-            <div className="cw-use-row">
-              <kbd>{hud.build.site ? 'E' : t('hud.click')}</kbd>
-              <span>{hud.build.label}</span>
-            </div>
+            <div className="cw-build-title">{hud.build.title}</div>
+            {hud.build.label && (
+              <div className="cw-use-row">
+                <kbd>{hud.build.site ? 'E' : t('hud.click')}</kbd>
+                <span>{hud.build.label}</span>
+              </div>
+            )}
             {hud.build.missing && <div className="cw-build-missing">{t('hud.needs')} {hud.build.missing}</div>}
             {hud.build.progress !== null && (
               <span className="cw-build-bar">

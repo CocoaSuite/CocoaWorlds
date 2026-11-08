@@ -39,11 +39,10 @@ reflection probe captures again, each new capture going in half over what the pr
 (`SceneReflections.relight`), so dawn and dusk change brushes' light smoothly. Probes also light brushes (their
 ambient), so a stale daytime capture used to keep brushes bright into the night until the camera moved.
 
-**Days.** The day count starts at **First day** and goes up each time the clock passes midnight (also while
-sleeping in a base). **Show the day on screen** puts a Day counter with the health and score (`{day}` also works
+**Days.** The day count starts at **First day** and goes up each time the clock passes midnight. **Show the day on screen** puts a Day counter with the health and score (`{day}` also works
 in screen texts); **Show the clock on screen** adds the time as 24-hour HH:MM. Events: **When a new day starts**; **When day n starts** (at midnight, when a block sets that day,
 or at the start when the game starts on it, not when resumed from a save); **When the clock reaches h o'clock**
-(once each time that hour passes, also while sleeping). Statement **Set the day to n** (a different day starts:
+(once each time that hour passes, also when hours are skipped). Statement **Set the day to n** (a different day starts:
 both day events run), values **the day** and **today is day n**. Setting the time of day to an earlier hour than now passes midnight: the day goes up and **When a new day starts** runs. The day goes with the player to other scenes and is kept in saved progress (when the cycle is
 on or a block changed it); “Forget saved progress” puts it back to the first day. Code: `GameWorld.passHours`,
 `day`. Tests: `packages/runtime/test/days.test.ts`.

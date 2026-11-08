@@ -251,15 +251,18 @@ First run here (software GPU, meaningless for speed): world step 18 ms median on
 calls** a frame (plants one by one, bulb shadows): instancing (step 3) may come before the worker. Decide from the
 user's numbers.
 
-### 11. Base building (comfort and safety)
+### 11. Base building (blueprints, Lumber Tycoon 2 style)
 
-Status: first working version. Game rule `building`. Data-driven pieces (`packages/runtime/src/building/data/*.json`,
-plus `settings.building` in a scene), build sites stage by stage, doors/bolts/shutters, the chair wedge, rooms and
-sealing (muffle + wind cut), hidden comfort (ambience only), sleep-to-save in comfortable rooms, horror events and a
-sample knock, saved in progress. Design and API: `docs/building.md`. Tests: `packages/runtime/test/building.test.ts`.
+Status: rewritten Nov 2026 (the old stage-by-stage build sites, rooms, sealing, comfort, sleep-to-save, the wedge
+and the knock are gone). Game rule `building`. Blueprint items place see-through blueprints on the grid (edges for
+walls/doors/windows, cells for floors/foundations); props tagged with the piece's `material` (`plank`,
+`concrete powder`) are used up on touching it, one each, until `count`; then it is solid. Hold E on a blueprint to
+remove it; finished pieces have `health` and are knocked down by weapon hits, blasts and damage blocks. Doors open
+with E. Data: `packages/runtime/src/building/data/*.json` plus `settings.building` in a scene. Design and API:
+`docs/building.md`. Tests: `packages/runtime/test/building.test.ts`.
 
-Next, if wanted: blocks for the base events (When a room is sealed, When something knocks); model files per piece;
-a second storey; an e2e test of placing in Play.
+Next, if wanted: buying blueprints from the home-computer shop; blocks for the base events; model files per piece;
+an e2e test of placing in Play.
 
 ### 12. Plant batching: tried and taken back
 
@@ -288,8 +291,8 @@ Next, if wanted: `trigger` meshes in files (zones); outlines on batched copies.
 ### 14. Days
 
 Status: done. A day count on top of day and night (see docs/rendering.md, Days): `DayCycle.startDay`
-(Inspector › First day), `showDay` (Day counter in the HUD, `PlayerStatus.day`), `GameWorld.day`, `passHours` (clock
-and sleep both go through it) and `setDay`, events `newDay`, `dayStarts` and `atHour`, statement `setDay`, values
+(Inspector › First day), `showDay` (Day counter in the HUD, `PlayerStatus.day`), `GameWorld.day`, `passHours` (the clock and
+skipped hours go through it) and `setDay`, events `newDay`, `dayStarts` and `atHour`, statement `setDay`, values
 `day` and `isDay`. Saved as `SavedProgress.day`, carried as `Travel.day`. Tests:
 `packages/runtime/test/days.test.ts`.
 

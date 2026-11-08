@@ -1,22 +1,13 @@
 {
   "id": "concrete_wall",
   "label": "Concrete wall",
-  "kind": "wall",
-  "blueprint": "Concrete wall plan",
+  "blueprint": "Concrete wall blueprint",
   "snap": "edge",
-  "seal": { "needs": [], "closed": false },
-  "stages": [
-    { "id": "mold", "action": "hold", "duration": 2.5, "tool": "Hammer", "item": "Concrete mold", "use": 1, "or": { "item": "Plank", "use": 4 }, "label": "Build the plank mold" },
-    { "id": "pour", "action": "pour", "item": "Bucket of concrete", "count": 2, "duration": 3, "gives": { "Empty bucket": 2 }, "label": "Pour the mix" },
-    { "id": "cure", "action": "wait", "duration": 180, "label": "Curing" },
-    { "id": "strip", "action": "hold", "duration": 2, "gives": { "Concrete mold": 1 }, "label": "Strip the mold" }
-  ],
+  "material": "concrete powder",
+  "materialLabel": "Bags of concrete powder",
+  "count": 3,
+  "health": 200,
   "mesh": {
-    "parts": [
-      { "id": "mold_a", "at": [48, 48, -5], "size": [98, 96, 2], "color": "#b08a5a", "from": "mold", "until": "strip", "solid": false },
-      { "id": "mold_b", "at": [48, 48, 5], "size": [98, 96, 2], "color": "#b08a5a", "from": "mold", "until": "strip", "solid": false },
-      { "id": "wet", "at": [48, 48, 0], "size": [96, 96, 8], "color": "#56595c", "from": "pour", "step": 0, "fill": "pour", "until": "cure" },
-      { "id": "cured", "at": [48, 48, 0], "size": [96, 96, 8], "color": "#a3a5a6", "from": "cure" }
-    ]
+    "parts": [{ "id": "wall", "at": [48, 52, 0], "size": [96, 104, 10], "color": "#9a9a96" }]
   }
 }

@@ -1,0 +1,18 @@
+{
+  "id": "wood_floor",
+  "label": "Wood floor",
+  "blueprint": "Wood floor blueprint",
+  "snap": "cell",
+  "material": "plank",
+  "materialLabel": "Planks",
+  "count": 4,
+  "health": 60,
+  "mesh": {
+    "parts": [
+      { "id": "board_1", "at": [12, 3, 48], "size": [23, 6, 96], "color": "#9a7246" },
+      { "id": "board_2", "at": [36, 3, 48], "size": [23, 6, 96], "color": "#946d42" },
+      { "id": "board_3", "at": [60, 3, 48], "size": [23, 6, 96], "color": "#9a7246" },
+      { "id": "board_4", "at": [84, 3, 48], "size": [23, 6, 96], "color": "#946d42" }
+    ]
+  }
+}

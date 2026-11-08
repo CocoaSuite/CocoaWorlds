@@ -1,380 +1,330 @@
-// Base building: pieces from JSON, stages, doors and bolts, rooms and sealing, comfort, sleep, the wedge, saving.
+// Base building, blueprint style: pieces from JSON, placing on the grid, filling with tagged props, finishing,
+// removing, doors, knocking pieces down, saving.
 import { beforeAll, describe, expect, it } from 'vitest';
-import { newEntity, newScene, type EntityData, type Vec3 } from '@cocoaworlds/core';
+import { newEntity, newScene, newWeapon, type EntityData, type ItemDef, type Vec3 } from '@cocoaworlds/core';
 import { box, toData } from '@cocoaworlds/geometry';
-import { BaseSystem, buildingCatalog, findRooms, nearestEdge, readPieceDef, type BaseHost, type ComfortSource, type GameEvent } from '../src';
+import { BaseSystem, buildingCatalog, nearestSpot, readPieceDef, type BaseHost, type BlockerBox, type GameEvent, type Spot } from '../src';
 import { GameWorld, initPhysics } from '../src';
 
 beforeAll(async () => {
   await initPhysics();
 });
 
-function fakeHost(over: Partial<BaseHost> = {}) {
+function fakeHost() {
   const items = new Map<string, number>();
   const events: GameEvent[] = [];
-  const blockers = new Map<string, unknown>();
-  const said: string[] = [];
-  const pinned = new Map<string, unknown>();
-  const sources: ComfortSource[] = [];
+  const blockers = new Map<string, BlockerBox>();
+  const consumed: string[] = [];
+  /** Props by tag, as the world would find them touching a blueprint. */
+  const props = new Map<string, string[]>();
   let t = 0;
   let hand = '';
-  let rnd = 0.5;
+  let ground = 0;
   const host: BaseHost = {
     time: () => t,
-    random: () => rnd,
     itemCount: (n) => items.get(n) ?? 0,
     giveItem: (n, k) => void items.set(n, (items.get(n) ?? 0) + k),
     selectedItem: () => hand,
-    groundAt: () => 0,
+    groundAt: () => ground,
     setBlocker: (k, b) => void (b ? blockers.set(k, b) : blockers.delete(k)),
+    propsIn: (_box, tag) => [...(props.get(tag) ?? [])],
+    consume: (id) => {
+      consumed.push(id);
+      for (const [k, list] of props) props.set(k, list.filter((x) => x !== id));
+    },
     emit: (e) => void events.push(e),
-    say: (s) => void said.push(s),
     playSound: () => {},
-    comfortSources: () => sources,
-    pinChair: (id, at) => void pinned.set(id, at),
-    releaseChair: (id) => void pinned.delete(id),
-    ...over,
   };
   const { pieces, config, problems } = buildingCatalog();
   const base = new BaseSystem(pieces, config, host);
   return {
-    base, items, events, blockers, said, pinned, sources, problems,
+    base, items, events, blockers, consumed, props, problems,
     hold: (item: string) => void (hand = item),
+    setGround: (y: number) => void (ground = y),
     advance: (s: number) => {
       for (let k = 0; k < Math.round(s * 60); k++) {
         t += 1 / 60;
         base.tick(1 / 60);
       }
     },
-    setRandom: (r: number) => void (rnd = r),
   };
 }
 
-/** Work a site's stages from inside (E taps, or E held through holds and pours). */
-function press(h: ReturnType<typeof fakeHost>, site: string, times = 1, part: string | null = null) {
-  for (let i = 0; i < times; i++) h.base.press({ site, part, distance: 10 }, null, [48, 0, 48]);
-}
-function holdE(h: ReturnType<typeof fakeHost>, site: string, seconds: number) {
-  for (let k = 0; k < Math.round(seconds * 60); k++) h.base.hold({ site, part: null, distance: 10 }, true, 1 / 60);
-}
-
-const G = 96;
+const wall: Spot = { kind: 'edge', axis: 'x', x: 0, z: 0 };
 const piece = (h: ReturnType<typeof fakeHost>, id: string) => h.base.pieces.get(id)!;
 
-/** A 1×1 room at cell (0, 0) out of three finished wood walls and one more piece. */
-function room(h: ReturnType<typeof fakeHost>, fourth: string) {
-  const ids = [
-    h.base.add(piece(h, 'wood_wall'), { axis: 'x', x: 0, z: 0 }, 0),
-    h.base.add(piece(h, 'wood_wall'), { axis: 'x', x: 0, z: 1 }, 0),
-    h.base.add(piece(h, 'wood_wall'), { axis: 'z', x: 0, z: 0 }, 0),
-  ];
-  for (const id of ids) {
-    const s = h.base.site(id)!;
-    s.stage = s.def.stages.length;
-  }
-  const last = h.base.add(piece(h, fourth), { axis: 'z', x: 1, z: 0 }, 0);
-  return { walls: ids, last };
-}
-
 describe('build pieces (JSON)', () => {
-  it('the built-in pieces read without problems; repeat groups are spelled out', () => {
+  it('the built-in pieces read without problems', () => {
     const h = fakeHost();
     expect(h.problems).toEqual([]);
-    expect([...h.base.pieces.keys()].sort()).toEqual(['concrete_wall', 'door', 'window', 'wood_wall']);
-    const wood = piece(h, 'wood_wall');
-    expect(wood.stages.map((s) => s.id)).toEqual(['posts', 'drive', 'board_1', 'nail_1', 'board_2', 'nail_2', 'board_3', 'nail_3', 'board_4', 'nail_4']);
+    expect([...h.base.pieces.keys()].sort()).toEqual(['concrete_floor', 'concrete_wall', 'wood_door', 'wood_floor', 'wood_wall', 'wood_window']);
+    expect(piece(h, 'wood_wall')).toMatchObject({ material: 'plank', count: 4, snap: 'edge', blueprint: 'Wood wall blueprint' });
+    expect(piece(h, 'concrete_floor')).toMatchObject({ material: 'concrete powder', snap: 'cell' });
   });
 
-  it('says what is wrong with a broken piece', () => {
-    expect(() => readPieceDef({ id: 'x', stages: [{ action: 'tap', optional: true }, { action: 'tap' }] })).toThrow(/optional/);
-    expect(() => readPieceDef({ id: 'x', stages: [{ id: 'a' }], mesh: { parts: [{ from: 'nope' }] } })).toThrow(/nope/);
-    // A new material is JSON alone.
-    const { pieces, problems } = buildingCatalog({ pieces: [{ id: 'mud_wall', blueprint: 'Mud wall plan', stages: [{ id: 'mud', action: 'pour', item: 'Mud', count: 3 }] }] });
-    expect(problems).toEqual([]);
-    expect(pieces.get('mud_wall')!.stages[0]!.duration).toBe(1.5);
+  it('a piece needs an id, a material and parts; the rest has defaults', () => {
+    expect(() => readPieceDef({ material: 'plank', mesh: { parts: [{}] } })).toThrow(/id/);
+    expect(() => readPieceDef({ id: 'a', mesh: { parts: [{}] } })).toThrow(/material/);
+    expect(() => readPieceDef({ id: 'a', material: 'plank' })).toThrow(/parts/);
+    const d = readPieceDef({ id: 'mud', label: 'Mud wall', material: 'mud', mesh: { parts: [{}] } });
+    expect(d).toMatchObject({ blueprint: 'Mud wall blueprint', count: 1, snap: 'edge', consumeBlueprint: false, opens: false });
   });
 
-  it('a plan in hand shows a ghost on the nearest edge and places a build site', () => {
+  it('a game adds and replaces pieces', () => {
+    const { pieces, problems } = buildingCatalog({ pieces: [{ id: 'wood_wall', material: 'log', count: 2, mesh: { parts: [{}] } }, { id: 'bad' }] });
+    expect(pieces.get('wood_wall')!.material).toBe('log');
+    expect(problems).toHaveLength(1);
+  });
+});
+
+describe('placing blueprints', () => {
+  it('a blueprint in hand previews on the nearest edge or cell; a click places it at 0%', () => {
     const h = fakeHost();
-    expect(nearestEdge(40, 3, G)).toEqual({ axis: 'x', x: 0, z: 0 });
-    expect(nearestEdge(94, 40, G)).toEqual({ axis: 'z', x: 1, z: 0 });
-    h.hold('Wood wall plan');
-    expect(h.base.aimPlacement([40, 0, 3])!.valid).toBe(true);
-    expect(h.base.parts().every((p) => p.ghost)).toBe(true);
+    expect(h.base.aimPlacement([50, 0, 10])).toBeNull();
+    h.hold('Wood wall blueprint');
+    expect(h.base.aimPlacement([50, 0, 10])!.spot).toEqual({ kind: 'edge', axis: 'x', x: 0, z: 0 });
     const id = h.base.placePreview()!;
-    expect(id).toBeTruthy();
-    expect(h.base.aimPlacement([40, 0, 3])!.valid).toBe(false);
-    expect(h.events.some((e) => e.type === 'base.placed')).toBe(true);
+    expect(h.base.site(id)!.filled).toBe(0);
+    expect(h.events.at(-1)).toMatchObject({ type: 'base.placed', piece: 'wood_wall' });
+    // (Blueprints don't block.)
+    expect(h.blockers.size).toBe(0);
+    h.hold('Wood floor blueprint');
+    expect(h.base.aimPlacement([50, 0, 10])!.spot).toEqual({ kind: 'cell', x: 0, z: 0 });
+    expect(nearestSpot('cell', -1, 200, 96)).toEqual({ kind: 'cell', x: -1, z: 2 });
+  });
+
+  it('one piece per spot and level; stacking on top is fine', () => {
+    const h = fakeHost();
+    h.hold('Wood wall blueprint');
+    h.base.aimPlacement([50, 0, 10]);
+    h.base.placePreview();
+    expect(h.base.aimPlacement([50, 0, 10])!.valid).toBe(false);
+    expect(h.base.placePreview()).toBeNull();
+    // (A wall and a floor share the ground: different kinds of spot.)
+    h.hold('Wood floor blueprint');
+    expect(h.base.aimPlacement([50, 0, 10])!.valid).toBe(true);
+    h.hold('Wood wall blueprint');
+    h.setGround(104);
+    expect(h.base.aimPlacement([50, 104, 10])!.valid).toBe(true);
+  });
+
+  it('blueprints are kept unless the piece uses them up', () => {
+    const { pieces, config } = buildingCatalog({ pieces: [{ id: 'once', blueprint: 'Shed plan', consumeBlueprint: true, material: 'plank', mesh: { parts: [{}] } }] });
+    const h = fakeHost();
+    const base = new BaseSystem(pieces, config, { ...(h.base as never as { host: BaseHost }).host });
+    h.hold('Shed plan');
+    base.aimPlacement([50, 0, 10]);
+    expect(base.placePreview()).toBeNull();
+    h.items.set('Shed plan', 1);
+    expect(base.placePreview()).not.toBeNull();
+    expect(h.items.get('Shed plan')).toBe(0);
   });
 });
 
-describe('stages', () => {
-  it('wood wall: posts, driven in (they sink), then boards nailed on; tools in hand, items used up', () => {
+describe('filling blueprints', () => {
+  it('props of its material are used up one each until it is finished; then it blocks', () => {
     const h = fakeHost();
-    const id = h.base.add(piece(h, 'wood_wall'), { axis: 'x', x: 0, z: 0 }, 0);
-    const s = h.base.site(id)!;
-    press(h, id);
-    expect(h.said[0]).toMatch(/Wooden post/);
-    h.items.set('Wooden post', 2);
-    press(h, id, 2);
-    expect(h.items.get('Wooden post')).toBe(0);
-    expect(h.base.current(s)!.id).toBe('drive');
-    const postY = () => h.base.parts().find((p) => p.key === `${id}:post_a`)!.center[1];
-    const before = postY();
-    press(h, id, 3);
-    expect(h.base.current(s)!.id).toBe('drive');
-    h.hold('Sledgehammer');
-    press(h, id, 3);
-    expect(postY()).toBeLessThan(before);
-    press(h, id, 3);
-    expect(postY()).toBeCloseTo(before - 14);
-    expect(h.base.current(s)!.id).toBe('board_1');
-    h.items.set('Board', 4);
-    h.items.set('Nail', 16);
-    for (let b = 0; b < 4; b++) {
-      press(h, id);
-      h.hold('Hammer');
-      press(h, id, 4);
-      h.hold('');
-    }
-    expect(h.base.built(s)).toBe(true);
-    expect(h.items.get('Nail')).toBe(0);
-    expect(h.events.some((e) => e.type === 'base.built' && e.site === id)).toBe(true);
-    // Solid now: posts and boards block the player.
-    expect([...h.blockers.keys()].filter((k) => k.startsWith(id)).length).toBe(6);
+    const id = h.base.add(piece(h, 'wood_wall'), wall, 0);
+    h.props.set('plank', ['p1', 'p2']);
+    h.props.set('concrete powder', ['bag']);
+    h.advance(0.2);
+    expect(h.consumed).toEqual(['p1', 'p2']);
+    expect(h.base.fraction(h.base.site(id)!)).toBe(0.5);
+    expect(h.base.prompt({ site: id, distance: 1 })).toMatchObject({ title: 'Wood wall · 50%', label: 'Hold to remove', progress: 0.5, missing: '2 more planks' });
+    expect(h.blockers.size).toBe(0);
+    h.props.set('plank', ['p3', 'p4', 'p5']);
+    h.advance(0.2);
+    // (Full at four: the fifth plank is left alone.)
+    expect(h.consumed).toEqual(['p1', 'p2', 'p3', 'p4']);
+    expect(h.base.built(h.base.site(id)!)).toBe(true);
+    expect(h.events.filter((e) => e.type === 'base.progress')).toHaveLength(4);
+    expect(h.events.at(-1)).toMatchObject({ type: 'base.built', site: id });
+    expect(h.blockers.size).toBe(piece(h, 'wood_wall').mesh.parts.length);
+    expect([...h.blockers.values()][0]!.site).toBe(id);
+    // A finished, undamaged wall has nothing to say.
+    expect(h.base.prompt({ site: id, distance: 1 })).toBeNull();
   });
 
-  it('concrete wall: mold (or 4 planks), pour, cure on a timer, strip gives the mold back', () => {
+  it('its drawn boxes are the flat blueprint colour until finished', () => {
     const h = fakeHost();
-    const id = h.base.add(piece(h, 'concrete_wall'), { axis: 'x', x: 0, z: 0 }, 0);
-    const s = h.base.site(id)!;
-    h.items.set('Plank', 4);
-    h.hold('Hammer');
-    holdE(h, id, 1);
-    expect(h.base.fraction(s, 'mold')).toBeCloseTo(0.4, 1);
-    holdE(h, id, 1.6);
-    expect(h.items.get('Plank')).toBe(0);
-    expect(h.base.current(s)!.id).toBe('pour');
-    h.items.set('Bucket of concrete', 2);
-    h.hold('');
-    holdE(h, id, 6.1);
-    expect(h.items.get('Empty bucket')).toBe(2);
-    expect(h.base.current(s)!.id).toBe('cure');
-    h.advance(100);
-    expect(h.base.current(s)!.id).toBe('cure');
-    h.advance(81);
-    expect(h.base.current(s)!.id).toBe('strip');
-    holdE(h, id, 2.1);
-    expect(h.base.built(s)).toBe(true);
-    expect(h.items.get('Concrete mold')).toBe(1);
-    // The mold is reused next time instead of planks.
-    const id2 = h.base.add(piece(h, 'concrete_wall'), { axis: 'x', x: 1, z: 0 }, 0);
-    h.hold('Hammer');
-    holdE(h, id2, 2.6);
-    expect(h.items.get('Concrete mold')).toBe(0);
+    const id = h.base.add(piece(h, 'concrete_wall'), wall, 0);
+    expect(h.base.parts().every((p) => p.ghost && p.color === h.base.config.ghost.color)).toBe(true);
+    h.base.site(id)!.filled = 3;
+    expect(h.base.parts().some((p) => p.ghost)).toBe(false);
   });
 
-  it('door: frame, hang, then E opens and closes; an optional bolt slides to lock', () => {
+  it('the space it takes props in wraps its boxes', () => {
     const h = fakeHost();
-    const id = h.base.add(piece(h, 'door'), { axis: 'x', x: 0, z: 0 }, 0);
-    const s = h.base.site(id)!;
-    h.items.set('Plank', 3);
-    h.items.set('Door', 1);
-    h.hold('Hammer');
-    holdE(h, id, 3.1);
-    h.hold('');
-    holdE(h, id, 2.6);
-    expect(h.base.built(s)).toBe(true);
-    expect(h.base.canOpen(s)).toBe(true);
-    press(h, id);
-    expect(s.open).toBe(true);
-    expect(h.blockers.has(`${id}:leaf`)).toBe(false);
-    press(h, id);
-    expect(s.open).toBe(false);
+    const id = h.base.add(piece(h, 'wood_floor'), { kind: 'cell', x: 1, z: 0 }, 10);
+    const b = h.base.space(h.base.site(id)!);
+    expect(b.center[0]).toBeCloseTo(96 + 48);
+    expect(b.center[1]).toBeCloseTo(13);
+    expect(b.half[0]).toBeCloseTo(47.5 + 4);
+  });
+
+  it('holding E on a blueprint removes it (what was put in is lost)', () => {
+    const h = fakeHost();
+    const id = h.base.add(piece(h, 'wood_wall'), wall, 0, undefined, 2);
+    for (let k = 0; k < 30; k++) h.base.hold({ site: id, distance: 1 }, true, 1 / 60);
+    expect(h.base.prompt({ site: id, distance: 1 })!.label).toBe('Removing…');
+    h.base.hold(null, false, 1 / 60);
+    for (let k = 0; k < 30; k++) h.base.hold({ site: id, distance: 1 }, true, 1 / 60);
+    expect(h.base.site(id)).toBeDefined();
+    for (let k = 0; k < 40; k++) h.base.hold({ site: id, distance: 1 }, true, 1 / 60);
+    expect(h.base.site(id)).toBeUndefined();
+    expect(h.events.at(-1)).toMatchObject({ type: 'base.removed', site: id });
+    // Finished pieces aren't removed this way.
+    const done = h.base.add(piece(h, 'wood_wall'), wall, 0, undefined, 4);
+    for (let k = 0; k < 120; k++) h.base.hold({ site: done, distance: 1 }, true, 1 / 60);
+    expect(h.base.site(done)).toBeDefined();
+  });
+});
+
+describe('finished pieces', () => {
+  it('hits wear a finished piece down until it comes down; blueprints take no damage', () => {
+    const h = fakeHost();
+    const bp = h.base.add(piece(h, 'wood_wall'), wall, 0);
+    h.base.damage(bp, 1000);
+    expect(h.base.site(bp)).toBeDefined();
+    h.base.remove(bp);
+    const id = h.base.add(piece(h, 'wood_wall'), wall, 0, undefined, 4);
+    h.base.damage(id, 20);
+    expect(h.base.prompt({ site: id, distance: 1 })).toMatchObject({ icon: 'hammer', label: '', progress: 40 / 60 });
+    h.base.damage(id, 40);
+    expect(h.base.site(id)).toBeUndefined();
+    expect(h.blockers.size).toBe(0);
+    expect(h.events.at(-1)).toMatchObject({ type: 'base.broken', site: id, piece: 'wood_wall' });
+  });
+
+  it('E opens and shuts a finished door: the leaf swings and stops blocking', () => {
+    const h = fakeHost();
+    const id = h.base.add(piece(h, 'wood_door'), wall, 0, undefined, 3);
     expect(h.blockers.has(`${id}:leaf`)).toBe(true);
-    h.items.set('Bolt', 1);
-    h.hold('Hammer');
-    holdE(h, id, 1.6);
-    expect(h.base.canLock(s)).toBe(true);
-    h.hold('');
-    press(h, id, 1, 'bolt');
-    expect(s.locked).toBe(true);
-    press(h, id);
-    expect(s.open).toBe(false);
-    expect(h.events.filter((e) => e.type === 'base.lock')).toHaveLength(1);
-  });
-});
-
-describe('rooms and sealing', () => {
-  it('flood fill finds an enclosed cell; any gap leaks to outside', () => {
-    const e = (axis: 'x' | 'z', x: number, z: number, closed = true) => ({ axis, x, z, site: `${axis}${x}${z}`, closed });
-    expect(findRooms([e('x', 0, 0), e('x', 0, 1), e('z', 0, 0)])).toEqual([]);
-    const r = findRooms([e('x', 0, 0), e('x', 0, 1), e('z', 0, 0), e('z', 1, 0, false)]);
-    expect(r).toHaveLength(1);
-    expect(r[0]!.cells).toEqual([[0, 0]]);
-    expect(r[0]!.sealed).toBe(false);
-    expect(r[0]!.openings).toEqual(['z10']);
-  });
-
-  it('a room with a door is sealed only while the door is shut; a window needs shutters, shut', () => {
-    const h = fakeHost();
-    const { last } = room(h, 'door');
-    const d = h.base.site(last)!;
-    d.stage = 2;
-    d.features.add('leaf');
-    press(h, last);
-    press(h, last);
-    const r = () => h.base.roomAt([48, 10, 48]);
-    expect(r()!.sealed).toBe(true);
-    press(h, last);
-    expect(r()!.sealed).toBe(false);
-    expect(h.base.openings(r()!.id)).toEqual([{ site: last, kind: 'door', reason: 'open' }]);
-    expect(h.events.filter((e) => e.type === 'base.sealed').map((e) => (e as { sealed: boolean }).sealed)).toEqual([true, false]);
-
-    const w = fakeHost();
-    const win = room(w, 'window').last;
-    const ws = w.base.site(win)!;
-    ws.stage = 1;
-    w.base.press({ site: win, part: null, distance: 1 }, null, [48, 0, 48]);
-    expect(w.base.roomAt([48, 10, 48])!.sealed).toBe(false);
-    expect(w.base.openings(w.base.roomAt([48, 10, 48])!.id)[0]!.reason).toBe('no-cover');
-    w.items.set('Shutters', 1);
-    w.hold('Hammer');
-    holdE(w, win, 2.1);
-    w.hold('');
-    expect(w.base.roomAt([48, 10, 48])!.sealed).toBe(true);
-    w.base.press({ site: win, part: null, distance: 1 }, null, [48, 0, 48]);
-    expect(w.base.roomAt([48, 10, 48])!.sealed).toBe(false);
-  });
-});
-
-describe('comfort, sleep, the wedge, the knock', () => {
-  function homely() {
-    const h = fakeHost();
-    const { last } = room(h, 'door');
-    const d = h.base.site(last)!;
-    d.stage = 2;
-    d.features.add('leaf');
-    h.base.press({ site: last, part: null, distance: 1 }, null, [48, 0, 48]);
-    h.base.press({ site: last, part: null, distance: 1 }, null, [48, 0, 48]);
-    return { h, door: last };
-  }
-
-  it('comfort comes from sealing, lights on and homely things inside; sleep needs enough', () => {
-    const { h, door } = homely();
-    const at = [48, 10, 48] as [number, number, number];
-    const id = h.base.roomAt(at)!.id;
-    expect(h.base.comfortOf(id)).toBeCloseTo(0.35);
-    expect(h.base.canSleep(at).ok).toBe(false);
-    h.sources.push({ id: 'lamp', at: [40, 30, 40], tags: [], components: ['light'], light: true });
-    h.sources.push({ id: 'bed', at: [50, 10, 50], tags: ['bed'], components: [], light: null });
-    h.sources.push({ id: 'far lamp', at: [900, 30, 40], tags: [], components: ['light'], light: true });
-    h.advance(0.6);
-    expect(h.base.comfortOf(id)).toBeCloseTo(0.65);
-    expect(h.base.canSleep(at).ok).toBe(true);
-    h.sources[0]!.light = false;
-    h.base.press({ site: door, part: null, distance: 1 }, null, [48, 0, 48]);
-    h.advance(0.6);
-    expect(h.base.comfortOf(id)).toBeCloseTo(0.15);
-    expect(h.base.canSleep(at).ok).toBe(false);
-  });
-
-  it('a chair wedges under a shut door, and now and then has slipped out on waking', () => {
-    const { h, door } = homely();
-    const s = h.base.site(door)!;
-    const r = h.base.press({ site: door, part: null, distance: 1 }, 'chair1', [48, 0, 48]);
-    expect(r!.wedged).toBe(true);
-    expect(s.wedged).toBe('chair1');
-    expect(h.pinned.has('chair1')).toBe(true);
-    // Wedged: E pulls the chair away rather than opening.
-    expect(h.base.prompt({ site: door, part: null, distance: 1 }, null)!.label).toMatch(/chair/);
-    h.setRandom(0.5);
-    expect(h.base.wake()).toEqual([]);
-    h.setRandom(0.01);
-    expect(h.base.wake()).toEqual([door]);
-    expect(s.wedged).toBe(null);
-    expect(h.events.some((e) => e.type === 'base.unwedged')).toBe(true);
-  });
-
-  it('the knock prefers a room with an unlocked door, knocking from outside', () => {
-    const { h, door } = homely();
-    expect(h.base.knock()).toBe(door);
-    const k = h.events.find((e) => e.type === 'base.knock') as { at: number[] };
-    expect(k.at[0]).toBeGreaterThan(G);
+    expect(h.base.prompt({ site: id, distance: 1 })!.label).toBe('Open');
+    expect(h.base.press({ site: id, distance: 1 })).toBe(true);
+    expect(h.blockers.has(`${id}:leaf`)).toBe(false);
+    const leaf = h.base.parts().find((p) => p.key === `${id}:leaf`)!;
+    expect(leaf.yaw).toBeCloseTo(Math.PI / 2);
+    expect(h.events.at(-1)).toMatchObject({ type: 'base.door', open: true });
+    // (Walls don't open; nor does an unfinished door.)
+    const w = h.base.add(piece(h, 'wood_wall'), { kind: 'edge', axis: 'z', x: 0, z: 0 }, 0, undefined, 4);
+    expect(h.base.press({ site: w, distance: 1 })).toBe(false);
   });
 });
 
 describe('saving', () => {
-  it('build sites, stage progress, cure timers, door, bolt and wedge come back', () => {
+  it('blueprints, how full they are, health and doors come back', () => {
     const h = fakeHost();
-    const c = h.base.add(piece(h, 'concrete_wall'), { axis: 'x', x: 3, z: 3 }, 0);
-    const cs = h.base.site(c)!;
-    cs.stage = 2;
-    cs.waitLeft = 42;
-    const { last } = room(h, 'door');
-    const d = h.base.site(last)!;
-    Object.assign(d, { stage: 3, open: false, locked: true, wedged: 'chair1' });
-    d.features = new Set(['leaf', 'bolt']);
+    const a = h.base.add(piece(h, 'wood_wall'), wall, 0, undefined, 2);
+    const b = h.base.add(piece(h, 'wood_door'), { kind: 'edge', axis: 'z', x: 1, z: 0 }, 0, undefined, 3);
+    const c = h.base.add(piece(h, 'concrete_floor'), { kind: 'cell', x: 0, z: 0 }, 0, undefined, 4);
+    h.base.press({ site: b, distance: 1 });
+    h.base.damage(c, 50);
     const save = JSON.parse(JSON.stringify(h.base.save()));
 
     const h2 = fakeHost();
     h2.base.load(save);
-    expect(h2.base.allSites()).toHaveLength(5);
-    expect(h2.base.site(c)!.waitLeft).toBe(42);
-    expect(h2.base.current(h2.base.site(c)!)!.id).toBe('cure');
-    const d2 = h2.base.site(last)!;
-    expect(d2.locked).toBe(true);
-    expect(d2.wedged).toBe('chair1');
-    expect(h2.pinned.has('chair1')).toBe(true);
-    expect(h2.base.roomAt([48, 10, 48])!.sealed).toBe(true);
-    // New sites don't reuse ids.
-    expect(h2.base.add(piece(h2, 'door'), { axis: 'x', x: 9, z: 9 }, 0)).not.toBe(c);
+    expect(h2.base.allSites()).toHaveLength(3);
+    expect(h2.base.site(a)!.filled).toBe(2);
+    expect(h2.base.site(b)!.open).toBe(true);
+    expect(h2.base.site(c)!.health).toBe(200);
+    expect(h2.base.site(c)!.spot).toEqual({ kind: 'cell', x: 0, z: 0 });
+    // New sites don't reuse ids; old-style saves are left behind.
+    expect(h2.base.add(piece(h2, 'wood_wall'), { kind: 'edge', axis: 'x', x: 9, z: 9 }, 0)).not.toBe(a);
+    h2.base.load({ v: 1, sites: [], next: 1 });
+    expect(h2.base.allSites()).toHaveLength(4);
   });
 });
 
 describe('in the game world', () => {
-  const brush = (name: string, min: Vec3, max: Vec3, extra: Record<string, unknown> = {}): EntityData => newEntity(name, { brush: { role: 'solid', faces: toData(box(min, max)).faces } as never, ...extra });
+  const brush = (name: string, min: Vec3, max: Vec3, extra: Record<string, unknown> = {}, tags: string[] = []): EntityData => {
+    const e = newEntity(name, { brush: { role: 'solid', faces: toData(box(min, max)).faces } as never, ...extra });
+    e.tags = tags;
+    return e;
+  };
   const run = (w: GameWorld, seconds: number) => {
     for (let t = 0; t < seconds; t += 1 / 60) w.step(1 / 60);
   };
+  /** A plank lying at x (inside the wall blueprint on edge x:0:0 when z is about 0). */
+  const plank = (name: string, x: number, z = 0) => brush(name, [x - 8, 40, z - 2], [x + 8, 44, z + 2], { rigidBody: { motion: 'dynamic', mass: 2 } }, ['Plank']);
 
-  function game(saved: unknown = null) {
+  function game(extra: EntityData[] = [], at: Vec3 = [48, 0, 200], saved: unknown = null, items: ItemDef[] = []) {
     const s = newScene('base');
-    s.entities = [brush('floor', [-2048, -16, -2048], [2048, 0, 2048]), newEntity('start', { playerSpawn: {} }, { position: [48, 0, 200] })];
-    const w = GameWorld.create(s, { rules: { building: true, saveItems: true }, saved: saved as never });
-    return w;
+    s.entities = [brush('floor', [-2048, -16, -2048], [2048, 0, 2048]), newEntity('start', { playerSpawn: {} }, { position: at }), ...extra];
+    s.settings.ui = { screens: [], items } as never;
+    return GameWorld.create(s, { rules: { building: true, saveItems: true }, saved: saved as never });
   }
 
   it('off unless the game has it', () => {
-    const s = newScene('plain');
-    expect(GameWorld.create(s).base).toBeNull();
+    expect(GameWorld.create(newScene('plain')).base).toBeNull();
   });
 
-  it('a plan places a site on the floor; a finished wall blocks; progress saves on sleep only', () => {
+  it('a blueprint item places a blueprint on the floor; the HUD shows 0%', () => {
     const w = game();
-    w.giveItem('Wood wall plan', 1);
+    w.giveItem('Wood wall blueprint', 1);
     w.setPlayerInput({ pitch: -0.6, yaw: 0 });
     run(w, 0.2);
-    expect(w.base!.preview).not.toBeNull();
     expect(w.base!.preview!.y).toBeCloseTo(0, 0);
+    expect(w.buildPrompt()).toMatchObject({ label: 'Place blueprint', missing: '4 planks' });
     w.useItem();
     expect(w.base!.allSites()).toHaveLength(1);
-    w.giveItem('Wood wall plan', -1);
-    w.setPlayerInput({ pitch: 0 });
+    // (Kept: one blueprint places as many as wanted; the spot is taken now.)
     run(w, 0.05);
-    expect(w.buildPrompt()!.label).toBe('Set the posts');
-    expect(w.buildPrompt()!.missing).toMatch(/Wooden post/);
-    const site = w.base!.allSites()[0]!;
-    site.stage = site.def.stages.length;
-    // (The site's own blockers: posts and boards are now fixed colliders.)
-    (w.base as never as { changed(s: unknown): void }).changed(site);
-    const before = w.progress();
-    expect(before).toBeNull();
-    w.sleep();
-    const p = w.progress()!;
-    expect(Object.keys(p.base!)).toEqual(['base']);
-    const w2 = game(JSON.parse(JSON.stringify(p)));
-    expect(w2.base!.allSites()).toHaveLength(1);
-    expect(w2.base!.built(w2.base!.allSites()[0]!)).toBe(true);
+    expect(w.base!.preview!.valid).toBe(false);
+    w.giveItem('Wood wall blueprint', -1);
+    w.setPlayerInput({ pitch: -0.3 });
+    run(w, 0.1);
+    expect(w.buildPrompt()!.title).toMatch(/0%$/);
+  });
+
+  it('planks touching it are used up; four finish it, and then it blocks', () => {
+    const planks = [10, 30, 50, 70].map((x, i) => plank(`plank${i}`, x));
+    const spare = plank('spare', 48, 30);
+    const crate = brush('crate', [80, 30, -4], [92, 42, 4], { rigidBody: { motion: 'dynamic', mass: 2 } });
+    const w = game([...planks, spare, crate]);
+    const id = w.base!.add(w.base!.pieces.get('wood_wall')!, wall, 0);
+    run(w, 0.3);
+    const s = w.base!.site(id)!;
+    expect(s.filled).toBe(4);
+    expect(w.base!.built(s)).toBe(true);
+    for (const p of planks) expect(w.positionOf(p.id)).toBeNull();
+    expect(w.positionOf(spare.id)).not.toBeNull();
+    // (Untagged props aren't building material.)
+    expect(w.positionOf(crate.id)).not.toBeNull();
+    expect(w.base!.allSites()).toHaveLength(1);
+  });
+
+  it('a crowbar knocks a finished wall down', () => {
+    const w = game([], [48, 0, 40], null, [{ name: 'Crowbar', icon: '', weapon: newWeapon('crowbar') }]);
+    const id = w.base!.add(w.base!.pieces.get('wood_wall')!, wall, 0, undefined, 4);
+    w.giveItem('Crowbar', 1);
+    w.selectSlot(0);
+    w.setPlayerInput({ yaw: 0, pitch: 0 });
+    run(w, 0.2);
+    w.setPlayerInput({ fire: true });
+    run(w, 4);
+    expect(w.base!.site(id)).toBeUndefined();
+  });
+
+  it('holding E on a blueprint removes it', () => {
+    const w = game([], [48, 0, 80]);
+    const id = w.base!.add(w.base!.pieces.get('wood_wall')!, wall, 0);
+    w.setPlayerInput({ yaw: 0, pitch: 0 });
+    run(w, 0.1);
+    expect(w.buildPrompt()!.label).toBe('Hold to remove');
+    w.setPlayerInput({ use: true });
+    run(w, 1.3);
+    expect(w.base!.site(id)).toBeUndefined();
+  });
+
+  it('the base is saved with the game', () => {
+    const p = plank('p', 48);
+    const w = game([p]);
+    const id = w.base!.add(w.base!.pieces.get('wood_wall')!, wall, 0);
+    run(w, 0.2);
+    const saved = JSON.parse(JSON.stringify(w.progress()!));
+    expect(Object.keys(saved.base)).toEqual(['base']);
+    const w2 = game([p], undefined, saved);
+    expect(w2.base!.site(id)!.filled).toBe(1);
   });
 });

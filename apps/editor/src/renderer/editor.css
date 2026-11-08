@@ -197,6 +197,7 @@ code { font: 12px var(--mono); color: var(--fg); }
 .cw-build-icon { flex: none; color: #f2efe9; }
 .cw-build-prompt.missing .cw-build-icon { color: #9a9a9a; }
 .cw-build-text { display: flex; flex-direction: column; gap: 4px; }
+.cw-build-title { font-size: 13px; font-weight: 600; color: #f2efe9; }
 .cw-build-missing { font-size: 12px; font-weight: 500; color: #d8d2c8; }
 .cw-build-bar { display: block; width: 120px; height: 4px; border-radius: 2px; background: rgba(255, 255, 255, 0.25); overflow: hidden; }
 .cw-build-bar > span { display: block; height: 100%; background: #f2efe9; }

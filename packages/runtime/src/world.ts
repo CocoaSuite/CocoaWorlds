@@ -65,7 +65,7 @@ import { ANIM_ROLES, Npc, type AnimRole } from './npc';
 import { NavGrid } from './navgrid';
 import { Acoustics } from './acoustics';
 import { FrameSnapshot } from './snapshot';
-import { BaseSystem, type BaseAim, type BlockerBox, type BuildPrompt, type ComfortSource } from './building/base';
+import { BaseSystem, type BaseAim, type BlockerBox, type BuildPrompt } from './building/base';
 import { buildingCatalog } from './building/catalog';
 import { momentAnimation } from './hunter/personality';
 import type { SpotInfo } from './hunter/spots';
@@ -86,9 +86,10 @@ export interface Hearing {
   background: { sound: string; volume: number } | null;
   /** Under water: muffled whatever area it is. */
   underwater: boolean;
-  /** Base building: the room the ears are in (sealed rooms muffle what's outside and cut the wind), or null. */
-  room?: { id: string; sealed: boolean; comfort: number } | null;
 }
+
+/** Owner ids of build pieces' colliders: this, then the site's id. */
+const BASE_OWNER = '@base:';
 
 /** Units per metre (an inch-based world). */
 export const UNITS_PER_METRE = 39.37;
@@ -522,7 +523,7 @@ export class GameWorld {
     w.sceneName = scene.name;
     if (w.rules.building) w.initBase(options.building ?? (scene.settings as { building?: { pieces?: unknown[]; base?: unknown } }).building);
     if (options.saved || options.arrive?.worlds) w.loadProgress(options.saved ?? { values: {} }, options.arrive ?? null);
-    if (w.base || w.savesWhenAsked) w.checkpoint = options.saved ?? null;
+    if (w.savesWhenAsked) w.checkpoint = options.saved ?? null;
     if (options.arrive) w.arrive(options.arrive);
     return w;
   }
@@ -629,7 +630,6 @@ export class GameWorld {
       this.day = Math.max(0, Math.round(saved.day));
       this.dayFresh = false;
     }
-    // (After the world: a chair wedged under a door is pinned there again.)
     if (saved.base && typeof saved.base === 'object') {
       this.otherBases = { ...saved.base };
       if (this.base && this.sceneName in saved.base) this.base.load(saved.base[this.sceneName]);
@@ -638,9 +638,8 @@ export class GameWorld {
 
   /** What is kept between sessions right now, or null when the game keeps nothing. */
   progress(): SavedProgress | null {
-    // (A base that saves on sleep: what was kept at the last sleep, not what is now.)
     // (A game with “Save the game” blocks: what was kept at the last of them.)
-    if ((this.base && this.base.config.sleep.saveOn === 'sleep') || this.savesWhenAsked) return this.checkpoint;
+    if (this.savesWhenAsked) return this.checkpoint;
     return this.liveProgress();
   }
 
@@ -659,7 +658,7 @@ export class GameWorld {
     return out;
   }
 
-  /** Save the game now (a game that saves on sleep keeps this until the next sleep or save). */
+  /** Save the game now (a game that saves only when asked keeps this until the next save). */
   saveNow(): void {
     const p = this.liveProgress();
     this.checkpoint = p && { ...p, at: Math.round(this.clock() * 1000) };
@@ -1898,9 +1897,7 @@ export class GameWorld {
     const bg = area?.data.sound ? { sound: area.data.sound, volume: area.data.volume } : scene.sound ? { sound: scene.sound, volume: scene.volume } : null;
     const underwater = !!this.waterAt(p);
     const mix = Math.max(0, Math.min(1, area?.data.mix ?? 1));
-    const r = this.base?.roomAt(p) ?? null;
-    const room = r && this.base ? { id: r.id, sealed: r.sealed, comfort: this.base.comfortOf(r.id) } : null;
-    return { area: area?.id ?? null, effect: underwater ? 'underwater' : (area?.data.effect ?? 'none'), mix: underwater ? 1 : mix, background: bg, underwater, ...(this.base ? { room } : {}) };
+    return { area: area?.id ?? null, effect: underwater ? 'underwater' : (area?.data.effect ?? 'none'), mix: underwater ? 1 : mix, background: bg, underwater };
   }
 
   /** The water a point is in (its id, surface height and look under water), or null. */
@@ -2384,7 +2381,7 @@ export class GameWorld {
    */
   usePrompt(): string | null {
     if (this.hiding) return null;
-    if (this.base && this.baseAim()) return null;
+    if (this.base && this.base.prompt(this.baseAim())) return null;
     const hit = this.useAim();
     if (!hit) return null;
     const { id, targets, distance } = hit;
@@ -2555,6 +2552,8 @@ export class GameWorld {
   private weaponDamage(target: string, amount: number, by: string, cause: string): void {
     if (!(amount > 0)) return;
     if (target === 'player') return this.hurt(amount, by === 'player' ? `your own ${cause}` : cause);
+    // (A finished build piece: crowbars, bullets and blasts knock it down.)
+    if (target.startsWith(BASE_OWNER)) return this.base?.damage(target.slice(BASE_OWNER.length), amount);
     const npc = this.npcs.get(target);
     if (npc) {
       if (!npc.alive) return;
@@ -2705,11 +2704,6 @@ export class GameWorld {
     const { id, targets, distance } = hit;
     const spot = targets.find((t) => this.spots.has(t) && this.keyOf(t) === 'KeyE' && this.seatReady(t));
     if (spot && distance <= this.reachOf(spot)) return this.enterHiding(spot);
-    if (this.base && distance <= PLAYER.useReach && this.trySleep(targets)) {
-      this.runner.dispatch({ type: 'use', targets, by: 'player', distance });
-      this.bus.emit({ type: 'use', target: id, by: 'player', time: this.time });
-      return;
-    }
     if (distance <= PLAYER.useReach) {
       if (this.grab(id)) return;
       // Friends follow (or stay) when used.
@@ -4271,56 +4265,44 @@ export class GameWorld {
   }
 
 
-  // ── Base building (comfort and safety; see building/) ──
+  // ── Base building (blueprints filled with props; see building/) ──
 
-  /** The base: build sites, rooms, comfort (null: the game doesn't have base building). */
+  /** The base: blueprints and finished pieces (null: the game doesn't have base building). */
   base: BaseSystem | null = null;
   /** Problems in the build pieces' JSON (shown in the console). */
   readonly buildingProblems: string[] = [];
   private sceneName = '';
   /** Other scenes' saved bases (kept as they were). */
   private otherBases: Record<string, unknown> = {};
-  /** Saved at the last sleep (a base that saves on sleep hands this out as its progress). */
+  /** Saved by the last “Save the game” (a game that saves only when asked hands this out as its progress). */
   private checkpoint: SavedProgress | null = null;
   private baseBody: RAPIER.RigidBody | null = null;
   private baseColliders = new Map<string, RAPIER.Collider>();
   private baseHandles = new Set<number>();
-  /** Objects that can make a room homely (lights, tagged things, seats). */
-  private comfortIds: string[] = [];
 
   private initBase(extra: { pieces?: unknown[]; base?: unknown } | undefined): void {
     const { pieces, config, problems } = buildingCatalog(extra);
     this.buildingProblems.push(...problems);
-    const c = config.comfort;
-    const wanted = new Set([...Object.keys(c.tags), ...config.sleep.tags, ...config.wedge.tags, config.ambience.fireTag]);
-    this.comfortIds = this.doc.entities
-      .filter((e) => {
-        const light = e.components.light as { kind?: string } | undefined;
-        // (The sun lights every room the same: it isn't a room's own light.)
-        if (light) return light.kind !== 'directional';
-        return e.tags.some((t) => wanted.has(t)) || Object.keys(e.components).some((k) => k in c.components);
-      })
-      .map((e) => e.id);
     this.base = new BaseSystem(pieces, config, {
       time: () => this.time,
-      random: () => this.random(),
       itemCount: (name) => this.inventory.get(name) ?? 0,
       giveItem: (name, n) => this.giveItem(name, n),
       selectedItem: () => this.selectedItem(),
       groundAt: (x, z, fromY) => this.groundAt(x, z, fromY),
       setBlocker: (key, box) => this.setBaseBlocker(key, box),
+      propsIn: (box, tag) => this.propsIn(box, tag),
+      consume: (id) => {
+        if (this.held?.id === id) this.dropHeld();
+        this.remove(id);
+      },
       emit: (e) => this.bus.emit(e),
-      say: (text) => this.say(text, 2),
       playSound: (sound, at, volume, range) => this.bus.emit({ type: 'sound', sound, at, follow: null, volume, loop: false, range, source: 'base', time: this.time }),
-      comfortSources: () => this.comfortSources(),
-      pinChair: (id, at, yaw) => this.pinChair(id, at, yaw),
-      releaseChair: (id, nudge) => this.releaseChair(id, nudge),
     });
   }
 
-  /** The ground under (x, z), looking down from `fromY` (fixed things only: not what moves or the base's own walls). */
+  /** The ground under (x, z), looking down from `fromY` (fixed things and finished build pieces: not what moves). */
   private groundAt(x: number, z: number, fromY: number): number | null {
-    const hit = this.world.castRay(new RAPIER.Ray({ x, y: fromY, z }, { x: 0, y: -1, z: 0 }), 8192, true, RAPIER.QueryFilterFlags.EXCLUDE_SENSORS, 0xffffffff, this.player?.collider, undefined, (c) => !this.baseHandles.has(c.handle) && !c.parent()?.isDynamic() && !this.standIns.has(c.handle));
+    const hit = this.world.castRay(new RAPIER.Ray({ x, y: fromY, z }, { x: 0, y: -1, z: 0 }), 8192, true, RAPIER.QueryFilterFlags.EXCLUDE_SENSORS, 0xffffffff, this.player?.collider, undefined, (c) => !c.parent()?.isDynamic() && !this.standIns.has(c.handle));
     return hit ? fromY - hit.timeOfImpact : null;
   }
 
@@ -4332,6 +4314,7 @@ export class GameWorld {
         this.sound.changed({ x: t.x - r, y: t.y - r, z: t.z - r }, { x: t.x + r, y: t.y + r, z: t.z + r });
       }
       this.baseHandles.delete(old.handle);
+      this.owner.delete(old.handle);
       this.world.removeCollider(old, false);
       this.baseColliders.delete(key);
     }
@@ -4342,70 +4325,45 @@ export class GameWorld {
     const c = this.world.createCollider(desc, this.baseBody);
     this.baseColliders.set(key, c);
     this.baseHandles.add(c.handle);
+    // (So hits find the piece: weapons and blasts damage what owns the collider.)
+    this.owner.set(c.handle, BASE_OWNER + box.site);
     if (this.sound) {
       const r = Math.hypot(...box.half);
       this.sound.changed({ x: box.center[0] - r, y: box.center[1] - r, z: box.center[2] - r }, { x: box.center[0] + r, y: box.center[1] + r, z: box.center[2] + r });
     }
   }
 
-  /** Where an object is now (it, or the moving body it rides in). */
-  private whereNow(id: string): [number, number, number] {
-    const start = this.doc.worldMatrix(id);
-    const motion = this.motionOf(this.bodyOf(id) ?? '');
-    const m = motion ? multiply(motion, start) : start;
-    return [m[12]!, m[13]!, m[14]!];
+  /** An object's tags (a copy made while playing has its original's). */
+  private tagsOf(id: string): string[] {
+    return (this.doc.get(id) ?? this.doc.get(id.split('#')[0]!))?.tags ?? [];
   }
 
-  private comfortSources(): ComfortSource[] {
-    return this.comfortIds.map((id) => {
-      const e = this.doc.get(id)!;
-      const l = this.lights.get(id);
-      return { id, at: this.whereNow(id), tags: e.tags, components: Object.keys(e.components), light: l ? l.on : null };
+  /** Props tagged `tag` (or inside something that is) touching a box: the loose physics objects to take away. */
+  private propsIn(box: BlockerBox, tag: string): string[] {
+    const want = tag.trim().toLowerCase();
+    const q = { x: 0, y: Math.sin(box.yaw / 2), z: 0, w: Math.cos(box.yaw / 2) };
+    const shape = new RAPIER.Cuboid(Math.max(0.5, box.half[0]), Math.max(0.5, box.half[1]), Math.max(0.5, box.half[2]));
+    const out: string[] = [];
+    const found: number[] = [];
+    this.world.intersectionsWithShape({ x: box.center[0], y: box.center[1], z: box.center[2] }, q, shape, (c) => {
+      if (!c.isSensor() && c.parent()?.isDynamic()) found.push(c.handle);
+      return true;
     });
-  }
-
-  /** The chair (its body) the player holds, if it can be wedged under a door handle. */
-  private heldChair(): string | null {
-    const id = this.held?.id;
-    if (!id || !this.base) return null;
-    const w = this.base.config.wedge;
-    for (let x: string | null | undefined = id; x; x = this.parentOf.get(x)) {
-      const e = this.doc.get(x);
-      if (e && (e.tags.some((t) => w.tags.includes(t)) || w.components.some((k) => k in e.components))) return id;
+    for (const h of found) {
+      const id = this.owner.get(h);
+      if (!id || id === 'player' || this.gone.has(id)) continue;
+      let prop: string | null = null, tagged = false;
+      for (let x: string | null | undefined = id; x; x = this.parentOf.get(x)) {
+        const b = this.bodies.get(x);
+        if (!prop && b?.info.motion === 'dynamic' && !this.printing.has(x)) prop = x;
+        if (this.tagsOf(x).some((t) => t.trim().toLowerCase() === want)) tagged = true;
+      }
+      if (prop && tagged && !out.includes(prop) && !this.npcs.has(prop)) out.push(prop);
     }
-    for (const e of this.doc.entities) if (this.bodyOf(e.id) === id && (e.tags.some((t) => w.tags.includes(t)) || w.components.some((k) => k in e.components))) return id;
-    return null;
+    return out;
   }
 
-  private pinChair(id: string, at: [number, number, number], yaw: number): void {
-    const body = this.bodies.get(id)?.body;
-    if (!body) return;
-    if (this.held?.id === id) this.dropHeld();
-    // (Its feet on the floor: kept as high above the ground as it stands now.)
-    const t = body.translation();
-    const below = this.world.castRay(new RAPIER.Ray(t, { x: 0, y: -1, z: 0 }), 512, true, RAPIER.QueryFilterFlags.EXCLUDE_SENSORS, 0xffffffff, undefined, undefined, (c) => c.parent()?.handle !== body.handle && !this.baseHandles.has(c.handle));
-    const lift = below ? below.timeOfImpact : 0;
-    body.setBodyType(RAPIER.RigidBodyType.Fixed, true);
-    // Leaning back a little, its top under the handle.
-    const tip = -0.25;
-    const qy = { x: 0, y: Math.sin(yaw / 2), z: 0, w: Math.cos(yaw / 2) };
-    const qx = { x: Math.sin(tip / 2), y: 0, z: 0, w: Math.cos(tip / 2) };
-    body.setTranslation({ x: at[0], y: at[1] + lift, z: at[2] }, true);
-    body.setRotation(qmul(qy, qx), true);
-  }
-
-  private releaseChair(id: string, nudge: boolean): void {
-    const body = this.bodies.get(id)?.body;
-    if (!body) return;
-    body.setBodyType(RAPIER.RigidBodyType.Dynamic, true);
-    if (nudge) {
-      const a = this.random() * Math.PI * 2;
-      body.setLinvel({ x: Math.cos(a) * 60, y: 40, z: Math.sin(a) * 60 }, true);
-      body.setAngvel({ x: 2 * (this.random() - 0.5), y: 1, z: 2 * (this.random() - 0.5) }, true);
-    } else if (this.player && !this.held) this.hold(id, body);
-  }
-
-  /** The build site E would reach now (null when something else is in the way). */
+  /** The build piece E would reach now (null when something else is in the way). */
   private baseAim(): BaseAim | null {
     const p = this.player;
     if (!p || !this.base || this.hiding || this.frozen) return null;
@@ -4417,29 +4375,24 @@ export class GameWorld {
     return hit && hit.distance < a.distance - 4 ? null : a;
   }
 
-  /** E at a build site, a door or a window (true: the base took it). */
+  /** E at a build piece: a door opens or shuts (true: the base took it). */
   private useBase(): boolean {
+    // (Holding something: E drops it, as ever.)
+    if (this.held) return false;
     const aim = this.baseAim();
-    if (!aim || !this.base) return false;
-    const chair = this.heldChair();
-    // (Holding something that isn't a chair: E drops it, as ever.)
-    if (this.held && !chair) return false;
-    const f = this.player!.feetPosition;
-    const r = this.base.press(aim, chair, [f.x, f.y, f.z]);
-    if (!r) return false;
-    if (chair && !r.wedged) return false;
+    if (!aim || !this.base || !this.base.press(aim)) return false;
     this.bus.emit({ type: 'use', target: aim.site, by: 'player', time: this.time });
     return true;
   }
 
-  /** Each step: holds and pours while E is down, and the ghost a plan in hand would place. */
+  /** Each step: E held on a blueprint (to remove it), and the ghost a blueprint in hand would place. */
   private stepBase(): void {
     const b = this.base!, p = this.player!;
     const aim = this.held ? null : this.baseAim();
     b.hold(aim, !!p.input.use && !this.frozen, STEP);
     let point: [number, number, number] | null = null;
     if (!this.held && !this.hiding && b.pieceForPlan(this.selectedItem())) {
-      const hit = p.aimAt(b.config.placeReach, (c) => this.baseHandles.has(c.handle));
+      const hit = p.aimAt(b.config.placeReach, (c) => this.isHeld(c));
       if (hit) {
         const e = p.eye(), d = p.lookDirection();
         point = [e[0] + d[0] * hit.distance, e[1] + d[1] * hit.distance, e[2] + d[2] * hit.distance];
@@ -4448,32 +4401,16 @@ export class GameWorld {
     b.aimPlacement(point);
   }
 
-  /** What E (or a click, with a plan) would do at the base now, for the HUD. */
+  /** What the HUD shows at the base now: the blueprint in hand's ghost, or the piece aimed at. */
   buildPrompt(): BuildPrompt | null {
     const b = this.base;
     if (!b || !this.player || this.hiding) return null;
     const pv = b.preview;
     if (pv) {
       const def = b.pieces.get(pv.piece)!;
-      return { site: '', icon: 'place', label: pv.valid ? `Place ${def.label}` : 'Something is already built here', progress: null, missing: '' };
+      return { site: '', icon: 'place', title: def.label, label: pv.valid ? 'Place blueprint' : 'Something is already here', progress: null, missing: pv.valid ? `${def.count} ${def.materialLabel.toLowerCase()}` : '' };
     }
-    const aim = this.held && !this.heldChair() ? null : this.baseAim();
-    return b.prompt(aim, this.heldChair());
-  }
-
-  /** E on a bed (or whatever the base's sleep tags mark): sleep if the room is comfortable enough (true: it was a bed). */
-  private trySleep(targets: string[]): boolean {
-    const b = this.base!;
-    const bed = targets.find((t) => this.doc.get(t)?.tags.some((x) => b.config.sleep.tags.includes(x)));
-    if (!bed || !this.player) return false;
-    const f = this.player.feetPosition;
-    const can = b.canSleep([f.x, f.y + 8, f.z]);
-    if (!can.ok) {
-      this.say(b.config.sleep.uneasy, 2.5);
-      return true;
-    }
-    this.sleep(can.room, can.comfort);
-    return true;
+    return b.prompt(this.held ? null : this.baseAim());
   }
 
   /** A block set the day: a different one starts. */
@@ -4505,17 +4442,6 @@ export class GameWorld {
       this.runner.dispatch({ type: 'newDay', day: this.day });
     }
     this.runner.dispatch({ type: 'hours', from, to });
-  }
-
-  /** Sleep: hours pass, the game is saved (a base that saves on sleep), and a wedged chair may have slipped. */
-  sleep(room: string | null = null, comfort = 0): void {
-    const b = this.base;
-    if (!b) return;
-    this.passHours(b.config.sleep.hours);
-    this.bus.emit({ type: 'base.sleep', room, comfort, time: this.time });
-    this.checkpoint = this.liveProgress();
-    if (b.config.sleep.slept) this.say(b.config.sleep.slept, 2.5);
-    b.wake();
   }
 
   dispose(): void {
