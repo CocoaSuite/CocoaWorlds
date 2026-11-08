@@ -68,7 +68,7 @@ function Player() {
       {data && hud && !locked && !uiMouse && !data.rules.saveMenu && (
         <button type="button" className="cw-ov cw-click-play" data-testid="click-to-play" onClick={() => runner.current?.capture()}>
           <strong>{data.name}</strong>
-          <span>Click to play · WASD move · Space jump · E use · Esc pause</span>
+          <span>Click to play&nbsp;&nbsp; WASD move&nbsp;&nbsp; Space jump&nbsp;&nbsp; E use&nbsp;&nbsp; Esc pause</span>
         </button>
       )}
       {!hud && !error && <div className="cw-player-msg">Loading…</div>}
