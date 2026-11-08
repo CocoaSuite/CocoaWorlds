@@ -144,6 +144,7 @@ function componentLabel(e: EntityData): string {
   if (light) return `${light.kind ?? ''} light`;
   if (e.components.playerSpawn) return 'Player spawn';
   if (e.components.sign) return t('add.sign');
+  if (e.components.stake) return t('add.stake');
   if (e.components.poster) return t((e.components.poster as { rolls?: boolean }).rolls === false ? 'add.painting' : 'add.poster');
   if (isGroupEntity(e)) return t('insp.group');
   return 'Object';

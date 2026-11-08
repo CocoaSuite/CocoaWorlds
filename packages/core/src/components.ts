@@ -85,6 +85,18 @@ export type PosterData = {
   mass: number;
   hungAtStart: boolean;
 };
+/** A prop that sticks into the ground (component `stake`) when it hits it hard enough, tip first. */
+export type StakeData = {
+  /** Which way its tip points, in its own axes. */
+  tip: 'bottom' | 'top' | 'front' | 'back';
+  /** The speed into the ground it takes to stick (u/s). */
+  speed: number;
+  /** How far it goes in (u). */
+  depth: number;
+  /** The most it leans away from straight (°), picked at random. */
+  tilt: number;
+};
+
 /** How thick a rolled poster's scroll is (its radius, u), the same for the physics and the drawing. */
 /** A poster's data with its scroll model filled in from the object's Model when it has none of its own. */
 export function posterOf(components: Record<string, unknown>): PosterData {
@@ -679,6 +691,28 @@ export const COMPONENTS: ComponentDef[] = [
       { key: 'frame', label: e('Frame / back', 'Рамка / оборот'), hint: e('The colour of the edges, the back and the rolled scroll.', 'Цвет краёв, оборота и свёрнутого свитка.'), type: { kind: 'color' }, default: '#e8e2d4' },
       { key: 'mass', label: e('Weight', 'Вес'), type: { kind: 'number', min: 0.01, max: 50, step: 0.5, unit: 'kg' }, default: 0.5 },
       { key: 'hungAtStart', label: e('Hung at start', 'Повешена в начале'), hint: e('Starts flat and fixed where it is placed (put it against a wall, picture out).', 'Начинает плоской и неподвижной на своём месте (поставьте у стены, картинкой наружу).'), type: { kind: 'boolean' }, default: false },
+    ],
+  },
+  {
+    name: 'stake',
+    label: e('Sticks in the ground', 'Втыкается в землю'),
+    description: e(
+      'A prop that sticks into the ground at a slight random lean when it hits it hard enough, tip first (a sign, a stake). Picking it up pulls it out. Needs Physics.',
+      'Предмет, который втыкается в землю под небольшим случайным наклоном, если ударить им достаточно сильно остриём вниз (табличка, кол). Если поднять, он вытаскивается. Нужна Физика.',
+    ),
+    appliesTo: 'point',
+    conflicts: ['poster', 'npc', 'seat', 'hidingSpot'],
+    fields: [
+      {
+        key: 'tip',
+        label: e('Tip', 'Остриё'),
+        hint: e('The end that goes into the ground.', 'Конец, который входит в землю.'),
+        type: { kind: 'enum', options: [{ value: 'bottom', label: e('Bottom', 'Низ') }, { value: 'top', label: e('Top', 'Верх') }, { value: 'front', label: e('Front', 'Перед') }, { value: 'back', label: e('Back', 'Зад') }] },
+        default: 'bottom',
+      },
+      { key: 'speed', label: e('Sticks from', 'Втыкается от'), hint: e('How fast it must hit the ground.', 'С какой скоростью нужно ударить о землю.'), type: { kind: 'number', min: 0, step: 16, unit: 'u/s' }, default: 160 },
+      { key: 'depth', label: e('Depth', 'Глубина'), type: { kind: 'number', min: 0, step: 1, unit: 'u' }, default: 6 },
+      { key: 'tilt', label: e('Lean', 'Наклон'), hint: e('Up to this much off straight, at random.', 'Случайно, не больше этого.'), type: { kind: 'number', min: 0, max: 45, step: 1, unit: '°' }, default: 10 },
     ],
   },
   {

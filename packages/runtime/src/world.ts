@@ -43,6 +43,7 @@ import {
   type GameRules,
   type ModelData,
   type PosterData,
+  type StakeData,
   posterScrollRadius,
   posterOf,
   type UiSettings,
@@ -130,6 +131,8 @@ export interface SavedScene {
   signs?: Record<string, string>;
   /** Posters and paintings hung on a wall (true) or loose (false), when not as they started. */
   posters?: Record<string, boolean>;
+  /** Props stuck in the ground. */
+  stakes?: string[];
   /** The time of day (hours). */
   hour?: number;
   /** Scripts, by object: variables that changed, and limited stacks that have had their run. */
@@ -745,6 +748,8 @@ export class GameWorld {
     const posters: Record<string, boolean> = {};
     for (const [id, p] of this.posters) if (!this.gone.has(id) && p.hung !== p.data.hungAtStart) posters[id] = p.hung;
     if (Object.keys(posters).length) out.posters = posters;
+    const stakes = [...this.stakes].filter(([id, k]) => k.stuck && !this.gone.has(id)).map(([id]) => id);
+    if (stakes.length) out.stakes = stakes;
     const scripts = this.runner.saveState();
     if (Object.keys(scripts).length) out.scripts = scripts;
     // (What scripts set lands where it was going: a fade halfway is saved finished.)
@@ -814,6 +819,12 @@ export class GameWorld {
         this.signVersion++;
       }
     for (const [id, hung] of Object.entries(save.posters ?? {})) if (typeof hung === 'boolean') this.setPosterHung(id, hung);
+    for (const id of Array.isArray(save.stakes) ? save.stakes : []) {
+      const k = this.stakes.get(id), b = this.bodies.get(id);
+      if (!k || !b || k.stuck) continue;
+      k.stuck = true;
+      b.body.setBodyType(RAPIER.RigidBodyType.Fixed, false);
+    }
     if (save.spent && typeof save.spent === 'object') this.runner.loadState(Object.fromEntries(Object.entries(save.spent).map(([o, spent]) => [o, { spent }])));
     if (save.scripts && typeof save.scripts === 'object') this.runner.loadState(save.scripts);
     const nums = (a: unknown) => (Array.isArray(a) && a.every((x) => typeof x === 'number' && Number.isFinite(x)) ? (a as number[]) : null);
@@ -1548,7 +1559,7 @@ export class GameWorld {
     if (parts.size) b.parts = parts;
     if (model) b.model = { ...model, matrix: world };
     else b.shape = { collider: shape!, matrix: world };
-    b.rb = rb;
+    b.rb = rb;    if (e.components.stake && rb.motion === 'dynamic') this.stakes.set(e.id, { data: readComponent<StakeData>('stake', e.components.stake), stuck: false, free: 0 });
   }
 
   // ── Posters and paintings ──
@@ -1694,6 +1705,82 @@ export class GameWorld {
       }
     });
     if (wall) this.hangPoster(h.id, (wall as { at: Q3 }).at, (wall as { normal: Q3 }).normal);
+  }
+
+  // ── Props that stick into the ground ──
+
+  private stakes = new Map<string, { data: StakeData; stuck: boolean; free: number }>();
+
+  /** Whether a prop is stuck in the ground now (null: it can't stick). */
+  stakeStuck(id: string): boolean | null {
+    return this.stakes.get(id)?.stuck ?? null;
+  }
+
+  /** After each step: a prop that hit the ground tip first, fast enough, sticks in. */
+  private stickStakes(): void {
+    for (const [id, k] of this.stakes) {
+      const b = this.bodies.get(id);
+      const v0 = b?.v0;
+      if (!b || !v0 || k.stuck || !b.body.isDynamic() || this.time < k.free) continue;
+      const c = b.body.translation(), r = b.body.rotation();
+      const tip = qrot({ x: r.x, y: r.y, z: r.z, w: r.w }, STAKE_TIP[k.data.tip] ?? [0, -1, 0]);
+      let ground: { at: Q3; n: Q3; reach: number } | null = null;
+      for (let i = 0; i < b.body.numColliders() && !ground; i++) {
+        const mine = b.body.collider(i);
+        this.world.contactPairsWith(mine, (other) => {
+          if (ground || other.isSensor() || !other.parent()?.isFixed() || this.triggers.has(other.handle) || this.volumes.has(other.handle)) return;
+          let touching = false;
+          this.world.contactPair(mine, other, (m) => {
+            if (m.numContacts() > 0) touching = true;
+          });
+          if (!touching) return;
+          const hit = this.world.castRayAndGetNormal(new RAPIER.Ray(c, { x: tip[0], y: tip[1], z: tip[2] }), 512, true, undefined, undefined, undefined, undefined, (x) => x.handle === other.handle);
+          if (!hit || hit.normal.y < 0.5) return;
+          const n = hit.normal;
+          const into = -(v0[0]! * n.x + v0[1]! * n.y + v0[2]! * n.z), lead = -(tip[0] * n.x + tip[1] * n.y + tip[2] * n.z);
+          if (into < k.data.speed || lead < 0.6) return;
+          const d = hit.timeOfImpact;
+          ground = { at: [c.x + tip[0] * d, c.y + tip[1] * d, c.z + tip[2] * d], n: [n.x, n.y, n.z], reach: d };
+        });
+      }
+      if (ground) this.stickStake(id, tip, ground);
+    }
+  }
+
+  /** In the ground at `at`: tip turned into it, then leaned a little in a random direction. */
+  private stickStake(id: string, tip: Q3, g: { at: Q3; n: Q3; reach: number }): void {
+    const k = this.stakes.get(id), b = this.bodies.get(id);
+    if (!k || !b) return;
+    if (this.held?.id === id) this.dropHeld();
+    const n = g.n;
+    const side = norm3(cross3(n, Math.abs(n[1]) < 0.9 ? [0, 1, 0] : [1, 0, 0]));
+    const other = cross3(n, side);
+    const turn = Math.random() * Math.PI * 2, lean = ((Math.random() * Math.max(0, k.data.tilt)) * Math.PI) / 180;
+    const axis = norm3([side[0] * Math.cos(turn) + other[0] * Math.sin(turn), side[1] * Math.cos(turn) + other[1] * Math.sin(turn), side[2] * Math.cos(turn) + other[2] * Math.sin(turn)]);
+    const down: Q3 = [-n[0], -n[1], -n[2]];
+    const r = b.body.rotation(), turnBy = qmul(axisAngle(axis, lean), fromTo(tip, down));
+    const q = qmul(turnBy, { x: r.x, y: r.y, z: r.z, w: r.w });
+    const dir = qrot(turnBy, tip);
+    const out = Math.max(0, g.reach - Math.min(k.data.depth, g.reach * 0.9));
+    b.body.setBodyType(RAPIER.RigidBodyType.Fixed, false);
+    b.body.setTranslation({ x: g.at[0] - dir[0] * out, y: g.at[1] - dir[1] * out, z: g.at[2] - dir[2] * out }, false);
+    b.body.setRotation(q, false);
+    k.stuck = true;
+    this.bus.emit({ type: 'stake.stick', target: id, time: this.time });
+  }
+
+  /** Out of the ground: loose again, lifted clear, and it won't stick again for a moment. */
+  private pullStake(id: string): void {
+    const k = this.stakes.get(id), b = this.bodies.get(id);
+    if (!k || !b || !k.stuck) return;
+    const r = b.body.rotation(), c = b.body.translation();
+    const tip = qrot({ x: r.x, y: r.y, z: r.z, w: r.w }, STAKE_TIP[k.data.tip] ?? [0, -1, 0]);
+    const up = k.data.depth + 1;
+    b.body.setTranslation({ x: c.x - tip[0] * up, y: c.y - tip[1] * up, z: c.z - tip[2] * up }, false);
+    b.body.setBodyType(RAPIER.RigidBodyType.Dynamic, true);
+    k.stuck = false;
+    k.free = this.time + 0.5;
+    this.bus.emit({ type: 'stake.pull', target: id, time: this.time });
   }
 
   private track(id: string, kind: BodyInfo['kind'], motion: BodyInfo['motion'], body: RAPIER.RigidBody, brushes: Brush[] = []): void {
@@ -1880,6 +1967,7 @@ export class GameWorld {
       this.world.step(this.events);
       this.listenForHits();
       if (this.held) this.stickHeld();
+      if (this.stakes.size) this.stickStakes();
       this.accumulator -= STEP;
       this.time += STEP;
       this.base?.tick(STEP);
@@ -2605,6 +2693,7 @@ export class GameWorld {
     const t = this.carryable(id);
     if (!t) return false;
     if (this.posters.get(t)?.hung) this.takeDownPoster(t);
+    if (this.stakes.get(t)?.stuck) this.pullStake(t);
     this.hold(t, this.bodies.get(t)!.body);
     return true;
   }
@@ -4264,6 +4353,33 @@ function transformPoint(m: number[], v: readonly number[]): [number, number, num
     m[1]! * v[0]! + m[5]! * v[1]! + m[9]! * v[2]! + m[13]!,
     m[2]! * v[0]! + m[6]! * v[1]! + m[10]! * v[2]! + m[14]!,
   ];
+}
+
+const STAKE_TIP: Record<string, Q3> = { bottom: [0, -1, 0], top: [0, 1, 0], front: [0, 0, 1], back: [0, 0, -1] };
+
+function cross3(a: Q3, b: Q3): Q3 {
+  return [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+}
+
+function norm3(v: Q3): Q3 {
+  const l = Math.hypot(v[0], v[1], v[2]) || 1;
+  return [v[0] / l, v[1] / l, v[2] / l];
+}
+
+function axisAngle(a: Q3, angle: number): Quat {
+  const s = Math.sin(angle / 2);
+  return { x: a[0] * s, y: a[1] * s, z: a[2] * s, w: Math.cos(angle / 2) };
+}
+
+/** The shortest turn from one unit vector to another. */
+function fromTo(a: Q3, b: Q3): Quat {
+  const d = a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+  if (d < -0.9999) {
+    const p = norm3(cross3(a, Math.abs(a[0]) < 0.9 ? [1, 0, 0] : [0, 1, 0]));
+    return { x: p[0], y: p[1], z: p[2], w: 0 };
+  }
+  const c = cross3(a, b), w = 1 + d, l = Math.hypot(c[0], c[1], c[2], w);
+  return { x: c[0] / l, y: c[1] / l, z: c[2] / l, w: w / l };
 }
 
 /** Rotate a vector by a unit quaternion. */
