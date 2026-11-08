@@ -18,7 +18,11 @@ export interface PosterObject {
   dispose(): void;
 }
 
-export function buildPoster(data: PosterData, onUpdate: () => void = () => {}): PosterObject {
+/**
+ * `prepare` gets the scroll model ready to draw before it replaces the cylinder (in the game: its shaders compiled
+ * in the background), so it doesn't hold a frame up when it appears.
+ */
+export function buildPoster(data: PosterData, onUpdate: () => void = () => {}, prepare: (o: THREE.Object3D) => Promise<unknown> = () => Promise.resolve()): PosterObject {
   const object = new THREE.Group();
   object.name = 'poster';
   const back = new THREE.MeshStandardMaterial({ color: data.frame, roughness: 0.85 });
@@ -48,7 +52,9 @@ export function buildPoster(data: PosterData, onUpdate: () => void = () => {}): 
       // The scroll model in place of the cylinder once it has loaded: centred, at its own scale.
       const holder = scroll;
       void modelInstance({ model: data.scrollModel, units: data.scrollUnits ?? 'metres', animation: '', castShadows: true, collision: 'none' })
-        .then((inst) => {
+        .then(async (inst) => {
+          if (gone) return inst.dispose();
+          await prepare(inst.object).catch(() => {});
           if (gone) return inst.dispose();
           model = inst;
           const k = data.scrollScale > 0 ? data.scrollScale : 1;
@@ -99,6 +105,74 @@ function sheet(w: number, h: number, half: number): THREE.BufferGeometry {
 }
 
 const UNSEEN = 31;
+
+/**
+ * Gets `obj` fully ready to draw before it shows, drawn yet or not (on a hidden layer too): its shaders, the
+ * shadow shaders of its cut-out materials, and its textures on the GPU. Without this, the first frame a poster
+ * hung (its picture's shader, the picture's own shadow shader, the picture uploaded) stalled the game.
+ */
+export function prepareToDraw(r: THREE.WebGLRenderer, obj: THREE.Object3D, cam: THREE.Camera, scene: THREE.Scene): Promise<unknown> {
+  const done = r.compileAsync(obj, cam, scene);
+  compileShadows(r, obj, cam, scene);
+  return done.then(() => uploadTextures(r, obj));
+}
+
+/** The same, at once (before the game's first frame). */
+export function prepareToDrawNow(r: THREE.WebGLRenderer, obj: THREE.Object3D, cam: THREE.Camera, scene: THREE.Scene): void {
+  r.compile(obj, cam, scene);
+  compileShadows(r, obj, cam, scene);
+  uploadTextures(r, obj);
+}
+
+// Three.js draws a cut-out material's shadow (a map or an opacity map, with alpha test) with a depth material of
+// its own, made and compiled at its first shadow; `compile` doesn't do it. Shadow shaders with the same settings
+// are shared, so compiling one stand-in for each kind (kept, so the shared shader stays) readies them all.
+const SHADOW_SIDE: Record<number, THREE.Side> = { [THREE.FrontSide]: THREE.BackSide, [THREE.BackSide]: THREE.FrontSide, [THREE.DoubleSide]: THREE.DoubleSide };
+const shadowStandIns = new Map<string, THREE.Mesh>();
+let shadowTarget: THREE.WebGLRenderTarget | null = null;
+
+function compileShadows(r: THREE.WebGLRenderer, obj: THREE.Object3D, cam: THREE.Camera, scene: THREE.Scene): void {
+  if (!r.shadowMap.enabled) return;
+  const group = new THREE.Group();
+  obj.traverse((o) => {
+    const mesh = o as THREE.Mesh;
+    if (!mesh.isMesh || !mesh.castShadow || (mesh as THREE.SkinnedMesh).isSkinnedMesh || (mesh as THREE.InstancedMesh).isInstancedMesh) return;
+    for (const m of Array.isArray(mesh.material) ? mesh.material : [mesh.material]) {
+      const cut = m as THREE.MeshStandardMaterial;
+      if (!(cut.alphaTest > 0) || !(cut.map || cut.alphaMap)) continue;
+      const side = cut.shadowSide ?? SHADOW_SIDE[cut.side] ?? THREE.BackSide;
+      for (const kind of ['depth', 'distance'] as const) {
+        const key = [kind, side, cut.map?.channel ?? '-', cut.alphaMap?.channel ?? '-', m.vertexColors].join('|');
+        if (shadowStandIns.has(key)) continue;
+        const sm = kind === 'depth' ? new THREE.MeshDepthMaterial() : new THREE.MeshDistanceMaterial();
+        sm.side = side;
+        sm.map = cut.map;
+        sm.alphaMap = cut.alphaMap;
+        sm.alphaTest = cut.alphaTest;
+        const standIn = new THREE.Mesh(mesh.geometry, sm);
+        shadowStandIns.set(key, standIn);
+        group.add(standIn);
+      }
+    }
+  });
+  if (!group.children.length) return;
+  // (Compiled as shadows are drawn: into a render target, so not tone-mapped.)
+  const prev = r.getRenderTarget();
+  r.setRenderTarget((shadowTarget ??= new THREE.WebGLRenderTarget(1, 1)));
+  try {
+    r.compile(group, cam, scene);
+  } finally {
+    r.setRenderTarget(prev);
+  }
+  // (Kept for their shaders only: nothing of the real objects held.)
+  for (const c of group.children) {
+    const sm = (c as THREE.Mesh).material as THREE.MeshDepthMaterial;
+    sm.map = sm.alphaMap = null;
+    (c as THREE.Mesh).geometry = PLACEHOLDER;
+  }
+}
+
+const PLACEHOLDER = new THREE.BufferGeometry();
 
 /** Sends the textures of everything in `obj`, drawn yet or not, to the GPU now (not at its first frame). */
 export function uploadTextures(r: THREE.WebGLRenderer, obj: THREE.Object3D): void {

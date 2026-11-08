@@ -955,7 +955,21 @@ export class PlaySession {
         holder.matrixAutoUpdate = false;
         holder.matrix.fromArray(poster.matrix);
         this.group.add(holder);
-        const view = buildPoster(poster.data);
+        // Its picture loads after the game's first frame, and hung or not, both looks are kept ready to draw: so
+        // the first time it is hung nothing compiles or uploads (that stalled the game).
+        let ready = false;
+        const view: PosterObject = buildPoster(
+          poster.data,
+          () => {
+            if (ready) return;
+            ready = true;
+            queueMicrotask(() => {
+              ready = false;
+              if (!this.disposed) void this.warm(view.object).catch(() => {});
+            });
+          },
+          (o) => this.warm(o),
+        );
         holder.add(view.object);
         this.posterViews.push({ id: b.id, view, hung: null });
         this.movers.push({ id: b.id, i: this.world.drawn(b.id), obj: holder, base: holder.matrix.clone() });
