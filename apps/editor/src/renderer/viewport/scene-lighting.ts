@@ -128,6 +128,7 @@ export class SceneLighting {
 
     const center = levelBounds.isEmpty() ? new THREE.Vector3() : levelBounds.getCenter(new THREE.Vector3());
     const radius = levelBounds.isEmpty() ? 1024 : Math.max(256, levelBounds.getSize(new THREE.Vector3()).length() / 2);
+    this.shadowRadius = radius;
     for (const e of lights) {
       const l = readComponent<LightData>('light', e.components.light);
       const m = new THREE.Matrix4().fromArray(worldOf(e.id));
@@ -231,6 +232,38 @@ export class SceneLighting {
   private stillDoc: SceneDoc | null = null;
   private anyShadows = false;
 
+  private shadowRadius = 1024;
+
+  /**
+   * Sun shadows cover only the area around `at` (half-size `extent`), so the shadow map stays sharp in big levels.
+   * Snapped to whole shadow texels so the edges don't crawl as the view moves.
+   */
+  follow(at: THREE.Vector3, extent = 1400): void {
+    for (const sun of this.suns) {
+      if (!sun.castShadow) continue;
+      const half = Math.min(extent, this.shadowRadius);
+      const from = sun === this.day?.sun ? this.day.center : sun.target.position;
+      const dir = sun.position.clone().sub(from).normalize();
+      const up = Math.abs(dir.y) > 0.99 ? Z_AXIS : Y_AXIS;
+      const q = new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().lookAt(dir, ORIGIN, up));
+      const texel = (half * 2) / sun.shadow.mapSize.x;
+      const p = at.clone().applyQuaternion(q.clone().invert());
+      p.x = Math.round(p.x / texel) * texel;
+      p.y = Math.round(p.y / texel) * texel;
+      p.applyQuaternion(q);
+      sun.target.position.copy(p);
+      sun.target.updateMatrixWorld();
+      sun.position.copy(p).addScaledVector(dir, this.shadowRadius * 2);
+      const cam = sun.shadow.camera;
+      if (cam.right !== half) {
+        cam.left = cam.bottom = -half;
+        cam.right = cam.top = half;
+        cam.updateProjectionMatrix();
+        sunBias(sun, half);
+      }
+    }
+  }
+
   /** Show the hour (null: the hour the game starts at) when day and night is on. */
   setDay(hour: number | null): void {
     const d = this.day;
@@ -323,5 +356,10 @@ export class SceneLighting {
 function sunBias(sun: THREE.DirectionalLight, radius: number): void {
   const texel = (radius * 2) / sun.shadow.mapSize.x;
   sun.shadow.bias = -0.0005;
-  sun.shadow.normalBias = Math.max(2.5, texel * 2);
+  // (Wide enough for the soft-shadow filter's reach, a few texels.)
+  sun.shadow.normalBias = Math.max(1.5, texel * 3);
 }
+
+const ORIGIN = new THREE.Vector3();
+const Y_AXIS = new THREE.Vector3(0, 1, 0);
+const Z_AXIS = new THREE.Vector3(0, 0, 1);

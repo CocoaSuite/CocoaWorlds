@@ -249,6 +249,7 @@ export class GameRunner {
     this.renderer.shadowMap.enabled = this.lighting.shadows;
     if (play.travel) return void this.go(play.travel);
     if (play.placeCamera(this.cam)) {
+      this.lighting.follow(this.cam.getWorldPosition(new THREE.Vector3()));
       play.applyWater(this.scene, this.cam);
       this.reflections ??= new SceneReflections(this.renderer);
       if (this.probesFor !== play) {

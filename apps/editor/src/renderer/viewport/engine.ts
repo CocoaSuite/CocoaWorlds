@@ -1847,6 +1847,7 @@ export class ViewportEngine {
     if (this.pathLines) this.pathLines.visible = !this.play;
     this.updateLighting();
     if (this.play?.placeCamera(this.fpCam)) {
+      this.lighting.follow(this.fpCam.getWorldPosition(new THREE.Vector3()));
       this.play.updateFoliage(this.fpCam);
       this.plants.update(this.fpCam);
       this.waterDepth.prepare(r, this.scene, this.fpCam);
@@ -1862,6 +1863,7 @@ export class ViewportEngine {
       return;
     }
     this.grid.setCamera(this.rig.camera.position);
+    this.lighting.follow(this.rig.target, Math.max(1400, this.rig.camera.position.distanceTo(this.rig.target) * 1.5));
     this.foliage.update(this.rig.camera, this.rig.unitsPerPixel);
     this.play?.updateFoliage(this.rig.camera, this.rig.unitsPerPixel);
     this.plants.update(this.rig.camera);
