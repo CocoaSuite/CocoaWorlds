@@ -10,7 +10,7 @@ import { buildMesh, isInvisibleMaterial, type Brush, type VoxelField, type World
 import { GameWorld, initPhysics, POSE, AT, NPC, type BuildPrompt, type FrameSnapshot, type Hearing, type NavGrid, type BodyInfo, type ModelMesh, type SavedProgress, type Travel, type UiState, type PlayerInput, type PlayerStatus, type ScriptLog, type TriggerEvent } from '@cocoaworlds/runtime';
 
 /** Field-of-view effects, degrees added to the camera's own; ease rates per second. */
-const FOV = { sprint: 8, fall: 10, easeIn: 6, easeOut: 4 };
+const FOV = { sprint: 8, fall: 10, weak: -14, easeIn: 6, easeOut: 4 };
 import type { Problem, ScriptError } from '@cocoaworlds/scripting';
 import * as THREE from 'three';
 import { brushBounds, worldBrushes } from '../brush/brushes';
@@ -1298,7 +1298,8 @@ export class PlaySession {
   }
 
   /**
-   * Field-of-view effects: the view widens while sprinting and on long falls, easing in and out
+   * Field-of-view effects: the view widens while sprinting and on long falls and narrows when badly hurt
+   * (hidden health), easing in and out
    * (framerate-independent).
    */
   private easeFov(cam: THREE.PerspectiveCamera, f: FrameSnapshot): void {
@@ -1311,8 +1312,8 @@ export class PlaySession {
     const dt = this.fovAt ? Math.min(0.1, (now - this.fovAt) / 1000) : 0;
     this.fovAt = now;
     const fall = THREE.MathUtils.clamp((f.fallSpeed - 400) / 500, 0, 1);
-    const target = (f.sprinting ? FOV.sprint : 0) + fall * FOV.fall;
-    const rate = target > this.fovKick ? FOV.easeIn : FOV.easeOut;
+    const target = (f.sprinting ? FOV.sprint : 0) + fall * FOV.fall + f.weak * FOV.weak;
+    const rate = Math.abs(target) > Math.abs(this.fovKick) ? FOV.easeIn : FOV.easeOut;
     this.fovKick += (target - this.fovKick) * (1 - Math.exp(-rate * dt));
     const fov = this.baseFov! + this.fovKick;
     if (Math.abs(cam.fov - fov) > 1e-3) {

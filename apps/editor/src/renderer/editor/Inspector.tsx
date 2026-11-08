@@ -320,6 +320,11 @@ function GameRulesSection() {
       <Field label={t('insp.health')}>
         <Switch checked={rules.health} label={t('insp.health')} onChange={(on) => !playing && void set('health', on)} />
       </Field>
+      {rules.health && (
+        <Field label={t('insp.hideHealth')}>
+          <Switch checked={rules.hideHealth} label={t('insp.hideHealth')} onChange={(on) => !playing && void set('hideHealth', on)} />
+        </Field>
+      )}
       <Field label={t('insp.score')}>
         <Switch checked={rules.score} label={t('insp.score')} onChange={(on) => !playing && void set('score', on)} />
       </Field>

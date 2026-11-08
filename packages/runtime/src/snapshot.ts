@@ -43,6 +43,8 @@ export class FrameSnapshot {
   sprinting = false;
   /** How fast the player falls (units/s, 0 when not falling; the view widens on long falls). */
   fallSpeed = 0;
+  /** How badly hurt the player is with hidden health, 0–1 (the view narrows and a red vignette pulses). */
+  weak = 0;
 
   /** Counts fills (a reader can tell a fresh picture from the one it already used). */
   frame = 0;
@@ -171,9 +173,10 @@ export class FrameSnapshot {
   }
 
   /** What the view's field-of-view effects follow. */
-  setMotion(sprinting: boolean, fallSpeed: number): void {
+  setMotion(sprinting: boolean, fallSpeed: number, weak = 0): void {
     this.sprinting = sprinting;
     this.fallSpeed = fallSpeed;
+    this.weak = weak;
   }
 }
 

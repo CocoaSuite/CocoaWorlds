@@ -60,6 +60,11 @@ export interface GameValue {
 export interface GameRules {
   /** The player has health: damage, falls, dying, the health bar. Off: nothing hurts and the player can't die. */
   health: boolean;
+  /**
+   * Health is kept but not shown (missing: off): no health or armour bar; low health shows instead as a pulsing
+   * red vignette, a narrower view and slower movement.
+   */
+  hideHealth: boolean;
   /** The game keeps a score, shown once a script changes it. */
   score: boolean;
   /** The camera follows behind the player (Roblox-style) instead of looking through their eyes. */
@@ -78,14 +83,14 @@ export interface GameRules {
   saveMenu: boolean;
 }
 
-export const defaultGameRules = (): GameRules => ({ health: true, score: true, thirdPerson: false, saveItems: false, stamina: false, showFps: false, building: false, saveWorld: false, saveMenu: false });
+export const defaultGameRules = (): GameRules => ({ health: true, hideHealth: false, score: true, thirdPerson: false, saveItems: false, stamina: false, showFps: false, building: false, saveWorld: false, saveMenu: false });
 
 /** A project's game rules with defaults filled in. */
 export function gameRules(settings: Pick<ProjectSettings, 'game'> | undefined): GameRules {
   const g = settings?.game ?? {};
   const d = defaultGameRules();
   const pick = (k: keyof GameRules) => (typeof g[k] === 'boolean' ? (g[k] as boolean) : d[k]);
-  return { health: pick('health'), score: pick('score'), thirdPerson: pick('thirdPerson'), saveItems: pick('saveItems'), stamina: pick('stamina'), showFps: pick('showFps'), building: pick('building'), saveWorld: pick('saveWorld'), saveMenu: pick('saveMenu') };
+  return { health: pick('health'), hideHealth: pick('hideHealth'), score: pick('score'), thirdPerson: pick('thirdPerson'), saveItems: pick('saveItems'), stamina: pick('stamina'), showFps: pick('showFps'), building: pick('building'), saveWorld: pick('saveWorld'), saveMenu: pick('saveMenu') };
 }
 
 export interface ProjectFile {

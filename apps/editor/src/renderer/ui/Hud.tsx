@@ -8,6 +8,10 @@ import { BuildIcon } from './build-icons';
 /** What the in-game display shows. */
 export interface Hud {
   showHealth: boolean;
+  /** Health kept but hidden: the player has health (hurt flash) without a bar. */
+  hasHealth: boolean;
+  /** How badly hurt, 0–1, with hidden health (pulsing red vignette). */
+  weak: number;
   health: number;
   maxHealth: number;
   /** Shown once the player has any. */
@@ -84,6 +88,8 @@ export function hudOf(play: PlaySession, locked: boolean): Hud {
   const screen = play.screen();
   return {
     showHealth: !!status?.showHealth,
+    hasHealth: !!status?.hasHealth,
+    weak: status?.weak ?? 0,
     health: Math.ceil(status?.health ?? 0),
     maxHealth: status?.maxHealth ?? 100,
     armour: Math.floor(status?.armour ?? 0),
@@ -152,7 +158,8 @@ export function HudView({ hud }: { hud: Hud }) {
           ))}
         </div>
       )}
-      {hud.hurt && hud.showHealth && <div className="cw-hurt" aria-hidden="true" />}
+      {hud.hurt && hud.hasHealth && <div className="cw-hurt" aria-hidden="true" />}
+      {hud.weak > 0 && <div className="cw-weak" aria-hidden="true" style={{ opacity: 0.35 + 0.65 * hud.weak, animationDuration: `${(1.6 - 0.8 * hud.weak).toFixed(2)}s` }} />}
       {hud.weapon && (
         <div className="cw-ov cw-hud cw-hud-weapon" data-testid="hud-weapon">
           <div className="cw-hud-item">

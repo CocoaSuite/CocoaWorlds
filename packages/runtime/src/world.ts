@@ -209,6 +209,8 @@ const LOUD_REPEAT = 2;
 export const NOISE = { footsteps: 0.35, landing: 0.5, shot: 1.6, hiding: 0.2 };
 /** Most armour the player can carry (Half-Life's suit holds 100). */
 export const MAX_ARMOUR = 100;
+/** Low health with hidden health: weakness starts below `from`, is full at `full`; full weakness moves `slow` slower. */
+export const WEAK = { from: 40, full: 10, slow: 0.4 };
 const MAX_STEPS_PER_FRAME = 5;
 /** How far behind the player the third-person camera sits. */
 const THIRD_PERSON_DISTANCE = 160;
@@ -373,8 +375,10 @@ export interface Travel {
 
 /** The player's state for the screen (health bar, score). */
 export interface PlayerStatus {
-  /** The project uses health (otherwise nothing hurts and no health bar shows). */
+  /** The health bar shows (the project uses health and doesn't hide it). */
   showHealth: boolean;
+  /** The player has health (shown or hidden). */
+  hasHealth: boolean;
   health: number;
   maxHealth: number;
   /** Armour (0–100); shown once the player has some. */
@@ -395,6 +399,8 @@ export interface PlayerStatus {
   stamina: number | null;
   /** Frames per second shown while playing. */
   showFps: boolean;
+  /** How badly hurt the player is when health is hidden, 0–1 (0: fine or health shown). */
+  weak: number;
 }
 
 export interface WorldStats {
@@ -1967,6 +1973,7 @@ export class GameWorld {
         if (this.useQueued) this.doUse();
       } else if (this.player) {
         if (this.frozen) Object.assign(this.player.input, { forward: 0, right: 0, jump: false, crouch: false, fire: false, use: false });
+        this.player.speedScale = 1 - WEAK.slow * this.weakness();
         this.player.step(STEP);
         this.playerNoise();
         if (this.player.landingSpeed) {
@@ -2901,7 +2908,16 @@ export class GameWorld {
 
   playerStatus(): PlayerStatus | null {
     if (!this.player) return null;
-    return { showHealth: this.rules.health, health: this.health, maxHealth: PLAYER.maxHealth, armour: this.armour, weapon: this.weaponStatus(), score: this.score, showScore: this.usesScore, day: this.showDay ? this.day : null, clock: this.showClock ? this.dayHour : null, sinceHurt: this.time - this.hurtAt, deaths: this.deaths, stamina: this.rules.stamina ? this.player!.stamina : null, showFps: this.rules.showFps };
+    return { showHealth: this.rules.health && !this.rules.hideHealth, hasHealth: this.rules.health, health: this.health, maxHealth: PLAYER.maxHealth, armour: this.armour, weapon: this.weaponStatus(), score: this.score, showScore: this.usesScore, day: this.showDay ? this.day : null, clock: this.showClock ? this.dayHour : null, sinceHurt: this.time - this.hurtAt, deaths: this.deaths, stamina: this.rules.stamina ? this.player!.stamina : null, showFps: this.rules.showFps, weak: this.weakness() };
+  }
+
+  /**
+   * How badly hurt the player is, 0–1, when health is kept but hidden: nothing above 40 health, all of it at 10
+   * and below (0 when health is shown or off).
+   */
+  weakness(): number {
+    if (!this.rules.health || !this.rules.hideHealth || this.health <= 0) return 0;
+    return Math.min(1, Math.max(0, (WEAK.from - this.health) / (WEAK.from - WEAK.full)));
   }
 
   // ── What scripts can do ──
@@ -4173,7 +4189,7 @@ export class GameWorld {
     }
     s.setView(this.playerView(), this.player?.crouched ?? false);
     const pl = this.player;
-    s.setMotion(pl?.sprinting ?? false, pl && !pl.onGround ? Math.max(0, -pl.velocity.y) : 0);
+    s.setMotion(pl?.sprinting ?? false, pl && !pl.onGround ? Math.max(0, -pl.velocity.y) : 0, pl ? this.weakness() : 0);
     return s;
   }
 

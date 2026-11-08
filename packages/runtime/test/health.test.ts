@@ -187,4 +187,23 @@ describe('health and score', () => {
     expect(w.playerStatus()).toMatchObject({ score: 0, showScore: false });
     w.dispose();
   });
+  it('hidden health: no bar, and low health narrows nothing above 40 but slows the player towards 10', () => {
+    const w = GameWorld.create(scene(floor(), spawn()), { rules: { hideHealth: true } });
+    run(w, 0.2);
+    expect(w.playerStatus()).toMatchObject({ showHealth: false, hasHealth: true, weak: 0 });
+    w.hurt(75, 'test', true);
+    expect(w.weakness()).toBeCloseTo(0.5, 1);
+    w.hurt(20, 'test', true);
+    expect(w.weakness()).toBe(1);
+    run(w, 0.05);
+    expect(w.snapshot().weak).toBe(1);
+  });
+
+  it('shown health never weakens the player', () => {
+    const w = GameWorld.create(scene(floor(), spawn()));
+    run(w, 0.2);
+    w.hurt(95, 'test', true);
+    expect(w.weakness()).toBe(0);
+    expect(w.playerStatus()).toMatchObject({ showHealth: true, hasHealth: true });
+  });
 });

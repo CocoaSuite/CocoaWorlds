@@ -261,6 +261,9 @@ export class Player {
     this.body.setTranslation({ x: this.feet.x, y: this.feet.y + this.height / 2, z: this.feet.z }, true);
   }
 
+  /** Movement speed multiplier (1: normal; badly hurt players with hidden health move slower). */
+  speedScale = 1;
+
   /** Stamina on (a game rule): Shift sprints rather than walks, and sprinting and jumping tire the player. */
   tires = false;
   stamina: number = PLAYER.maxStamina;
@@ -300,7 +303,7 @@ export class Player {
       wx /= len;
       wz /= len;
     }
-    const maxSpeed = this.crouched ? PLAYER.crouchSpeed : sprint ? PLAYER.sprintSpeed : inp.walk && !this.tires ? PLAYER.walkSpeed : PLAYER.runSpeed;
+    const maxSpeed = (this.crouched ? PLAYER.crouchSpeed : sprint ? PLAYER.sprintSpeed : inp.walk && !this.tires ? PLAYER.walkSpeed : PLAYER.runSpeed) * this.speedScale;
     const wishSpeed = len > 1e-6 ? maxSpeed : 0;
     const s = this.surroundings;
     this.sense(s);
