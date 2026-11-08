@@ -150,9 +150,7 @@ export class SceneLighting {
           cam.near = 1;
           cam.far = radius * 4;
           sun.shadow.mapSize.set(2048, 2048);
-          sun.shadow.bias = -0.0005;
-          // (In world units: about a shadow-map texel at this scale, so curved meshes don't stripe themselves.)
-          sun.shadow.normalBias = 2.5;
+          sunBias(sun, radius);
           // (A wider soft edge, where the saturated band shows.)
           sun.shadow.radius = 1.5;
         }
@@ -204,8 +202,7 @@ export class SceneLighting {
         cam.near = 1;
         cam.far = radius * 4;
         sun.shadow.mapSize.set(2048, 2048);
-        sun.shadow.bias = -0.0005;
-        sun.shadow.normalBias = 2.5;
+        sunBias(sun, radius);
         sun.castShadow = true;
         this.suns.push(sun);
       }
@@ -320,4 +317,11 @@ export class SceneLighting {
     this.sky.geometry.dispose();
     this.skyMat.dispose();
   }
+}
+
+// Shadow bias that grows with the shadow-map texel, so big scenes don't get acne.
+function sunBias(sun: THREE.DirectionalLight, radius: number): void {
+  const texel = (radius * 2) / sun.shadow.mapSize.x;
+  sun.shadow.bias = -0.0005;
+  sun.shadow.normalBias = Math.max(2.5, texel * 2);
 }
