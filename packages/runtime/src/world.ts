@@ -54,7 +54,7 @@ import {
   uiShown,
 } from '@cocoaworlds/core';
 import { EventBus } from './events';
-import { DIRECTIONS, ScriptRunner, compileScript, type ActionName, type GameValueDef, type Problem, type Program, type SceneInfo, type Script, type Value } from '@cocoaworlds/scripting';
+import { DIRECTIONS, ScriptRunner, compileScript, type ScriptSave, type ActionName, type GameValueDef, type Problem, type Program, type SceneInfo, type Script, type Value } from '@cocoaworlds/scripting';
 import { scriptTargets } from './script-targets';
 import { PLAYER, Player, fallDamage, type PlayerInput } from './player';
 import { Weapons, type V3 } from './weapons';
@@ -123,7 +123,7 @@ export interface SavedScene {
   /** Creatures: where they stand, which way they face, their health (0: dead). */
   npcs: Record<string, { at: [number, number, number]; yaw: number; health: number }>;
   /** The player (left out when the scene was only passed through). */
-  player?: { at: [number, number, number]; yaw: number; pitch: number; health: number; armour: number; score: number };
+  player?: { at: [number, number, number]; yaw: number; pitch: number; health: number; armour: number; score: number; slot?: number };
   /** Lights switched on or off, broken objects' health, signs' texts (only what changed). */
   lights?: Record<string, boolean>;
   broken?: Record<string, number>;
@@ -132,8 +132,24 @@ export interface SavedScene {
   posters?: Record<string, boolean>;
   /** The time of day (hours). */
   hour?: number;
-  /** Stacks limited to once (ever, or a day) that have run: object → stack → the day it ran. */
+  /** Scripts, by object: variables that changed, and limited stacks that have had their run. */
+  scripts?: Record<string, ScriptSave>;
+  /** (Saves from before `scripts`: limited stacks only.) */
   spent?: Record<string, Record<string, number>>;
+  /** Lights' brightness, range, cone and colour that scripts set; models' glow scripts set. */
+  lightSet?: Record<string, { intensity?: number[]; range?: number[]; angle?: number[]; color?: number[] }>;
+  glows?: Record<string, number>;
+  /** Creatures that changed sides. */
+  sides?: Record<string, NpcData['side']>;
+  /** Screens shown, elements hidden, texts and list rows scripts set. */
+  ui?: { shown: string[]; hidden: string[]; text: Record<string, string>; rows: Record<string, string[]> };
+  /** Trains: where they are, their last and next stop, moving or not. */
+  trains?: Record<string, { p: [number, number, number]; q: [number, number, number, number]; at: string | null; to: string | null; moving: boolean }>;
+  /** Sound components scripts stopped. */
+  stoppedSounds?: string[];
+  /** The world silenced; the save menu blocked by scripts. */
+  silent?: boolean;
+  noSaving?: boolean;
 }
 
 /** An object's saved state: place, turn, and only what differs from how it started. */
@@ -661,6 +677,8 @@ export class GameWorld {
   private gone = new Set<string>();
   /** “When the game starts” has run. */
   private started = false;
+  /** Sound components scripts stopped (they don't start again when a save is loaded). */
+  private stoppedSounds = new Set<string>();
   /** The game saves only when asked: the save menu, or “Save the game” blocks. */
   private savesWhenAsked = false;
   /** Scripts blocked the save menu: the player can neither save nor load. */
@@ -704,7 +722,7 @@ export class GameWorld {
     const p = this.player;
     if (withPlayer && p) {
       const f = p.feetPosition;
-      out.player = { at: [r(f.x), r(f.y), r(f.z)], yaw: r(p.input.yaw, 1e4), pitch: r(p.input.pitch, 1e4), health: this.health, armour: this.armour, score: this.score };
+      out.player = { at: [r(f.x), r(f.y), r(f.z)], yaw: r(p.input.yaw, 1e4), pitch: r(p.input.pitch, 1e4), health: this.health, armour: this.armour, score: this.score, slot: this.slot };
     }
     const lights: Record<string, boolean> = {};
     for (const [id, l] of this.lights) {
@@ -727,8 +745,37 @@ export class GameWorld {
     const posters: Record<string, boolean> = {};
     for (const [id, p] of this.posters) if (!this.gone.has(id) && p.hung !== p.data.hungAtStart) posters[id] = p.hung;
     if (Object.keys(posters).length) out.posters = posters;
-    const spent = this.runner.spentState();
-    if (Object.keys(spent).length) out.spent = spent;
+    const scripts = this.runner.saveState();
+    if (Object.keys(scripts).length) out.scripts = scripts;
+    // (What scripts set lands where it was going: a fade halfway is saved finished.)
+    const lightSet: NonNullable<SavedScene['lightSet']> = {};
+    for (const [id, l] of this.lights) {
+      const set: NonNullable<SavedScene['lightSet']>[string] = {};
+      for (const k of ['intensity', 'range', 'angle', 'color'] as const) if (l[k].from !== null) set[k] = l[k].to.map((x) => r(x));
+      if (Object.keys(set).length) lightSet[id] = set;
+    }
+    if (Object.keys(lightSet).length) out.lightSet = lightSet;
+    const glows: Record<string, number> = {};
+    for (const [id, g] of this.glows) glows[id] = r(g.to[0] ?? 0);
+    if (Object.keys(glows).length) out.glows = glows;
+    const sides: Record<string, NpcData['side']> = {};
+    for (const n of this.npcs.values()) {
+      const e = this.doc.get(this.copyOf.get(n.id) ?? n.id);
+      if (e && n.data.side !== readComponent<NpcData>('npc', e.components.npc).side) sides[n.id] = n.data.side;
+    }
+    if (Object.keys(sides).length) out.sides = sides;
+    out.ui = { shown: [...this.uiShown], hidden: [...this.uiHidden], text: Object.fromEntries(this.uiText), rows: Object.fromEntries(this.uiRows) };
+    const trainsAt: NonNullable<SavedScene['trains']> = {};
+    for (const t of this.trains) {
+      const b = this.bodies.get(t.id);
+      if (!b) continue;
+      const p = b.body.translation(), q = b.body.rotation();
+      trainsAt[t.id] = { p: [r(p.x), r(p.y), r(p.z)], q: [r(q.x, 1e6), r(q.y, 1e6), r(q.z, 1e6), r(q.w, 1e6)], at: t.at, to: t.to, moving: t.moving };
+    }
+    if (Object.keys(trainsAt).length) out.trains = trainsAt;
+    if (this.stoppedSounds.size) out.stoppedSounds = [...this.stoppedSounds];
+    if (this.silent) out.silent = true;
+    if (this.savingBlocked) out.noSaving = true;
     return out;
   }
 
@@ -767,7 +814,37 @@ export class GameWorld {
         this.signVersion++;
       }
     for (const [id, hung] of Object.entries(save.posters ?? {})) if (typeof hung === 'boolean') this.setPosterHung(id, hung);
-    if (save.spent && typeof save.spent === 'object') this.runner.restoreSpent(save.spent);
+    if (save.spent && typeof save.spent === 'object') this.runner.loadState(Object.fromEntries(Object.entries(save.spent).map(([o, spent]) => [o, { spent }])));
+    if (save.scripts && typeof save.scripts === 'object') this.runner.loadState(save.scripts);
+    const nums = (a: unknown) => (Array.isArray(a) && a.every((x) => typeof x === 'number' && Number.isFinite(x)) ? (a as number[]) : null);
+    for (const [id, set] of Object.entries(save.lightSet ?? {})) {
+      const l = this.lights.get(id);
+      if (!l || !set) continue;
+      for (const k of ['intensity', 'range', 'angle', 'color'] as const) {
+        const to = nums(set[k]);
+        if (to && to.length === l[k].to.length) l[k] = { from: [...to], to, t0: 0, t1: 0 };
+      }
+    }
+    for (const [id, g] of Object.entries(save.glows ?? {})) if (typeof g === 'number') this.glows.set(id, { from: [g], to: [g], t0: 0, t1: 0 });
+    for (const [id, side] of Object.entries(save.sides ?? {})) if (side === 'hostile' || side === 'friendly' || side === 'neutral') this.npcs.get(id)?.setSide(side);
+    if (save.ui && typeof save.ui === 'object') {
+      const strs = (a: unknown) => (Array.isArray(a) ? a.filter((x): x is string => typeof x === 'string') : []);
+      this.uiShown = new Set(strs(save.ui.shown));
+      this.uiHidden = new Set(strs(save.ui.hidden));
+      this.uiText = new Map(Object.entries(save.ui.text ?? {}).filter(([, v]) => typeof v === 'string'));
+      this.uiRows = new Map(Object.entries(save.ui.rows ?? {}).map(([k, v]) => [k, strs(v)]));
+    }
+    for (const [id, st] of Object.entries(save.trains ?? {})) {
+      const t = this.trains.find((x) => x.id === id), b = this.bodies.get(id), p = v3(st?.p), q = nums(st?.q);
+      if (!t || !b || !p || !q || q.length !== 4) continue;
+      b.body.setTranslation({ x: p[0], y: p[1], z: p[2] }, true);
+      b.body.setRotation({ x: q[0]!, y: q[1]!, z: q[2]!, w: q[3]! }, true);
+      const stop = (s: unknown) => (typeof s === 'string' && this.pathPoints.has(s) ? s : null);
+      [t.at, t.to, t.moving] = [stop(st.at), stop(st.to), !!st.moving && stop(st.to) !== null];
+    }
+    this.stoppedSounds = new Set(Array.isArray(save.stoppedSounds) ? save.stoppedSounds.filter((x): x is string => typeof x === 'string') : []);
+    this.silent = save.silent === true;
+    this.savingBlocked = save.noSaving === true;
     if (typeof save.hour === 'number' && Number.isFinite(save.hour)) this.dayHour = ((save.hour % 24) + 24) % 24;
     const pl = save.player, p = this.player, at = v3(pl?.at);
     if (withPlayer && p && pl && at) {
@@ -776,6 +853,7 @@ export class GameWorld {
       this.health = Math.max(1, Math.min(PLAYER.maxHealth, num(pl.health, this.health)));
       this.armour = Math.max(0, Math.min(MAX_ARMOUR, num(pl.armour)));
       this.score = num(pl.score, this.score);
+      if (typeof pl.slot === 'number') this.slot = Math.max(0, Math.round(pl.slot));
     }
   }
 
@@ -1160,6 +1238,7 @@ export class GameWorld {
         if (at) this.hint(this.v3(at), spread, sure, as);
       },
       stopSound: (target) => {
+        if (this.doc.get(this.copyOf.get(target) ?? target)?.components.sound) this.stoppedSounds.add(target);
         this.loudSounds.delete(target);
         this.bus.emit({ type: 'sound.stop', source: target, time: this.time });
       },
@@ -3094,7 +3173,7 @@ export class GameWorld {
 
   /** A Sound component that plays from the start (or a copy's, as it appears). */
   private startSound(id: string, s: SoundData, at: Q3 | null): void {
-    if (!s.sound || !s.playOnStart) return;
+    if (!s.sound || !s.playOnStart || this.stoppedSounds.has(id)) return;
     const p = at ?? this.placePoint({ ref: id });
     this.bus.emit({ type: 'sound', sound: s.sound, at: p, follow: this.bodyOf(id), volume: s.volume, loop: s.loop, range: s.range, source: id, areaEffects: s.areaEffects !== false, ambient: true, time: this.time });
     const loud = Number(s.loudness) || 0;

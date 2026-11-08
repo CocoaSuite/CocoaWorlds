@@ -389,3 +389,11 @@ Status: done (2026-11-08). `EventBlock.limit` ('once' | 'day'), compiled onto th
 skips a spent handler (`Instance.spent`: handler → the day it ran). The old Use-only `once` still reads as
 'once'. Test: `scripting.test.ts` "how often a stack runs". Kept with the world (`SavedScene.spent`,
 `ScriptRunner.spentState`/`restoreSpent`; copies get theirs when added). Test: `world-save.test.ts`.
+
+### 26. Everything scripts change is kept with the world
+
+Status: done (2026-11-08). `SavedScene` also keeps `scripts` (per object: changed variables, spent stacks,
+waiting stacks: `ScriptRunner.saveState`/`loadState`, a stack resumes only if its compiled shape `sig` is
+unchanged), `lightSet`, `glows`, `sides`, `ui`, `trains`, `stoppedSounds`, `silent`, `noSaving`, and the
+player's hotbar `slot`. List in docs/scripting.md. Tests: `world-save.test.ts`. Not kept: creatures' current
+errands (walk to, wander), a frozen player, what is carried (dropped).

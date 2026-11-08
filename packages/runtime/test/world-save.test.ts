@@ -212,15 +212,82 @@ describe('keeping the world', () => {
     run(w1, 0.1);
     send(w1, 'ring');
     const saved = store(w1);
-    expect(saved.world?.yard?.spent?.box).toBeDefined();
+    expect(saved.world?.yard?.scripts?.box?.spent).toBeDefined();
     const w2 = GameWorld.create(make(), { rules: { saveWorld: true }, saved });
     run(w2, 0.1);
     const vars = () => (w2 as unknown as { runner: { instances: { program: { owner: string }; vars: number[] }[] } }).runner.instances.find((i) => i.program.owner === 'box')!.vars;
     send(w2, 'ring');
-    expect(vars()).toEqual([0, 0]);
+    expect(vars()).toEqual([1, 1]);
     (w2 as unknown as { day: number }).day++;
     send(w2, 'ring');
-    expect(vars()).toEqual([0, 1]);
+    expect(vars()).toEqual([1, 2]);
+  });
+
+  it('what scripts changed comes back: variables, lights, a stopped sound, the silent world, the hotbar slot', () => {
+    const make = () => {
+      const s = newScene('yard');
+      const lamp = newEntity('lamp', { light: { kind: 'point', intensity: 1, color: '#ffffff' } }, { position: [0, 40, -80] });
+      lamp.id = 'lamp';
+      const radio = newEntity('radio', { sound: { sound: 'assets/sounds/hum.ogg', volume: 1, loop: true, playOnStart: true, range: 512 } });
+      radio.id = 'radio';
+      const box = newEntity('box', {});
+      box.id = 'box';
+      box.components.script = {
+        version: 1,
+        variables: [{ name: 'opened', type: 'boolean', initial: false }, { name: 'left', type: 'number', initial: 10 }],
+        handlers: [{ id: 'h', event: { id: 'e', kind: 'message', message: 'go' }, body: [
+          { id: 's1', kind: 'set', variable: 'opened', value: { id: 'b', kind: 'boolean', value: true } },
+          { id: 's2', kind: 'change', variable: 'left', by: n(-3) },
+          { id: 's3', kind: 'setLight', target: { entity: 'lamp' }, prop: 'color', value: { id: 't', kind: 'text', value: '#ff0000' }, seconds: n(0) },
+          { id: 's4', kind: 'stopSound', target: { entity: 'radio' } },
+          { id: 's5', kind: 'silence' },
+        ] }],
+      } as Script as never;
+      s.entities = [brush('floor', [-512, -16, -512], [512, 0, 512]), newEntity('start', { playerSpawn: {} }), lamp, radio, box];
+      return s;
+    };
+    const w1 = GameWorld.create(make(), { rules: { saveWorld: true } });
+    run(w1, 0.1);
+    send(w1, 'go');
+    const saved = store(w1);
+    const w2 = GameWorld.create(make(), { rules: { saveWorld: true }, saved });
+    const sounds: string[] = [];
+    w2.bus.on('sound', (e) => void sounds.push(e.source));
+    run(w2, 0.2);
+    const inst = (w2 as unknown as { runner: { instances: { program: { owner: string }; vars: unknown[] }[] } }).runner.instances.find((i) => i.program.owner === 'box')!;
+    expect(inst.vars).toEqual([true, 7]);
+    expect(w2.lightOf('lamp')!.color.map((c) => Math.round(c * 100) / 100)).toEqual([1, 0, 0]);
+    expect(sounds).not.toContain('radio');
+    expect(w2.silent).toBe(true);
+  });
+
+  it('a stack partway through (a countdown) picks up where it was, with the time it had left', () => {
+    const make = () => {
+      const s = newScene('yard');
+      const bomb = newEntity('bomb', {});
+      bomb.id = 'bomb';
+      bomb.components.script = {
+        version: 1,
+        variables: [{ name: 'left', type: 'number', initial: 5 }],
+        handlers: [{ id: 'h', event: { id: 'e', kind: 'start' }, body: [
+          { id: 'r', kind: 'repeat', times: n(5), body: [{ id: 'w', kind: 'wait', seconds: n(1) }, { id: 'c', kind: 'change', variable: 'left', by: n(-1) }] },
+          { id: 'x', kind: 'log', text: { id: 't', kind: 'text', value: 'boom' } },
+        ] }],
+      } as Script as never;
+      s.entities = [brush('floor', [-512, -16, -512], [512, 0, 512]), newEntity('start', { playerSpawn: {} }), bomb];
+      return s;
+    };
+    const w1 = GameWorld.create(make(), { rules: { saveWorld: true } });
+    run(w1, 2.5);
+    const saved = store(w1);
+    const w2 = GameWorld.create(make(), { rules: { saveWorld: true }, saved });
+    const vars = () => (w2 as unknown as { runner: { instances: { program: { owner: string }; vars: number[] }[] } }).runner.instances.find((i) => i.program.owner === 'bomb')!.vars[0];
+    run(w2, 0.1);
+    expect(vars()).toBe(3);
+    run(w2, 0.6);
+    expect(vars()).toBe(2);
+    run(w2, 2.5);
+    expect(vars()).toBe(0);
   });
 });
 

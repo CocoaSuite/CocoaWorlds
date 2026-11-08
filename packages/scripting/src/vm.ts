@@ -108,6 +108,29 @@ export interface ScriptError {
   time: number;
 }
 
+/** One object's scripts in a save. */
+export interface ScriptSave {
+  vars?: Record<string, Value>;
+  spent?: Record<string, number>;
+  /** Stacks partway through (waiting): where they are and what they hold, and how long they had left to wait. */
+  threads?: SavedThread[];
+}
+
+export interface SavedThread {
+  h: string;
+  /** The stack's shape when saved (a stack changed since doesn't pick up partway). */
+  sig: string;
+  pc: number;
+  stack: Value[];
+  temps: Value[];
+  other: string | null;
+  wait: number;
+  copy: string | null;
+  pick: string;
+}
+
+const sigOf = (h: CompiledHandler) => `${h.code.length}:${h.blocks.join(',')}`;
+
 interface Instance {
   program: Program;
   vars: Value[];
@@ -202,30 +225,69 @@ export class ScriptRunner {
       vars: program.variables.map((v) => v.initial),
       timers: new Map(program.handlers.filter((h) => h.event.kind === 'every').map((h) => [h.id, 0])),
       near: new Map(),
-      spent: new Map(Object.entries(this.spentLater.get(program.owner) ?? {})),
+      spent: new Map(),
     };
     this.instances.push(inst);
-    if (!this.started) return;
-    for (const h of program.handlers) if (h.event.kind === 'start') this.spawn(inst, h, null);
+    if (this.started) for (const h of program.handlers) if (h.event.kind === 'start') this.spawn(inst, h, null);
+    const later = this.savedLater.get(program.owner);
+    if (later) {
+      this.savedLater.delete(program.owner);
+      this.apply(inst, later);
+    }
   }
 
-  /** Limited stacks that have had their run: object → stack → the day it ran (for saving). */
-  spentState(): Record<string, Record<string, number>> {
-    const out: Record<string, Record<string, number>> = {};
-    for (const i of this.instances) if (i.spent.size) out[i.program.owner] = Object.fromEntries(i.spent);
+  /**
+   * What scripts have that a save keeps, by object: variables that differ from how they start, and limited
+   * stacks that have had their run (stack → the day it ran).
+   */
+  saveState(): Record<string, ScriptSave> {
+    const out: Record<string, ScriptSave> = {};
+    for (const i of this.instances) {
+      const vars: Record<string, Value> = {};
+      i.program.variables.forEach((v, k) => {
+        if (JSON.stringify(i.vars[k]) !== JSON.stringify(v.initial)) vars[v.name] = i.vars[k]!;
+      });
+      const save: ScriptSave = {};
+      if (Object.keys(vars).length) save.vars = vars;
+      if (i.spent.size) save.spent = Object.fromEntries(i.spent);
+      const now = this.host.now();
+      const threads = this.threads
+        .filter((t) => t.inst === i)
+        .map((t) => ({ h: t.handler.id, sig: sigOf(t.handler), pc: t.pc, stack: t.stack, temps: t.temps, other: t.other, wait: Math.max(0, t.waitUntil - now), copy: t.copy, pick: t.pick }));
+      if (threads.length) save.threads = JSON.parse(JSON.stringify(threads)) as SavedThread[];
+      if (save.vars || save.spent || save.threads) out[i.program.owner] = save;
+    }
     return out;
   }
 
-  private spentLater = new Map<string, Record<string, number>>();
+  private savedLater = new Map<string, ScriptSave>();
 
   /** Back from a save (objects made later, copies, get theirs when their scripts are added). */
-  restoreSpent(saved: Record<string, Record<string, number>>): void {
-    for (const [owner, stacks] of Object.entries(saved)) {
-      if (!stacks || typeof stacks !== 'object') continue;
-      const clean = Object.fromEntries(Object.entries(stacks).filter(([, d]) => typeof d === 'number' && Number.isFinite(d)));
+  loadState(saved: Record<string, ScriptSave>): void {
+    for (const [owner, s] of Object.entries(saved)) {
+      if (!s || typeof s !== 'object') continue;
       const inst = this.instances.find((i) => i.program.owner === owner);
-      if (inst) inst.spent = new Map(Object.entries(clean));
-      else this.spentLater.set(owner, clean);
+      if (inst) this.apply(inst, s);
+      else this.savedLater.set(owner, s);
+    }
+  }
+
+  private apply(inst: Instance, s: ScriptSave): void {
+    for (const [stack, day] of Object.entries(s.spent ?? {})) if (typeof day === 'number' && Number.isFinite(day)) inst.spent.set(stack, day);
+    inst.program.variables.forEach((v, k) => {
+      const x = s.vars?.[v.name];
+      // (Only a value of the variable's kind: the script may have changed since the save.)
+      if (x !== undefined && Array.isArray(x) === Array.isArray(v.initial) && typeof x === typeof v.initial) inst.vars[k] = x;
+    });
+    // Stacks that were waiting pick up where they were (in place of the same stack started again, if it was).
+    // (Something they waited on, like a move, is done by now: what moved was saved where it was going.)
+    for (const st of Array.isArray(s.threads) ? s.threads : []) {
+      const h = inst.program.handlers.find((x) => x.id === st?.h);
+      if (!h || st.sig !== sigOf(h) || !Number.isInteger(st.pc) || st.pc < 0 || st.pc > h.code.length || !Array.isArray(st.stack) || !Array.isArray(st.temps)) continue;
+      this.threads = this.threads.filter((t) => !(t.inst === inst && t.handler === h));
+      this.running.add(this.key(inst, h));
+      const wait = typeof st.wait === 'number' && Number.isFinite(st.wait) ? st.wait : 0;
+      this.threads.push({ inst, handler: h, pc: st.pc, stack: st.stack, temps: st.temps, other: st.other ?? null, waitUntil: this.host.now() + wait, waitFor: null, loop: null, copy: st.copy ?? null, pick: typeof st.pick === 'string' ? st.pick : '' });
     }
   }
 

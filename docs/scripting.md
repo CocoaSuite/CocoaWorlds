@@ -154,6 +154,17 @@ Every event block ends with **how often**: *every time*, *once a day* (again whe
 *only once* (never again). A Use stack that has had its run no longer shows its prompt (a chest, a gift box).
 When the game keeps the world (Game rules), which stacks have had their run is kept too.
 
+**What a kept world keeps** (Game rules › Keep the world): where everything is (moved, turned, scaled, shown,
+hidden, switched off, falling), copies made while playing, what was removed, creatures (place, health, side),
+the player (place, view, health, armour, score, hotbar slot), lights (on/off, brightness, range, cone, colour),
+glows, signs' texts, posters, broken objects' health, trains (where, last and next stop, moving), screens shown
+and their texts and rows, Sound components that were stopped, the silent world, the save menu blocked, the time
+of day and day, every object's variables, which limited stacks have run, and stacks partway through: a
+countdown carries on with the time it had left (a stack edited since the save starts over instead). What a
+stack was waiting on (a move) counts as done: the thing moved was saved where it was going. The player's items
+are kept by **Keep the player's items**; game values by their own **kept** tick. **When the game starts**
+stacks run again after loading, as they always have (and can change what was loaded).
+
 ## Holding things and putting them in spots
 
 Blocks for puzzles where the player carries things to where they belong (a fuse to its box, a skull to its
