@@ -81,25 +81,27 @@ describe('string lights and outlets', () => {
     expect(w.holding).toBe(null);
     expect(w.pluggedInto(cord)).toBe(outlet);
     const c = w.positionOf(cord)!;
+    // F takes the coil in hand; clicks plug it in and hang it.
     lookAt(w, [24, 4, -40]);
-    w.use();
+    expect(w.keyPrompts()).toContainEqual({ key: 'KeyF', prompt: 'Pick up' });
+    w.pressKey('KeyF');
     run(w, 0.2);
-    expect(w.holding).toBe(lights);
+    expect(w.inHands).toBe(lights);
     lookAt(w, c);
-    expect(w.usePrompt()).toBe('Plug in');
-    w.use();
+    expect(w.keyPrompts()).toContainEqual({ key: 'Click', prompt: 'Plug in' });
+    w.useItem();
     run(w, 0.1);
     expect(w.pluggedInto(lights)).toBe(cord);
     // One end on the wall, then the other.
     lookAt(w, [-40, 90, -80]);
-    expect(w.usePrompt()).toBe('Hang one end');
-    w.use();
+    expect(w.keyPrompts()).toContainEqual({ key: 'Click', prompt: 'Hang one end' });
+    w.useItem();
     run(w, 0.1);
     lookAt(w, [40, 90, -80]);
-    expect(w.usePrompt()).toBe('Hang the other end');
-    w.use();
+    expect(w.keyPrompts()).toContainEqual({ key: 'Click', prompt: 'Hang the other end' });
+    w.useItem();
     run(w, 0.1);
-    expect(w.holding).toBe(null);
+    expect(w.inHands).toBe(null);
     expect(w.bulbsOf(lights).length).toBeGreaterThan(5);
     expect(w.powered(lights)).toBe(false);
     lookAt(w, [-50, 12, -50]);
@@ -117,12 +119,17 @@ describe('string lights and outlets', () => {
     expect(w2.bulbsOf(lights).length).toBeGreaterThan(5);
     expect(w2.powered(lights)).toBe(true);
 
-    // Taken down: in the hands again; walked far away, it comes unplugged.
+    // Taken down: in the hands again.
     lookAt(w2, [0, 82, -79]);
     expect(w2.usePrompt()).toBe('Take down');
     w2.use();
     run(w2, 0.1);
-    expect(w2.holding).toBe(lights);
+    expect(w2.inHands).toBe(lights);
+    // F puts it down: an ordinary prop again.
+    w2.pressKey('KeyF');
+    run(w2, 1);
+    expect(w2.inHands).toBe(null);
+    expect(w2.positionOf(lights)![1]).toBeLessThan(20);
     w2.dispose();
   });
 

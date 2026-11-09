@@ -1900,9 +1900,9 @@ export class GameWorld {
     return [m[12]!, m[13]!, m[14]!];
   }
 
-  /** Where a plug's cable starts: hung string lights from their first end. */
+  /** Where a plug's cable starts: hung string lights from the end placed last (while hanging: the coil in hand). */
   private plugAt(id: string): P3 | null {
-    return this.strings.get(id)?.hung?.[0] ?? this.strings.get(id)?.half ?? this.placeOf(id);
+    return this.strings.get(id)?.hung?.[1] ?? this.placeOf(id);
   }
 
   /** Whether a power source is on (null: it isn't one). */
@@ -1971,29 +1971,125 @@ export class GameWorld {
     return out;
   }
 
-  /**
-   * Use while holding a plug: into a socket looked at (or out of it), or, string lights, hung by one end, then
-   * the other. The prompt (do: false), or what was done; null: nothing to do with power.
-   */
+  /** Use while holding an extension cord: into a socket looked at (or out of it). The prompt (do: false), or what was done; null: nothing to do with power. */
   private powerHeldUse(act: boolean): string | null {
-    const id = this.held!.id, plug = this.grid.plugs.get(id);
-    if (!plug) return null;
+    const id = this.held!.id;
+    if (!this.grid.cords.has(id)) return null;
+    return this.plugUse(id, act);
+  }
+
+  /** Into the socket looked at (or out of it); null: no socket looked at. */
+  private plugUse(id: string, act: boolean): string | null {
+    const plug = this.grid.plugs.get(id);
     const look = this.lookHit(PLAYER.useReach);
-    if (!look) return null;
+    if (!plug || !look) return null;
     const socket = look.id ? this.withParents(look.id).find((t) => this.grid.isSocket(t) && t !== id) : undefined;
-    if (socket) {
-      if (plug.into === socket) {
-        if (act) this.unplug(id, false);
-        return 'Unplug';
-      }
-      if (!this.grid.canPlug(id, socket)) return null;
-      const from = this.plugAt(id), to = this.placeOf(socket);
-      if (!from || !to || dist3(from, to) > plug.cable) return 'Cable too short';
-      if (act) this.plug(id, socket);
-      return 'Plug in';
+    if (!socket) return null;
+    if (plug.into === socket) {
+      if (act) this.unplug(id, false);
+      return 'Unplug';
     }
+    if (!this.grid.canPlug(id, socket)) return null;
+    const from = this.plugAt(id), to = this.placeOf(socket);
+    if (!from || !to || dist3(from, to) > plug.cable) return 'Cable too short';
+    if (act) this.plug(id, socket);
+    return 'Plug in';
+  }
+
+  // String lights in hand (F picks a coil up into the hands, or puts it down; the click plugs in and hangs).
+
+  /** The string lights in the player's hands. */
+  private equipped: string | null = null;
+
+  /** Which string lights are in the player's hands (null: none). */
+  get inHands(): string | null {
+    return this.equipped;
+  }
+
+  /** F: string lights into the hands (a coil looked at) or put down. The prompt (do: false); null: F does nothing here. */
+  private equipKey(act: boolean): string | null {
+    if (!this.player || this.hiding || this.frozen) return null;
+    if (this.equipped) {
+      if (act) this.unequip();
+      return 'Put down';
+    }
+    if (this.held && this.strings.has(this.held.id) && !this.strings.get(this.held.id)!.hung) {
+      if (act) this.equip(this.held.id);
+      return 'Take in hand';
+    }
+    if (this.held) return null;
+    const hit = this.useAim();
+    const id = hit && hit.distance <= PLAYER.useReach ? hit.targets.find((t) => this.strings.has(t) && !this.strings.get(t)!.hung && !this.gone.has(t)) : undefined;
+    if (!id) return null;
+    if (act) this.equip(id);
+    return 'Pick up';
+  }
+
+  private equip(id: string): void {
+    const b = this.bodies.get(id);
+    if (!b) return;
+    if (this.held?.id === id) this.dropHeld();
+    if (this.equipped) this.unequip();
+    this.equipped = id;
+    b.body.setBodyType(RAPIER.RigidBodyType.KinematicPositionBased, true);
+    b.visible = true;
+    this.setColliders(b, false);
+    this.carryEquipped(true);
+    this.bus.emit({ type: 'pickup', target: id, by: 'player', time: this.time });
+  }
+
+  /** Down in front of the player (a hanging begun is let go). */
+  private unequip(): void {
+    const id = this.equipped, b = id ? this.bodies.get(id) : undefined, p = this.player;
+    this.equipped = null;
+    if (!id || !b) return;
     const st = this.strings.get(id);
-    if (!st || !look.at) return null;
+    if (st?.half) {
+      st.half = null;
+      st.version++;
+    }
+    if (p) {
+      const eye = p.eye(), d = p.lookDirection();
+      const flat = Math.hypot(d[0], d[2]) || 1;
+      b.body.setTranslation({ x: eye[0] + (d[0] / flat) * 32, y: eye[1] - 24, z: eye[2] + (d[2] / flat) * 32 }, true);
+    }
+    b.body.setBodyType(RAPIER.RigidBodyType.Dynamic, true);
+    b.body.setLinvel({ x: 0, y: 0, z: 0 }, true);
+    b.body.setAngvel({ x: 0, y: 0, z: 0 }, true);
+    this.setColliders(b, true);
+    this.bus.emit({ type: 'drop', target: id, by: 'player', time: this.time });
+  }
+
+  /** The coil in hand: low and to the right of the view, turned with it. */
+  private carryEquipped(now = false): void {
+    const id = this.equipped, b = id ? this.bodies.get(id) : undefined, p = this.player;
+    if (!id || !b || !p || this.gone.has(id)) {
+      this.equipped = null;
+      return;
+    }
+    const eye = p.eye(), d = p.lookDirection();
+    const yaw = Math.atan2(d[0], d[2]);
+    const right: P3 = [-Math.cos(yaw), 0, Math.sin(yaw)];
+    const at = { x: eye[0] + d[0] * 30 + right[0] * 14, y: eye[1] + d[1] * 30 - 16, z: eye[2] + d[2] * 30 + right[2] * 14 };
+    const q = { x: 0, y: Math.sin(yaw / 2), z: 0, w: Math.cos(yaw / 2) };
+    if (now) {
+      b.body.setTranslation(at, true);
+      b.body.setRotation(q, true);
+    } else {
+      b.body.setNextKinematicTranslation(at);
+      b.body.setNextKinematicRotation(q);
+    }
+  }
+
+  /** A click with string lights in hand: into a socket (or out), else one end on a wall or ceiling, then the other. */
+  private lightsClick(act: boolean): string | null {
+    const id = this.equipped!;
+    const st = this.strings.get(id);
+    if (!st) return null;
+    const plugged = this.plugUse(id, act);
+    if (plugged !== null) return plugged;
+    const look = this.lookHit(PLAYER.useReach);
+    if (!look?.at) return null;
     // Only on something that stays put (a wall, a ceiling, a beam).
     const body = look.id ? this.bodies.get(look.id) : undefined;
     if (body && !body.body.isFixed()) return null;
@@ -2024,7 +2120,7 @@ export class GameWorld {
       const r = rayNearLine(look.eye, look.dir, wirePoints(a, b, dropOf(a, b, st.data.sag), 12), PLAYER.useReach);
       if (r && r.d < 4 && r.t <= look.distance + 1 && (!near || r.t < near.t)) near = { id, t: r.t };
     }
-    if (near) {
+    if (near && !this.equipped) {
       if (act) this.takeDownLights(near.id);
       return 'Take down';
     }
@@ -2040,6 +2136,7 @@ export class GameWorld {
     const st = this.strings.get(id), body = this.bodies.get(id);
     if (!st || !body) return;
     if (this.held?.id === id) this.dropHeld();
+    if (this.equipped === id) this.equipped = null;
     st.hung = [a, b];
     st.half = null;
     st.version++;
@@ -2056,13 +2153,8 @@ export class GameWorld {
     if (!st?.hung || !body || !p) return;
     st.hung = null;
     st.version++;
-    const eye = p.eye(), d = p.lookDirection();
-    body.body.setTranslation({ x: eye[0] + d[0] * 56, y: eye[1] + d[1] * 56, z: eye[2] + d[2] * 56 }, false);
-    body.body.setBodyType(RAPIER.RigidBodyType.Dynamic, true);
-    body.visible = true;
-    this.setColliders(body, true);
     this.bus.emit({ type: 'lights.takeDown', target: id, time: this.time });
-    this.hold(id, body.body);
+    this.equip(id);
   }
 
   /** What to draw: string lights (hung, or one end up while being hung) and cables from plugs to sockets. */
@@ -2358,6 +2450,7 @@ export class GameWorld {
         if (this.useQueued) this.doUse();
         if (this.base) this.stepBase();
         this.carryHeld();
+        if (this.equipped) this.carryEquipped();
         this.watchSeats();
         this.checkLevelZones();
         if (this.player.input.use) this.charge();
@@ -4438,6 +4531,7 @@ export class GameWorld {
 
   /** The player pressed a key the game doesn't use itself (letters, Tab): “When the player presses” starts. */
   pressKey(code: string): void {
+    if (code === 'KeyF' && this.equipKey(true) !== null) return;
     this.runner.dispatch({ type: 'key', key: code });
     // Seats sat on with their own key (E is Use's): the same key gets up again.
     const h = this.hiding;
@@ -4460,6 +4554,10 @@ export class GameWorld {
   /** Keys that do something at what the player holds or looks at, with their prompts (held first, one per key). */
   keyPrompts(): { key: string; prompt: string }[] {
     const out: { key: string; prompt: string }[] = [];
+    const f = this.equipKey(false);
+    if (f !== null) out.push({ key: 'KeyF', prompt: f });
+    const click = this.equipped && !this.held ? this.lightsClick(false) : null;
+    if (click !== null) out.push({ key: 'Click', prompt: click });
     const hit = !this.hiding && !this.held && !this.frozen ? this.useAim() : null;
     const seat = hit?.targets.find((t) => this.seats.has(t) && this.keyOf(t) !== 'KeyE' && hit.distance <= this.reachOf(t) && this.seatReady(t));
     if (seat) out.push({ key: this.keyOf(seat), prompt: String(this.spots.get(seat)!.prompt ?? '') });
@@ -4482,6 +4580,11 @@ export class GameWorld {
 
   /** The player clicked with the item in the picked hotbar slot. */
   useItem(): void {
+    // (String lights in hand: the click plugs them in, or hangs an end.)
+    if (this.equipped && !this.held) {
+      this.lightsClick(true);
+      return;
+    }
     // (Placing a blueprint: the click places it.)
     if (this.base?.placing && !this.held) {
       this.base.placePreview();

@@ -885,7 +885,7 @@ export const COMPONENTS: ComponentDef[] = [
       { key: 'cable', label: e('Plug cable', 'Кабель вилки'), hint: e('How far the plug reaches from the first end.', 'Как далеко вилка достаёт от первого конца.'), type: { kind: 'number', min: 8, step: 8, unit: 'u' }, default: 160 },
       { key: 'sag', label: e('Sag', 'Провис'), hint: e('How far the middle hangs, for each 100 u of span.', 'Насколько провисает середина на каждые 100 ед. пролёта.'), type: { kind: 'number', min: 0, step: 1, unit: 'u' }, default: 10 },
       { key: 'lights', label: e('Lights cast', 'Источников света'), hint: e('Spread along it; more cost more (0: the bulbs only glow).', 'Распределены по ней; больше — дороже (0: лампочки только светятся).'), type: { kind: 'number', min: 0, max: 4, step: 1 }, default: 2 },
-      { key: 'intensity', label: e('Brightness', 'Яркость'), type: { kind: 'number', min: 0, step: 0.1 }, default: 0.6 },
+      { key: 'intensity', label: e('Brightness', 'Яркость'), type: { kind: 'number', min: 0, step: 0.1 }, default: 1.5 },
       { key: 'range', label: e('Light range', 'Дальность света'), type: { kind: 'number', min: 16, step: 16, unit: 'u' }, default: 256 },
     ],
   },

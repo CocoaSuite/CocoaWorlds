@@ -1,6 +1,11 @@
 // Power while playing: hung string lights (wire, bulbs, the light they cast), cables from plugs to sockets, and
 // plain stand-ins for outlets and power sources that have no model of their own.
 import * as THREE from 'three';
+import { Line2 } from 'three/examples/jsm/lines/Line2.js';
+import { LineGeometry } from 'three/examples/jsm/lines/LineGeometry.js';
+import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js';
+import { LineSegments2 } from 'three/examples/jsm/lines/LineSegments2.js';
+import { LineSegmentsGeometry } from 'three/examples/jsm/lines/LineSegmentsGeometry.js';
 import { readComponent, type ColliderData, type SceneDoc, type StringLightsData } from '@cocoaworlds/core';
 import { along, bulbPoints, dropOf, wirePoints, type GameWorld, type P3 } from '@cocoaworlds/runtime';
 
@@ -9,13 +14,16 @@ const FALLOFF = 96;
 /** Most cables drawn, and points along each. */
 const MAX_CABLES = 64;
 const CABLE_SEGS = 12;
+/** Cables and wires: this many pixels thick, whatever the distance. */
+const CABLE_PX = 3;
+const size = new THREE.Vector2();
 
 interface StringView {
   version: number;
   lit: boolean | null;
-  wire: THREE.Line;
+  wire: Line2;
   bulbs: THREE.InstancedMesh | null;
-  mat: THREE.MeshStandardMaterial;
+  mat: THREE.MeshBasicMaterial;
   lights: THREE.PointLight[];
   data: StringLightsData;
 }
@@ -23,10 +31,15 @@ interface StringView {
 export class PowerView {
   readonly group = new THREE.Group();
   private strings = new Map<string, StringView>();
-  private wireMat = new THREE.LineBasicMaterial({ color: 0x2a2a2a });
-  private bulbGeo = new THREE.IcosahedronGeometry(1.4, 0);
-  private cables: THREE.LineSegments;
+  private wireMat = new LineMaterial({ color: 0x2a2a2a, linewidth: CABLE_PX });
+  private bulbGeo = new THREE.IcosahedronGeometry(2, 0);
+  private cables: LineSegments2;
   private cablePos = new Float32Array(MAX_CABLES * CABLE_SEGS * 6);
+  /** (Line thickness is in pixels of the view drawn into.) */
+  private fitLines = (r: THREE.WebGLRenderer) => {
+    r.getSize(size);
+    this.wireMat.resolution.copy(size);
+  };
   private sources: { id: string; lamp: THREE.MeshBasicMaterial; on: boolean | null }[] = [];
   private standIns: THREE.Object3D[] = [];
 
@@ -34,11 +47,10 @@ export class PowerView {
     private world: GameWorld,
     doc: SceneDoc,
   ) {
-    const g = new THREE.BufferGeometry();
-    g.setAttribute('position', new THREE.BufferAttribute(this.cablePos, 3).setUsage(THREE.DynamicDrawUsage));
-    g.setDrawRange(0, 0);
-    this.cables = new THREE.LineSegments(g, this.wireMat);
+    this.cables = new LineSegments2(new LineSegmentsGeometry(), this.wireMat);
     this.cables.frustumCulled = false;
+    this.cables.visible = false;
+    this.cables.onBeforeRender = this.fitLines;
     this.group.add(this.cables);
     // (String lights' lights made now, dark, so lighting one up later compiles nothing.)
     for (const e of doc.entities) if (e.components.stringLights) this.stringView(e.id, readComponent<StringLightsData>('stringLights', e.components.stringLights));
@@ -79,8 +91,10 @@ export class PowerView {
   private stringView(id: string, data: StringLightsData): StringView {
     let v = this.strings.get(id);
     if (v) return v;
-    const wire = new THREE.Line(new THREE.BufferGeometry(), this.wireMat);
+    const wire = new Line2(new LineGeometry(), this.wireMat);
+    wire.frustumCulled = false;
     wire.visible = false;
+    wire.onBeforeRender = this.fitLines;
     this.group.add(wire);
     const lights: THREE.PointLight[] = [];
     for (let i = 0; i < Math.max(0, Math.min(4, Math.round(data.lights))); i++) {
@@ -90,8 +104,8 @@ export class PowerView {
       lights.push(l);
     }
     const c = new THREE.Color(data.color);
-    // (Its own material: lit and dark differ by a number only, so switching compiles nothing.)
-    const mat = new THREE.MeshStandardMaterial({ color: c.clone().multiplyScalar(0.45), emissive: c, emissiveIntensity: 0, roughness: 0.4 });
+    // (Its own flat, unlit material: lit and dark differ by colour only, so switching compiles nothing.)
+    const mat = new THREE.MeshBasicMaterial({ color: c.clone().multiplyScalar(0.3), toneMapped: false });
     v = { version: -1, lit: null, wire, bulbs: null, mat, lights, data };
     this.strings.set(id, v);
     return v;
@@ -109,7 +123,8 @@ export class PowerView {
       const lit = s.lit && !!s.ends && s.version % 1 === 0;
       if (lit !== v.lit) {
         v.lit = lit;
-        v.mat.emissiveIntensity = lit ? 2.5 : 0;
+        v.mat.color.set(s.data.color);
+        if (!lit) v.mat.color.multiplyScalar(0.3);
         for (const l of v.lights) l.intensity = lit ? s.data.intensity * FALLOFF : 0;
       }
     }
@@ -132,9 +147,11 @@ export class PowerView {
         prev = q;
       }
     }
-    const geo = this.cables.geometry;
-    geo.setDrawRange(0, n / 3);
-    (geo.getAttribute('position') as THREE.BufferAttribute).needsUpdate = true;
+    this.cables.visible = n > 0;
+    if (n > 0) {
+      this.cables.geometry.dispose();
+      this.cables.geometry = new LineSegmentsGeometry().setPositions(p.subarray(0, n));
+    }
     for (const s of this.sources) {
       const on = this.world.powerOn(s.id);
       if (on === s.on) continue;
@@ -153,8 +170,8 @@ export class PowerView {
     const [a, b] = ends;
     const drop = dropOf(a, b, v.data.sag);
     const pts = wirePoints(a, b, drop, 24);
-    v.wire.geometry.setFromPoints(pts.map((q) => new THREE.Vector3(...q)));
-    v.wire.geometry.computeBoundingSphere();
+    v.wire.geometry.dispose();
+    v.wire.geometry = new LineGeometry().setPositions(pts.flat());
     v.wire.visible = true;
     const bulbs = bulbPoints(a, b, v.data);
     if (!v.bulbs || v.bulbs.count < bulbs.length) {
