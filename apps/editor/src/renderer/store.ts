@@ -119,7 +119,7 @@ export type ViewMode = 'perspective' | 'top' | 'front' | 'side';
 /** Grid sizes to snap to (u). */
 export const GRID_SIZES = [1, 2, 4, 8, 16, 32, 64, 128, 256, 512];
 
-export type AddKind = 'empty' | 'pointLight' | 'spotLight' | 'sun' | 'spawn' | 'sign' | 'reflectionProbe' | 'poster' | 'painting' | 'stake' | 'junk' | 'carpet' | 'outlet' | 'extender' | 'stringLights' | 'generator' | 'lightSwitch';
+export type AddKind = 'empty' | 'pointLight' | 'spotLight' | 'sun' | 'spawn' | 'sign' | 'reflectionProbe' | 'poster' | 'painting' | 'stake' | 'junk' | 'carpet' | 'outlet' | 'extender' | 'stringLights' | 'generator' | 'lightSwitch' | 'shelf';
 export interface LogEntry {
   at: string;
   level: 'info' | 'warn' | 'error';
@@ -234,7 +234,7 @@ interface Actions {
   /** The ready-made 3D printer: its model (with collision boxes and moving lift, gantry and head) and settings to match. */
   addPrinter(at?: [number, number, number]): Promise<void>;
   /** Ready-made power things with their models (copied into the project the first time): an outlet, a light switch, an extension cord, string lights (and their plug). */
-  addPower(kind: 'outlet' | 'lightSwitch' | 'extender' | 'stringLights', at?: [number, number, number]): Promise<void>;
+  addPower(kind: 'outlet' | 'lightSwitch' | 'extender' | 'stringLights' | 'shelf', at?: [number, number, number]): Promise<void>;
   /** A ready-made ladder: a Repeat group of rail-and-rung segments with a climbing zone in each, and a top cap. */
   addLadder(at?: [number, number, number]): void;
   /** A new terrain: flat ground 2048 u square, 768 u deep, its surface at `at` (T1). */
@@ -552,7 +552,7 @@ export const useEditor = create<State & Actions>()((set, get) => ({
   add(kind, at = get().placementPoint() ?? [0, 0, 0]) {
     const doc = get().doc;
     if (!doc) return;
-    if (kind === 'outlet' || kind === 'lightSwitch' || kind === 'extender' || kind === 'stringLights') return void get().addPower(kind, at);
+    if (kind === 'outlet' || kind === 'lightSwitch' || kind === 'extender' || kind === 'stringLights' || kind === 'shelf') return void get().addPower(kind, at);
     const base = (name: string, components: EntityData['components'], y = 0) =>
       newEntity(name, components, { position: [at[0], at[1] + y, at[2]] });
     const e: EntityData = {
@@ -571,6 +571,7 @@ export const useEditor = create<State & Actions>()((set, get) => ({
       lightSwitch: () => base('light_switch', {}),
       extender: () => base('extension_cord', {}),
       stringLights: () => base('string_lights', {}),
+      shelf: () => base('shelf', {}),
       generator: () => base('generator', { collider: { shape: 'box', size: [32, 24, 24] }, powerSource: { on: true } }, 12),
       stake: () => base('stake', { model: {}, rigidBody: { motion: 'dynamic' }, stake: { tip: 'bottom', speed: 160, depth: 6, tilt: 10 } }, 16),
     }[kind]();
@@ -693,6 +694,10 @@ export const useEditor = create<State & Actions>()((set, get) => ({
           { model: model(m, 'hull'), rigidBody: { motion: 'dynamic', mass: 1 }, extender: { cable: 256, sockets: [[0, 3.26, -7.72], [0, 3.26, 2.84], [0, 3.26, 13.35]], cableAt: [0, 1.5, -18.6], plug } },
           pos(0),
         );
+    } else if (kind === 'shelf') {
+      // (A placeholder model: its red back, the side that goes on the wall, is −Z. Swap in your own.)
+      const m = await sample('shelf');
+      if (m) e = newEntity('shelf', { model: model(m, 'hull'), rigidBody: { motion: 'dynamic', mass: 3 }, shelf: { mountedAtStart: true } }, pos(48));
     } else {
       const plug = await sample('plug');
       if (plug) e = newEntity('string_lights', { collider: { shape: 'box', size: [12, 8, 12] }, rigidBody: { motion: 'dynamic', mass: 1 }, stringLights: { plug } }, pos(4));

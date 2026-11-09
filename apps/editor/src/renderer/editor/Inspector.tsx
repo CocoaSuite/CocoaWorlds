@@ -165,6 +165,7 @@ function componentLabel(e: EntityData): string {
   if (e.components.playerSpawn) return 'Player spawn';
   if (e.components.sign) return t('add.sign');
   if (e.components.stake) return t('add.stake');
+  if (e.components.shelf) return t('add.shelf');
   if (e.components.outlet) return t('add.outlet');
   if (e.components.extender) return t('add.extender');
   if (e.components.stringLights) return t('add.stringLights');

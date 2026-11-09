@@ -27,6 +27,9 @@ export type GameEvent =
   | { type: 'power.switch'; target: string; on: boolean; time: number }
   /** String lights were hung up, or taken down. */
   | { type: 'lights.hang'; target: string; time: number }
+  /** A shelf was mounted on a wall, or taken down. */
+  | { type: 'shelf.mount'; target: string; time: number }
+  | { type: 'shelf.unmount'; target: string; time: number }
   | { type: 'lights.takeDown'; target: string; time: number }
   | { type: 'player.hurt'; amount: number; health: number; cause: string; time: number }
   | { type: 'player.die'; cause: string; time: number }

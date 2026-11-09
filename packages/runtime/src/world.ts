@@ -49,6 +49,7 @@ import {
   type OutletData,
   type ExtenderData,
   type StringLightsData,
+  type ShelfData,
   type PrinterData,
   worldBoundsOf,
   posterScrollRadius,
@@ -82,6 +83,8 @@ import { COLLIDER_MATERIAL, signedDist, type Plane, bounds, brushToWorld, isNoGr
 
 /** How far away a click can hang an end of string lights (u). */
 const HANG_REACH = 144;
+/** How long Use is held on a mounted shelf to take it down (s). */
+const SHELF_HOLD = 0.6;
 /** A plug: how far its body runs back from the base of its prongs, and how far it is from its middle to its side (u). */
 const PLUG_BACK = 3.9;
 const PLUG_RADIUS = 3.6;
@@ -149,6 +152,8 @@ export interface SavedScene {
   signs?: Record<string, string>;
   /** Posters and paintings hung on a wall (true) or loose (false), when not as they started. */
   posters?: Record<string, boolean>;
+  /** Shelves mounted (true) or taken down (false), where that changed from the start. */
+  shelves?: Record<string, boolean>;
   /** Props stuck in the ground. */
   stakes?: string[];
   /** Power: sources switched from how they started, what each plug is in, string lights hung (their two ends). */
@@ -787,6 +792,9 @@ export class GameWorld {
     if (stakes.length) out.stakes = stakes;
     const power = this.savePower();
     if (power) out.power = power;
+    const shelves: Record<string, boolean> = {};
+    for (const [id, sh] of this.shelves) if (!this.gone.has(id) && sh.mounted !== sh.atStart) shelves[id] = sh.mounted;
+    if (Object.keys(shelves).length) out.shelves = shelves;
     const scripts = this.runner.saveState();
     if (Object.keys(scripts).length) out.scripts = scripts;
     // (What scripts set lands where it was going: a fade halfway is saved finished.)
@@ -870,6 +878,7 @@ export class GameWorld {
       }
     }
     if (save.power && typeof save.power === 'object') this.loadPower(save.power);
+    for (const [id, m] of Object.entries(save.shelves ?? {})) if (typeof m === 'boolean') this.setShelfMounted(id, m);
     for (const id of Array.isArray(save.stakes) ? save.stakes : []) {
       const k = this.stakes.get(id), b = this.bodies.get(id);
       if (!k || !b || k.stuck) continue;
@@ -1668,6 +1677,11 @@ export class GameWorld {
       this.grid.plugs.set(e.id, { cable: data.cable, into: null });
       this.strings.set(e.id, { data, hung: null, half: null, version: 0, out: [0, -1, 0], halfOut: [0, -1, 0] });
     }
+    if (rb.motion === 'dynamic' && e.components.shelf) {
+      const data = readComponent<ShelfData>('shelf', e.components.shelf);
+      this.shelves.set(e.id, { mounted: false, atStart: data.mountedAtStart, back: this.backOf(e, model), normal: [0, 0, 1] });
+      if (data.mountedAtStart) this.setShelfMounted(e.id, true, body);
+    }
     // (Junk lying on the floor stays put: nothing pushes it; picking it up frees it.)
     if (e.components.junk && model && rb.motion === 'dynamic') this.junky.add(e.id);
     if (e.components.junk && model && rb.motion === 'dynamic') body.setBodyType(RAPIER.RigidBodyType.Fixed, false);
@@ -2413,6 +2427,124 @@ export class GameWorld {
     }
   }
 
+  // ── Shelves: mounted on a wall by their back (−Z); a held Use takes one down ──
+
+  private shelves = new Map<string, { mounted: boolean; atStart: boolean; back: number; normal: P3 }>();
+  /** The held Use on a mounted shelf: which, and for how long (−1: let go of Use first). */
+  private shelfHold = { id: '', time: 0 };
+
+  /** Whether a shelf is on a wall now (null: it isn't a shelf). */
+  shelfMounted(id: string): boolean | null {
+    return this.shelves.get(id)?.mounted ?? null;
+  }
+
+  /** How far behind its origin a shelf's back is (u, its own −Z): from its model, else its collider. */
+  private backOf(e: EntityData, model: { data: ModelData; mesh: ModelMesh } | null): number {
+    const sc = Math.abs(decomposeMat4(this.doc.worldMatrix(e.id)).scale[2]!);
+    if (model) {
+      const p = model.mesh.positions;
+      let low = Infinity;
+      for (let i = 2; i < p.length; i += 3) low = Math.min(low, p[i]!);
+      return Number.isFinite(low) ? Math.max(0, -low * unitsOf(model.data) * sc) : 0;
+    }
+    const c = e.components.collider ? readComponent<ColliderData>('collider', e.components.collider) : null;
+    return c ? Math.max(0, (c.size[2] / 2 - c.offset[2]) * sc) : 0;
+  }
+
+  /** On the wall where it is (or off it), with no moving and no events (starting, loading a save). */
+  private setShelfMounted(id: string, mounted: boolean, body?: RAPIER.RigidBody): void {
+    const sh = this.shelves.get(id), rb = body ?? this.bodies.get(id)?.body;
+    if (!sh || !rb) return;
+    if (this.held?.id === id) this.dropHeld();
+    sh.mounted = mounted;
+    if (mounted) {
+      const r = rb.rotation();
+      const n = qrot({ x: r.x, y: r.y, z: r.z, w: r.w }, [0, 0, 1]);
+      sh.normal = [n[0], n[1], n[2]];
+    }
+    rb.setBodyType(mounted ? RAPIER.RigidBodyType.Fixed : RAPIER.RigidBodyType.Dynamic, true);
+  }
+
+  /** A mounted shelf looked at within reach (with nothing held), or null. */
+  private shelfLooked(): string | null {
+    if (this.held || !this.player || this.hiding || this.frozen) return null;
+    const hit = this.useAim();
+    if (!hit || hit.distance > PLAYER.useReach) return null;
+    return hit.targets.find((t) => this.shelves.get(t)?.mounted) ?? null;
+  }
+
+  /**
+   * Use while holding a shelf, looking at a wall: mounted there by its back, upright, facing out. Only by its
+   * back: turned another way to the wall, it won't go. The prompt (do: false); null: not a shelf at a wall.
+   */
+  private shelfMountUse(act: boolean): string | null {
+    const id = this.held?.id, sh = id ? this.shelves.get(id) : undefined, b = id ? this.bodies.get(id) : undefined;
+    if (!id || !sh || !b) return null;
+    const look = this.lookHit(PLAYER.useReach);
+    if (!look?.at || Math.abs(look.n[1]) > 0.5) return null;
+    const wallBody = look.id ? this.bodies.get(look.id) : undefined;
+    if (wallBody && !wallBody.body.isFixed()) return null;
+    const flat = Math.hypot(look.n[0], look.n[2]) || 1;
+    const n: P3 = [look.n[0] / flat, 0, look.n[2] / flat];
+    // Its back (−Z) has to face the wall.
+    const r = b.body.rotation();
+    const back = qrot({ x: r.x, y: r.y, z: r.z, w: r.w }, [0, 0, -1]);
+    const bl = Math.hypot(back[0], back[2]) || 1;
+    if ((back[0] * -n[0] + back[2] * -n[2]) / bl < 0.5) return 'Turn its back to the wall';
+    if (act) {
+      this.dropHeld();
+      const yaw = Math.atan2(n[0], n[2]);
+      const out = sh.back + 0.05;
+      b.body.setBodyType(RAPIER.RigidBodyType.Fixed, false);
+      b.body.setTranslation({ x: look.at[0] + n[0] * out, y: look.at[1], z: look.at[2] + n[2] * out }, false);
+      b.body.setRotation({ x: 0, y: Math.sin(yaw / 2), z: 0, w: Math.cos(yaw / 2) }, false);
+      b.body.setLinvel({ x: 0, y: 0, z: 0 }, false);
+      b.body.setAngvel({ x: 0, y: 0, z: 0 }, false);
+      sh.mounted = true;
+      sh.normal = n;
+      this.bus.emit({ type: 'shelf.mount', target: id, time: this.time });
+    }
+    return 'Mount on the wall';
+  }
+
+  /** Each step: Use held on a mounted shelf long enough takes it down into the hands (what was on it falls). */
+  private holdOnShelf(): void {
+    const h = this.shelfHold;
+    if (!this.player?.input.use) {
+      h.id = '';
+      h.time = 0;
+      return;
+    }
+    if (h.time < 0) return;
+    const id = this.shelfLooked();
+    if (!id) {
+      h.time = 0;
+      return;
+    }
+    if (h.id !== id) {
+      h.id = id;
+      h.time = 0;
+    }
+    h.time += STEP;
+    if (h.time < SHELF_HOLD) return;
+    // (Then Use has to be let go of before it does anything more.)
+    h.time = -1;
+    this.unmountShelf(id);
+  }
+
+  private unmountShelf(id: string): void {
+    const sh = this.shelves.get(id), b = this.bodies.get(id);
+    if (!sh?.mounted || !b) return;
+    // (What rests on it wakes, to fall when it goes.)
+    for (let i = 0; i < b.body.numColliders(); i++) this.world.contactPairsWith(b.body.collider(i), (other) => other.parent()?.wakeUp());
+    const t = b.body.translation(), n = sh.normal;
+    b.body.setTranslation({ x: t.x + n[0] * 2, y: t.y, z: t.z + n[2] * 2 }, false);
+    b.body.setBodyType(RAPIER.RigidBodyType.Dynamic, true);
+    sh.mounted = false;
+    this.bus.emit({ type: 'shelf.unmount', target: id, time: this.time });
+    this.hold(id, b.body);
+  }
+
   // ── Junk: a pile on the ground, a bundle in the hands ──
 
   /** Junk and carpets (with or without a packed model): fixed while down, loose while carried or falling. */
@@ -2678,6 +2810,7 @@ export class GameWorld {
       if (this.held) this.stickHeld();
       if (this.stakes.size) this.stickStakes();
       if (this.junky.size) this.settleJunk();
+      if (this.shelves.size) this.holdOnShelf();
       if (this.grid.plugs.size) this.checkCables();
       this.accumulator -= STEP;
       this.time += STEP;
@@ -3036,8 +3169,9 @@ export class GameWorld {
   usePrompt(): string | null {
     if (this.hiding) return null;
     if (this.base && this.base.prompt(this.baseAim())) return null;
-    const power = this.held ? this.powerHeldUse(false) : this.powerUse(false);
+    const power = this.held ? (this.powerHeldUse(false) ?? this.shelfMountUse(false)) : this.powerUse(false);
     if (power !== null) return power;
+    if (!this.held && this.shelfLooked()) return this.shelfHold.time > 0 ? `Taking down… ${Math.round((this.shelfHold.time / SHELF_HOLD) * 100)}%` : 'Hold to take down';
     const hit = this.useAim();
     if (!hit) return null;
     const { id, targets, distance } = hit;
@@ -3354,10 +3488,12 @@ export class GameWorld {
     }
     if (this.base && this.useBase()) return;
     if (this.held) {
-      if (this.powerHeldUse(true) === null && !this.useHolding()) this.dropHeld();
+      if (this.powerHeldUse(true) === null && this.shelfMountUse(true) === null && !this.useHolding()) this.dropHeld();
       return;
     }
     if (this.powerUse(true) !== null) return;
+    // (A shelf on a wall comes down only for a held Use.)
+    if (this.shelfLooked()) return;
     const hit = this.useAim();
     if (!hit) return;
     const { id, targets, distance } = hit;

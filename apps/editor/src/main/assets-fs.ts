@@ -75,6 +75,7 @@ const SAMPLES: Record<string, { file: string; as: string; kind: AssetKind }> = {
   lightSwitch: { file: 'light_switch.glb', as: 'light_switch.glb', kind: 'models' },
   extensionCord: { file: 'extension_cord.glb', as: 'extension_cord.glb', kind: 'models' },
   plug: { file: 'plug.glb', as: 'plug.glb', kind: 'models' },
+  shelf: { file: 'shelf.glb', as: 'shelf.glb', kind: 'models' },
 };
 
 /**

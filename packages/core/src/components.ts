@@ -157,6 +157,11 @@ export type StringLightsData = {
   /** Its plug's model (set by Add › String lights). */
   plug?: string;
 };
+/** A shelf (component `shelf`): carried, then mounted on a wall by its back (−Z); held Use takes it down. */
+export type ShelfData = {
+  /** On the wall where it was placed when the game starts. */
+  mountedAtStart: boolean;
+};
 /** A prop that sticks into the ground (component `stake`) when it hits it hard enough, tip first. */
 export type StakeData = {
   /** Which way its tip points, in its own axes. */
@@ -896,6 +901,17 @@ export const COMPONENTS: ComponentDef[] = [
       { key: 'intensity', label: e('Brightness', 'Яркость'), type: { kind: 'number', min: 0, step: 0.1 }, default: 0.8 },
       { key: 'range', label: e('Light range', 'Дальность света'), type: { kind: 'number', min: 16, step: 16, unit: 'u' }, default: 384 },
     ],
+  },
+  {
+    name: 'shelf',
+    label: e('Shelf', 'Полка'),
+    description: e(
+      'A shelf that mounts on a wall by its back (its −Z side) and holds things put on it. Carry it with its back to a wall and Use the wall to mount it; hold Use on it to take it down. Its Model is your own (made with its back at −Z). Needs Physics.',
+      'Полка, которая крепится к стене задней стороной (−Z) и держит то, что на неё положили. Несите её задом к стене и нажмите «Использовать» на стене; удерживайте «Использовать», чтобы снять. Модель — ваша (задняя сторона по −Z). Нужна Физика.',
+    ),
+    appliesTo: 'point',
+    conflicts: ['poster', 'junk', 'stake', 'extender', 'stringLights', 'npc', 'seat'],
+    fields: [{ key: 'mountedAtStart', label: e('On the wall at start', 'На стене в начале'), hint: e('Fixed where it was placed (put its back against a wall).', 'Закреплена там, где поставлена (задом к стене).'), type: { kind: 'boolean' }, default: true }],
   },
   {
     name: 'levelChange',
