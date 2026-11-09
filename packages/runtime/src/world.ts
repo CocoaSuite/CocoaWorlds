@@ -1951,6 +1951,10 @@ export class GameWorld {
 
   /** After each step: a plug pulled further than its cable (or whose socket is gone) comes out. */
   private checkCables(): void {
+    if (this.plugHand) {
+      const st = this.strings.get(this.plugHand), hand = this.handAt(), cable = this.grid.plugs.get(this.plugHand)?.cable ?? 0;
+      if (!st?.hung || !hand || this.gone.has(this.plugHand) || dist3(st.hung[1], hand) > cable + 8) this.plugHand = null;
+    }
     for (const [id, p] of this.grid.plugs) {
       if (!p.into) continue;
       const a = this.plugAt(id), b = this.placeOf(p.into);
@@ -2014,6 +2018,10 @@ export class GameWorld {
   /** F: string lights into the hands (a coil looked at) or put down. The prompt (do: false); null: F does nothing here. */
   private equipKey(act: boolean): string | null {
     if (!this.player || this.hiding || this.frozen) return null;
+    if (this.plugHand) {
+      if (act) this.plugHand = null;
+      return 'Drop plug';
+    }
     if (this.equipped) {
       if (act) this.unequip();
       return 'Put down';
@@ -2023,6 +2031,15 @@ export class GameWorld {
       return 'Take in hand';
     }
     if (this.held) return null;
+    // Hung lights looked at: their plug into the hand (out of its socket).
+    const hungAt = this.hungLooked();
+    if (hungAt) {
+      if (act) {
+        this.unplug(hungAt, false);
+        this.plugHand = hungAt;
+      }
+      return 'Take plug';
+    }
     const hit = this.useAim();
     const id = hit && hit.distance <= PLAYER.useReach ? hit.targets.find((t) => this.strings.has(t) && !this.strings.get(t)!.hung && !this.gone.has(t)) : undefined;
     if (!id) return null;
@@ -2094,8 +2111,6 @@ export class GameWorld {
     const id = this.equipped!;
     const st = this.strings.get(id);
     if (!st) return null;
-    const plugged = this.plugUse(id, act);
-    if (plugged !== null) return plugged;
     // (A longer reach than Use's: lights go up high.)
     const look = this.lookHit(HANG_REACH);
     if (!look?.at) return null;
@@ -2114,13 +2129,13 @@ export class GameWorld {
     const span = dist3(st.half, at);
     if (span < 8) return null;
     if (span > st.data.length) return 'Too far to reach';
-    // (Plugged in: the cable runs from this end, so it has to reach from here.)
-    const plug = this.grid.plugs.get(id), socket = plug?.into ? this.placeOf(plug.into) : null;
-    if (plug && socket && dist3(at, socket) > plug.cable) return 'Cable too short';
     if (act) {
       const o: P3 = [st.halfOut[0] + look.n[0], st.halfOut[1] + look.n[1], st.halfOut[2] + look.n[2]];
       const l = Math.hypot(...o);
       this.hangLights(id, st.half, at, false, l > 0.2 ? [o[0] / l, o[1] / l, o[2] / l] : look.n);
+      // Up: now the plug, its cable running from this end, is in hand to take to a socket.
+      this.unplug(id, false);
+      this.plugHand = id;
     }
     return 'Hang the other end';
   }
@@ -2129,16 +2144,9 @@ export class GameWorld {
   private powerUse(act: boolean): string | null {
     const look = this.lookHit(PLAYER.useReach);
     if (!look) return null;
-    // String lights nearer than what is looked at.
-    let near: { id: string; t: number } | null = null;
-    for (const [id, st] of this.strings) {
-      if (!st.hung || this.gone.has(id)) continue;
-      const [a, b] = st.hung;
-      const r = rayNearLine(look.eye, look.dir, wirePoints(a, b, dropOf(a, b, st.data.sag), 12), PLAYER.useReach);
-      if (r && r.d < 4 && r.t <= look.distance + 1 && (!near || r.t < near.t)) near = { id, t: r.t };
-    }
-    if (near && !this.equipped) {
-      if (act) this.takeDownLights(near.id);
+    const near = this.equipped || this.plugHand ? null : this.hungLooked();
+    if (near) {
+      if (act) this.takeDownLights(near);
       return 'Take down';
     }
     const src = look.id ? this.withParents(look.id).find((t) => this.grid.sources.has(t)) : undefined;
@@ -2146,6 +2154,54 @@ export class GameWorld {
     const on = this.grid.sources.get(src)!;
     if (act) this.switchPower(src, !on);
     return on ? 'Turn off' : 'Turn on';
+  }
+
+  /** Hung string lights looked at (within reach, nearer than what is behind them), or null. */
+  private hungLooked(): string | null {
+    const look = this.lookHit(HANG_REACH);
+    if (!look) return null;
+    let near: { id: string; t: number } | null = null;
+    for (const [id, st] of this.strings) {
+      if (!st.hung || this.gone.has(id)) continue;
+      const [a, b] = st.hung;
+      const r = rayNearLine(look.eye, look.dir, wirePoints(a, b, dropOf(a, b, st.data.sag), 12), HANG_REACH);
+      if (r && r.d < 4 && r.t <= look.distance + 1 && (!near || r.t < near.t)) near = { id, t: r.t };
+    }
+    return near?.id ?? null;
+  }
+
+  /** String lights whose plug is in the player's hand (hung, not yet plugged in). */
+  private plugHand: string | null = null;
+
+  /** Which string lights' plug the player is holding (null: none). */
+  get plugInHand(): string | null {
+    return this.plugHand;
+  }
+
+  /** Where the plug in hand is: low and to the right of the view. */
+  private handAt(): P3 | null {
+    const p = this.player;
+    if (!p) return null;
+    const eye = p.eye(), d = p.lookDirection();
+    const yaw = Math.atan2(d[0], d[2]);
+    return [eye[0] + d[0] * 24 - Math.cos(yaw) * 10, eye[1] + d[1] * 24 - 12, eye[2] + d[2] * 24 + Math.sin(yaw) * 10];
+  }
+
+  /** A click with the plug in hand: into the socket looked at, if the cable reaches from the lights' last end. */
+  private plugClick(act: boolean): string | null {
+    const id = this.plugHand!;
+    const st = this.strings.get(id), plug = this.grid.plugs.get(id);
+    const look = this.lookHit(PLAYER.useReach);
+    if (!st?.hung || !plug || !look) return null;
+    const socket = look.id ? this.withParents(look.id).find((t) => this.grid.isSocket(t)) : undefined;
+    if (!socket || !this.grid.canPlug(id, socket)) return null;
+    const to = this.placeOf(socket);
+    if (!to || dist3(st.hung[1], to) > plug.cable) return 'Cable too short';
+    if (act) {
+      this.plug(id, socket);
+      this.plugHand = null;
+    }
+    return 'Plug in';
   }
 
   /** Up between two points: the coil itself is put away (still, hidden, not colliding) halfway between them. */
@@ -2169,6 +2225,7 @@ export class GameWorld {
   private takeDownLights(id: string): void {
     const st = this.strings.get(id), body = this.bodies.get(id), p = this.player;
     if (!st?.hung || !body || !p) return;
+    if (this.plugHand === id) this.plugHand = null;
     st.hung = null;
     st.version++;
     this.bus.emit({ type: 'lights.takeDown', target: id, time: this.time });
@@ -2192,6 +2249,8 @@ export class GameWorld {
       const from = this.plugAt(id), to = this.placeOf(p.into);
       if (from && to) cables.push({ id, points: this.cableShape(id, from, to, p.cable) });
     }
+    const inHand = this.plugHand ? this.strings.get(this.plugHand) : undefined, hand = this.handAt();
+    if (this.plugHand && inHand?.hung && hand) cables.push({ id: this.plugHand, points: this.cableShape(this.plugHand, inHand.hung[1], hand, this.grid.plugs.get(this.plugHand)!.cable) });
     return { strings, cables };
   }
 
@@ -2950,7 +3009,7 @@ export class GameWorld {
     const fresh = (held && !this.fireHeld) || (queued && !p.input.fire);
     this.fireHeld = !!p.input.fire;
     // (String lights in hand: the click is theirs.)
-    if (this.equipped && !this.held) return;
+    if ((this.equipped || this.plugHand) && !this.held) return;
     // (Something in the hands: Fire throws it instead.)
     if (this.held) {
       if (fresh && !this.useHolding()) this.throwHeld();
@@ -4611,7 +4670,7 @@ export class GameWorld {
     const out: { key: string; prompt: string }[] = [];
     const f = this.equipKey(false);
     if (f !== null) out.push({ key: 'KeyF', prompt: f });
-    const click = this.equipped && !this.held ? this.lightsClick(false) : null;
+    const click = this.held ? null : this.plugHand ? this.plugClick(false) : this.equipped ? this.lightsClick(false) : null;
     if (click !== null) out.push({ key: 'Click', prompt: click });
     const hit = !this.hiding && !this.held && !this.frozen ? this.useAim() : null;
     const seat = hit?.targets.find((t) => this.seats.has(t) && this.keyOf(t) !== 'KeyE' && hit.distance <= this.reachOf(t) && this.seatReady(t));
@@ -4636,6 +4695,10 @@ export class GameWorld {
   /** The player clicked with the item in the picked hotbar slot. */
   useItem(): void {
     // (String lights in hand: the click plugs them in, or hangs an end.)
+    if (this.plugHand && !this.held) {
+      this.plugClick(true);
+      return;
+    }
     if (this.equipped && !this.held) {
       this.lightsClick(true);
       return;

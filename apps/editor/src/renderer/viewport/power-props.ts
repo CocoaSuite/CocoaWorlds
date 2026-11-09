@@ -66,7 +66,7 @@ export function powerStandIn(components: Record<string, ComponentData | undefine
       const ring = mesh(new THREE.TorusGeometry(r - (i % 2) * 0.8, 0.9, 6, 20), wire, [0, -h / 2 + 1 + (i * (h - 2)) / Math.max(1, turns - 1), 0]);
       ring.rotation.x = Math.PI / 2;
     }
-    const bulb = new THREE.MeshBasicMaterial({ color: new THREE.Color(data.color).multiplyScalar(0.6) });
+    const bulb = new THREE.MeshStandardMaterial({ color: new THREE.Color(data.color), roughness: 0.5 });
     const bg = new THREE.IcosahedronGeometry(1.4, 0);
     for (let i = 0; i < 6; i++) {
       const a = (i / 6) * Math.PI * 2;

@@ -26,7 +26,7 @@ interface StringView {
   lit: boolean | null;
   wire: Line2;
   bulbs: THREE.InstancedMesh | null;
-  mat: THREE.MeshBasicMaterial;
+  mat: THREE.MeshStandardMaterial;
   lights: THREE.PointLight[];
   data: StringLightsData;
 }
@@ -89,8 +89,8 @@ export class PowerView {
       lights.push(l);
     }
     const c = new THREE.Color(data.color);
-    // (Its own flat, unlit material: lit and dark differ by colour only, so switching compiles nothing.)
-    const mat = new THREE.MeshBasicMaterial({ color: c.clone().multiplyScalar(0.3), toneMapped: false });
+    // (Its own material, lit by the world when off; on, it glows. Switching changes a number, compiling nothing.)
+    const mat = new THREE.MeshStandardMaterial({ color: c, emissive: c, emissiveIntensity: 0, roughness: 0.5 });
     v = { version: -1, lit: null, wire, bulbs: null, mat, lights, data };
     this.strings.set(id, v);
     return v;
@@ -108,8 +108,7 @@ export class PowerView {
       const lit = s.lit && !!s.ends && s.version % 1 === 0;
       if (lit !== v.lit) {
         v.lit = lit;
-        v.mat.color.set(s.data.color);
-        if (!lit) v.mat.color.multiplyScalar(0.3);
+        v.mat.emissiveIntensity = lit ? 2 : 0;
         for (const l of v.lights) l.intensity = lit ? s.data.intensity * FALLOFF : 0;
       }
     }

@@ -90,11 +90,6 @@ describe('string lights and outlets', () => {
     w.pressKey('KeyF');
     run(w, 0.2);
     expect(w.inHands).toBe(lights);
-    lookAt(w, c);
-    expect(w.keyPrompts()).toContainEqual({ key: 'Click', prompt: 'Plug in' });
-    w.useItem();
-    run(w, 0.1);
-    expect(w.pluggedInto(lights)).toBe(cord);
     // One end on the wall, then the other.
     lookAt(w, [-40, 90, -80]);
     expect(w.keyPrompts()).toContainEqual({ key: 'Click', prompt: 'Hang one end' });
@@ -105,6 +100,14 @@ describe('string lights and outlets', () => {
     w.useItem();
     run(w, 0.1);
     expect(w.inHands).toBe(null);
+    // Then the plug, from the end placed last, into the cord.
+    expect(w.plugInHand).toBe(lights);
+    lookAt(w, c);
+    expect(w.keyPrompts()).toContainEqual({ key: 'Click', prompt: 'Plug in' });
+    w.useItem();
+    run(w, 0.1);
+    expect(w.pluggedInto(lights)).toBe(cord);
+    expect(w.plugInHand).toBe(null);
     expect(w.bulbsOf(lights).length).toBeGreaterThan(5);
     expect(w.powered(lights)).toBe(false);
     lookAt(w, [-50, 12, -50]);
@@ -124,6 +127,13 @@ describe('string lights and outlets', () => {
 
     // Taken down: in the hands again.
     lookAt(w2, [0, 82, -79]);
+    // F takes its plug (out of the cord); F again drops it.
+    expect(w2.keyPrompts()).toContainEqual({ key: 'KeyF', prompt: 'Take plug' });
+    w2.pressKey('KeyF');
+    expect(w2.plugInHand).toBe(lights);
+    expect(w2.pluggedInto(lights)).toBe(null);
+    w2.pressKey('KeyF');
+    expect(w2.plugInHand).toBe(null);
     expect(w2.usePrompt()).toBe('Take down');
     w2.use();
     run(w2, 0.1);
