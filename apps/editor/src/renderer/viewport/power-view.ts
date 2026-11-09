@@ -128,6 +128,8 @@ export class PowerView {
     // Plugs: in their sockets, in the hand, or lying at the end of their cable.
     const shown = new Set<string>();
     for (const p of view.plugs) {
+      // (No way to point it, or anywhere to put it: not drawn, rather than drawn as NaN.)
+      if (Math.hypot(...p.dir) < 1e-6 || ![...p.at, ...p.dir, ...p.up].every(Number.isFinite)) continue;
       shown.add(p.id);
       const v = this.plugView(p.id);
       // (Its prongs along `dir`; its own −Z is the way its prongs point.)
@@ -177,7 +179,7 @@ export class PowerView {
 
   /** The wire, bulbs and lights where the string hangs now (hidden when it is a coil). */
   private reshape(v: StringView, ends: [P3, P3] | null, out: P3, moving: boolean): void {
-    if (!ends) {
+    if (!ends || !ends.flat().every(Number.isFinite)) {
       v.wire.visible = false;
       if (v.bulbs) v.bulbs.visible = false;
       return;
@@ -232,11 +234,25 @@ export class PowerView {
   }
 }
 
-/** A thin tube along points. */
+/**
+ * A thin tube along points. (Points on top of each other are dropped first: a zero-length piece gives the tube
+ * NaN normals, and one NaN pixel through bloom greys out the whole view.)
+ */
 function tube(pts: P3[]): THREE.BufferGeometry {
+  const clean: THREE.Vector3[] = [];
+  for (const p of pts) {
+    if (!p.every(Number.isFinite)) continue;
+    const v = new THREE.Vector3(...p);
+    if (!clean.length || clean[clean.length - 1]!.distanceToSquared(v) > 0.01) clean.push(v);
+  }
+  if (clean.length < 2) return new THREE.BufferGeometry();
   const path = new THREE.CurvePath<THREE.Vector3>();
-  for (let i = 0; i + 1 < pts.length; i++) path.add(new THREE.LineCurve3(new THREE.Vector3(...pts[i]!), new THREE.Vector3(...pts[i + 1]!)));
-  return new THREE.TubeGeometry(path, Math.max(1, pts.length - 1) * 2, CABLE_R, 5, false);
+  for (let i = 0; i + 1 < clean.length; i++) path.add(new THREE.LineCurve3(clean[i]!, clean[i + 1]!));
+  const geo = new THREE.TubeGeometry(path, (clean.length - 1) * 2, CABLE_R, 5, false);
+  // (Belt and braces: anything not a number left in it, and it isn't drawn.)
+  const a = geo.getAttribute('normal').array;
+  for (let i = 0; i < a.length; i++) if (!Number.isFinite(a[i]!)) return new THREE.BufferGeometry();
+  return geo;
 }
 
 const plugMat = new THREE.MeshStandardMaterial({ color: 0xe8e2d4, roughness: 0.7 });
