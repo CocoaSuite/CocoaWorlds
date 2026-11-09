@@ -126,11 +126,17 @@ export type PowerSourceData = {
 export type OutletData = {
   /** The power source it is wired to, by id (empty: always live). */
   source: string;
+  /** Where plugs go (its own space, game units), facing its front (+Z). Set by the ready-made outlet. */
+  sockets?: [number, number, number][];
 };
 /** An extension cord (component `extender`): plugs into a live socket and gives sockets of its own. */
 export type ExtenderData = {
   /** How far its plug reaches from it (u). */
   cable: number;
+  /** Where plugs go (its own space, game units), facing up (+Y); where its cable leaves it; its plug's model. Set by the ready-made cord. */
+  sockets?: [number, number, number][];
+  cableAt?: [number, number, number];
+  plug?: string;
 };
 /** String lights (component `stringLights`): carried as a coil, hung between two points, lit while plugged into a live socket. */
 export type StringLightsData = {
@@ -148,6 +154,8 @@ export type StringLightsData = {
   lights: number;
   intensity: number;
   range: number;
+  /** Its plug's model (set by Add › String lights). */
+  plug?: string;
 };
 /** A prop that sticks into the ground (component `stake`) when it hits it hard enough, tip first. */
 export type StakeData = {

@@ -207,7 +207,7 @@ export class PlaySession {
       // Batched: still for good. No body, or a fixed one that can't break and that no script names (scripts can
       // hide or show it); everything else is drawn by itself so it can change.
       // (A printer's own model moves its head, gantry and lift.)
-      const fixed = !e.components.printer && (!mover || (!bodies.has(mover) && !e.components.breakable && !e.components.script && !scripted.includes(e.id)));
+      const fixed = !e.components.printer && !e.components.powerSource && (!mover || (!bodies.has(mover) && !e.components.breakable && !e.components.script && !scripted.includes(e.id)));
       if (fixed) {
         const k = batchKey(data);
         const b = stillModels.get(k) ?? { data, copies: [] };
@@ -220,7 +220,13 @@ export class PlaySession {
       holder.matrix.fromArray(doc.worldMatrix(e.id));
       this.group.add(holder);
       if (mover) this.movers.push({ id: mover, i: this.world.drawn(mover), obj: holder, base: holder.matrix.clone() });
-      this.attachModel(holder, data, e.id);
+      if (e.components.powerSource) {
+        // A switch (or generator) with a model: turned half round its front when off, so its rocker shows it.
+        const inner = new THREE.Group();
+        holder.add(inner);
+        this.attachModel(inner, data, e.id);
+        this.switchViews.push({ id: e.id, inner, on: null });
+      } else this.attachModel(holder, data, e.id);
     }
     const alone = (data: ModelData) => (c: { id: string; matrix: THREE.Matrix4 }) => {
       const holder = new THREE.Group();
@@ -1052,6 +1058,7 @@ export class PlaySession {
   /** Posters and paintings drawn, and whether each was last drawn hung. */
   private power: PowerView | null = null;
   private standIns: PowerStandIn[] = [];
+  private switchViews: { id: string; inner: THREE.Group; on: boolean | null }[] = [];
   private posterViews: { id: string; view: PosterObject; hung: boolean | null }[] = [];
   /** Junk: its pile and packed-bundle looks, and which is shown. */
   private junkViews: { id: string; pile: THREE.Group; bundle: THREE.Group; packed: boolean }[] = [];
@@ -1138,6 +1145,12 @@ export class PlaySession {
     }
     if (this.printers.length) this.updatePrinters(dt);
     this.power?.update();
+    for (const v of this.switchViews) {
+      const on = this.world.powerOn(v.id);
+      if (on === v.on) continue;
+      v.on = on;
+      v.inner.rotation.z = on === false ? Math.PI : 0;
+    }
     for (const j of this.junkViews) {
       const packed = this.world.junkPacked(j.id) ?? false;
       if (packed === j.packed) continue;

@@ -300,6 +300,7 @@ export function Viewport() {
         { label: t('add.extender'), onSelect: () => s.add('extender', ctx?.ground ?? undefined) },
         { label: t('add.stringLights'), onSelect: () => s.add('stringLights', ctx?.ground ?? undefined) },
         { label: t('add.generator'), onSelect: () => s.add('generator', ctx?.ground ?? undefined) },
+        { label: t('add.lightSwitch'), onSelect: () => s.add('lightSwitch', ctx?.ground ?? undefined) },
         { label: t('add.printer'), onSelect: () => void s.addPrinter(ctx?.ground ?? undefined) },
         { label: t('add.chicken'), onSelect: () => void s.addChicken(false, ctx?.ground ?? undefined) },
         { label: t('add.chickenFriend'), onSelect: () => void s.addChicken(true, ctx?.ground ?? undefined) },

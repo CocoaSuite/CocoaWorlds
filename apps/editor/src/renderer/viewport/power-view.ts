@@ -1,7 +1,8 @@
 // Power while playing: hung string lights (wire, bulbs, the light they cast), cables from plugs to sockets, and
 // plain stand-ins for outlets and power sources that have no model of their own.
 import * as THREE from 'three';
-import { readComponent, type SceneDoc, type StringLightsData } from '@cocoaworlds/core';
+import { defaultComponent, readComponent, type ModelData, type SceneDoc, type StringLightsData } from '@cocoaworlds/core';
+import { modelInstance, type ModelInstance } from './models';
 import { powerStandIn, type PowerStandIn } from './power-props';
 import { along, bulbPoints, dropOf, wirePoints, type GameWorld, type P3 } from '@cocoaworlds/runtime';
 
@@ -35,6 +36,9 @@ export class PowerView {
 
   private sources: { id: string; lamp: THREE.MeshBasicMaterial; on: boolean | null }[] = [];
   private standIns: PowerStandIn[] = [];
+  /** Each plug drawn (its model, or a plain stand-in), by the object it belongs to. */
+  private plugs = new Map<string, { obj: THREE.Group; inst: ModelInstance | null }>();
+  private plugModel = new Map<string, string>();
 
   constructor(
     private world: GameWorld,
@@ -42,6 +46,10 @@ export class PowerView {
   ) {
     // (String lights' lights made now, dark, so lighting one up later compiles nothing.)
     for (const e of doc.entities) if (e.components.stringLights) this.stringView(e.id, readComponent<StringLightsData>('stringLights', e.components.stringLights));
+    for (const e of doc.entities) {
+      const m = ((e.components.extender ?? e.components.stringLights) as { plug?: unknown } | undefined)?.plug;
+      if (typeof m === 'string' && m) this.plugModel.set(e.id, m);
+    }
     // Outlets and power sources without a model: a plate, a box with a lamp (as the editor shows them).
     for (const e of doc.entities) {
       if (!e.components.outlet && !e.components.powerSource) continue;
@@ -117,6 +125,21 @@ export class PowerView {
     }
     for (let i = shapes.length; i < this.cables.length; i++) this.cables[i]!.visible = false;
     this.lastCables = shapes;
+    // Plugs: in their sockets, in the hand, or lying at the end of their cable.
+    const shown = new Set<string>();
+    for (const p of view.plugs) {
+      shown.add(p.id);
+      const v = this.plugView(p.id);
+      // (Its prongs along `dir`; its own −Z is the way its prongs point.)
+      const z = new THREE.Vector3(-p.dir[0], -p.dir[1], -p.dir[2]).normalize();
+      const x = new THREE.Vector3(...p.up).cross(z);
+      if (x.lengthSq() < 1e-6) x.set(1, 0, 0).cross(z);
+      x.normalize();
+      const y = z.clone().cross(x);
+      v.obj.matrix.makeBasis(x, y, z).setPosition(...p.at);
+      v.obj.visible = true;
+    }
+    for (const [id, v] of this.plugs) if (!shown.has(id)) v.obj.visible = false;
     for (const s of this.sources) {
       const on = this.world.powerOn(s.id);
       if (on === s.on) continue;
@@ -124,6 +147,33 @@ export class PowerView {
       s.lamp.color.set(on ? 0x5dcaa5 : 0xe24b4a);
     }
   }
+
+  private plugView(id: string): { obj: THREE.Group; inst: ModelInstance | null } {
+    const base = id.split('#')[0]!;
+    let v = this.plugs.get(id);
+    if (v) return v;
+    const obj = new THREE.Group();
+    obj.matrixAutoUpdate = false;
+    this.group.add(obj);
+    v = { obj, inst: null };
+    this.plugs.set(id, v);
+    const model = this.plugModel.get(base);
+    const standIn = () => obj.add(plainPlug());
+    if (!model) standIn();
+    else
+      void modelInstance({ ...(defaultComponent('model') as ModelData), model, units: 'metres' })
+        .then((inst) => {
+          if (this.disposed) return inst.dispose();
+          inst.object.traverse((o) => {
+            if (o instanceof THREE.Mesh) o.castShadow = o.receiveShadow = true;
+          });
+          obj.add(inst.object);
+          v!.inst = inst;
+        })
+        .catch(standIn);
+    return v;
+  }
+  private disposed = false;
 
   /** The wire, bulbs and lights where the string hangs now (hidden when it is a coil). */
   private reshape(v: StringView, ends: [P3, P3] | null, out: P3, moving: boolean): void {
@@ -163,6 +213,13 @@ export class PowerView {
   }
 
   dispose(): void {
+    this.disposed = true;
+    for (const v of this.plugs.values()) {
+      v.inst?.dispose();
+      v.obj.traverse((o) => {
+        if (o instanceof THREE.Mesh && !v.inst) o.geometry.dispose();
+      });
+    }
     this.wireMat.dispose();
     this.bulbGeo.dispose();
     for (const c of this.cables) c.geometry.dispose();
@@ -180,4 +237,21 @@ function tube(pts: P3[]): THREE.BufferGeometry {
   const path = new THREE.CurvePath<THREE.Vector3>();
   for (let i = 0; i + 1 < pts.length; i++) path.add(new THREE.LineCurve3(new THREE.Vector3(...pts[i]!), new THREE.Vector3(...pts[i + 1]!)));
   return new THREE.TubeGeometry(path, Math.max(1, pts.length - 1) * 2, CABLE_R, 5, false);
+}
+
+const plugMat = new THREE.MeshStandardMaterial({ color: 0xe8e2d4, roughness: 0.7 });
+const prongMat = new THREE.MeshStandardMaterial({ color: 0xb4b2a9, metalness: 0.8, roughness: 0.3 });
+/** A plain plug (no model): a round body behind the prongs' base, two prongs along −Z. */
+function plainPlug(): THREE.Group {
+  const g = new THREE.Group();
+  const body = new THREE.Mesh(new THREE.CylinderGeometry(3.6, 3.6, 3.9, 8).rotateX(Math.PI / 2).translate(0, 0, 1.95), plugMat);
+  g.add(body);
+  for (const x of [-1.2, 1.2]) {
+    const p = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.4, 4.5, 6).rotateX(Math.PI / 2).translate(x, 0, -2.25), prongMat);
+    g.add(p);
+  }
+  g.traverse((o) => {
+    if (o instanceof THREE.Mesh) o.castShadow = o.receiveShadow = true;
+  });
+  return g;
 }

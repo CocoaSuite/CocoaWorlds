@@ -71,6 +71,10 @@ export async function writeAsset(dir: string, kind: unknown, name: unknown, byte
 const SAMPLES: Record<string, { file: string; as: string; kind: AssetKind }> = {
   chicken: { file: 'chicken.glb', as: 'chicken_rigged.glb', kind: 'models' },
   printer: { file: 'printer.glb', as: '3d_printer.glb', kind: 'models' },
+  outlet: { file: 'outlet.glb', as: 'outlet.glb', kind: 'models' },
+  lightSwitch: { file: 'light_switch.glb', as: 'light_switch.glb', kind: 'models' },
+  extensionCord: { file: 'extension_cord.glb', as: 'extension_cord.glb', kind: 'models' },
+  plug: { file: 'plug.glb', as: 'plug.glb', kind: 'models' },
 };
 
 /**

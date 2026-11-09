@@ -157,6 +157,7 @@ export function SceneTree() {
             { label: t('add.extender'), onSelect: () => s.add('extender') },
             { label: t('add.stringLights'), onSelect: () => s.add('stringLights') },
             { label: t('add.generator'), onSelect: () => s.add('generator') },
+            { label: t('add.lightSwitch'), onSelect: () => s.add('lightSwitch') },
             { label: t('add.printer'), onSelect: () => void s.addPrinter() },
             { label: t('add.chicken'), onSelect: () => void s.addChicken(false) },
             { label: t('add.chickenFriend'), onSelect: () => void s.addChicken(true) },

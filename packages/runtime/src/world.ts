@@ -82,6 +82,9 @@ import { COLLIDER_MATERIAL, signedDist, type Plane, bounds, brushToWorld, isNoGr
 
 /** How far away a click can hang an end of string lights (u). */
 const HANG_REACH = 144;
+/** A plug: how far its body runs back from the base of its prongs, and how far it is from its middle to its side (u). */
+const PLUG_BACK = 3.9;
+const PLUG_RADIUS = 3.6;
 
 /**
  * What the player hears through, at one point: the area's effect (and how much of it), the background sound
@@ -1177,7 +1180,11 @@ export class GameWorld {
     this.addLevel(level, conveyors);
     for (const e of doc.entities) {
       if (e.components.powerSource) this.grid.sources.set(e.id, readComponent<PowerSourceData>('powerSource', e.components.powerSource).on);
-      if (e.components.outlet) this.grid.outlets.set(e.id, readComponent<OutletData>('outlet', e.components.outlet).source);
+      if (e.components.outlet) {
+        const o = readComponent<OutletData>('outlet', e.components.outlet);
+        this.grid.outlets.set(e.id, o.source);
+        this.socketsOf.set(e.id, { pts: validPoints(o.sockets), normal: [0, 0, 1], up: [0, 1, 0] });
+      }
     }
     this.sourcesAtStart = new Map(this.grid.sources);
     // Point objects inside a physics object (a light, a model, an emitter) ride with it.
@@ -1650,8 +1657,11 @@ export class GameWorld {
       if (mesh && mesh.positions.length >= 9) this.junks.set(e.id, { pile: model, packed: { data: { ...model.data, model: packedPath }, mesh }, isPacked: false });
     }
     if (rb.motion === 'dynamic' && e.components.extender) {
-      this.grid.plugs.set(e.id, { cable: readComponent<ExtenderData>('extender', e.components.extender).cable, into: null });
+      const x = readComponent<ExtenderData>('extender', e.components.extender);
+      this.grid.plugs.set(e.id, { cable: x.cable, into: null });
       this.grid.cords.add(e.id);
+      this.socketsOf.set(e.id, { pts: validPoints(x.sockets), normal: [0, 1, 0], up: [0, 0, 1] });
+      if (x.cableAt && validPoints([x.cableAt]).length) this.cableAt.set(e.id, x.cableAt);
     }
     if (rb.motion === 'dynamic' && e.components.stringLights) {
       const data = readComponent<StringLightsData>('stringLights', e.components.stringLights);
@@ -1905,9 +1915,60 @@ export class GameWorld {
     return [m[12]!, m[13]!, m[14]!];
   }
 
-  /** Where a plug's cable starts: hung string lights from the end placed last (while hanging: the coil in hand). */
+  /** Where a plug's cable starts: hung string lights from the end placed last (while hanging: the coil in hand); a cord from where its cable leaves it. */
   private plugAt(id: string): P3 | null {
-    return this.strings.get(id)?.hung?.[1] ?? this.placeOf(id);
+    const hung = this.strings.get(id)?.hung?.[1];
+    if (hung) return hung;
+    const at = this.cableAt.get(id);
+    return at ? (this.poseOf(id)?.point(at) ?? this.placeOf(id)) : this.placeOf(id);
+  }
+
+  /** Sockets: where plugs go on each (its own space), which way they face and which way is up. */
+  private socketsOf = new Map<string, { pts: P3[]; normal: P3; up: P3 }>();
+  /** Where a cord's cable leaves it (its own space). */
+  private cableAt = new Map<string, P3>();
+
+  /** An object as it is now: a point and a direction of its own, in the world. */
+  private poseOf(id: string): { point(p: P3): P3; dir(d: P3): P3 } | null {
+    const base = id.split('#')[0]!;
+    const m = this.doc.get(base) ? this.doc.worldMatrix(base) : null;
+    const b = this.bodies.get(id);
+    if (b && !b.body.isFixed()) {
+      const t = b.body.translation(), r = b.body.rotation();
+      const q = { x: r.x, y: r.y, z: r.z, w: r.w };
+      const sc = (m ? decomposeMat4(m).scale.map(Math.abs) : [1, 1, 1]).map((v) => v * b.scale);
+      return {
+        point: (p) => {
+          const v = qrot(q, [p[0] * sc[0]!, p[1] * sc[1]!, p[2] * sc[2]!]);
+          return [t.x + v[0], t.y + v[1], t.z + v[2]];
+        },
+        dir: (d) => qrot(q, d),
+      };
+    }
+    if (!m) return null;
+    return {
+      point: (p) => transformPoint(m, p),
+      dir: (d) => {
+        const v: P3 = [m[0]! * d[0] + m[4]! * d[1] + m[8]! * d[2], m[1]! * d[0] + m[5]! * d[1] + m[9]! * d[2], m[2]! * d[0] + m[6]! * d[1] + m[10]! * d[2]];
+        const l = Math.hypot(...v) || 1;
+        return [v[0] / l, v[1] / l, v[2] / l];
+      },
+    };
+  }
+
+  /** Where a plug sits in its socket: the base of its prongs, the way the socket faces, and up. */
+  private socketSpot(socket: string, plug: string): { at: P3; normal: P3; up: P3 } | null {
+    const s = this.socketsOf.get(socket), pose = this.poseOf(socket);
+    if (!pose) return null;
+    if (!s) return { at: pose.point([0, 0, 0]), normal: pose.dir([0, 0, 1]), up: pose.dir([0, 1, 0]) };
+    const i = Math.max(0, this.grid.pluggedInto(socket).indexOf(plug));
+    return { at: pose.point(s.pts[i % s.pts.length]!), normal: pose.dir(s.normal), up: pose.dir(s.up) };
+  }
+
+  /** Where the cable of a plug in a socket ends: the back of the plug. */
+  private socketEnd(socket: string, plug: string): P3 | null {
+    const s = this.socketSpot(socket, plug);
+    return s ? [s.at[0] + s.normal[0] * PLUG_BACK, s.at[1] + s.normal[1] * PLUG_BACK, s.at[2] + s.normal[2] * PLUG_BACK] : null;
   }
 
   /** Whether a power source is on (null: it isn't one). */
@@ -2233,7 +2294,7 @@ export class GameWorld {
   }
 
   /** What to draw: string lights (hung, or one end up while being hung) and cables from plugs to sockets. */
-  powerView(): { strings: { id: string; ends: [P3, P3] | null; out: P3; lit: boolean; version: number; data: StringLightsData }[]; cables: { id: string; points: P3[] }[] } {
+  powerView(): { strings: { id: string; ends: [P3, P3] | null; out: P3; lit: boolean; version: number; data: StringLightsData }[]; cables: { id: string; points: P3[] }[]; plugs: { id: string; at: P3; dir: P3; up: P3 }[] } {
     const strings: { id: string; ends: [P3, P3] | null; out: P3; lit: boolean; version: number; data: StringLightsData }[] = [];
     for (const [id, st] of this.strings) {
       if (this.gone.has(id)) continue;
@@ -2241,18 +2302,53 @@ export class GameWorld {
       strings.push({ id, ends: st.hung ?? (st.half && coil ? [st.half, coil] : null), out: st.hung ? st.out : st.halfOut, lit: this.grid.live(this.grid.plugs.get(id)?.into ?? null), version: st.version + (st.half ? 0.5 : 0), data: st.data });
     }
     const cables: { id: string; points: P3[] }[] = [];
+    const plugs: { id: string; at: P3; dir: P3; up: P3 }[] = [];
     for (const [id, p] of this.grid.plugs) {
-      if (!p.into || this.gone.has(id)) {
-        this.cableShapes.delete(id);
-        continue;
-      }
-      const from = this.plugAt(id), to = this.placeOf(p.into);
+      if (!p.into || this.gone.has(id)) continue;
+      const from = this.plugAt(id), to = this.socketEnd(p.into, id), spot = this.socketSpot(p.into, id);
       if (from && to) cables.push({ id, points: this.cableShape(id, from, to, p.cable) });
+      if (spot) plugs.push({ id, at: spot.at, dir: [-spot.normal[0], -spot.normal[1], -spot.normal[2]], up: spot.up });
     }
     const inHand = this.plugHand ? this.strings.get(this.plugHand) : undefined, hand = this.handAt();
-    if (this.plugHand && inHand?.hung && hand) cables.push({ id: this.plugHand, points: this.cableShape(this.plugHand, inHand.hung[1], hand, this.grid.plugs.get(this.plugHand)!.cable) });
-    return { strings, cables };
+    if (this.plugHand && inHand?.hung && hand && this.player) {
+      const d = this.player.lookDirection() as P3;
+      cables.push({ id: this.plugHand, points: this.cableShape(this.plugHand, inHand.hung[1], [hand[0] - d[0] * PLUG_BACK, hand[1] - d[1] * PLUG_BACK, hand[2] - d[2] * PLUG_BACK], this.grid.plugs.get(this.plugHand)!.cable) });
+      plugs.push({ id: this.plugHand, at: hand, dir: d, up: [0, 1, 0] });
+    }
+    // Plugs not in anything: cords' and hung lights', lying on the floor at the end of a short length of cable.
+    for (const [id, p] of this.grid.plugs) {
+      if (p.into || this.gone.has(id) || id === this.plugHand) continue;
+      const st = this.strings.get(id);
+      if (st && !st.hung) continue;
+      const from = this.plugAt(id);
+      if (!from) continue;
+      let d: P3 = st ? st.out : (this.poseOf(id)?.dir([0, 0, -1]) ?? [1, 0, 0]);
+      const flat = Math.hypot(d[0], d[2]);
+      d = flat > 0.1 ? [d[0] / flat, 0, d[2] / flat] : [1, 0, 0];
+      const loose = this.looseEnd(id, from, d, st ? 10 : 24);
+      cables.push({ id, points: loose.points });
+      plugs.push({ id, at: loose.plug, dir: d, up: [0, 1, 0] });
+    }
+    return { strings, cables, plugs };
   }
+
+  /** A loose plug's cable: from where it leaves, out a little way and down onto whatever is below; the plug at its end. */
+  private looseEnd(id: string, from: P3, d: P3, out: number): { points: P3[]; plug: P3 } {
+    const r = (v: P3) => v.map((x) => Math.round(x * 2)).join(',');
+    const key = `loose|${r(from)}|${r(d)}`;
+    const kept = this.looseShapes.get(id);
+    if (kept?.key === key) return kept;
+    const x = from[0] + d[0] * out, z = from[2] + d[2] * out;
+    const hit = this.world.castRay(new RAPIER.Ray({ x, y: from[1], z }, { x: 0, y: -1, z: 0 }), 4096, true, RAPIER.QueryFilterFlags.EXCLUDE_SENSORS, 0xffffffff, this.player?.collider, undefined, (c) => !this.isHeld(c));
+    const y = (hit ? from[1] - hit.timeOfImpact : from[1] - 64) + PLUG_RADIUS;
+    const end: P3 = [x, y, z];
+    const points = this.cableShape(id, from, end, dist3(from, end) * 1.2);
+    const plug: P3 = [x + d[0] * PLUG_BACK, y, z + d[2] * PLUG_BACK];
+    const shape = { key, points, plug };
+    this.looseShapes.set(id, shape);
+    return shape;
+  }
+  private looseShapes = new Map<string, { key: string; points: P3[]; plug: P3 }>();
 
   /**
    * A cable from a plug to its socket: hanging a little with the slack it has, but lying along the floor (or
@@ -5141,6 +5237,12 @@ function quatFromMatrix(m: number[]): { x: number; y: number; z: number; w: numb
   }
   const s = 2 * Math.sqrt(1 + m33 - m11 - m22);
   return { w: (m21 - m12) / s, x: (m13 + m31) / s, y: (m23 + m32) / s, z: 0.25 * s };
+}
+
+/** Points given in a component (anything else dropped); none: one at the origin. */
+function validPoints(v: unknown): P3[] {
+  const out = Array.isArray(v) ? (v.filter((p) => Array.isArray(p) && p.length === 3 && p.every((x) => typeof x === 'number' && Number.isFinite(x))) as P3[]) : [];
+  return out.length ? out : [[0, 0, 0]];
 }
 
 function transformPoint(m: number[], v: readonly number[]): [number, number, number] {

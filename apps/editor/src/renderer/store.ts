@@ -119,7 +119,7 @@ export type ViewMode = 'perspective' | 'top' | 'front' | 'side';
 /** Grid sizes to snap to (u). */
 export const GRID_SIZES = [1, 2, 4, 8, 16, 32, 64, 128, 256, 512];
 
-export type AddKind = 'empty' | 'pointLight' | 'spotLight' | 'sun' | 'spawn' | 'sign' | 'reflectionProbe' | 'poster' | 'painting' | 'stake' | 'junk' | 'carpet' | 'outlet' | 'extender' | 'stringLights' | 'generator';
+export type AddKind = 'empty' | 'pointLight' | 'spotLight' | 'sun' | 'spawn' | 'sign' | 'reflectionProbe' | 'poster' | 'painting' | 'stake' | 'junk' | 'carpet' | 'outlet' | 'extender' | 'stringLights' | 'generator' | 'lightSwitch';
 export interface LogEntry {
   at: string;
   level: 'info' | 'warn' | 'error';
@@ -233,6 +233,8 @@ interface Actions {
   addChicken(friendly: boolean, at?: [number, number, number]): Promise<void>;
   /** The ready-made 3D printer: its model (with collision boxes and moving lift, gantry and head) and settings to match. */
   addPrinter(at?: [number, number, number]): Promise<void>;
+  /** Ready-made power things with their models (copied into the project the first time): an outlet, a light switch, an extension cord, string lights (and their plug). */
+  addPower(kind: 'outlet' | 'lightSwitch' | 'extender' | 'stringLights', at?: [number, number, number]): Promise<void>;
   /** A ready-made ladder: a Repeat group of rail-and-rung segments with a climbing zone in each, and a top cap. */
   addLadder(at?: [number, number, number]): void;
   /** A new terrain: flat ground 2048 u square, 768 u deep, its surface at `at` (T1). */
@@ -550,6 +552,7 @@ export const useEditor = create<State & Actions>()((set, get) => ({
   add(kind, at = get().placementPoint() ?? [0, 0, 0]) {
     const doc = get().doc;
     if (!doc) return;
+    if (kind === 'outlet' || kind === 'lightSwitch' || kind === 'extender' || kind === 'stringLights') return void get().addPower(kind, at);
     const base = (name: string, components: EntityData['components'], y = 0) =>
       newEntity(name, components, { position: [at[0], at[1] + y, at[2]] });
     const e: EntityData = {
@@ -564,9 +567,10 @@ export const useEditor = create<State & Actions>()((set, get) => ({
       painting: () => base('painting', { poster: { picture: '', width: 48, height: 36, rolls: false, scrollModel: '', scrollScale: 1, scrollCollision: 'cylinder', thickness: 3, frame: '#5a3d25', mass: 4, hungAtStart: false } }, 24),
       junk: () => base('junk', { model: { collision: 'hull' }, rigidBody: { motion: 'dynamic', mass: 8 }, junk: { packed: '' } }, 24),
       carpet: () => base('carpet', { model: { collision: 'hull' }, rigidBody: { motion: 'dynamic', mass: 6 }, junk: { packed: '' } }, 2),
-      outlet: () => base('outlet', { collider: { shape: 'box', size: [8, 12, 2] }, outlet: { source: '' } }, 24),
-      extender: () => base('extension_cord', { collider: { shape: 'box', size: [16, 6, 10] }, rigidBody: { motion: 'dynamic', mass: 1 }, extender: { cable: 256 } }, 3),
-      stringLights: () => base('string_lights', { collider: { shape: 'box', size: [12, 8, 12] }, rigidBody: { motion: 'dynamic', mass: 1 }, stringLights: {} }, 4),
+      outlet: () => base('outlet', {}),
+      lightSwitch: () => base('light_switch', {}),
+      extender: () => base('extension_cord', {}),
+      stringLights: () => base('string_lights', {}),
       generator: () => base('generator', { collider: { shape: 'box', size: [32, 24, 24] }, powerSource: { on: true } }, 12),
       stake: () => base('stake', { model: {}, rigidBody: { motion: 'dynamic' }, stake: { tip: 'bottom', speed: 160, depth: 6, tilt: 10 } }, 16),
     }[kind]();
@@ -658,6 +662,45 @@ export const useEditor = create<State & Actions>()((set, get) => ({
     get().execute(addEntitiesCmd(doc, [e], `Add ${e.name}`));
     set({ selection: [e.id] });
     get().log('info', 'Scene', 'Added a 3D printer (the Print block prints on it)');
+  },
+
+  async addPower(kind, at = get().placementPoint() ?? [0, 0, 0]) {
+    const { doc, session } = get();
+    if (!doc || !session) return;
+    const sample = async (name: string) => {
+      const r = await window.cocoa.projects.addSample(session.dir, name);
+      if (!r.ok) {
+        get().notify(r.error);
+        return null;
+      }
+      return r.value.path;
+    };
+    const model = (path: string, collision: string) => ({ ...defaultComponent('model'), model: path, units: 'metres', collision });
+    const pos = (y: number) => ({ position: [at[0], at[1] + y, at[2]] as [number, number, number] });
+    let e: EntityData | null = null;
+    // (The models' sizes and where their sockets and cable are, in game units: see samples/.)
+    if (kind === 'outlet') {
+      const m = await sample('outlet');
+      if (m) e = newEntity('outlet', { model: model(m, 'box'), outlet: { source: '', sockets: [[0, 0, 0.29]] } }, pos(24));
+    } else if (kind === 'lightSwitch') {
+      const m = await sample('lightSwitch');
+      if (m) e = newEntity('light_switch', { model: model(m, 'box'), powerSource: { on: true } }, pos(40));
+    } else if (kind === 'extender') {
+      const m = await sample('extensionCord'), plug = await sample('plug');
+      if (m && plug)
+        e = newEntity(
+          'extension_cord',
+          { model: model(m, 'hull'), rigidBody: { motion: 'dynamic', mass: 1 }, extender: { cable: 256, sockets: [[0, 3.26, -7.72], [0, 3.26, 2.84], [0, 3.26, 13.35]], cableAt: [0, 1.5, -18.6], plug } },
+          pos(0),
+        );
+    } else {
+      const plug = await sample('plug');
+      if (plug) e = newEntity('string_lights', { collider: { shape: 'box', size: [12, 8, 12] }, rigidBody: { motion: 'dynamic', mass: 1 }, stringLights: { plug } }, pos(4));
+    }
+    if (!e) return;
+    void get().loadAssets();
+    get().execute(addEntitiesCmd(doc, [e], `Add ${e.name}`));
+    set({ selection: [e.id] });
   },
 
   deleteSelection() {
