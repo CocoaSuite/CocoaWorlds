@@ -56,6 +56,16 @@ describe('junk', () => {
     w.dispose();
   });
 
+  it('a pile on the floor is not pushed (the player walks into it and it stays)', () => {
+    const { w, id } = world();
+    const at = w.positionOf(id)!;
+    w.setPlayerInput({ pitch: 0, forward: 1 });
+    run(w, 2);
+    const now = w.positionOf(id)!;
+    expect(Math.hypot(now[0] - at[0], now[2] - at[2])).toBeLessThan(0.01);
+    w.dispose();
+  });
+
   it('without a packed model it just stays a pile', () => {
     const { w, id } = world('');
     expect(w.junkPacked(id)).toBe(null);

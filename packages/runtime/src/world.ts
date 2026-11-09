@@ -825,6 +825,8 @@ export class GameWorld {
     const bodies = save.bodies && typeof save.bodies === 'object' ? save.bodies : {};
     const later: Record<string, SavedBody> = {};
     for (const [id, sb] of Object.entries(bodies)) if (!this.restoreBody(id, sb)) later[id] = sb;
+    // (Junk and carpets that were moved settle again where they were put: loose until they lie still.)
+    for (const id of this.junky) if (bodies[id]) this.bodies.get(id)?.body.setBodyType(RAPIER.RigidBodyType.Dynamic, true);
     this.waiting = { bodies: later, removed: Array.isArray(save.removed) ? save.removed.filter((x): x is string => typeof x === 'string') : [] };
     for (const [id, st] of Object.entries(save.npcs ?? {})) {
       const n = this.npcs.get(id), at = v3(st?.at);
@@ -1629,6 +1631,9 @@ export class GameWorld {
       const mesh = packedPath ? this.models.get(packedPath) : undefined;
       if (mesh && mesh.positions.length >= 9) this.junks.set(e.id, { pile: model, packed: { data: { ...model.data, model: packedPath }, mesh }, isPacked: false });
     }
+    // (Junk lying on the floor stays put: nothing pushes it; picking it up frees it.)
+    if (e.components.junk && model && rb.motion === 'dynamic') this.junky.add(e.id);
+    if (e.components.junk && model && rb.motion === 'dynamic') body.setBodyType(RAPIER.RigidBodyType.Fixed, false);
   }
 
   // ── Posters and paintings ──
@@ -1854,6 +1859,8 @@ export class GameWorld {
 
   // ── Junk: a pile on the ground, a bundle in the hands ──
 
+  /** Junk and carpets (with or without a packed model): fixed while down, loose while carried or falling. */
+  private junky = new Set<string>();
   private junks = new Map<string, { pile: { data: ModelData; mesh: ModelMesh }; packed: { data: ModelData; mesh: ModelMesh }; isPacked: boolean }>();
 
   /** Whether junk is packed up now (null: it isn't junk). */
@@ -1868,7 +1875,10 @@ export class GameWorld {
 
   /** Packed into its bundle, or spread into its pile: its look and collider swapped (keeping its weight). */
   private packJunk(id: string, packed: boolean): void {
-    const j = this.junks.get(id), b = this.bodies.get(id);
+    const b = this.bodies.get(id);
+    // Picked up: loose; down as a pile: fixed in place.
+    if (b && this.junky.has(id)) b.body.setBodyType(packed ? RAPIER.RigidBodyType.Dynamic : RAPIER.RigidBodyType.Fixed, packed);
+    const j = this.junks.get(id);
     if (!j || !b?.model || j.isPacked === packed) return;
     j.isPacked = packed;
     b.model = { ...(packed ? j.packed : j.pile), matrix: b.model.matrix };
@@ -1888,20 +1898,28 @@ export class GameWorld {
 
   /** After each step: packed junk that isn't held and has landed on something spreads into a pile, upright, there. */
   private settleJunk(): void {
-    for (const [id, j] of this.junks) {
+    for (const id of this.junky) {
       const b = this.bodies.get(id);
-      if (!j.isPacked || !b?.model || this.held?.id === id || !b.body.isDynamic()) continue;
+      if (!b?.model || this.held?.id === id || !b.body.isDynamic()) continue;
+      const j = this.junks.get(id);
+      // On something below it (not just brushing a wall); without a bundle to spread from, once it has settled.
       let landed = b.body.isSleeping();
       for (let i = 0; i < b.body.numColliders() && !landed; i++) {
         const mine = b.body.collider(i);
         this.world.contactPairsWith(mine, (other) => {
           if (landed || other.isSensor() || other.handle === this.player?.collider.handle || this.triggers.has(other.handle) || this.volumes.has(other.handle)) return;
           this.world.contactPair(mine, other, (m) => {
-            if (m.numContacts() > 0) landed = true;
+            if (m.numContacts() > 0 && Math.abs(m.normal().y) > 0.5) landed = true;
           });
         });
       }
-      if (!landed) continue;
+      if (landed && !j?.isPacked) {
+        const v = b.body.linvel(), w = b.body.angvel();
+        if (!b.body.isSleeping() && (Math.hypot(v.x, v.y, v.z) > 8 || Math.hypot(w.x, w.y, w.z) > 0.5)) continue;
+        this.packJunk(id, false);
+        continue;
+      }
+      if (!landed || !j) continue;
       const r = b.body.rotation(), c = b.body.translation();
       const was = { x: r.x, y: r.y, z: r.z, w: r.w };
       // Upright, facing the way the bundle faced, its lowest point where the bundle's was.
@@ -1911,12 +1929,12 @@ export class GameWorld {
       const y = c.y + this.junkFloor(j.packed, b.model.matrix, was) - this.junkFloor(j.pile, b.model.matrix, up) + 0.5;
       b.body.setTranslation({ x: c.x, y, z: c.z }, false);
       b.body.setRotation(up, false);
-      const v = b.body.linvel();
-      b.body.setLinvel({ x: v.x * 0.2, y: Math.min(0, v.y) * 0.2, z: v.z * 0.2 }, false);
+      b.body.setLinvel({ x: 0, y: 0, z: 0 }, false);
       b.body.setAngvel({ x: 0, y: 0, z: 0 }, false);
       this.packJunk(id, false);
     }
   }
+
 
   private track(id: string, kind: BodyInfo['kind'], motion: BodyInfo['motion'], body: RAPIER.RigidBody, brushes: Brush[] = []): void {
     const t = body.translation(), r = body.rotation();
@@ -2102,7 +2120,7 @@ export class GameWorld {
       this.listenForHits();
       if (this.held) this.stickHeld();
       if (this.stakes.size) this.stickStakes();
-      if (this.junks.size) this.settleJunk();
+      if (this.junky.size) this.settleJunk();
       this.accumulator -= STEP;
       this.time += STEP;
       this.base?.tick(STEP);
@@ -2828,7 +2846,7 @@ export class GameWorld {
     if (!t) return false;
     if (this.posters.get(t)?.hung) this.takeDownPoster(t);
     if (this.stakes.get(t)?.stuck) this.pullStake(t);
-    if (this.junks.has(t)) this.packJunk(t, true);
+    if (this.junky.has(t)) this.packJunk(t, true);
     this.hold(t, this.bodies.get(t)!.body);
     return true;
   }

@@ -778,10 +778,10 @@ export const COMPONENTS: ComponentDef[] = [
   },
   {
     name: 'junk',
-    label: e('Junk', 'Хлам'),
+    label: e('Packs up (junk, carpet)', 'Сворачивается (хлам, ковёр)'),
     description: e(
-      'A heap of junk: its Model is the pile it makes on the ground. Picked up, it is packed into a bundle (another model) and collides as that; dropped or thrown, it spreads into a pile again where it lands. Needs Physics.',
-      'Куча хлама: её Модель — куча на земле. Если поднять, она сжимается в связку (другая модель) и сталкивается как она; брошенная, снова рассыпается в кучу там, где упала. Нужна Физика.',
+      'Junk or a carpet: its Model is how it lies on the floor (a pile, a flat carpet), solid and fixed in place, so nothing pushes it. Picked up, it is packed into its Packed model (a bundle, a roll) and collides as that; dropped or thrown, it lies down again, upright, where it lands. Needs Physics.',
+      'Хлам или ковёр: его Модель — как он лежит на полу (куча, расстеленный ковёр), твёрдый и неподвижный, его ничто не сдвинет. Если поднять, он сворачивается в Модель в связке (связка, рулон) и сталкивается как она; брошенный, снова ложится там, где упал. Нужна Физика.',
     ),
     appliesTo: 'point',
     pointNeeds: 'model',
@@ -789,8 +789,8 @@ export const COMPONENTS: ComponentDef[] = [
     fields: [
       {
         key: 'packed',
-        label: e('Packed model', 'Модель в связке'),
-        hint: e('How it looks while carried (same origin and units as its Model; put the origin at the bottom of both). Empty: it stays a pile.', 'Как выглядит в руках (то же начало и единицы, что у Модели; начало внизу у обеих). Пусто — остаётся кучей.'),
+        label: e('Packed model', 'Свёрнутая модель'),
+        hint: e('How it looks while carried: a bundle, a rolled-up carpet (same origin and units as its Model; put the origin at the bottom of both). Empty: it stays a pile.', 'Как выглядит в руках (то же начало и единицы, что у Модели; начало внизу у обеих). Пусто — остаётся кучей.'),
         type: { kind: 'asset', asset: 'models' },
         default: '',
       },

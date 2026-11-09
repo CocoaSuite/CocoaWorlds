@@ -119,7 +119,7 @@ export type ViewMode = 'perspective' | 'top' | 'front' | 'side';
 /** Grid sizes to snap to (u). */
 export const GRID_SIZES = [1, 2, 4, 8, 16, 32, 64, 128, 256, 512];
 
-export type AddKind = 'empty' | 'pointLight' | 'spotLight' | 'sun' | 'spawn' | 'sign' | 'reflectionProbe' | 'poster' | 'painting' | 'stake' | 'junk';
+export type AddKind = 'empty' | 'pointLight' | 'spotLight' | 'sun' | 'spawn' | 'sign' | 'reflectionProbe' | 'poster' | 'painting' | 'stake' | 'junk' | 'carpet';
 export interface LogEntry {
   at: string;
   level: 'info' | 'warn' | 'error';
@@ -563,6 +563,7 @@ export const useEditor = create<State & Actions>()((set, get) => ({
       poster: () => base('poster', { poster: { picture: '', width: 32, height: 48, rolls: true, scrollModel: '', scrollScale: 1, scrollCollision: 'cylinder', thickness: 0.5, frame: '#e8e2d4', mass: 0.5, hungAtStart: false } }, 8),
       painting: () => base('painting', { poster: { picture: '', width: 48, height: 36, rolls: false, scrollModel: '', scrollScale: 1, scrollCollision: 'cylinder', thickness: 3, frame: '#5a3d25', mass: 4, hungAtStart: false } }, 24),
       junk: () => base('junk', { model: { collision: 'hull' }, rigidBody: { motion: 'dynamic', mass: 8 }, junk: { packed: '' } }, 24),
+      carpet: () => base('carpet', { model: { collision: 'hull' }, rigidBody: { motion: 'dynamic', mass: 6 }, junk: { packed: '' } }, 2),
       stake: () => base('stake', { model: {}, rigidBody: { motion: 'dynamic' }, stake: { tip: 'bottom', speed: 160, depth: 6, tilt: 10 } }, 16),
     }[kind]();
     get().execute(addEntitiesCmd(doc, [e], `Add ${e.name}`));
