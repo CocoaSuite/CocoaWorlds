@@ -17,6 +17,9 @@ export type GameEvent =
   /** A prop stuck into the ground, or was pulled out. */
   | { type: 'stake.stick'; target: string; time: number }
   | { type: 'stake.pull'; target: string; time: number }
+  /** Junk was packed up (picked up), or spread into a pile where it landed. */
+  | { type: 'junk.pack'; target: string; time: number }
+  | { type: 'junk.unpack'; target: string; time: number }
   | { type: 'player.hurt'; amount: number; health: number; cause: string; time: number }
   | { type: 'player.die'; cause: string; time: number }
   | { type: 'score'; score: number; by: number; time: number }

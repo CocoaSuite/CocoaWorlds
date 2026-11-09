@@ -44,6 +44,7 @@ import {
   type ModelData,
   type PosterData,
   type StakeData,
+  type JunkData,
   type PrinterData,
   worldBoundsOf,
   posterScrollRadius,
@@ -1471,6 +1472,8 @@ export class GameWorld {
   private modelShape(e: EntityData): { data: ModelData; mesh: ModelMesh } | null {
     if (!e.components.model || e.components.collider) return null;
     const data = readComponent<ModelData>('model', e.components.model);
+    // (Junk always collides by its shape: a pile, or the bundle it is packed into.)
+    if (e.components.junk && (data.collision === 'auto' || data.collision === 'none')) data.collision = 'hull';
     const mesh = data.collision !== 'none' ? this.models.get(data.model) : undefined;
     if (mesh?.parts?.length) return { data, mesh };
     if (data.collision === 'auto') return null;
@@ -1619,7 +1622,13 @@ export class GameWorld {
     if (parts.size) b.parts = parts;
     if (model) b.model = { ...model, matrix: world };
     else b.shape = { collider: shape!, matrix: world };
-    b.rb = rb;    if (e.components.stake && rb.motion === 'dynamic') this.stakes.set(e.id, { data: readComponent<StakeData>('stake', e.components.stake), stuck: false, free: 0 });
+    b.rb = rb;
+    if (e.components.stake && rb.motion === 'dynamic') this.stakes.set(e.id, { data: readComponent<StakeData>('stake', e.components.stake), stuck: false, free: 0 });
+    if (e.components.junk && model && rb.motion === 'dynamic') {
+      const packedPath = readComponent<JunkData>('junk', e.components.junk).packed;
+      const mesh = packedPath ? this.models.get(packedPath) : undefined;
+      if (mesh && mesh.positions.length >= 9) this.junks.set(e.id, { pile: model, packed: { data: { ...model.data, model: packedPath }, mesh }, isPacked: false });
+    }
   }
 
   // ── Posters and paintings ──
@@ -1843,6 +1852,72 @@ export class GameWorld {
     this.bus.emit({ type: 'stake.pull', target: id, time: this.time });
   }
 
+  // ── Junk: a pile on the ground, a bundle in the hands ──
+
+  private junks = new Map<string, { pile: { data: ModelData; mesh: ModelMesh }; packed: { data: ModelData; mesh: ModelMesh }; isPacked: boolean }>();
+
+  /** Whether junk is packed up now (null: it isn't junk). */
+  junkPacked(id: string): boolean | null {
+    return this.junks.get(id)?.isPacked ?? null;
+  }
+
+  /** The packed-up model of a piece of junk (for drawing it), or null. */
+  junkModel(id: string): ModelData | null {
+    return this.junks.get(id)?.packed.data ?? null;
+  }
+
+  /** Packed into its bundle, or spread into its pile: its look and collider swapped (keeping its weight). */
+  private packJunk(id: string, packed: boolean): void {
+    const j = this.junks.get(id), b = this.bodies.get(id);
+    if (!j || !b?.model || j.isPacked === packed) return;
+    j.isPacked = packed;
+    b.model = { ...(packed ? j.packed : j.pile), matrix: b.model.matrix };
+    this.rebuildColliders(b);
+    this.bus.emit({ type: packed ? 'junk.pack' : 'junk.unpack', target: id, time: this.time });
+  }
+
+  /** The lowest height of a model's points, turned by `q` (world units, from the body's origin). */
+  private junkFloor(m: { data: ModelData; mesh: ModelMesh }, matrix: number[], q: Quat): number {
+    const k = unitsOf(m.data);
+    const sc = decomposeMat4(matrix).scale.map(Math.abs);
+    const p = m.mesh.positions;
+    let low = Infinity;
+    for (let i = 0; i + 2 < p.length; i += 3) low = Math.min(low, qrot(q, [p[i]! * k * sc[0]!, p[i + 1]! * k * sc[1]!, p[i + 2]! * k * sc[2]!])[1]);
+    return Number.isFinite(low) ? low : 0;
+  }
+
+  /** After each step: packed junk that isn't held and has landed on something spreads into a pile, upright, there. */
+  private settleJunk(): void {
+    for (const [id, j] of this.junks) {
+      const b = this.bodies.get(id);
+      if (!j.isPacked || !b?.model || this.held?.id === id || !b.body.isDynamic()) continue;
+      let landed = b.body.isSleeping();
+      for (let i = 0; i < b.body.numColliders() && !landed; i++) {
+        const mine = b.body.collider(i);
+        this.world.contactPairsWith(mine, (other) => {
+          if (landed || other.isSensor() || other.handle === this.player?.collider.handle || this.triggers.has(other.handle) || this.volumes.has(other.handle)) return;
+          this.world.contactPair(mine, other, (m) => {
+            if (m.numContacts() > 0) landed = true;
+          });
+        });
+      }
+      if (!landed) continue;
+      const r = b.body.rotation(), c = b.body.translation();
+      const was = { x: r.x, y: r.y, z: r.z, w: r.w };
+      // Upright, facing the way the bundle faced, its lowest point where the bundle's was.
+      const f = qrot(was, [0, 0, 1]);
+      const yaw = Math.hypot(f[0], f[2]) > 1e-3 ? Math.atan2(f[0], f[2]) : 0;
+      const up = { x: 0, y: Math.sin(yaw / 2), z: 0, w: Math.cos(yaw / 2) };
+      const y = c.y + this.junkFloor(j.packed, b.model.matrix, was) - this.junkFloor(j.pile, b.model.matrix, up) + 0.5;
+      b.body.setTranslation({ x: c.x, y, z: c.z }, false);
+      b.body.setRotation(up, false);
+      const v = b.body.linvel();
+      b.body.setLinvel({ x: v.x * 0.2, y: Math.min(0, v.y) * 0.2, z: v.z * 0.2 }, false);
+      b.body.setAngvel({ x: 0, y: 0, z: 0 }, false);
+      this.packJunk(id, false);
+    }
+  }
+
   private track(id: string, kind: BodyInfo['kind'], motion: BodyInfo['motion'], body: RAPIER.RigidBody, brushes: Brush[] = []): void {
     const t = body.translation(), r = body.rotation();
     this.bodies.set(id, {
@@ -2027,6 +2102,7 @@ export class GameWorld {
       this.listenForHits();
       if (this.held) this.stickHeld();
       if (this.stakes.size) this.stickStakes();
+      if (this.junks.size) this.settleJunk();
       this.accumulator -= STEP;
       this.time += STEP;
       this.base?.tick(STEP);
@@ -2752,6 +2828,7 @@ export class GameWorld {
     if (!t) return false;
     if (this.posters.get(t)?.hung) this.takeDownPoster(t);
     if (this.stakes.get(t)?.stuck) this.pullStake(t);
+    if (this.junks.has(t)) this.packJunk(t, true);
     this.hold(t, this.bodies.get(t)!.body);
     return true;
   }

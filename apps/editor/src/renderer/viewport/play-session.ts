@@ -95,7 +95,9 @@ export class PlaySession {
     const wanted = new Set<string>();
     for (const e of scene.entities) {
       const m = e.components.model as Partial<ModelData> | undefined;
-      if (m?.model && m.collision !== 'none') wanted.add(m.model);
+      if (m?.model && (m.collision !== 'none' || e.components.junk)) wanted.add(m.model);
+      const packed = (e.components.junk as { packed?: unknown } | undefined)?.packed;
+      if (typeof packed === 'string' && packed) wanted.add(packed);
       if (e.components.poster) {
         const p = posterOf(e.components);
         if (p.rolls && p.scrollModel && p.scrollCollision !== 'cylinder') wanted.add(p.scrollModel);
@@ -542,7 +544,8 @@ export class PlaySession {
    */
   warm: (obj: THREE.Object3D) => Promise<unknown> = () => Promise.resolve();
 
-  private attachModel(holder: THREE.Group, data: ModelData, id: string): void {
+  /** `own`: the object's main model (for “Play animation” and moving collision meshes); a second look isn't. */
+  private attachModel(holder: THREE.Group, data: ModelData, id: string, own = true): void {
     void modelInstance(data)
       .then(async (inst) => {
         if (this.disposed) return inst.dispose();
@@ -552,6 +555,7 @@ export class PlaySession {
         // (Googly eyes ride on its head bone now, while it still stands in its rest pose.)
         this.eyesById.get(id)?.rideModel(inst.object);
         if (inst.mixer) this.mixers.push(inst.mixer);
+        if (!own) return;
         this.models.set(id, inst);
         if (inst.mixer && inst.movedParts().length) this.carried.push([id, inst]);
       })
@@ -943,7 +947,16 @@ export class PlaySession {
         holder.matrix.fromArray(at);
         this.group.add(holder);
         this.movers.push({ id: b.id, i: this.world.drawn(b.id), obj: holder, base: holder.matrix.clone() });
-        this.attachModel(holder, model, b.id);
+        const packed = this.world.junkModel(b.id);
+        if (packed) {
+          // Junk: the pile and the packed bundle both kept ready, one shown (as the world says it is now).
+          const pile = new THREE.Group(), bundle = new THREE.Group();
+          bundle.visible = false;
+          holder.add(pile, bundle);
+          this.attachModel(pile, model, b.id);
+          this.attachModel(bundle, packed, b.id, false);
+          this.junkViews.push({ id: b.id, pile, bundle, packed: false });
+        } else this.attachModel(holder, model, b.id);
         this.eyesOn(b.id, holder, this.eyesIn(b.id, holder.matrix));
         this.addCarriedBrushes(b);
         return;
@@ -1022,6 +1035,8 @@ export class PlaySession {
 
   /** Posters and paintings drawn, and whether each was last drawn hung. */
   private posterViews: { id: string; view: PosterObject; hung: boolean | null }[] = [];
+  /** Junk: its pile and packed-bundle looks, and which is shown. */
+  private junkViews: { id: string; pile: THREE.Group; bundle: THREE.Group; packed: boolean }[] = [];
 
   /** How long the world's step took in the last tick (ms). */
   stepMs = 0;
@@ -1087,6 +1102,7 @@ export class PlaySession {
       this.movers = this.movers.filter((m) => !gone.has(m.id));
       for (const p of this.posterViews) if (gone.has(p.id)) p.view.dispose();
       this.posterViews = this.posterViews.filter((p) => !gone.has(p.id));
+      this.junkViews = this.junkViews.filter((j) => !gone.has(j.id));
       for (const x of this.eyes) if (gone.has(x.id)) {
         x.eyes.dispose();
         this.eyesById.delete(x.id);
@@ -1103,6 +1119,13 @@ export class PlaySession {
       m.obj.matrixWorldNeedsUpdate = true;
     }
     if (this.printers.length) this.updatePrinters(dt);
+    for (const j of this.junkViews) {
+      const packed = this.world.junkPacked(j.id) ?? false;
+      if (packed === j.packed) continue;
+      j.packed = packed;
+      j.pile.visible = !packed;
+      j.bundle.visible = packed;
+    }
     for (const p of this.posterViews) {
       const hung = this.world.posterHung(p.id);
       if (hung === null || hung === p.hung) continue;

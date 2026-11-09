@@ -112,6 +112,11 @@ export type PrinterData = {
   sound: string;
   volume: number;
 };
+/** Junk (component `junk`): its Model is the pile it makes on the ground; this is how it looks packed up while carried. */
+export type JunkData = {
+  /** The packed-up model (empty: it stays a pile). Made in the same units as its Model. */
+  packed: string;
+};
 /** A prop that sticks into the ground (component `stake`) when it hits it hard enough, tip first. */
 export type StakeData = {
   /** Which way its tip points, in its own axes. */
@@ -757,7 +762,7 @@ export const COMPONENTS: ComponentDef[] = [
       'Предмет, который втыкается в землю под небольшим случайным наклоном, если ударить им достаточно сильно остриём вниз (табличка, кол). Если поднять, он вытаскивается. Нужна Физика.',
     ),
     appliesTo: 'point',
-    conflicts: ['poster', 'npc', 'seat', 'hidingSpot'],
+    conflicts: ['poster', 'npc', 'seat', 'hidingSpot', 'junk'],
     fields: [
       {
         key: 'tip',
@@ -769,6 +774,26 @@ export const COMPONENTS: ComponentDef[] = [
       { key: 'speed', label: e('Sticks from', 'Втыкается от'), hint: e('How fast it must hit the ground.', 'С какой скоростью нужно ударить о землю.'), type: { kind: 'number', min: 0, step: 16, unit: 'u/s' }, default: 160 },
       { key: 'depth', label: e('Depth', 'Глубина'), type: { kind: 'number', min: 0, step: 1, unit: 'u' }, default: 6 },
       { key: 'tilt', label: e('Lean', 'Наклон'), hint: e('Up to this much off straight, at random.', 'Случайно, не больше этого.'), type: { kind: 'number', min: 0, max: 45, step: 1, unit: '°' }, default: 10 },
+    ],
+  },
+  {
+    name: 'junk',
+    label: e('Junk', 'Хлам'),
+    description: e(
+      'A heap of junk: its Model is the pile it makes on the ground. Picked up, it is packed into a bundle (another model) and collides as that; dropped or thrown, it spreads into a pile again where it lands. Needs Physics.',
+      'Куча хлама: её Модель — куча на земле. Если поднять, она сжимается в связку (другая модель) и сталкивается как она; брошенная, снова рассыпается в кучу там, где упала. Нужна Физика.',
+    ),
+    appliesTo: 'point',
+    pointNeeds: 'model',
+    conflicts: ['poster', 'npc', 'seat', 'hidingSpot', 'stake', 'printer'],
+    fields: [
+      {
+        key: 'packed',
+        label: e('Packed model', 'Модель в связке'),
+        hint: e('How it looks while carried (same origin and units as its Model; put the origin at the bottom of both). Empty: it stays a pile.', 'Как выглядит в руках (то же начало и единицы, что у Модели; начало внизу у обеих). Пусто — остаётся кучей.'),
+        type: { kind: 'asset', asset: 'models' },
+        default: '',
+      },
     ],
   },
   {
