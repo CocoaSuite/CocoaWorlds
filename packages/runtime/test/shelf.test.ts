@@ -32,17 +32,15 @@ function world(saved: SavedProgress | null = null, id?: string) {
 }
 
 describe('shelves', () => {
-  it('mounts by its back, ignores a tap of Use, comes down for a held Use; saved', () => {
+  it('sticks by its back when carried to a wall, ignores a tap of Use, comes down for a held Use; saved', () => {
     const { w, shelf } = world();
     lookAt(w, [0, 1, -40]);
     w.use();
     run(w, 0.3);
     expect(w.holding).toBe(shelf);
-    lookAt(w, [0, 60, -80]);
-    run(w, 0.3);
-    expect(w.usePrompt()).toBe('Mount on the wall');
-    w.use();
-    run(w, 0.2);
+    // Brought to the wall (looking at it), back first: it sticks.
+    lookAt(w, [0, 40, -80]);
+    run(w, 1);
     expect(w.holding).toBe(null);
     expect(w.shelfMounted(shelf)).toBe(true);
     const at = w.positionOf(shelf)!;
@@ -73,6 +71,15 @@ describe('shelves', () => {
     run(w2, 0.8);
     expect(w2.shelfMounted(shelf)).toBe(false);
     expect(w2.holding).toBe(shelf);
+    // Not stuck straight back while still at the wall; pulled away and brought back, it sticks again.
+    w2.setPlayerInput({ use: false });
+    run(w2, 0.5);
+    expect(w2.shelfMounted(shelf)).toBe(false);
+    lookAt(w2, [0, 40, 100]);
+    run(w2, 0.3);
+    lookAt(w2, [0, 40, -80]);
+    run(w2, 1);
+    expect(w2.shelfMounted(shelf)).toBe(true);
     w2.dispose();
   });
 
@@ -83,11 +90,8 @@ describe('shelves', () => {
     run(w, 0.3);
     // Spun half round: its back now toward the player.
     w.rotateHeld(Math.PI / HELD_TURN, 0);
-    lookAt(w, [0, 60, -80]);
-    run(w, 0.5);
-    expect(w.usePrompt()).toBe('Turn its back to the wall');
-    w.use();
-    run(w, 0.2);
+    lookAt(w, [0, 40, -80]);
+    run(w, 1);
     expect(w.shelfMounted(shelf)).toBe(false);
     expect(w.holding).toBe(shelf);
     w.dispose();

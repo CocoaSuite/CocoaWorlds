@@ -1679,7 +1679,7 @@ export class GameWorld {
     }
     if (rb.motion === 'dynamic' && e.components.shelf) {
       const data = readComponent<ShelfData>('shelf', e.components.shelf);
-      this.shelves.set(e.id, { mounted: false, atStart: data.mountedAtStart, back: this.backOf(e, model), normal: [0, 0, 1] });
+      this.shelves.set(e.id, { mounted: false, atStart: data.mountedAtStart, back: this.backOf(e, model), normal: [0, 0, 1], clear: true, wallAt: [0, 0, 0] });
       if (data.mountedAtStart) this.setShelfMounted(e.id, true, body);
     }
     // (Junk lying on the floor stays put: nothing pushes it; picking it up frees it.)
@@ -2429,7 +2429,7 @@ export class GameWorld {
 
   // ── Shelves: mounted on a wall by their back (−Z); a held Use takes one down ──
 
-  private shelves = new Map<string, { mounted: boolean; atStart: boolean; back: number; normal: P3 }>();
+  private shelves = new Map<string, { mounted: boolean; atStart: boolean; back: number; normal: P3; clear: boolean; wallAt: P3 }>();
   /** The held Use on a mounted shelf: which, and for how long (−1: let go of Use first). */
   private shelfHold = { id: '', time: 0 };
 
@@ -2474,37 +2474,43 @@ export class GameWorld {
   }
 
   /**
-   * Use while holding a shelf, looking at a wall: mounted there by its back, upright, facing out. Only by its
-   * back: turned another way to the wall, it won't go. The prompt (do: false); null: not a shelf at a wall.
+   * Each step: a held shelf brought back first against a wall (something fixed, standing up) that the player is
+   * looking at sticks to it, upright, facing out, as posters do. Only by its back: turned another way, it won't.
    */
-  private shelfMountUse(act: boolean): string | null {
+  private stickShelf(): void {
     const id = this.held?.id, sh = id ? this.shelves.get(id) : undefined, b = id ? this.bodies.get(id) : undefined;
-    if (!id || !sh || !b) return null;
-    const look = this.lookHit(PLAYER.useReach);
-    if (!look?.at || Math.abs(look.n[1]) > 0.5) return null;
-    const wallBody = look.id ? this.bodies.get(look.id) : undefined;
-    if (wallBody && !wallBody.body.isFixed()) return null;
-    const flat = Math.hypot(look.n[0], look.n[2]) || 1;
-    const n: P3 = [look.n[0] / flat, 0, look.n[2] / flat];
-    // Its back (−Z) has to face the wall.
-    const r = b.body.rotation();
-    const back = qrot({ x: r.x, y: r.y, z: r.z, w: r.w }, [0, 0, -1]);
-    const bl = Math.hypot(back[0], back[2]) || 1;
-    if ((back[0] * -n[0] + back[2] * -n[2]) / bl < 0.5) return 'Turn its back to the wall';
-    if (act) {
-      this.dropHeld();
-      const yaw = Math.atan2(n[0], n[2]);
-      const out = sh.back + 0.05;
-      b.body.setBodyType(RAPIER.RigidBodyType.Fixed, false);
-      b.body.setTranslation({ x: look.at[0] + n[0] * out, y: look.at[1], z: look.at[2] + n[2] * out }, false);
-      b.body.setRotation({ x: 0, y: Math.sin(yaw / 2), z: 0, w: Math.cos(yaw / 2) }, false);
-      b.body.setLinvel({ x: 0, y: 0, z: 0 }, false);
-      b.body.setAngvel({ x: 0, y: 0, z: 0 }, false);
-      sh.mounted = true;
-      sh.normal = n;
-      this.bus.emit({ type: 'shelf.mount', target: id, time: this.time });
+    if (!id || !sh || !b || sh.mounted || !this.player) return;
+    const look = this.player.lookDirection();
+    const c = b.body.translation(), r = b.body.rotation();
+    if (!sh.clear) {
+      // (Just taken down: it sticks again once pulled away from that wall, or the player looks away from it.)
+      const n = sh.normal, w = sh.wallAt;
+      const away = (c.x - w[0]) * n[0] + (c.z - w[2]) * n[2];
+      if (away < 16 && look[0] * n[0] + look[2] * n[2] < -0.3) return;
+      sh.clear = true;
     }
-    return 'Mount on the wall';
+    const back = qrot({ x: r.x, y: r.y, z: r.z, w: r.w }, [0, 0, -1]);
+    const bl = Math.hypot(back[0], back[2]);
+    if (bl < 0.7) return;
+    const dir = { x: back[0] / bl, y: 0, z: back[2] / bl };
+    const hit = this.world.castRayAndGetNormal(new RAPIER.Ray(c, dir), sh.back + 3, true, RAPIER.QueryFilterFlags.EXCLUDE_SENSORS, 0xffffffff, this.player.collider, b.body, (x) => !!x.parent()?.isFixed() && !this.triggers.has(x.handle) && !this.volumes.has(x.handle));
+    if (!hit || Math.abs(hit.normal.y) > 0.5) return;
+    const nl = Math.hypot(hit.normal.x, hit.normal.z) || 1;
+    const n: P3 = [hit.normal.x / nl, 0, hit.normal.z / nl];
+    // Its back square to the wall, and the player looking at that wall.
+    if (dir.x * -n[0] + dir.z * -n[2] < 0.7 || look[0] * n[0] + look[2] * n[2] > -0.3) return;
+    const at: P3 = [c.x + dir.x * hit.timeOfImpact, c.y, c.z + dir.z * hit.timeOfImpact];
+    this.dropHeld();
+    const yaw = Math.atan2(n[0], n[2]), out = sh.back + 0.05;
+    b.body.setBodyType(RAPIER.RigidBodyType.Fixed, false);
+    b.body.setTranslation({ x: at[0] + n[0] * out, y: at[1], z: at[2] + n[2] * out }, false);
+    b.body.setRotation({ x: 0, y: Math.sin(yaw / 2), z: 0, w: Math.cos(yaw / 2) }, false);
+    b.body.setLinvel({ x: 0, y: 0, z: 0 }, false);
+    b.body.setAngvel({ x: 0, y: 0, z: 0 }, false);
+    sh.mounted = true;
+    sh.normal = n;
+    sh.wallAt = at;
+    this.bus.emit({ type: 'shelf.mount', target: id, time: this.time });
   }
 
   /** Each step: Use held on a mounted shelf long enough takes it down into the hands (what was on it falls). */
@@ -2538,9 +2544,12 @@ export class GameWorld {
     // (What rests on it wakes, to fall when it goes.)
     for (let i = 0; i < b.body.numColliders(); i++) this.world.contactPairsWith(b.body.collider(i), (other) => other.parent()?.wakeUp());
     const t = b.body.translation(), n = sh.normal;
+    sh.wallAt = [t.x - n[0] * sh.back, t.y, t.z - n[2] * sh.back];
     b.body.setTranslation({ x: t.x + n[0] * 2, y: t.y, z: t.z + n[2] * 2 }, false);
     b.body.setBodyType(RAPIER.RigidBodyType.Dynamic, true);
     sh.mounted = false;
+    // (Not stuck straight back: first it has to leave the wall.)
+    sh.clear = false;
     this.bus.emit({ type: 'shelf.unmount', target: id, time: this.time });
     this.hold(id, b.body);
   }
@@ -2810,7 +2819,10 @@ export class GameWorld {
       if (this.held) this.stickHeld();
       if (this.stakes.size) this.stickStakes();
       if (this.junky.size) this.settleJunk();
-      if (this.shelves.size) this.holdOnShelf();
+      if (this.shelves.size) {
+        this.holdOnShelf();
+        this.stickShelf();
+      }
       if (this.grid.plugs.size) this.checkCables();
       this.accumulator -= STEP;
       this.time += STEP;
@@ -3169,7 +3181,7 @@ export class GameWorld {
   usePrompt(): string | null {
     if (this.hiding) return null;
     if (this.base && this.base.prompt(this.baseAim())) return null;
-    const power = this.held ? (this.powerHeldUse(false) ?? this.shelfMountUse(false)) : this.powerUse(false);
+    const power = this.held ? this.powerHeldUse(false) : this.powerUse(false);
     if (power !== null) return power;
     if (!this.held && this.shelfLooked()) return this.shelfHold.time > 0 ? `Taking down… ${Math.round((this.shelfHold.time / SHELF_HOLD) * 100)}%` : 'Hold to take down';
     const hit = this.useAim();
@@ -3488,7 +3500,7 @@ export class GameWorld {
     }
     if (this.base && this.useBase()) return;
     if (this.held) {
-      if (this.powerHeldUse(true) === null && this.shelfMountUse(true) === null && !this.useHolding()) this.dropHeld();
+      if (this.powerHeldUse(true) === null && !this.useHolding()) this.dropHeld();
       return;
     }
     if (this.powerUse(true) !== null) return;

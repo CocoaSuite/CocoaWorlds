@@ -906,8 +906,8 @@ export const COMPONENTS: ComponentDef[] = [
     name: 'shelf',
     label: e('Shelf', 'Полка'),
     description: e(
-      'A shelf that mounts on a wall by its back (its −Z side) and holds things put on it. Carry it with its back to a wall and Use the wall to mount it; hold Use on it to take it down. Its Model is your own (made with its back at −Z). Needs Physics.',
-      'Полка, которая крепится к стене задней стороной (−Z) и держит то, что на неё положили. Несите её задом к стене и нажмите «Использовать» на стене; удерживайте «Использовать», чтобы снять. Модель — ваша (задняя сторона по −Z). Нужна Физика.',
+      'A shelf that mounts on a wall by its back (its −Z side) and holds things put on it. Carried back first against a wall you are looking at, it sticks there (as posters do); hold Use on it to take it down. Its Model is your own (made with its back at −Z). Needs Physics.',
+      'Полка, которая крепится к стене задней стороной (−Z) и держит то, что на неё положили. Поднесённая задом к стене, на которую вы смотрите, она прилипает (как плакат); удерживайте «Использовать», чтобы снять. Модель — ваша (задняя сторона по −Z). Нужна Физика.',
     ),
     appliesTo: 'point',
     conflicts: ['poster', 'junk', 'stake', 'extender', 'stringLights', 'npc', 'seat'],
