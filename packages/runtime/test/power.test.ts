@@ -80,6 +80,9 @@ describe('string lights and outlets', () => {
     run(w, 2);
     expect(w.holding).toBe(null);
     expect(w.pluggedInto(cord)).toBe(outlet);
+    // Its cable lies along the floor, never through it.
+    const cable = w.powerView().cables.find((c) => c.id === cord)!;
+    expect(Math.min(...cable.points.map((p) => p[1]))).toBeGreaterThanOrEqual(0);
     const c = w.positionOf(cord)!;
     // F takes the coil in hand; clicks plug it in and hang it.
     lookAt(w, [24, 4, -40]);

@@ -80,6 +80,9 @@ import type { SpotInfo } from './hunter/spots';
 import type { StimulusKind } from './hunter/stimuli';
 import { COLLIDER_MATERIAL, signedDist, type Plane, bounds, brushToWorld, isNoGrassBrush, buildMesh, buildWorld, fromData, hullPoints, vertices, type Brush, type BrushData, type WorldBrush } from '@cocoaworlds/geometry';
 
+/** How far away a click can hang an end of string lights (u). */
+const HANG_REACH = 144;
+
 /**
  * What the player hears through, at one point: the area's effect (and how much of it), the background sound
  * that should be playing, and whether that's because they're under water. See `GameWorld.hearing`.
@@ -146,7 +149,7 @@ export interface SavedScene {
   /** Props stuck in the ground. */
   stakes?: string[];
   /** Power: sources switched from how they started, what each plug is in, string lights hung (their two ends). */
-  power?: { on?: Record<string, boolean>; plugs?: Record<string, string>; hung?: Record<string, [P3, P3]> };
+  power?: { on?: Record<string, boolean>; plugs?: Record<string, string>; hung?: Record<string, [P3, P3] | [P3, P3, P3]> };
   /** 3D printers: the print under way (what of, the copy's number, seconds printed) and the prints waiting. */
   printers?: Record<string, { job?: [template: string, n: number, t: number] }>;
   /** The time of day (hours). */
@@ -1653,7 +1656,7 @@ export class GameWorld {
     if (rb.motion === 'dynamic' && e.components.stringLights) {
       const data = readComponent<StringLightsData>('stringLights', e.components.stringLights);
       this.grid.plugs.set(e.id, { cable: data.cable, into: null });
-      this.strings.set(e.id, { data, hung: null, half: null, version: 0 });
+      this.strings.set(e.id, { data, hung: null, half: null, version: 0, out: [0, -1, 0], halfOut: [0, -1, 0] });
     }
     // (Junk lying on the floor stays put: nothing pushes it; picking it up frees it.)
     if (e.components.junk && model && rb.motion === 'dynamic') this.junky.add(e.id);
@@ -1886,7 +1889,9 @@ export class GameWorld {
   private grid = new PowerGrid();
   private sourcesAtStart = new Map<string, boolean>();
   /** String lights: their settings, their two ends once hung, the first end while being hung; `version` counts changes. */
-  private strings = new Map<string, { data: StringLightsData; hung: [P3, P3] | null; half: P3 | null; version: number }>();
+  private strings = new Map<string, { data: StringLightsData; hung: [P3, P3] | null; half: P3 | null; version: number; out: P3; halfOut: P3 }>();
+  /** Cable shapes, kept while their ends stay put (each frame would mean a dozen rays a cable). */
+  private cableShapes = new Map<string, { key: string; points: P3[] }>();
 
   /** Where an object is now (its body, or where it was placed). */
   private placeOf(id: string): P3 | null {
@@ -2051,7 +2056,10 @@ export class GameWorld {
     if (p) {
       const eye = p.eye(), d = p.lookDirection();
       const flat = Math.hypot(d[0], d[2]) || 1;
-      b.body.setTranslation({ x: eye[0] + (d[0] / flat) * 32, y: eye[1] - 24, z: eye[2] + (d[2] / flat) * 32 }, true);
+      const dir = { x: d[0] / flat, y: 0, z: d[2] / flat };
+      const wall = this.world.castRay(new RAPIER.Ray({ x: eye[0], y: eye[1] - 24, z: eye[2] }, dir), 32, true, RAPIER.QueryFilterFlags.EXCLUDE_SENSORS, 0xffffffff, p.collider);
+      const k = Math.max(4, (wall ? wall.timeOfImpact : 32) - 10);
+      b.body.setTranslation({ x: eye[0] + dir.x * k, y: eye[1] - 24, z: eye[2] + dir.z * k }, true);
     }
     b.body.setBodyType(RAPIER.RigidBodyType.Dynamic, true);
     b.body.setLinvel({ x: 0, y: 0, z: 0 }, true);
@@ -2088,7 +2096,8 @@ export class GameWorld {
     if (!st) return null;
     const plugged = this.plugUse(id, act);
     if (plugged !== null) return plugged;
-    const look = this.lookHit(PLAYER.useReach);
+    // (A longer reach than Use's: lights go up high.)
+    const look = this.lookHit(HANG_REACH);
     if (!look?.at) return null;
     // Only on something that stays put (a wall, a ceiling, a beam).
     const body = look.id ? this.bodies.get(look.id) : undefined;
@@ -2097,6 +2106,7 @@ export class GameWorld {
     if (!st.half) {
       if (act) {
         st.half = at;
+        st.halfOut = look.n;
         st.version++;
       }
       return 'Hang one end';
@@ -2104,7 +2114,14 @@ export class GameWorld {
     const span = dist3(st.half, at);
     if (span < 8) return null;
     if (span > st.data.length) return 'Too far to reach';
-    if (act) this.hangLights(id, st.half, at);
+    // (Plugged in: the cable runs from this end, so it has to reach from here.)
+    const plug = this.grid.plugs.get(id), socket = plug?.into ? this.placeOf(plug.into) : null;
+    if (plug && socket && dist3(at, socket) > plug.cable) return 'Cable too short';
+    if (act) {
+      const o: P3 = [st.halfOut[0] + look.n[0], st.halfOut[1] + look.n[1], st.halfOut[2] + look.n[2]];
+      const l = Math.hypot(...o);
+      this.hangLights(id, st.half, at, false, l > 0.2 ? [o[0] / l, o[1] / l, o[2] / l] : look.n);
+    }
     return 'Hang the other end';
   }
 
@@ -2132,12 +2149,13 @@ export class GameWorld {
   }
 
   /** Up between two points: the coil itself is put away (still, hidden, not colliding) halfway between them. */
-  private hangLights(id: string, a: P3, b: P3, quiet = false): void {
+  private hangLights(id: string, a: P3, b: P3, quiet = false, out: P3 = [0, -1, 0]): void {
     const st = this.strings.get(id), body = this.bodies.get(id);
     if (!st || !body) return;
     if (this.held?.id === id) this.dropHeld();
     if (this.equipped === id) this.equipped = null;
     st.hung = [a, b];
+    st.out = out;
     st.half = null;
     st.version++;
     body.body.setBodyType(RAPIER.RigidBodyType.Fixed, false);
@@ -2158,20 +2176,54 @@ export class GameWorld {
   }
 
   /** What to draw: string lights (hung, or one end up while being hung) and cables from plugs to sockets. */
-  powerView(): { strings: { id: string; ends: [P3, P3] | null; lit: boolean; version: number; data: StringLightsData }[]; cables: { from: P3; to: P3; slack: number }[] } {
-    const strings: { id: string; ends: [P3, P3] | null; lit: boolean; version: number; data: StringLightsData }[] = [];
+  powerView(): { strings: { id: string; ends: [P3, P3] | null; out: P3; lit: boolean; version: number; data: StringLightsData }[]; cables: { id: string; points: P3[] }[] } {
+    const strings: { id: string; ends: [P3, P3] | null; out: P3; lit: boolean; version: number; data: StringLightsData }[] = [];
     for (const [id, st] of this.strings) {
       if (this.gone.has(id)) continue;
       const coil = st.half ? this.placeOf(id) : null;
-      strings.push({ id, ends: st.hung ?? (st.half && coil ? [st.half, coil] : null), lit: this.grid.live(this.grid.plugs.get(id)?.into ?? null), version: st.version + (st.half ? 0.5 : 0), data: st.data });
+      strings.push({ id, ends: st.hung ?? (st.half && coil ? [st.half, coil] : null), out: st.hung ? st.out : st.halfOut, lit: this.grid.live(this.grid.plugs.get(id)?.into ?? null), version: st.version + (st.half ? 0.5 : 0), data: st.data });
     }
-    const cables: { from: P3; to: P3; slack: number }[] = [];
+    const cables: { id: string; points: P3[] }[] = [];
     for (const [id, p] of this.grid.plugs) {
-      if (!p.into || this.gone.has(id)) continue;
+      if (!p.into || this.gone.has(id)) {
+        this.cableShapes.delete(id);
+        continue;
+      }
       const from = this.plugAt(id), to = this.placeOf(p.into);
-      if (from && to) cables.push({ from, to, slack: Math.max(0, p.cable - dist3(from, to)) });
+      if (from && to) cables.push({ id, points: this.cableShape(id, from, to, p.cable) });
     }
     return { strings, cables };
+  }
+
+  /**
+   * A cable from a plug to its socket: hanging a little with the slack it has, but lying along the floor (or
+   * whatever is under it) rather than through it.
+   */
+  private cableShape(id: string, from: P3, to: P3, cable: number): P3[] {
+    const r = (v: P3) => v.map((x) => Math.round(x * 2)).join(',');
+    const key = `${r(from)}|${r(to)}`;
+    const kept = this.cableShapes.get(id);
+    if (kept?.key === key) return kept.points;
+    const span = dist3(from, to);
+    const drop = Math.min(Math.max(0, cable - span) * 0.25, Math.hypot(to[0] - from[0], to[2] - from[2]) * 0.2 + 2);
+    const n = 16;
+    const points: P3[] = [];
+    const skip = new Set([this.player?.collider.handle]);
+    for (let i = 0; i <= n; i++) {
+      const t = i / n;
+      const line: P3 = [from[0] + (to[0] - from[0]) * t, from[1] + (to[1] - from[1]) * t, from[2] + (to[2] - from[2]) * t];
+      const y = line[1] - drop * 4 * t * (1 - t);
+      // (The ends stay where they are plugged; between them, nothing under the cable is passed through.)
+      let low = y;
+      if (i > 0 && i < n) {
+        const top = Math.max(line[1], y) + 2;
+        const hit = this.world.castRay(new RAPIER.Ray({ x: line[0], y: top, z: line[2] }, { x: 0, y: -1, z: 0 }), top - y + 1, true, RAPIER.QueryFilterFlags.EXCLUDE_SENSORS, 0xffffffff, undefined, undefined, (c) => !skip.has(c.handle) && !this.isHeld(c));
+        if (hit) low = Math.max(y, top - hit.timeOfImpact + 0.8);
+      }
+      points.push([line[0], low, line[2]]);
+    }
+    this.cableShapes.set(id, { key, points });
+    return points;
   }
 
   /** Bulb positions of hung string lights (for tests and drawing). */
@@ -2181,10 +2233,10 @@ export class GameWorld {
   }
 
   private savePower(): SavedScene['power'] | null {
-    const on: Record<string, boolean> = {}, plugs: Record<string, string> = {}, hung: Record<string, [P3, P3]> = {};
+    const on: Record<string, boolean> = {}, plugs: Record<string, string> = {}, hung: Record<string, [P3, P3, P3]> = {};
     for (const [id, v] of this.grid.sources) if (this.sourcesAtStart.get(id) !== v) on[id] = v;
     for (const [id, p] of this.grid.plugs) if (p.into && !this.gone.has(id)) plugs[id] = p.into;
-    for (const [id, st] of this.strings) if (st.hung && !this.gone.has(id)) hung[id] = st.hung;
+    for (const [id, st] of this.strings) if (st.hung && !this.gone.has(id)) hung[id] = [...st.hung, st.out];
     const out: NonNullable<SavedScene['power']> = {};
     if (Object.keys(on).length) out.on = on;
     if (Object.keys(plugs).length) out.plugs = plugs;
@@ -2197,7 +2249,8 @@ export class GameWorld {
     for (const [id, on] of Object.entries(save.on ?? {})) if (this.grid.sources.has(id) && typeof on === 'boolean') this.grid.sources.set(id, on);
     for (const [id, ends] of Object.entries(save.hung ?? {})) {
       const a = p3(Array.isArray(ends) ? ends[0] : null), b = p3(Array.isArray(ends) ? ends[1] : null);
-      if (a && b) this.hangLights(id, a, b, true);
+      const o = p3(Array.isArray(ends) ? ends[2] : null);
+      if (a && b) this.hangLights(id, a, b, true, o ?? [0, -1, 0]);
     }
     for (const [id, socket] of Object.entries(save.plugs ?? {})) {
       const p = this.grid.plugs.get(id);
@@ -2896,6 +2949,8 @@ export class GameWorld {
     const held = !!p.input.fire || queued;
     const fresh = (held && !this.fireHeld) || (queued && !p.input.fire);
     this.fireHeld = !!p.input.fire;
+    // (String lights in hand: the click is theirs.)
+    if (this.equipped && !this.held) return;
     // (Something in the hands: Fire throws it instead.)
     if (this.held) {
       if (fresh && !this.useHolding()) this.throwHeld();
