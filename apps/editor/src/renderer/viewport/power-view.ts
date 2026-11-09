@@ -6,7 +6,8 @@ import { LineGeometry } from 'three/examples/jsm/lines/LineGeometry.js';
 import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js';
 import { LineSegments2 } from 'three/examples/jsm/lines/LineSegments2.js';
 import { LineSegmentsGeometry } from 'three/examples/jsm/lines/LineSegmentsGeometry.js';
-import { readComponent, type ColliderData, type SceneDoc, type StringLightsData } from '@cocoaworlds/core';
+import { readComponent, type SceneDoc, type StringLightsData } from '@cocoaworlds/core';
+import { powerStandIn, type PowerStandIn } from './power-props';
 import { along, bulbPoints, dropOf, wirePoints, type GameWorld, type P3 } from '@cocoaworlds/runtime';
 
 /** Point lights' brightness in the game's units (as scene lights). */
@@ -44,7 +45,7 @@ export class PowerView {
     this.wireMat.resolution.copy(size);
   };
   private sources: { id: string; lamp: THREE.MeshBasicMaterial; on: boolean | null }[] = [];
-  private standIns: THREE.Object3D[] = [];
+  private standIns: PowerStandIn[] = [];
 
   constructor(
     private world: GameWorld,
@@ -57,39 +58,18 @@ export class PowerView {
     this.group.add(this.cables);
     // (String lights' lights made now, dark, so lighting one up later compiles nothing.)
     for (const e of doc.entities) if (e.components.stringLights) this.stringView(e.id, readComponent<StringLightsData>('stringLights', e.components.stringLights));
-    // Outlets and power sources without a model: a plate, a box with a lamp.
+    // Outlets and power sources without a model: a plate, a box with a lamp (as the editor shows them).
     for (const e of doc.entities) {
-      if (e.components.brush || e.components.model || (!e.components.outlet && !e.components.powerSource)) continue;
-      // (A loose one is drawn as its collider by the play session, moving with it.)
+      if (!e.components.outlet && !e.components.powerSource) continue;
+      // (A loose one is drawn by the play session, moving with it.)
       if ((e.components.rigidBody as { motion?: string } | undefined)?.motion === 'dynamic') continue;
-      const c = readComponent<ColliderData>('collider', e.components.collider ?? { size: e.components.outlet ? [8, 12, 2] : [32, 24, 24] });
-      const holder = new THREE.Group();
-      holder.matrixAutoUpdate = false;
-      holder.matrix.fromArray(doc.worldMatrix(e.id));
-      const body = new THREE.Mesh(new THREE.BoxGeometry(...c.size), new THREE.MeshStandardMaterial({ color: e.components.outlet ? 0xe8e2d4 : 0x5f5e5a, roughness: 0.8 }));
-      body.position.set(...c.offset);
-      holder.add(body);
-      const [w, h, d] = c.size;
-      if (e.components.outlet) {
-        const slot = new THREE.BoxGeometry(Math.max(0.4, w * 0.08), h * 0.22, 0.2);
-        const dark = new THREE.MeshBasicMaterial({ color: 0x2c2c2a });
-        for (const x of [-w * 0.18, w * 0.18]) {
-          const s = new THREE.Mesh(slot, dark);
-          s.position.set(c.offset[0] + x, c.offset[1], c.offset[2] + d / 2 + 0.1);
-          holder.add(s);
-        }
-      } else {
-        const lamp = new THREE.MeshBasicMaterial({ color: 0x888780 });
-        const l = new THREE.Mesh(new THREE.BoxGeometry(w * 0.12, h * 0.12, 0.4), lamp);
-        l.position.set(c.offset[0] + w * 0.3, c.offset[1] + h * 0.3, c.offset[2] + d / 2 + 0.2);
-        holder.add(l);
-        this.sources.push({ id: e.id, lamp, on: null });
-      }
-      holder.traverse((o) => {
-        if (o instanceof THREE.Mesh) o.castShadow = o.receiveShadow = true;
-      });
-      this.group.add(holder);
-      this.standIns.push(holder);
+      const s = powerStandIn(e.components);
+      if (!s) continue;
+      s.object.matrixAutoUpdate = false;
+      s.object.matrix.fromArray(doc.worldMatrix(e.id));
+      this.group.add(s.object);
+      this.standIns.push(s);
+      if (s.lamp) this.sources.push({ id: e.id, lamp: s.lamp, on: null });
     }
   }
 
@@ -210,12 +190,6 @@ export class PowerView {
       v.bulbs?.dispose();
       v.mat.dispose();
     }
-    for (const h of this.standIns)
-      h.traverse((o) => {
-        if (o instanceof THREE.Mesh) {
-          o.geometry.dispose();
-          (o.material as THREE.Material).dispose();
-        }
-      });
+    for (const h of this.standIns) h.dispose();
   }
 }

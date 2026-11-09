@@ -18,6 +18,7 @@ import { buildPoster } from './poster';
 import { buildGooglyEyes, type GooglyEyes } from './googly-eyes';
 import pointIcon from '../assets/empty/PathPoint.png';
 import spawnIcon from '../assets/empty/Finish.png';
+import { powerStandIn } from './power-props';
 import audioIcon from '../assets/empty/AudioEmitter.png';
 
 const ICONS: Record<EmptyClass, string> = { point: pointIcon, assetSpawn: spawnIcon, audioEmitter: audioIcon };
@@ -264,6 +265,13 @@ export function buildMarker(e: EntityData): Marker {
       lines.push(l);
     }
     pick = new THREE.Mesh(new THREE.SphereGeometry(14, 8, 6), pickMat);
+  } else if (powerStandIn(e.components)) {
+    // Power things without a model (outlets, generators, extension cords, string-light coils): as in the game.
+    const s = powerStandIn(e.components)!;
+    group.add(s.object);
+    group.userData.dispose = s.dispose;
+    lines.push(segs([[-6, 0, 0], [6, 0, 0], [0, -6, 0], [0, 6, 0], [0, 0, -6], [0, 0, 6]], baseColor));
+    pick = new THREE.Mesh(new THREE.BoxGeometry(Math.max(8, s.size.x), Math.max(8, s.size.y), Math.max(8, s.size.z)).translate(s.center.x, s.center.y, s.center.z), pickMat);
   } else if (e.emptyClass && ICONS[e.emptyClass]) {
     pick = icon = iconSprite(e.emptyClass);
   } else {
@@ -326,5 +334,5 @@ export function disposeMarker(m: Marker): void {
 
 /** Stable key for "does this marker need rebuilding" (shape-affecting data only). */
 export function markerKey(e: EntityData): string {
-  return JSON.stringify([e.components.light ?? null, !!e.components.playerSpawn, e.components.sign ?? null, e.components.poster ?? null, e.components.model ?? null, (e.components.npc as { side?: string } | undefined)?.side ?? null, e.components.reflectionProbe ?? null, e.components.googlyEyes ?? null, e.emptyClass ?? null]);
+  return JSON.stringify([e.components.light ?? null, !!e.components.playerSpawn, e.components.sign ?? null, e.components.poster ?? null, e.components.model ?? null, (e.components.npc as { side?: string } | undefined)?.side ?? null, e.components.reflectionProbe ?? null, e.components.googlyEyes ?? null, e.emptyClass ?? null, e.components.outlet ? 1 : 0, e.components.powerSource ? 1 : 0, e.components.extender ? 1 : 0, e.components.stringLights ?? null, e.components.collider ?? null]);
 }

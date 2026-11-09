@@ -32,6 +32,7 @@ import { EMITTER_DEFAULTS } from './particles';
 import { assetUrl } from '../assets';
 import { modelGeometry, modelInstance, type ModelInstance } from './models';
 import { PowerView } from './power-view';
+import { powerStandIn, type PowerStandIn } from './power-props';
 import { SoundStage, ramp } from './area-sound';
 import { LeanPositionalAudio } from './lean-audio';
 import { allSurfaceFiles, materialSurfaces, surfaceFiles } from './surface-sounds';
@@ -967,6 +968,18 @@ export class PlaySession {
       this.addCarriedBrushes(b);
       const shape = this.world.pointShape(b.id);
       if (!shape) return;
+      // (Power things without a model: the same stand-in the editor shows, an extension cord or a coil of lights.)
+      const standIn = powerStandIn({ ...(this.doc?.get(b.id.split('#')[0]!)?.components ?? {}), collider: shape.collider as never });
+      if (standIn) {
+        const holder = new THREE.Group();
+        holder.matrixAutoUpdate = false;
+        holder.matrix.fromArray(shape.matrix);
+        holder.add(standIn.object);
+        this.group.add(holder);
+        this.standIns.push(standIn);
+        this.movers.push({ id: b.id, i: this.world.drawn(b.id), obj: holder, base: holder.matrix.clone() });
+        return;
+      }
       const c = shape.collider;
       const geo =
         c.shape === 'sphere'
@@ -1038,6 +1051,7 @@ export class PlaySession {
 
   /** Posters and paintings drawn, and whether each was last drawn hung. */
   private power: PowerView | null = null;
+  private standIns: PowerStandIn[] = [];
   private posterViews: { id: string; view: PosterObject; hung: boolean | null }[] = [];
   /** Junk: its pile and packed-bundle looks, and which is shown. */
   private junkViews: { id: string; pile: THREE.Group; bundle: THREE.Group; packed: boolean }[] = [];
@@ -1493,6 +1507,7 @@ export class PlaySession {
     this.restoreFov();
     this.baseView?.dispose();
     this.power?.dispose();
+    for (const s of this.standIns) s.dispose();
     this.effects.dispose();
     this.vfx.clear();
     this.foliage.dispose();
