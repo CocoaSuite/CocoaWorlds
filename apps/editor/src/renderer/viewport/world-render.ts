@@ -90,6 +90,9 @@ export class WorldRenderer {
   private triggerEdgeMat = new THREE.LineBasicMaterial({ color: 0xf0a442, transparent: true, opacity: 0.95 });
   private ladderMat = new THREE.MeshBasicMaterial({ color: 0x7fcf5a, transparent: true, opacity: 0.18, depthWrite: false, side: THREE.DoubleSide });
   private ladderEdgeMat = new THREE.LineBasicMaterial({ color: 0x7fcf5a, transparent: true, opacity: 0.95 });
+  // No Render zones (asset parks) are lavender, faint so the park inside stays easy to see.
+  private noRenderMat = new THREE.MeshBasicMaterial({ color: 0x9a8cff, transparent: true, opacity: 0.07, depthWrite: false, side: THREE.DoubleSide });
+  private noRenderEdgeMat = new THREE.LineBasicMaterial({ color: 0x9a8cff, transparent: true, opacity: 0.9 });
   private waterEdgeMat = new THREE.LineBasicMaterial({ color: 0x4fb3e0, transparent: true, opacity: 0.8 });
   private selectedEdgeMat = new THREE.LineBasicMaterial({ color: 0x4b9cff, transparent: true, opacity: 0.95 });
   private selectedHiddenMat = new THREE.LineBasicMaterial({ color: 0x4b9cff, transparent: true, opacity: 0.3, depthTest: false });
@@ -214,8 +217,8 @@ export class WorldRenderer {
       if (b.role === 'solid') continue;
       const m = buildMesh([b.brush]);
       // Water is drawn with its own materials (like in the game), with a blue outline; ladders are green zones.
-      const fill = b.role === 'water' ? waterMaterialFor(this.waterLookOf(b.id)) : b.role === 'ladder' ? this.ladderMat : b.role === 'trigger' ? this.triggerMat : this.subtractMat;
-      const edge = b.role === 'water' ? this.waterEdgeMat : b.role === 'ladder' ? this.ladderEdgeMat : b.role === 'trigger' ? this.triggerEdgeMat : this.subtractEdgeMat;
+      const fill = b.role === 'water' ? waterMaterialFor(this.waterLookOf(b.id)) : b.role === 'ladder' ? this.ladderMat : b.role === 'noRender' ? this.noRenderMat : b.role === 'trigger' ? this.triggerMat : this.subtractMat;
+      const edge = b.role === 'water' ? this.waterEdgeMat : b.role === 'ladder' ? this.ladderEdgeMat : b.role === 'noRender' ? this.noRenderEdgeMat : b.role === 'trigger' ? this.triggerEdgeMat : this.subtractEdgeMat;
       const mesh = new THREE.Mesh(toGeometry(m), fill);
       mesh.userData.entityId = b.id;
       this.subtractGroup.add(mesh, edgeLines(b.brush, edge));

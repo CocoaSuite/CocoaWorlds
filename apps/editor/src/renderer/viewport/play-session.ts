@@ -5,7 +5,7 @@
  * With a Player start in the scene you play as the player (first person); without one, Play is a physics
  * preview watched with the free camera.
  */
-import { SceneDoc, expandRepeats, posterOf, readComponent, type ParticlesData, type VfxData, type ColliderData, type GameRules, type GameValue, type EntityData, type GooglyEyesData, type ModelData, type PrinterData, type SceneFile, type SignData, type TerrainData } from '@cocoaworlds/core';
+import { SceneDoc, expandRepeats, parkAssets, posterOf, readComponent, type ParticlesData, type VfxData, type ColliderData, type GameRules, type GameValue, type EntityData, type GooglyEyesData, type ModelData, type PrinterData, type SceneFile, type SignData, type TerrainData } from '@cocoaworlds/core';
 import { buildMesh, isInvisibleMaterial, type Brush, type VoxelField, type WorldBrush } from '@cocoaworlds/geometry';
 import { GameWorld, initPhysics, POSE, AT, NPC, type AcousticVoice, type BuildPrompt, type FrameSnapshot, type Hearing, type NavGrid, type BodyInfo, type ModelMesh, type SavedProgress, type Travel, type UiState, type PlayerInput, type PlayerStatus, type ScriptLog, type TriggerEvent } from '@cocoaworlds/runtime';
 
@@ -140,7 +140,7 @@ export class PlaySession {
     // (Blasts light their surroundings with lights made now: adding lights later would compile every material again.)
     this.effects = new Effects(this.world.hasBlasts ? 2 : 0);
     // The same copies the game world made (Repeat groups).
-    const doc = new SceneDoc(expandRepeats(structuredClone(scene), brushBounds));
+    const doc = new SceneDoc(parkAssets(expandRepeats(structuredClone(scene), brushBounds), brushBounds));
     const bodies = new Set(this.world.movingBodies().map((b) => b.id));
     const units = new Set(this.world.movingBodies().filter((b) => b.kind === 'unit').map((b) => b.id));
 

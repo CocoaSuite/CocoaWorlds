@@ -969,6 +969,17 @@ export const COMPONENTS: ComponentDef[] = [
     fields: [{ key: 'speed', label: e('Climb speed', 'Скорость'), type: { kind: 'number', min: 10, step: 10, unit: 'u/s' }, default: 200 }],
   },
   {
+    name: 'noRender',
+    label: e('No Render', 'Не отображать'),
+    description: e(
+      'An asset park: when playing, every object whose centre is inside this zone is hidden and switched off (no drawing, physics, scripts, lights or sounds). Copies made from them come out whole and live. The editor still shows them.',
+      'Склад ассетов: в игре каждый объект, центр которого внутри этой зоны, скрыт и выключен (не рисуется, без физики, скриптов, света и звука). Копии из них появляются целыми и рабочими. В редакторе они видны.',
+    ),
+    appliesTo: 'brush',
+    conflicts: ['rigidBody', 'trigger', 'conveyor', 'water', 'ladder', 'soundArea', 'levelChange', 'train', 'breakable', 'charger', 'scatter', 'seat', 'hidingSpot'],
+    fields: [],
+  },
+  {
     name: 'terrain',
     label: e('Terrain', 'Ландшафт'),
     description: e(

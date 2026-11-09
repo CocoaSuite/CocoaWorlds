@@ -435,7 +435,7 @@ function blockersOf(doc: SceneDoc, skip: string, spread: number, tall: number): 
   for (const e of doc.entities) {
     if (e.id === skip || !clearsGrass(e) || !isShown(doc, e)) continue;
     const c = e.components;
-    if (c.trigger || c.water || c.ladder || c.levelChange) continue;
+    if (c.trigger || c.water || c.ladder || c.levelChange || c.noRender) continue;
     const wb = c.brush ? worldBrushOf(doc, e) : null;
     if (wb) {
       if (wb.role !== 'solid') continue;
