@@ -165,6 +165,10 @@ function componentLabel(e: EntityData): string {
   if (e.components.playerSpawn) return 'Player spawn';
   if (e.components.sign) return t('add.sign');
   if (e.components.stake) return t('add.stake');
+  if (e.components.outlet) return t('add.outlet');
+  if (e.components.extender) return t('add.extender');
+  if (e.components.stringLights) return t('add.stringLights');
+  if (e.components.powerSource) return t('add.generator');
   if (e.components.junk) return t(/carpet|rug|ковёр|ковер/i.test(e.name) ? 'add.carpet' : 'add.junk');
   if (e.components.printer) return t('add.printer');
   if (e.components.poster) return t((e.components.poster as { rolls?: boolean }).rolls === false ? 'add.painting' : 'add.poster');

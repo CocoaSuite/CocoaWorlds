@@ -31,6 +31,7 @@ import { VfxRenderer, effectById, type VfxHandle } from './vfx';
 import { EMITTER_DEFAULTS } from './particles';
 import { assetUrl } from '../assets';
 import { modelGeometry, modelInstance, type ModelInstance } from './models';
+import { PowerView } from './power-view';
 import { SoundStage, ramp } from './area-sound';
 import { LeanPositionalAudio } from './lean-audio';
 import { allSurfaceFiles, materialSurfaces, surfaceFiles } from './surface-sounds';
@@ -180,6 +181,8 @@ export class PlaySession {
     this.doc = doc;
     this.realistic = doc.settings.acoustics !== false;
     this.makeSpareLights(doc);
+    this.power = new PowerView(this.world, doc);
+    this.group.add(this.power.group);
     // Base building: blueprints (with their % tags), finished pieces and the ghost being placed.
     if (this.world.base) {
       this.baseView = new BaseView(material, this.world.base);
@@ -1034,6 +1037,7 @@ export class PlaySession {
   }
 
   /** Posters and paintings drawn, and whether each was last drawn hung. */
+  private power: PowerView | null = null;
   private posterViews: { id: string; view: PosterObject; hung: boolean | null }[] = [];
   /** Junk: its pile and packed-bundle looks, and which is shown. */
   private junkViews: { id: string; pile: THREE.Group; bundle: THREE.Group; packed: boolean }[] = [];
@@ -1119,6 +1123,7 @@ export class PlaySession {
       m.obj.matrixWorldNeedsUpdate = true;
     }
     if (this.printers.length) this.updatePrinters(dt);
+    this.power?.update();
     for (const j of this.junkViews) {
       const packed = this.world.junkPacked(j.id) ?? false;
       if (packed === j.packed) continue;
@@ -1487,6 +1492,7 @@ export class PlaySession {
     this.disposed = true;
     this.restoreFov();
     this.baseView?.dispose();
+    this.power?.dispose();
     this.effects.dispose();
     this.vfx.clear();
     this.foliage.dispose();

@@ -22,13 +22,13 @@ describe('component registry', () => {
   it('offers only what fits: brushes vs point objects, conflicts, no duplicates, no internal ones', () => {
     const brush = { brush: {} };
     const names = (c: Record<string, unknown>, isBrush: boolean) => addableComponents(c, isBrush).map((x) => x.name).sort();
-    expect(names(brush, true)).toEqual(['breakable', 'charger', 'conveyor', 'hidingSpot', 'ladder', 'levelChange', 'noRender', 'rigidBody', 'scatter', 'script', 'seat', 'sound', 'soundArea', 'train', 'trigger', 'vfx', 'water']);
+    expect(names(brush, true)).toEqual(['breakable', 'charger', 'conveyor', 'hidingSpot', 'ladder', 'levelChange', 'noRender', 'outlet', 'powerSource', 'rigidBody', 'scatter', 'script', 'seat', 'sound', 'soundArea', 'train', 'trigger', 'vfx', 'water']);
     expect(names({ ...brush, trigger: {} }, true)).toEqual(['breakable', 'charger', 'scatter', 'script', 'sound', 'soundArea', 'vfx']);
     expect(names({ ...brush, soundArea: {} }, true)).toEqual(['breakable', 'charger', 'scatter', 'script', 'sound', 'trigger', 'vfx']);
-    expect(names({ ...brush, rigidBody: {} }, true)).toEqual(['breakable', 'charger', 'scatter', 'script', 'seat', 'sound', 'vfx']);
+    expect(names({ ...brush, rigidBody: {} }, true)).toEqual(['breakable', 'charger', 'powerSource', 'scatter', 'script', 'seat', 'sound', 'vfx']);
     expect(names({ ...brush, water: {} }, true)).toEqual(['breakable', 'charger', 'scatter', 'script', 'sound', 'vfx']);
-    expect(names({}, false)).toEqual(['breakable', 'charger', 'collider', 'googlyEyes', 'hidingSpot', 'landmark', 'light', 'model', 'npc', 'particles', 'pathPoint', 'plant', 'playerSpawn', 'poster', 'printer', 'reflectionProbe', 'repeat', 'rigidBody', 'script', 'seat', 'sign', 'sound', 'stake', 'train', 'vfx']);
-    expect(names({ light: {} }, false)).toEqual(['breakable', 'charger', 'collider', 'googlyEyes', 'hidingSpot', 'landmark', 'model', 'npc', 'particles', 'pathPoint', 'plant', 'playerSpawn', 'printer', 'reflectionProbe', 'repeat', 'rigidBody', 'script', 'seat', 'sign', 'sound', 'stake', 'train', 'vfx']);
+    expect(names({}, false)).toEqual(['breakable', 'charger', 'collider', 'extender', 'googlyEyes', 'hidingSpot', 'landmark', 'light', 'model', 'npc', 'outlet', 'particles', 'pathPoint', 'plant', 'playerSpawn', 'poster', 'powerSource', 'printer', 'reflectionProbe', 'repeat', 'rigidBody', 'script', 'seat', 'sign', 'sound', 'stake', 'stringLights', 'train', 'vfx']);
+    expect(names({ light: {} }, false)).toEqual(['breakable', 'charger', 'collider', 'extender', 'googlyEyes', 'hidingSpot', 'landmark', 'model', 'npc', 'outlet', 'particles', 'pathPoint', 'plant', 'playerSpawn', 'powerSource', 'printer', 'reflectionProbe', 'repeat', 'rigidBody', 'script', 'seat', 'sign', 'sound', 'stake', 'stringLights', 'train', 'vfx']);
     expect(componentDef('group')?.internal).toBe(true);
   });
 });

@@ -20,6 +20,14 @@ export type GameEvent =
   /** Junk was packed up (picked up), or spread into a pile where it landed. */
   | { type: 'junk.pack'; target: string; time: number }
   | { type: 'junk.unpack'; target: string; time: number }
+  /** A plug went into a socket (an outlet or extension cord), or came out (`pulled`: stretched too far). */
+  | { type: 'power.plug'; target: string; socket: string; time: number }
+  | { type: 'power.unplug'; target: string; socket: string; pulled: boolean; time: number }
+  /** A power source was switched on or off. */
+  | { type: 'power.switch'; target: string; on: boolean; time: number }
+  /** String lights were hung up, or taken down. */
+  | { type: 'lights.hang'; target: string; time: number }
+  | { type: 'lights.takeDown'; target: string; time: number }
   | { type: 'player.hurt'; amount: number; health: number; cause: string; time: number }
   | { type: 'player.die'; cause: string; time: number }
   | { type: 'score'; score: number; by: number; time: number }

@@ -119,7 +119,7 @@ export type ViewMode = 'perspective' | 'top' | 'front' | 'side';
 /** Grid sizes to snap to (u). */
 export const GRID_SIZES = [1, 2, 4, 8, 16, 32, 64, 128, 256, 512];
 
-export type AddKind = 'empty' | 'pointLight' | 'spotLight' | 'sun' | 'spawn' | 'sign' | 'reflectionProbe' | 'poster' | 'painting' | 'stake' | 'junk' | 'carpet';
+export type AddKind = 'empty' | 'pointLight' | 'spotLight' | 'sun' | 'spawn' | 'sign' | 'reflectionProbe' | 'poster' | 'painting' | 'stake' | 'junk' | 'carpet' | 'outlet' | 'extender' | 'stringLights' | 'generator';
 export interface LogEntry {
   at: string;
   level: 'info' | 'warn' | 'error';
@@ -564,6 +564,10 @@ export const useEditor = create<State & Actions>()((set, get) => ({
       painting: () => base('painting', { poster: { picture: '', width: 48, height: 36, rolls: false, scrollModel: '', scrollScale: 1, scrollCollision: 'cylinder', thickness: 3, frame: '#5a3d25', mass: 4, hungAtStart: false } }, 24),
       junk: () => base('junk', { model: { collision: 'hull' }, rigidBody: { motion: 'dynamic', mass: 8 }, junk: { packed: '' } }, 24),
       carpet: () => base('carpet', { model: { collision: 'hull' }, rigidBody: { motion: 'dynamic', mass: 6 }, junk: { packed: '' } }, 2),
+      outlet: () => base('outlet', { collider: { shape: 'box', size: [8, 12, 2] }, outlet: { source: '' } }, 24),
+      extender: () => base('extension_cord', { collider: { shape: 'box', size: [16, 6, 10] }, rigidBody: { motion: 'dynamic', mass: 1 }, extender: { cable: 256 } }, 3),
+      stringLights: () => base('string_lights', { collider: { shape: 'box', size: [12, 8, 12] }, rigidBody: { motion: 'dynamic', mass: 1 }, stringLights: {} }, 4),
+      generator: () => base('generator', { collider: { shape: 'box', size: [32, 24, 24] }, powerSource: { on: true } }, 12),
       stake: () => base('stake', { model: {}, rigidBody: { motion: 'dynamic' }, stake: { tip: 'bottom', speed: 160, depth: 6, tilt: 10 } }, 16),
     }[kind]();
     get().execute(addEntitiesCmd(doc, [e], `Add ${e.name}`));

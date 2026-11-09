@@ -117,6 +117,38 @@ export type JunkData = {
   /** The packed-up model (empty: it stays a pile). Made in the same units as its Model. */
   packed: string;
 };
+/** Something that powers outlets (component `powerSource`): a generator, a breaker. Use switches it. */
+export type PowerSourceData = {
+  /** On when the game starts. */
+  on: boolean;
+};
+/** A wall outlet (component `outlet`): plugs go into it; live while its power source is on. */
+export type OutletData = {
+  /** The power source it is wired to, by id (empty: always live). */
+  source: string;
+};
+/** An extension cord (component `extender`): plugs into a live socket and gives sockets of its own. */
+export type ExtenderData = {
+  /** How far its plug reaches from it (u). */
+  cable: number;
+};
+/** String lights (component `stringLights`): carried as a coil, hung between two points, lit while plugged into a live socket. */
+export type StringLightsData = {
+  /** Bulb colour. */
+  color: string;
+  /** Distance between bulbs (u). */
+  spacing: number;
+  /** The longest span between its two ends (u). */
+  length: number;
+  /** How far its plug reaches from the first end (u). */
+  cable: number;
+  /** How far the middle hangs below a straight line, for each 100 u of span (u). */
+  sag: number;
+  /** Lights cast (spread along it; 0: the bulbs only glow). */
+  lights: number;
+  intensity: number;
+  range: number;
+};
 /** A prop that sticks into the ground (component `stake`) when it hits it hard enough, tip first. */
 export type StakeData = {
   /** Which way its tip points, in its own axes. */
@@ -785,7 +817,7 @@ export const COMPONENTS: ComponentDef[] = [
     ),
     appliesTo: 'point',
     pointNeeds: 'model',
-    conflicts: ['poster', 'npc', 'seat', 'hidingSpot', 'stake', 'printer'],
+    conflicts: ['poster', 'npc', 'seat', 'hidingSpot', 'stake', 'printer', 'extender', 'stringLights'],
     fields: [
       {
         key: 'packed',
@@ -794,6 +826,67 @@ export const COMPONENTS: ComponentDef[] = [
         type: { kind: 'asset', asset: 'models' },
         default: '',
       },
+    ],
+  },
+  {
+    name: 'powerSource',
+    label: e('Power source', 'Источник питания'),
+    description: e(
+      'A generator or a breaker: outlets wired to it are live while it is on. Use switches it; scripts can Turn it on or off.',
+      'Генератор или рубильник: подключённые к нему розетки под током, пока он включён. «Использовать» переключает; скрипты могут включать и выключать.',
+    ),
+    appliesTo: 'any',
+    conflicts: ['trigger', 'soundArea', 'water', 'levelChange'],
+    fields: [{ key: 'on', label: e('On at start', 'Включён в начале'), type: { kind: 'boolean' }, default: true }],
+  },
+  {
+    name: 'outlet',
+    label: e('Outlet', 'Розетка'),
+    description: e(
+      'A wall outlet: hold a plug (an extension cord, string lights) and Use it here to plug in or pull out. Live while its power source is on.',
+      'Розетка: держа вилку (удлинитель, гирлянду), нажмите «Использовать» на ней, чтобы включить или вынуть. Под током, пока включён её источник.',
+    ),
+    appliesTo: 'any',
+    conflicts: ['extender', 'stringLights', 'trigger', 'soundArea', 'water', 'levelChange', 'rigidBody'],
+    fields: [
+      {
+        key: 'source',
+        label: e('Power source', 'Источник питания'),
+        hint: e('A generator or breaker (empty: always live).', 'Генератор или рубильник (пусто — всегда под током).'),
+        type: { kind: 'object', component: 'powerSource' },
+        default: '',
+      },
+    ],
+  },
+  {
+    name: 'extender',
+    label: e('Extension cord', 'Удлинитель'),
+    description: e(
+      'A carryable extension cord: hold it and Use an outlet (or another cord) to plug it in; then plug things into it. Pulled further than its cable, it comes unplugged. Needs Physics.',
+      'Переносной удлинитель: держа его, нажмите «Использовать» на розетке (или другом удлинителе), чтобы включить; потом включайте в него. Если утащить дальше кабеля — выдернется. Нужна Физика.',
+    ),
+    appliesTo: 'point',
+    conflicts: ['outlet', 'stringLights', 'junk', 'stake', 'poster'],
+    fields: [{ key: 'cable', label: e('Cable', 'Кабель'), type: { kind: 'number', min: 16, step: 16, unit: 'u' }, default: 256 }],
+  },
+  {
+    name: 'stringLights',
+    label: e('String lights', 'Гирлянда'),
+    description: e(
+      'Carried as a coil (its Model, or a box). Holding it: Use a socket to plug it in, then Use a wall or ceiling for one end and again for the other. Lit while plugged into something live. Use the hung lights to take them down. Needs Physics.',
+      'Носится мотком (её Модель или коробка). Держа её: «Использовать» на розетке — включить, затем на стене или потолке — один конец, ещё раз — другой. Горит, пока включена во что-то под током. «Использовать» на висящей гирлянде — снять. Нужна Физика.',
+    ),
+    appliesTo: 'point',
+    conflicts: ['outlet', 'extender', 'junk', 'stake', 'poster'],
+    fields: [
+      { key: 'color', label: e('Bulb colour', 'Цвет лампочек'), type: { kind: 'color' }, default: '#ffc46b' },
+      { key: 'spacing', label: e('Bulb spacing', 'Шаг лампочек'), type: { kind: 'number', min: 2, step: 1, unit: 'u' }, default: 12 },
+      { key: 'length', label: e('Longest span', 'Наибольший пролёт'), type: { kind: 'number', min: 16, step: 16, unit: 'u' }, default: 320 },
+      { key: 'cable', label: e('Plug cable', 'Кабель вилки'), hint: e('How far the plug reaches from the first end.', 'Как далеко вилка достаёт от первого конца.'), type: { kind: 'number', min: 8, step: 8, unit: 'u' }, default: 160 },
+      { key: 'sag', label: e('Sag', 'Провис'), hint: e('How far the middle hangs, for each 100 u of span.', 'Насколько провисает середина на каждые 100 ед. пролёта.'), type: { kind: 'number', min: 0, step: 1, unit: 'u' }, default: 10 },
+      { key: 'lights', label: e('Lights cast', 'Источников света'), hint: e('Spread along it; more cost more (0: the bulbs only glow).', 'Распределены по ней; больше — дороже (0: лампочки только светятся).'), type: { kind: 'number', min: 0, max: 4, step: 1 }, default: 2 },
+      { key: 'intensity', label: e('Brightness', 'Яркость'), type: { kind: 'number', min: 0, step: 0.1 }, default: 0.6 },
+      { key: 'range', label: e('Light range', 'Дальность света'), type: { kind: 'number', min: 16, step: 16, unit: 'u' }, default: 256 },
     ],
   },
   {

@@ -45,6 +45,10 @@ import {
   type PosterData,
   type StakeData,
   type JunkData,
+  type PowerSourceData,
+  type OutletData,
+  type ExtenderData,
+  type StringLightsData,
   type PrinterData,
   worldBoundsOf,
   posterScrollRadius,
@@ -67,6 +71,7 @@ import { ANIM_ROLES, Npc, type AnimRole } from './npc';
 import { NavGrid } from './navgrid';
 import { Acoustics } from './acoustics';
 import { FrameSnapshot } from './snapshot';
+import { PowerGrid, bulbPoints, dist3, dropOf, rayNearLine, wirePoints, type P3 } from './power';
 import { BaseSystem, type BaseAim, type BlockerBox, type BlueprintCard, type BlueprintTag, type BuildPrompt } from './building/base';
 import type { BaseConfig } from './building/defs';
 import { buildingCatalog } from './building/catalog';
@@ -140,6 +145,8 @@ export interface SavedScene {
   posters?: Record<string, boolean>;
   /** Props stuck in the ground. */
   stakes?: string[];
+  /** Power: sources switched from how they started, what each plug is in, string lights hung (their two ends). */
+  power?: { on?: Record<string, boolean>; plugs?: Record<string, string>; hung?: Record<string, [P3, P3]> };
   /** 3D printers: the print under way (what of, the copy's number, seconds printed) and the prints waiting. */
   printers?: Record<string, { job?: [template: string, n: number, t: number] }>;
   /** The time of day (hours). */
@@ -772,6 +779,8 @@ export class GameWorld {
     if (Object.keys(posters).length) out.posters = posters;
     const stakes = [...this.stakes].filter(([id, k]) => k.stuck && !this.gone.has(id)).map(([id]) => id);
     if (stakes.length) out.stakes = stakes;
+    const power = this.savePower();
+    if (power) out.power = power;
     const scripts = this.runner.saveState();
     if (Object.keys(scripts).length) out.scripts = scripts;
     // (What scripts set lands where it was going: a fade halfway is saved finished.)
@@ -854,6 +863,7 @@ export class GameWorld {
         this.restoredCopies = Math.max(this.restoredCopies, n!);
       }
     }
+    if (save.power && typeof save.power === 'object') this.loadPower(save.power);
     for (const id of Array.isArray(save.stakes) ? save.stakes : []) {
       const k = this.stakes.get(id), b = this.bodies.get(id);
       if (!k || !b || k.stuck) continue;
@@ -1162,6 +1172,11 @@ export class GameWorld {
       }
     }
     this.addLevel(level, conveyors);
+    for (const e of doc.entities) {
+      if (e.components.powerSource) this.grid.sources.set(e.id, readComponent<PowerSourceData>('powerSource', e.components.powerSource).on);
+      if (e.components.outlet) this.grid.outlets.set(e.id, readComponent<OutletData>('outlet', e.components.outlet).source);
+    }
+    this.sourcesAtStart = new Map(this.grid.sources);
     // Point objects inside a physics object (a light, a model, an emitter) ride with it.
     for (const e of doc.entities) {
       if (unitOf.has(e.id) || this.bodies.has(e.id) || own(e) || e.components.brush) continue;
@@ -1631,6 +1646,15 @@ export class GameWorld {
       const mesh = packedPath ? this.models.get(packedPath) : undefined;
       if (mesh && mesh.positions.length >= 9) this.junks.set(e.id, { pile: model, packed: { data: { ...model.data, model: packedPath }, mesh }, isPacked: false });
     }
+    if (rb.motion === 'dynamic' && e.components.extender) {
+      this.grid.plugs.set(e.id, { cable: readComponent<ExtenderData>('extender', e.components.extender).cable, into: null });
+      this.grid.cords.add(e.id);
+    }
+    if (rb.motion === 'dynamic' && e.components.stringLights) {
+      const data = readComponent<StringLightsData>('stringLights', e.components.stringLights);
+      this.grid.plugs.set(e.id, { cable: data.cable, into: null });
+      this.strings.set(e.id, { data, hung: null, half: null, version: 0 });
+    }
     // (Junk lying on the floor stays put: nothing pushes it; picking it up frees it.)
     if (e.components.junk && model && rb.motion === 'dynamic') this.junky.add(e.id);
     if (e.components.junk && model && rb.motion === 'dynamic') body.setBodyType(RAPIER.RigidBodyType.Fixed, false);
@@ -1855,6 +1879,238 @@ export class GameWorld {
     k.stuck = false;
     k.free = this.time + 0.5;
     this.bus.emit({ type: 'stake.pull', target: id, time: this.time });
+  }
+
+  // ── Power: sources, outlets, extension cords and string lights ──
+
+  private grid = new PowerGrid();
+  private sourcesAtStart = new Map<string, boolean>();
+  /** String lights: their settings, their two ends once hung, the first end while being hung; `version` counts changes. */
+  private strings = new Map<string, { data: StringLightsData; hung: [P3, P3] | null; half: P3 | null; version: number }>();
+
+  /** Where an object is now (its body, or where it was placed). */
+  private placeOf(id: string): P3 | null {
+    const b = this.bodies.get(id);
+    if (b) {
+      const t = b.body.translation();
+      return [t.x, t.y, t.z];
+    }
+    if (!this.doc.get(id)) return null;
+    const m = this.doc.worldMatrix(id);
+    return [m[12]!, m[13]!, m[14]!];
+  }
+
+  /** Where a plug's cable starts: hung string lights from their first end. */
+  private plugAt(id: string): P3 | null {
+    return this.strings.get(id)?.hung?.[0] ?? this.strings.get(id)?.half ?? this.placeOf(id);
+  }
+
+  /** Whether a power source is on (null: it isn't one). */
+  powerOn(id: string): boolean | null {
+    return this.grid.sources.get(id) ?? null;
+  }
+
+  /** Whether a socket (an outlet or a cord) is live, or a plug is in a live socket (null: neither). */
+  powered(id: string): boolean | null {
+    if (this.grid.isSocket(id) && !this.grid.plugs.has(id)) return this.grid.live(id);
+    const p = this.grid.plugs.get(id);
+    return p ? this.grid.live(p.into) : null;
+  }
+
+  /** The socket a plug is in (null: none, or it isn't a plug). */
+  pluggedInto(id: string): string | null {
+    return this.grid.plugs.get(id)?.into ?? null;
+  }
+
+  private switchPower(id: string, on: boolean): void {
+    if (!this.grid.sources.has(id) || this.grid.sources.get(id) === on) return;
+    this.grid.sources.set(id, on);
+    this.bus.emit({ type: 'power.switch', target: id, on, time: this.time });
+  }
+
+  private plug(id: string, socket: string): void {
+    const p = this.grid.plugs.get(id);
+    if (!p || p.into === socket) return;
+    if (p.into) this.unplug(id, false);
+    p.into = socket;
+    this.bus.emit({ type: 'power.plug', target: id, socket, time: this.time });
+  }
+
+  private unplug(id: string, pulled: boolean): void {
+    const p = this.grid.plugs.get(id);
+    if (!p?.into) return;
+    const socket = p.into;
+    p.into = null;
+    this.bus.emit({ type: 'power.unplug', target: id, socket, pulled, time: this.time });
+  }
+
+  /** After each step: a plug pulled further than its cable (or whose socket is gone) comes out. */
+  private checkCables(): void {
+    for (const [id, p] of this.grid.plugs) {
+      if (!p.into) continue;
+      const a = this.plugAt(id), b = this.placeOf(p.into);
+      if (!a || !b || this.gone.has(p.into) || this.gone.has(id) || dist3(a, b) > p.cable + 8) this.unplug(id, true);
+    }
+  }
+
+  /** The eye, the look direction, and the first solid thing looked at within reach (past what's held). */
+  private lookHit(reach: number): { eye: P3; dir: P3; at: P3 | null; n: P3; distance: number; id: string | null } | null {
+    const p = this.player;
+    if (!p) return null;
+    const eye = p.eye() as P3, dir = p.lookDirection() as P3;
+    const hit = this.world.castRayAndGetNormal(new RAPIER.Ray({ x: eye[0], y: eye[1], z: eye[2] }, { x: dir[0], y: dir[1], z: dir[2] }), reach, true, RAPIER.QueryFilterFlags.EXCLUDE_SENSORS, 0xffffffff, p.collider, undefined, (c) => !this.isHeld(c));
+    if (!hit) return { eye, dir, at: null, n: [0, 1, 0], distance: reach, id: null };
+    const d = hit.timeOfImpact;
+    return { eye, dir, at: [eye[0] + dir[0] * d, eye[1] + dir[1] * d, eye[2] + dir[2] * d], n: [hit.normal.x, hit.normal.y, hit.normal.z], distance: d, id: this.owner.get(hit.collider.handle) ?? null };
+  }
+
+  /** The object and what it is part of. */
+  private withParents(id: string): string[] {
+    const out: string[] = [];
+    for (let x: string | null | undefined = id; x; x = this.parentOf.get(x)) out.push(x);
+    return out;
+  }
+
+  /**
+   * Use while holding a plug: into a socket looked at (or out of it), or, string lights, hung by one end, then
+   * the other. The prompt (do: false), or what was done; null: nothing to do with power.
+   */
+  private powerHeldUse(act: boolean): string | null {
+    const id = this.held!.id, plug = this.grid.plugs.get(id);
+    if (!plug) return null;
+    const look = this.lookHit(PLAYER.useReach);
+    if (!look) return null;
+    const socket = look.id ? this.withParents(look.id).find((t) => this.grid.isSocket(t) && t !== id) : undefined;
+    if (socket) {
+      if (plug.into === socket) {
+        if (act) this.unplug(id, false);
+        return 'Unplug';
+      }
+      if (!this.grid.canPlug(id, socket)) return null;
+      const from = this.plugAt(id), to = this.placeOf(socket);
+      if (!from || !to || dist3(from, to) > plug.cable) return 'Cable too short';
+      if (act) this.plug(id, socket);
+      return 'Plug in';
+    }
+    const st = this.strings.get(id);
+    if (!st || !look.at) return null;
+    // Only on something that stays put (a wall, a ceiling, a beam).
+    const body = look.id ? this.bodies.get(look.id) : undefined;
+    if (body && !body.body.isFixed()) return null;
+    const at: P3 = [look.at[0] + look.n[0], look.at[1] + look.n[1], look.at[2] + look.n[2]];
+    if (!st.half) {
+      if (act) {
+        st.half = at;
+        st.version++;
+      }
+      return 'Hang one end';
+    }
+    const span = dist3(st.half, at);
+    if (span < 8) return null;
+    if (span > st.data.length) return 'Too far to reach';
+    if (act) this.hangLights(id, st.half, at);
+    return 'Hang the other end';
+  }
+
+  /** Use with nothing held: switch a power source, or take down string lights looked at. */
+  private powerUse(act: boolean): string | null {
+    const look = this.lookHit(PLAYER.useReach);
+    if (!look) return null;
+    // String lights nearer than what is looked at.
+    let near: { id: string; t: number } | null = null;
+    for (const [id, st] of this.strings) {
+      if (!st.hung || this.gone.has(id)) continue;
+      const [a, b] = st.hung;
+      const r = rayNearLine(look.eye, look.dir, wirePoints(a, b, dropOf(a, b, st.data.sag), 12), PLAYER.useReach);
+      if (r && r.d < 4 && r.t <= look.distance + 1 && (!near || r.t < near.t)) near = { id, t: r.t };
+    }
+    if (near) {
+      if (act) this.takeDownLights(near.id);
+      return 'Take down';
+    }
+    const src = look.id ? this.withParents(look.id).find((t) => this.grid.sources.has(t)) : undefined;
+    if (!src || this.runner.usePrompt([src]) !== null) return null;
+    const on = this.grid.sources.get(src)!;
+    if (act) this.switchPower(src, !on);
+    return on ? 'Turn off' : 'Turn on';
+  }
+
+  /** Up between two points: the coil itself is put away (still, hidden, not colliding) halfway between them. */
+  private hangLights(id: string, a: P3, b: P3, quiet = false): void {
+    const st = this.strings.get(id), body = this.bodies.get(id);
+    if (!st || !body) return;
+    if (this.held?.id === id) this.dropHeld();
+    st.hung = [a, b];
+    st.half = null;
+    st.version++;
+    body.body.setBodyType(RAPIER.RigidBodyType.Fixed, false);
+    body.body.setTranslation({ x: (a[0] + b[0]) / 2, y: (a[1] + b[1]) / 2, z: (a[2] + b[2]) / 2 }, false);
+    body.visible = false;
+    this.setColliders(body, false);
+    if (!quiet) this.bus.emit({ type: 'lights.hang', target: id, time: this.time });
+  }
+
+  /** Down into the player's hands as a coil again (still plugged in, if the cable reaches). */
+  private takeDownLights(id: string): void {
+    const st = this.strings.get(id), body = this.bodies.get(id), p = this.player;
+    if (!st?.hung || !body || !p) return;
+    st.hung = null;
+    st.version++;
+    const eye = p.eye(), d = p.lookDirection();
+    body.body.setTranslation({ x: eye[0] + d[0] * 56, y: eye[1] + d[1] * 56, z: eye[2] + d[2] * 56 }, false);
+    body.body.setBodyType(RAPIER.RigidBodyType.Dynamic, true);
+    body.visible = true;
+    this.setColliders(body, true);
+    this.bus.emit({ type: 'lights.takeDown', target: id, time: this.time });
+    this.hold(id, body.body);
+  }
+
+  /** What to draw: string lights (hung, or one end up while being hung) and cables from plugs to sockets. */
+  powerView(): { strings: { id: string; ends: [P3, P3] | null; lit: boolean; version: number; data: StringLightsData }[]; cables: { from: P3; to: P3; slack: number }[] } {
+    const strings: { id: string; ends: [P3, P3] | null; lit: boolean; version: number; data: StringLightsData }[] = [];
+    for (const [id, st] of this.strings) {
+      if (this.gone.has(id)) continue;
+      const coil = st.half ? this.placeOf(id) : null;
+      strings.push({ id, ends: st.hung ?? (st.half && coil ? [st.half, coil] : null), lit: this.grid.live(this.grid.plugs.get(id)?.into ?? null), version: st.version + (st.half ? 0.5 : 0), data: st.data });
+    }
+    const cables: { from: P3; to: P3; slack: number }[] = [];
+    for (const [id, p] of this.grid.plugs) {
+      if (!p.into || this.gone.has(id)) continue;
+      const from = this.plugAt(id), to = this.placeOf(p.into);
+      if (from && to) cables.push({ from, to, slack: Math.max(0, p.cable - dist3(from, to)) });
+    }
+    return { strings, cables };
+  }
+
+  /** Bulb positions of hung string lights (for tests and drawing). */
+  bulbsOf(id: string): P3[] {
+    const st = this.strings.get(id);
+    return st?.hung ? bulbPoints(st.hung[0], st.hung[1], st.data) : [];
+  }
+
+  private savePower(): SavedScene['power'] | null {
+    const on: Record<string, boolean> = {}, plugs: Record<string, string> = {}, hung: Record<string, [P3, P3]> = {};
+    for (const [id, v] of this.grid.sources) if (this.sourcesAtStart.get(id) !== v) on[id] = v;
+    for (const [id, p] of this.grid.plugs) if (p.into && !this.gone.has(id)) plugs[id] = p.into;
+    for (const [id, st] of this.strings) if (st.hung && !this.gone.has(id)) hung[id] = st.hung;
+    const out: NonNullable<SavedScene['power']> = {};
+    if (Object.keys(on).length) out.on = on;
+    if (Object.keys(plugs).length) out.plugs = plugs;
+    if (Object.keys(hung).length) out.hung = hung;
+    return Object.keys(out).length ? out : null;
+  }
+
+  private loadPower(save: NonNullable<SavedScene['power']>): void {
+    const p3 = (v: unknown): P3 | null => (Array.isArray(v) && v.length === 3 && v.every((x) => typeof x === 'number' && Number.isFinite(x)) ? (v as P3) : null);
+    for (const [id, on] of Object.entries(save.on ?? {})) if (this.grid.sources.has(id) && typeof on === 'boolean') this.grid.sources.set(id, on);
+    for (const [id, ends] of Object.entries(save.hung ?? {})) {
+      const a = p3(Array.isArray(ends) ? ends[0] : null), b = p3(Array.isArray(ends) ? ends[1] : null);
+      if (a && b) this.hangLights(id, a, b, true);
+    }
+    for (const [id, socket] of Object.entries(save.plugs ?? {})) {
+      const p = this.grid.plugs.get(id);
+      if (p && typeof socket === 'string' && this.grid.canPlug(id, socket)) p.into = socket;
+    }
   }
 
   // ── Junk: a pile on the ground, a bundle in the hands ──
@@ -2121,6 +2377,7 @@ export class GameWorld {
       if (this.held) this.stickHeld();
       if (this.stakes.size) this.stickStakes();
       if (this.junky.size) this.settleJunk();
+      if (this.grid.plugs.size) this.checkCables();
       this.accumulator -= STEP;
       this.time += STEP;
       this.base?.tick(STEP);
@@ -2478,6 +2735,8 @@ export class GameWorld {
   usePrompt(): string | null {
     if (this.hiding) return null;
     if (this.base && this.base.prompt(this.baseAim())) return null;
+    const power = this.held ? this.powerHeldUse(false) : this.powerUse(false);
+    if (power !== null) return power;
     const hit = this.useAim();
     if (!hit) return null;
     const { id, targets, distance } = hit;
@@ -2792,9 +3051,10 @@ export class GameWorld {
     }
     if (this.base && this.useBase()) return;
     if (this.held) {
-      if (!this.useHolding()) this.dropHeld();
+      if (this.powerHeldUse(true) === null && !this.useHolding()) this.dropHeld();
       return;
     }
+    if (this.powerUse(true) !== null) return;
     const hit = this.useAim();
     if (!hit) return;
     const { id, targets, distance } = hit;
@@ -2895,6 +3155,11 @@ export class GameWorld {
     if (!this.held) return;
     const id = this.held.id;
     this.held = null;
+    const st = this.strings.get(id);
+    if (st?.half) {
+      st.half = null;
+      st.version++;
+    }
     this.bus.emit({ type: 'drop', target: id, by: 'player', time: this.time });
   }
 
@@ -3074,6 +3339,10 @@ export class GameWorld {
       if (light.on !== on) this.bus.emit({ type: 'light', target, on, time: this.time });
       light.on = on;
       return null;
+    }
+    if (this.grid.sources.has(target) && (name === 'turnOn' || name === 'turnOff')) {
+      this.switchPower(target, name === 'turnOn');
+      if (!this.bodies.has(target)) return null;
     }
     const b = this.bodies.get(target) ?? this.bodies.get(this.unitOf.get(target) ?? '');
     if (!b) throw new Error(`${label} can't be moved or switched by scripts here.`);
