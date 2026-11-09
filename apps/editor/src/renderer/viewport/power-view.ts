@@ -1,30 +1,23 @@
 // Power while playing: hung string lights (wire, bulbs, the light they cast), cables from plugs to sockets, and
 // plain stand-ins for outlets and power sources that have no model of their own.
 import * as THREE from 'three';
-import { Line2 } from 'three/examples/jsm/lines/Line2.js';
-import { LineGeometry } from 'three/examples/jsm/lines/LineGeometry.js';
-import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js';
-import { LineSegments2 } from 'three/examples/jsm/lines/LineSegments2.js';
-import { LineSegmentsGeometry } from 'three/examples/jsm/lines/LineSegmentsGeometry.js';
 import { readComponent, type SceneDoc, type StringLightsData } from '@cocoaworlds/core';
 import { powerStandIn, type PowerStandIn } from './power-props';
 import { along, bulbPoints, dropOf, wirePoints, type GameWorld, type P3 } from '@cocoaworlds/runtime';
 
 /** Point lights' brightness in the game's units (as scene lights). */
 const FALLOFF = 96;
-/** Most cables drawn, and points along each. */
+/** Most cables drawn. */
 const MAX_CABLES = 64;
-const CABLE_SEGS = 16;
-/** Cables and wires: this many pixels thick, whatever the distance. */
-const CABLE_PX = 3;
 /** How far out from what the lights hang on their light comes from (u). */
 const LIGHT_OUT = 56;
-const size = new THREE.Vector2();
+/** Cables and wires: a real cable's thickness (u), shaded by the scene's light and shadow like anything else. */
+const CABLE_R = 0.6;
 
 interface StringView {
   version: number;
   lit: boolean | null;
-  wire: Line2;
+  wire: THREE.Mesh;
   bulbs: THREE.InstancedMesh | null;
   mat: THREE.MeshStandardMaterial;
   lights: THREE.PointLight[];
@@ -34,16 +27,12 @@ interface StringView {
 export class PowerView {
   readonly group = new THREE.Group();
   private strings = new Map<string, StringView>();
-  private wireMat = new LineMaterial({ color: 0x2a2a2a, linewidth: CABLE_PX });
+  private wireMat = new THREE.MeshStandardMaterial({ color: 0x2a2a2a, roughness: 0.6 });
   private bulbGeo = new THREE.IcosahedronGeometry(2, 0);
-  private cables: LineSegments2;
-  private cablePos = new Float32Array(MAX_CABLES * CABLE_SEGS * 6);
+  /** One tube per cable, and the shapes they were made from (rebuilt only when the world changes one). */
+  private cables: THREE.Mesh[] = [];
   private lastCables: P3[][] = [];
-  /** (Line thickness is in pixels of the view drawn into.) */
-  private fitLines = (r: THREE.WebGLRenderer) => {
-    r.getSize(size);
-    this.wireMat.resolution.copy(size);
-  };
+
   private sources: { id: string; lamp: THREE.MeshBasicMaterial; on: boolean | null }[] = [];
   private standIns: PowerStandIn[] = [];
 
@@ -51,11 +40,6 @@ export class PowerView {
     private world: GameWorld,
     doc: SceneDoc,
   ) {
-    this.cables = new LineSegments2(new LineSegmentsGeometry(), this.wireMat);
-    this.cables.frustumCulled = false;
-    this.cables.visible = false;
-    this.cables.onBeforeRender = this.fitLines;
-    this.group.add(this.cables);
     // (String lights' lights made now, dark, so lighting one up later compiles nothing.)
     for (const e of doc.entities) if (e.components.stringLights) this.stringView(e.id, readComponent<StringLightsData>('stringLights', e.components.stringLights));
     // Outlets and power sources without a model: a plate, a box with a lamp (as the editor shows them).
@@ -76,10 +60,9 @@ export class PowerView {
   private stringView(id: string, data: StringLightsData): StringView {
     let v = this.strings.get(id);
     if (v) return v;
-    const wire = new Line2(new LineGeometry(), this.wireMat);
-    wire.frustumCulled = false;
+    const wire = new THREE.Mesh(new THREE.BufferGeometry(), this.wireMat);
+    wire.receiveShadow = true;
     wire.visible = false;
-    wire.onBeforeRender = this.fitLines;
     this.group.add(wire);
     const lights: THREE.PointLight[] = [];
     for (let i = 0; i < Math.max(0, Math.min(4, Math.round(data.lights))); i++) {
@@ -119,22 +102,21 @@ export class PowerView {
     }
     // Cables (rebuilt only when one changed: the world keeps a cable's shape while its ends stay put).
     const shapes = view.cables.slice(0, MAX_CABLES).map((c) => c.points);
-    if (shapes.length !== this.lastCables.length || shapes.some((x, i) => x !== this.lastCables[i])) {
-      this.lastCables = shapes;
-      let n = 0;
-      const p = this.cablePos;
-      for (const pts of shapes)
-        for (let i = 0; i + 1 < pts.length && n + 6 <= p.length; i++) {
-          const a = pts[i]!, b = pts[i + 1]!;
-          p.set([a[0], a[1], a[2], b[0], b[1], b[2]], n);
-          n += 6;
-        }
-      this.cables.visible = n > 0;
-      if (n > 0) {
-        this.cables.geometry.dispose();
-        this.cables.geometry = new LineSegmentsGeometry().setPositions(p.subarray(0, n));
+    for (let i = 0; i < shapes.length; i++) {
+      if (shapes[i] === this.lastCables[i]) continue;
+      let m = this.cables[i];
+      if (!m) {
+        m = new THREE.Mesh(new THREE.BufferGeometry(), this.wireMat);
+        m.receiveShadow = true;
+        this.group.add(m);
+        this.cables.push(m);
       }
+      m.geometry.dispose();
+      m.geometry = tube(shapes[i]!);
+      m.visible = true;
     }
+    for (let i = shapes.length; i < this.cables.length; i++) this.cables[i]!.visible = false;
+    this.lastCables = shapes;
     for (const s of this.sources) {
       const on = this.world.powerOn(s.id);
       if (on === s.on) continue;
@@ -154,7 +136,7 @@ export class PowerView {
     const drop = dropOf(a, b, v.data.sag);
     const pts = wirePoints(a, b, drop, 24);
     v.wire.geometry.dispose();
-    v.wire.geometry = new LineGeometry().setPositions(pts.flat());
+    v.wire.geometry = tube(pts);
     v.wire.visible = true;
     const bulbs = bulbPoints(a, b, v.data);
     if (!v.bulbs || v.bulbs.count < bulbs.length) {
@@ -183,7 +165,7 @@ export class PowerView {
   dispose(): void {
     this.wireMat.dispose();
     this.bulbGeo.dispose();
-    this.cables.geometry.dispose();
+    for (const c of this.cables) c.geometry.dispose();
     for (const v of this.strings.values()) {
       v.wire.geometry.dispose();
       v.bulbs?.dispose();
@@ -191,4 +173,11 @@ export class PowerView {
     }
     for (const h of this.standIns) h.dispose();
   }
+}
+
+/** A thin tube along points. */
+function tube(pts: P3[]): THREE.BufferGeometry {
+  const path = new THREE.CurvePath<THREE.Vector3>();
+  for (let i = 0; i + 1 < pts.length; i++) path.add(new THREE.LineCurve3(new THREE.Vector3(...pts[i]!), new THREE.Vector3(...pts[i + 1]!)));
+  return new THREE.TubeGeometry(path, Math.max(1, pts.length - 1) * 2, CABLE_R, 5, false);
 }
