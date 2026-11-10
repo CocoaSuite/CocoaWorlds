@@ -8,7 +8,22 @@ import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer
 import { GTAOPass } from 'three/examples/jsm/postprocessing/GTAOPass.js';
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
+import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
+
+/** Every pixel finite and in range: NaN and infinity become black, the rest is capped. */
+const FINITE = {
+  uniforms: { tDiffuse: { value: null } },
+  vertexShader: `varying vec2 vUv;
+void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+  fragmentShader: `uniform sampler2D tDiffuse;
+varying vec2 vUv;
+void main() {
+  vec4 c = texture2D(tDiffuse, vUv);
+  if (any(isnan(c)) || any(isinf(c))) c = vec4(0., 0., 0., 1.);
+  gl_FragColor = vec4(clamp(c.rgb, 0., 1000.), clamp(c.a, 0., 1.));
+}`,
+};
 
 export class AoRenderer {
   private c: { composer: EffectComposer; pass: GTAOPass; bloom: UnrealBloomPass; scene: THREE.Scene; cam: THREE.Camera; w: number; h: number } | null = null;
@@ -110,6 +125,10 @@ void main() {
         draw(r, write, read, dt, mask);
       };
       composer.addPass(pass);
+      // Clean-up before bloom: a single NaN or overflowed pixel (a broken normal, a light right against a surface going
+      // past half-float's range) is blurred by bloom over the whole screen and greys it out for as long as it is in
+      // view. Such pixels become black, and anything absurdly bright is capped.
+      composer.addPass(new ShaderPass(FINITE));
       // Bloom: bright parts, blurred down a few halvings and added back (cheap: it starts at half size).
       const bloom = new UnrealBloomPass(new THREE.Vector2(size.x, size.y), b.strength, b.radius, b.threshold);
       composer.addPass(bloom);
