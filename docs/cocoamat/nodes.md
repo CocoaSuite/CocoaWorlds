@@ -470,7 +470,7 @@ outColor = vec4(vec3(v), 1.);
 
 Copies of a picture scattered over the square, each a different size, turn and brightness: leaves, pebbles, bolts.
 
-Makes: color · hash `74a004bd`
+Makes: color · hash `0b236b89`
 
 | Input | Reads as | Unlinked |
 |---|---|---|
@@ -478,7 +478,8 @@ Makes: color · hash `74a004bd`
 
 | Setting | Kind | Range | Default |
 |---|---|---|---|
-| `count` (Per row) | int | 1 – 32 | `6` |
+| `count` (Amount X) | int | 1 – 32 | `6` |
+| `countY` (Amount Y) | int | 1 – 32 | `6` |
 | `size` (Size) | number | 0.05 – 2 | `0.6` |
 | `sizeRandom` (Size varies) | number | 0 – 1 | `0.4` |
 | `turn` (Turn varies) | number | 0 – 1 | `1` |
@@ -488,19 +489,21 @@ Makes: color · hash `74a004bd`
 | `seed` (Seed) | seed | any whole number | `0` |
 
 ```glsl
-vec2 p = uv * p_count; vec2 c = floor(p); float best = 0.; vec3 col = vec3(0.); vec2 o = seedv(p_seed);
+vec2 N = vec2(p_count, p_countY); vec2 p = uv * N; vec2 c = floor(p); float best = 0.; vec3 col = vec3(0.); vec2 o = seedv(p_seed);
+// Copies are measured in units of a cell's shorter side, so uneven X/Y amounts don't stretch them.
+float k = max(N.x, N.y); vec2 dims = k / N;
 // Keep apart: each copy stays inside its own cell (its turned corners too, plus the space between), so none touch.
 float reach = p_turn > 0. ? 0.70711 : 0.5;
 float room = max(0., 1. - p_margin);
 for (int y = -1; y <= 1; y++) for (int x = -1; x <= 1; x++) {
-  vec2 cc = c + vec2(float(x), float(y)); vec2 cm = mod(cc, p_count);
+  vec2 cc = c + vec2(float(x), float(y)); vec2 cm = mod(cc, N);
   if (p_apart > 0.5 && (x != 0 || y != 0)) continue;
   float s = p_size * (1. - p_sizeRandom * hash12(cm + o + 1.7));
   if (p_apart > 0.5) s = min(s, room / (2. * reach));
-  float slack = p_apart > 0.5 ? max(0., room - 2. * reach * s) : 0.8;
+  vec2 slack = p_apart > 0.5 ? max(vec2(0.), (dims - p_margin - 2. * reach * s) / dims) : vec2(0.8);
   vec2 ctr = cc + 0.5 + (hash22(cm + o) - 0.5) * slack;
   float a = hash12(cm + o + 4.4) * 6.2831853 * p_turn;
-  vec2 d = mat2(cos(a), -sin(a), sin(a), cos(a)) * ((p - ctr) / max(s, 1e-3));
+  vec2 d = mat2(cos(a), -sin(a), sin(a), cos(a)) * ((p - ctr) * dims / max(s, 1e-3));
   if (abs(d.x) < 0.5 && abs(d.y) < 0.5) {
     vec3 t = inC_in(d + 0.5).rgb * (1. - p_brightRandom * hash12(cm + o + 8.8));
     float g = dot(t, vec3(0.3333));
@@ -734,9 +737,9 @@ outColor = vec4(c, 1.);
 
 ### Transform — `transform`
 
-Repeat, slide or turn the picture (in quarter turns, so it still tiles).
+Repeat, scale, slide or turn the picture (in quarter turns, so it still tiles; a scale other than 1 can break the tiling).
 
-Makes: color · hash `82a8e34b`
+Makes: color · hash `ff57536e`
 
 | Input | Reads as | Unlinked |
 |---|---|---|
@@ -745,6 +748,7 @@ Makes: color · hash `82a8e34b`
 | Setting | Kind | Range | Default |
 |---|---|---|---|
 | `tiles` (Repeat) | int | 1 – 32 | `2` |
+| `scale` (Scale) | number | 0.1 – 8 (step 0.01) | `1` |
 | `x` (Slide across) | number | 0 – 1 | `0` |
 | `y` (Slide down) | number | 0 – 1 | `0` |
 | `turn` (Turn) | choice | 0 `0`, 1 `90`, 2 `180`, 3 `270` | `0` |
@@ -752,7 +756,7 @@ Makes: color · hash `82a8e34b`
 ```glsl
 vec2 q = uv - 0.5;
 if (p_turn > 0.5 && p_turn < 1.5) q = vec2(-q.y, q.x); else if (p_turn > 1.5 && p_turn < 2.5) q = -q; else if (p_turn > 2.5) q = vec2(q.y, -q.x);
-outColor = vec4(inC_in((q + 0.5) * p_tiles + vec2(p_x, p_y)).rgb, 1.);
+outColor = vec4(inC_in((q / max(p_scale, 1e-3) + 0.5) * p_tiles + vec2(p_x, p_y)).rgb, 1.);
 ```
 
 ### Slope blur — `slopeBlur`

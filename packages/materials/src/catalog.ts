@@ -22,6 +22,8 @@ export interface CatalogParam {
   step?: number;
   /** For `choice`: the values in order. The shader gets the chosen value's index (0, 1, 2 …) as a float. */
   options?: { value: string; label: { en: string; ru: string } }[];
+  /** When the setting is missing from a graph, use this other setting's value before the default. */
+  follows?: string;
 }
 
 export interface CatalogNode {
@@ -72,6 +74,7 @@ function param(p: Param): CatalogParam {
   } else if (p.kind === 'int') {
     out.min = p.min;
     out.max = p.max;
+    if (p.follows) out.follows = p.follows;
   } else if (p.kind === 'choice') out.options = p.options;
   return out;
 }

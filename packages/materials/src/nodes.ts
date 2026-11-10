@@ -25,7 +25,7 @@ export interface Port {
 
 export type Param =
   | { id: string; label: L; kind: 'number'; min: number; max: number; step?: number; default: number }
-  | { id: string; label: L; kind: 'int'; min: number; max: number; default: number }
+  | { id: string; label: L; kind: 'int'; min: number; max: number; default: number; /** When unset, take this other setting's value (older files had one setting for both). */ follows?: string }
   | { id: string; label: L; kind: 'seed'; default: number }
   | { id: string; label: L; kind: 'choice'; options: { value: string; label: L }[]; default: string }
   | { id: string; label: L; kind: 'color'; default: string }
@@ -439,18 +439,19 @@ outColor = vec4(c, 1.);`,
     type: 'transform',
     group: 'change',
     label: l('Transform', 'Трансформация'),
-    hint: l('Repeat, slide or turn the picture (in quarter turns, so it still tiles).', 'Повторить, сдвинуть или повернуть картинку (на четверть оборота, чтобы стыковалась).'),
+    hint: l('Repeat, scale, slide or turn the picture (in quarter turns, so it still tiles; a scale other than 1 can break the tiling).', 'Повторить, масштабировать, сдвинуть или повернуть картинку (на четверть оборота, чтобы стыковалась; масштаб не 1 может нарушить стыковку).'),
     inputs: [IN_COLOR()],
     output: 'color',
     params: [
       { id: 'tiles', label: l('Repeat', 'Повторов'), kind: 'int', min: 1, max: 32, default: 2 },
+      { id: 'scale', label: l('Scale', 'Масштаб'), kind: 'number', min: 0.1, max: 8, step: 0.01, default: 1 },
       { id: 'x', label: l('Slide across', 'Сдвиг поперёк'), kind: 'number', min: 0, max: 1, default: 0 },
       { id: 'y', label: l('Slide down', 'Сдвиг вниз'), kind: 'number', min: 0, max: 1, default: 0 },
       { id: 'turn', label: l('Turn', 'Поворот'), kind: 'choice', options: [opt('0', 'None', 'Нет'), opt('90', '90°', '90°'), opt('180', '180°', '180°'), opt('270', '270°', '270°')], default: '0' },
     ],
     glsl: `vec2 q = uv - 0.5;
 if (p_turn > 0.5 && p_turn < 1.5) q = vec2(-q.y, q.x); else if (p_turn > 1.5 && p_turn < 2.5) q = -q; else if (p_turn > 2.5) q = vec2(q.y, -q.x);
-outColor = vec4(inC_in((q + 0.5) * p_tiles + vec2(p_x, p_y)).rgb, 1.);`,
+outColor = vec4(inC_in((q / max(p_scale, 1e-3) + 0.5) * p_tiles + vec2(p_x, p_y)).rgb, 1.);`,
   },
   {
     type: 'slopeBlur',
@@ -862,7 +863,8 @@ outColor = vec4(vec3(v), 1.);`,
     inputs: [IN_COLOR('in', l('Picture', 'Картинка'), [1, 1, 1])],
     output: 'color',
     params: [
-      { id: 'count', label: l('Per row', 'В ряду'), kind: 'int', min: 1, max: 32, default: 6 },
+      { id: 'count', label: l('Amount X', 'Количество по X'), kind: 'int', min: 1, max: 32, default: 6 },
+      { id: 'countY', label: l('Amount Y', 'Количество по Y'), kind: 'int', min: 1, max: 32, default: 6, follows: 'count' },
       { id: 'size', label: l('Size', 'Размер'), kind: 'number', min: 0.05, max: 2, default: 0.6 },
       { id: 'sizeRandom', label: l('Size varies', 'Разный размер'), kind: 'number', min: 0, max: 1, default: 0.4 },
       { id: 'turn', label: l('Turn varies', 'Разный поворот'), kind: 'number', min: 0, max: 1, default: 1 },
@@ -871,19 +873,21 @@ outColor = vec4(vec3(v), 1.);`,
       { id: 'margin', label: l('Space between', 'Промежуток'), kind: 'number', min: 0, max: 0.5, default: 0.05 },
       seed,
     ],
-    glsl: `vec2 p = uv * p_count; vec2 c = floor(p); float best = 0.; vec3 col = vec3(0.); vec2 o = seedv(p_seed);
+    glsl: `vec2 N = vec2(p_count, p_countY); vec2 p = uv * N; vec2 c = floor(p); float best = 0.; vec3 col = vec3(0.); vec2 o = seedv(p_seed);
+// Copies are measured in units of a cell's shorter side, so uneven X/Y amounts don't stretch them.
+float k = max(N.x, N.y); vec2 dims = k / N;
 // Keep apart: each copy stays inside its own cell (its turned corners too, plus the space between), so none touch.
 float reach = p_turn > 0. ? 0.70711 : 0.5;
 float room = max(0., 1. - p_margin);
 for (int y = -1; y <= 1; y++) for (int x = -1; x <= 1; x++) {
-  vec2 cc = c + vec2(float(x), float(y)); vec2 cm = mod(cc, p_count);
+  vec2 cc = c + vec2(float(x), float(y)); vec2 cm = mod(cc, N);
   if (p_apart > 0.5 && (x != 0 || y != 0)) continue;
   float s = p_size * (1. - p_sizeRandom * hash12(cm + o + 1.7));
   if (p_apart > 0.5) s = min(s, room / (2. * reach));
-  float slack = p_apart > 0.5 ? max(0., room - 2. * reach * s) : 0.8;
+  vec2 slack = p_apart > 0.5 ? max(vec2(0.), (dims - p_margin - 2. * reach * s) / dims) : vec2(0.8);
   vec2 ctr = cc + 0.5 + (hash22(cm + o) - 0.5) * slack;
   float a = hash12(cm + o + 4.4) * 6.2831853 * p_turn;
-  vec2 d = mat2(cos(a), -sin(a), sin(a), cos(a)) * ((p - ctr) / max(s, 1e-3));
+  vec2 d = mat2(cos(a), -sin(a), sin(a), cos(a)) * ((p - ctr) * dims / max(s, 1e-3));
   if (abs(d.x) < 0.5 && abs(d.y) < 0.5) {
     vec3 t = inC_in(d + 0.5).rgb * (1. - p_brightRandom * hash12(cm + o + 8.8));
     float g = dot(t, vec3(0.3333));

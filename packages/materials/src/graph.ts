@@ -83,14 +83,20 @@ export function nodeId(): string {
 
 export function newNode(type: string, x = 0, y = 0, params: Record<string, ParamValue> = {}): GraphNode {
   if (!nodeDef(type)) throw new Error(`Unknown node “${type}”.`);
-  return { id: nodeId(), type, x, y, params };
+  // A setting that follows another when unset starts at its own default in new nodes.
+  const own: Record<string, ParamValue> = {};
+  for (const p of nodeDef(type)!.params) if ('follows' in p && p.follows && params[p.id] === undefined) own[p.id] = p.default;
+  return { id: nodeId(), type, x, y, params: { ...own, ...params } };
 }
 
 /** A node's settings with the defaults filled in. */
 export function paramsOf(n: GraphNode): Record<string, ParamValue> {
   const def = nodeDef(n.type);
   const out: Record<string, ParamValue> = {};
-  for (const p of def?.params ?? []) out[p.id] = n.params[p.id] ?? p.default;
+  for (const p of def?.params ?? []) {
+    const follows = 'follows' in p ? p.follows : undefined;
+    out[p.id] = n.params[p.id] ?? (follows !== undefined ? n.params[follows] : undefined) ?? p.default;
+  }
   return out;
 }
 
@@ -168,8 +174,8 @@ export function setParam(g: MatGraph, id: string, key: string, value: ParamValue
       if (n.id !== id) return n;
       const def = nodeDef(n.type)?.params.find((p) => p.id === key);
       const params = { ...n.params };
-      // (Defaults are left out of the file.)
-      if (def && JSON.stringify(def.default) === JSON.stringify(value)) delete params[key];
+      // (Defaults are left out of the file, except for a setting that follows another when unset.)
+      if (def && !('follows' in def && def.follows) && JSON.stringify(def.default) === JSON.stringify(value)) delete params[key];
       else params[key] = value;
       return { ...n, params };
     }),
