@@ -4459,8 +4459,8 @@ export class GameWorld {
     const sprint = speed > 250, walk = p.crouched || speed < 130;
     this.stepLeft -= speed * STEP;
     if (this.stepLeft > 0) return;
-    this.stepLeft += p.crouched ? 50 : walk ? 64 : sprint ? 104 : 84;
-    step('step', p.crouched ? 0.06 : walk ? 0.12 : sprint ? 0.3 : 0.2);
+    this.stepLeft += p.crouched ? 95 : walk ? 122 : sprint ? 198 : 160;
+    step('step', p.crouched ? 0.03 : walk ? 0.06 : sprint ? 0.15 : 0.1);
   }
 
   /** Velocities just before a physics step: what the step changes beyond gravity is what things hit. */
