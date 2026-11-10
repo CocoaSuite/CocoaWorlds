@@ -110,6 +110,10 @@ void main() {
   float near = -viewZ(texture2D(tSceneDepth, vUv).x);
   float measured = -viewZ(texture2D(tAoDepth, vUv).x);
   float inFront = smoothstep(0.5, 2.0, measured - near);
+  // (Occlusion that came out as no number, from a broken normal or depth, is no occlusion: multiplied over the
+  // picture it would blank every pixel it touches.)
+  if (any(isnan(texel)) || any(isinf(texel))) texel = vec4(1.);
+  if (isnan(inFront) || isinf(inFront)) inFront = 1.;
   gl_FragColor = vec4(mix(mix(vec3(1.), texel.rgb, intensity), vec3(1.), inFront), texel.a);
 }`;
       blend.needsUpdate = true;
