@@ -293,6 +293,8 @@ export class ViewportEngine {
     this.scene.add(this.foliage.group);
     this.scene.add(this.terrains.group);
     this.scene.add(this.plants.group);
+    this.markerRoot.name = 'markers';
+    this.scene.add(this.markerRoot);
     this.repeatHandle.renderOrder = 21;
     this.repeatHandle.visible = false;
     this.repeatHandle.name = 'repeat-handle';
@@ -580,8 +582,11 @@ export class ViewportEngine {
     this.gizmo.detach();
     this.world.group.visible = false;
     // (The session draws its own grass, terrain and plants: the editor's would be drawn on top of them, twice the work.)
-    this.editorGreenery = [this.foliage.group, this.terrains.group, this.plants.group].map((g) => [g, g.visible] as const);
+    // Markers too (one hidden group, not thousands of hidden ones for every pass to step over); and none of it is
+    // placed again each frame while hidden.
+    this.editorGreenery = [this.foliage.group, this.terrains.group, this.plants.group, this.markerRoot].map((g) => [g, g.visible] as const);
     for (const [g] of this.editorGreenery) g.visible = false;
+    for (const g of [this.world.group, ...this.editorGreenery.map(([g]) => g)]) g.matrixWorldAutoUpdate = false;
     this.vertexTool.group.visible = false;
     this.clipTool.group.visible = false;
     this.snapMarker.visible = false;
@@ -602,6 +607,8 @@ export class ViewportEngine {
 
   /** The editor's own grass, terrain and plants, and whether each was shown, while a session draws its own. */
   private editorGreenery: (readonly [THREE.Object3D, boolean])[] = [];
+  /** Every object's marker (icon, outline) hangs here. */
+  private markerRoot = new THREE.Group();
 
   stopPlay(): void {
     this.playToken++;
@@ -624,6 +631,7 @@ export class ViewportEngine {
     p.dispose();
     this.world.group.visible = true;
     for (const [g, v] of this.editorGreenery) g.visible = v;
+    for (const g of [this.world.group, ...this.editorGreenery.map(([g]) => g)]) g.matrixWorldAutoUpdate = true;
     this.editorGreenery = [];
     this.grid.object.visible = this.gridWasVisible;
     this.vertexTool.group.visible = this.editTool === 'vertex';
@@ -1258,7 +1266,7 @@ export class ViewportEngine {
       }
       rec = { m: buildMarker(e), key };
       this.markers.set(e.id, rec);
-      this.scene.add(rec.m.group);
+      this.markerRoot.add(rec.m.group);
     }
     const g = rec.m.group;
     if (!(this.gizmo.dragging && this.gizmo.object === g)) {

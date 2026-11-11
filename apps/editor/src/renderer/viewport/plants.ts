@@ -513,6 +513,8 @@ export class PlantRenderer {
         const holder = new THREE.Group();
         holder.name = `plant:${e.id}`;
         holder.matrixAutoUpdate = false;
+        // (Placed by hand in `sync`: no render walks into it to place it again.)
+        holder.matrixWorldAutoUpdate = false;
         const g0 = plantGeometry(def, p.seed);
         const size = Math.max(32, g0.boundingSphere?.radius ?? 32);
         const pick = new THREE.Mesh(g0, PICK_MATERIAL);
@@ -571,7 +573,11 @@ export class PlantRenderer {
       if (level < 0) level = count - 1;
       const end = s.ends[level];
       const t = end === undefined ? 0 : Math.min(1, Math.max(0, (d - end * (1 - BLEND)) / (end * BLEND)));
-      if (s.card) s.card.visible = false;
+      if (s.card) {
+        // (The holder too: hidden, no pass steps into it.)
+        s.card.visible = false;
+        s.holder.visible = false;
+      }
       this.put(s, level, 1 - t, 0);
       if (t > 0 && level + 1 < count) this.put(s, level + 1, t, 1);
     }
@@ -597,7 +603,10 @@ export class PlantRenderer {
   private put(s: Shown, level: number, amount: number, side: number): void {
     if (amount <= 0.001) return;
     if (level >= MESH_LEVELS) {
-      if (s.card) setFade(s.card, amount, side);
+      if (s.card) {
+        setFade(s.card, amount, side);
+        s.holder.visible = true;
+      }
       return;
     }
     const b = this.batch(s, level);
@@ -645,6 +654,7 @@ export class PlantRenderer {
     const mesh = new THREE.InstancedMesh(g, this.material(s), capacity);
     mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
     mesh.count = 0;
+    mesh.matrixAutoUpdate = false;
     mesh.castShadow = true;
     // (A tree's crown is lit by its rounded normals; shadows from its own jagged leaves would stripe it.)
     mesh.receiveShadow = s.def.form === 'clump';
@@ -667,6 +677,7 @@ export class PlantRenderer {
     const mesh = new THREE.InstancedMesh(g, old.material, capacity);
     (mesh.instanceMatrix.array as Float32Array).set(old.instanceMatrix.array as Float32Array);
     mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    mesh.matrixAutoUpdate = false;
     mesh.castShadow = old.castShadow;
     mesh.receiveShadow = old.receiveShadow;
     mesh.userData.noAo = true;
