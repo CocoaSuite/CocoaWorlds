@@ -329,12 +329,20 @@ function fading<M extends THREE.Material>(m: M): M {
     sh.uniforms.uTime = PLANT_TIME;
     // Wind: the plant sways more towards its top, each one in its own rhythm (from where it stands).
     sh.vertexShader = sh.vertexShader
-      .replace('#include <common>', '#include <common>\nuniform float uSway;\nuniform float uSwayH;\nuniform float uTime;')
+      .replace(
+        '#include <common>',
+        '#include <common>\nuniform float uSway;\nuniform float uSwayH;\nuniform float uTime;\n#ifdef CW_INSTANCED\nattribute vec2 aFade;\nvarying vec2 vCwFade;\n#endif',
+      )
       .replace(
         '#include <begin_vertex>',
         `vec3 transformed = vec3(position);
         {
           vec2 at = modelMatrix[3].xz;
+          #ifdef CW_INSTANCED
+          // (Batched plants: each its own fade, and its own rhythm from where it stands.)
+          vCwFade = aFade;
+          at = (modelMatrix * instanceMatrix)[3].xz;
+          #endif
           float h = clamp(position.y / uSwayH, 0.0, 1.5);
           float s = h * h * uSway;
           float ph = at.x * 0.013 + at.y * 0.017;
@@ -347,9 +355,17 @@ function fading<M extends THREE.Material>(m: M): M {
         'void main() {',
         `uniform float uFade;
 uniform float uFadeSide;
+#ifdef CW_INSTANCED
+varying vec2 vCwFade;
+#endif
 void main() {
+  #ifdef CW_INSTANCED
+  float cwFadeA = vCwFade.x, cwFadeS = vCwFade.y;
+  #else
+  float cwFadeA = uFade, cwFadeS = uFadeSide;
+  #endif
   float cwDither = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715))));
-  if (uFadeSide < 0.5 ? cwDither >= uFade : cwDither < 1.0 - uFade) discard;`,
+  if (cwFadeS < 0.5 ? cwDither >= cwFadeA : cwDither < 1.0 - cwFadeA) discard;`,
       )
       .replace('#include <normal_fragment_begin>', THREE.ShaderChunk.normal_fragment_begin.replace('normal *= faceDirection;', ''));
     // Backlight: looking towards the sun through a plant, light shines through its leaves, brightest round the
@@ -421,25 +437,64 @@ const setFade = (o: THREE.Object3D, amount: number, side: number) => {
 
 interface Shown {
   key: string;
+  /** The batch kind (recipe and seed). */
+  kind: string;
+  def: PlantDef;
+  seed: number;
+  /** What the editor picks the plant by: its full-detail mesh, never drawn. */
   holder: THREE.Group;
-  levels: THREE.Object3D[];
+  pick: THREE.Mesh;
+  /** A tree's far picture (drawn on its own: a sprite). */
+  card: THREE.Sprite | null;
+  matrix: THREE.Matrix4;
   /** Where each level hands over to the next (u from the camera). */
   ends: number[];
   at: THREE.Vector3;
+  cell: string;
+}
+
+/** Plants of one recipe, seed and detail level in one area, drawn together (one draw a pass). */
+interface Batch {
+  mesh: THREE.InstancedMesh;
+  fade: THREE.InstancedBufferAttribute;
+  capacity: number;
+  /** Plants written this frame. */
+  n: number;
+  dirty: boolean;
 }
 
 /** The last part of each level's range where it dissolves into the next (a share of that distance). */
 const BLEND = 0.2;
 
-/** Draws the scene's Plant objects (editor and game), each at the detail level its distance calls for. */
+/**
+ * The size of the areas plants are batched by (u). Each batch is culled as a whole (by the camera and each shadow's
+ * view), so areas keep what is drawn close to what is seen; bigger areas mean fewer draws.
+ */
+export const PLANT_CELL = 2048;
+
+const MESH_LEVELS = 3;
+
+/**
+ * Draws the scene's Plant objects (editor and game), each at the detail level its distance calls for. Plants of the
+ * same recipe, seed and level in the same area are one instanced mesh (one draw call a pass instead of one each);
+ * each keeps its own place, wind rhythm and dissolve between levels.
+ */
 export class PlantRenderer {
   readonly group = new THREE.Group();
   private shown = new Map<string, Shown>();
+  private batches = new Map<string, Batch>();
+  private materials = new Map<string, THREE.MeshLambertMaterial>();
+  private picks = new THREE.Group();
   private last: SceneDoc | null = null;
   private off = onPlantsChange(() => this.sync(this.last));
+  private eye = new THREE.Vector3();
+  /** Recipe-and-seed|area pairs that have plants (batches elsewhere can go). */
+  private areas = new Set<string>();
 
   constructor(private onDraw: () => void = () => {}) {
     this.group.name = 'plants';
+    this.picks.name = 'plant picks';
+    this.group.add(this.picks);
   }
 
   sync(doc: SceneDoc | null): void {
@@ -460,40 +515,44 @@ export class PlantRenderer {
         holder.matrixAutoUpdate = false;
         const g0 = plantGeometry(def, p.seed);
         const size = Math.max(32, g0.boundingSphere?.radius ?? 32);
-        const levels: THREE.Object3D[] = [0, 1, 2].map((l) => {
-          const m = new THREE.Mesh(l ? plantGeometry(def, p.seed, l) : g0, plantMaterial());
-          setPlantWind(m.material, def);
-          m.castShadow = true;
-          // (A tree's crown is lit by its rounded normals; shadows from its own jagged leaves would stripe it.)
-          m.receiveShadow = def.form === 'clump';
-          return m;
-        });
+        const pick = new THREE.Mesh(g0, PICK_MATERIAL);
+        pick.visible = false;
+        pick.userData.entityId = e.id;
+        holder.add(pick);
         const ends = [size * 6, size * 16];
         // Trees, very far away: a picture of themselves, always facing the camera (two triangles).
+        let card: THREE.Sprite | null = null;
         if (def.form === 'tree') {
           const imp = plantImpostor(def, p.seed);
-          const card = new THREE.Sprite(fading(new THREE.SpriteMaterial({ map: imp.map, alphaTest: 0.5 })));
+          card = new THREE.Sprite(fading(new THREE.SpriteMaterial({ map: imp.map, alphaTest: 0.5 })));
           card.center.set(0.5, 0);
           card.scale.set(imp.width, imp.height, 1);
-          levels.push(card);
+          card.userData.entityId = e.id;
+          card.userData.noAo = true;
+          card.visible = false;
+          holder.add(card);
           ends.push(size * 40);
         }
-        for (const o of levels) {
-          o.userData.entityId = e.id;
-          // (Plants are left out of ambient occlusion: their leaves would cast dark halos on what's behind.)
-          o.userData.noAo = true;
-          o.visible = o === levels[0];
-          holder.add(o);
-        }
-        this.group.add(holder);
-        s = { key, holder, levels, ends, at: new THREE.Vector3() };
+        // (Only trees' far pictures are drawn from here: other holders stay out of the scene, so no pass walks them.)
+        if (card) this.picks.add(holder);
+        s = { key, kind: key, def, seed: p.seed, holder, pick, card, matrix: new THREE.Matrix4(), ends, at: new THREE.Vector3(), cell: '' };
         this.shown.set(e.id, s);
       }
       s.holder.matrix.fromArray(doc.worldMatrix(e.id));
-      s.holder.matrixWorldNeedsUpdate = true;
-      s.at.setFromMatrixPosition(s.holder.matrix);
+      // (Placed by hand: a holder outside the scene is never updated by a render, and picking reads its mesh's place.)
+      s.holder.matrixWorld.copy(s.holder.matrix);
+      for (const c of s.holder.children) c.updateMatrixWorld(true);
+      s.matrix.copy(s.holder.matrix);
+      s.at.setFromMatrixPosition(s.matrix);
+      s.cell = `${Math.floor(s.at.x / PLANT_CELL)},${Math.floor(s.at.z / PLANT_CELL)}`;
     }
     for (const id of [...this.shown.keys()]) if (!seen.has(id)) this.drop(id);
+    this.areas.clear();
+    for (const s of this.shown.values()) {
+      this.areas.add(`${s.kind}|${s.cell}`);
+      // (Made now, not on the first frame: Play compiles every shader before it starts, these batched ones too.)
+      this.batch(s, 0);
+    }
     this.onDraw();
   }
 
@@ -503,34 +562,175 @@ export class PlantRenderer {
     let root: THREE.Object3D = this.group;
     while (root.parent) root = root.parent;
     aimRim(root, cam);
-    const eye = cam.getWorldPosition(new THREE.Vector3());
+    const eye = cam.getWorldPosition(this.eye);
+    for (const b of this.batches.values()) b.n = 0;
     for (const s of this.shown.values()) {
       const d = eye.distanceTo(s.at);
+      const count = s.ends.length + 1;
       let level = s.ends.findIndex((e) => d < e);
-      if (level < 0) level = s.levels.length - 1;
+      if (level < 0) level = count - 1;
       const end = s.ends[level];
       const t = end === undefined ? 0 : Math.min(1, Math.max(0, (d - end * (1 - BLEND)) / (end * BLEND)));
-      s.levels.forEach((o, l) => (o.visible = false));
-      setFade(s.levels[level]!, 1 - t, 0);
-      if (t > 0 && s.levels[level + 1]) setFade(s.levels[level + 1]!, t, 1);
+      if (s.card) s.card.visible = false;
+      this.put(s, level, 1 - t, 0);
+      if (t > 0 && level + 1 < count) this.put(s, level + 1, t, 1);
     }
+    for (const [k, b] of this.batches) {
+      if (b.mesh.count !== b.n) {
+        b.mesh.count = b.n;
+        b.dirty = true;
+      }
+      b.mesh.visible = b.n > 0;
+      if (b.dirty) {
+        b.mesh.instanceMatrix.needsUpdate = true;
+        b.fade.needsUpdate = true;
+        b.mesh.boundingSphere = null;
+        b.mesh.boundingBox = null;
+        b.dirty = false;
+      }
+      // (Areas left empty for good: let them go.)
+      if (!b.n && !this.shownIn(k)) this.dropBatch(k);
+    }
+  }
+
+  /** Plant `s` at `level` with this fade (`side`: which half of the dither it keeps while dissolving). */
+  private put(s: Shown, level: number, amount: number, side: number): void {
+    if (amount <= 0.001) return;
+    if (level >= MESH_LEVELS) {
+      if (s.card) setFade(s.card, amount, side);
+      return;
+    }
+    const b = this.batch(s, level);
+    const i = b.n++;
+    if (i >= b.capacity) this.grow(b);
+    const m = b.mesh.instanceMatrix.array as Float32Array, e = s.matrix.elements, o = i * 16;
+    for (let k = 0; k < 16; k++) {
+      // (Float32: compare what will be stored.)
+      const v = Math.fround(e[k]!);
+      if (m[o + k] !== v) {
+        m[o + k] = v;
+        b.dirty = true;
+      }
+    }
+    const f = b.fade.array as Float32Array;
+    const a = Math.fround(amount);
+    if (f[i * 2] !== a || f[i * 2 + 1] !== side) {
+      f[i * 2] = a;
+      f[i * 2 + 1] = side;
+      b.dirty = true;
+    }
+  }
+
+  private batch(s: Shown, level: number): Batch {
+    const k = `${s.kind}|${level}|${s.cell}`;
+    let b = this.batches.get(k);
+    if (!b) {
+      b = this.makeBatch(s, level, 16);
+      this.batches.set(k, b);
+    }
+    return b;
+  }
+
+  private makeBatch(s: Shown, level: number, capacity: number): Batch {
+    const src = plantGeometry(s.def, s.seed, level);
+    // (Its own geometry object sharing the plant's buffers: only the per-plant fade is its own.)
+    const g = new THREE.BufferGeometry();
+    g.index = src.index;
+    for (const [name, a] of Object.entries(src.attributes)) g.setAttribute(name, a);
+    g.boundingBox = src.boundingBox;
+    g.boundingSphere = src.boundingSphere;
+    const fade = new THREE.InstancedBufferAttribute(new Float32Array(capacity * 2), 2);
+    fade.setUsage(THREE.DynamicDrawUsage);
+    g.setAttribute('aFade', fade);
+    const mesh = new THREE.InstancedMesh(g, this.material(s), capacity);
+    mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    mesh.count = 0;
+    mesh.castShadow = true;
+    // (A tree's crown is lit by its rounded normals; shadows from its own jagged leaves would stripe it.)
+    mesh.receiveShadow = s.def.form === 'clump';
+    // (Plants are left out of ambient occlusion: their leaves would cast dark halos on what's behind.)
+    mesh.userData.noAo = true;
+    mesh.name = `plants:${level}`;
+    this.group.add(mesh);
+    return { mesh, fade, capacity, n: 0, dirty: true };
+  }
+
+  /** Room for twice as many plants (what's written so far is kept). */
+  private grow(b: Batch): void {
+    const old = b.mesh;
+    const capacity = b.capacity * 2;
+    const g = old.geometry;
+    const fade = new THREE.InstancedBufferAttribute(new Float32Array(capacity * 2), 2);
+    fade.setUsage(THREE.DynamicDrawUsage);
+    (fade.array as Float32Array).set(b.fade.array as Float32Array);
+    g.setAttribute('aFade', fade);
+    const mesh = new THREE.InstancedMesh(g, old.material, capacity);
+    (mesh.instanceMatrix.array as Float32Array).set(old.instanceMatrix.array as Float32Array);
+    mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    mesh.castShadow = old.castShadow;
+    mesh.receiveShadow = old.receiveShadow;
+    mesh.userData.noAo = true;
+    mesh.name = old.name;
+    this.group.remove(old);
+    old.dispose();
+    this.group.add(mesh);
+    b.mesh = mesh;
+    b.fade = fade;
+    b.capacity = capacity;
+    b.dirty = true;
+  }
+
+  /** One material per recipe and seed: the wind is the recipe's, the fade each plant's own. */
+  private material(s: Shown): THREE.MeshLambertMaterial {
+    let m = this.materials.get(s.kind);
+    if (!m) {
+      m = plantMaterial();
+      m.defines = { ...m.defines, CW_INSTANCED: '' };
+      setPlantWind(m, s.def);
+      this.materials.set(s.kind, m);
+    }
+    return m;
+  }
+
+  private shownIn(batchKey: string): boolean {
+    const [kind, , cell] = batchKey.split('|');
+    return this.areas.has(`${kind}|${cell}`);
+  }
+
+  private dropBatch(k: string): void {
+    const b = this.batches.get(k);
+    if (!b) return;
+    this.group.remove(b.mesh);
+    b.mesh.dispose();
+    this.batches.delete(k);
   }
 
   private drop(id: string): void {
     const s = this.shown.get(id);
     if (!s) return;
-    for (const o of s.levels) ((o as THREE.Mesh).material as THREE.Material).dispose();
-    this.group.remove(s.holder);
+    if (s.card) (s.card.material as THREE.Material).dispose();
+    this.picks.remove(s.holder);
     this.shown.delete(id);
   }
 
-  /** What to pick plants by (each its full-detail mesh). */
+  /** What to pick plants by (each its full-detail mesh, never drawn). */
   get meshes(): THREE.Mesh[] {
-    return [...this.shown.values()].map((s) => s.levels[0] as THREE.Mesh);
+    return [...this.shown.values()].map((s) => s.pick);
+  }
+
+  /** Draw calls a pass that plants make at most (one per batch with plants in it), for tests. */
+  get drawn(): number {
+    return [...this.batches.values()].filter((b) => b.mesh.visible).length;
   }
 
   dispose(): void {
     this.off();
     for (const id of [...this.shown.keys()]) this.drop(id);
+    for (const k of [...this.batches.keys()]) this.dropBatch(k);
+    for (const m of this.materials.values()) m.dispose();
+    this.materials.clear();
   }
 }
+
+/** Plants' pick meshes are never drawn; raycasting needs a material all the same. */
+const PICK_MATERIAL = new THREE.MeshBasicMaterial({ side: THREE.DoubleSide });

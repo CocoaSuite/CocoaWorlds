@@ -579,6 +579,9 @@ export class ViewportEngine {
     this.cancelDraft();
     this.gizmo.detach();
     this.world.group.visible = false;
+    // (The session draws its own grass, terrain and plants: the editor's would be drawn on top of them, twice the work.)
+    this.editorGreenery = [this.foliage.group, this.terrains.group, this.plants.group].map((g) => [g, g.visible] as const);
+    for (const [g] of this.editorGreenery) g.visible = false;
     this.vertexTool.group.visible = false;
     this.clipTool.group.visible = false;
     this.snapMarker.visible = false;
@@ -596,6 +599,9 @@ export class ViewportEngine {
     this.invalidate();
     return session.info;
   }
+
+  /** The editor's own grass, terrain and plants, and whether each was shown, while a session draws its own. */
+  private editorGreenery: (readonly [THREE.Object3D, boolean])[] = [];
 
   stopPlay(): void {
     this.playToken++;
@@ -617,6 +623,8 @@ export class ViewportEngine {
     this.scene.remove(p.group);
     p.dispose();
     this.world.group.visible = true;
+    for (const [g, v] of this.editorGreenery) g.visible = v;
+    this.editorGreenery = [];
     this.grid.object.visible = this.gridWasVisible;
     this.vertexTool.group.visible = this.editTool === 'vertex';
     this.clipTool.group.visible = this.editTool === 'clip';
@@ -1120,7 +1128,10 @@ export class ViewportEngine {
 
   /** View › Show grass: hides the editor's grass (Play still shows it). */
   setGrassVisible(v: boolean): void {
-    this.foliage.group.visible = v;
+    // (While playing, the editor's grass stays hidden; the choice is kept for afterwards.)
+    const kept = this.editorGreenery.findIndex(([g]) => g === this.foliage.group);
+    if (kept >= 0) this.editorGreenery[kept] = [this.foliage.group, v];
+    else this.foliage.group.visible = v;
     this.invalidate();
   }
 
@@ -1866,7 +1877,6 @@ export class ViewportEngine {
     if (this.play?.placeCamera(this.fpCam)) {
       this.lighting.follow(this.fpCam.getWorldPosition(new THREE.Vector3()));
       this.play.updateFoliage(this.fpCam);
-      this.plants.update(this.fpCam);
       this.waterDepth.prepare(r, this.scene, this.fpCam);
       this.reflections ??= new SceneReflections(r);
       if (this.reflectOn()) this.syncProbes();

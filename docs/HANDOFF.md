@@ -265,7 +265,15 @@ with E. Data: `packages/runtime/src/building/data/*.json` plus `settings.buildin
 Next, if wanted: buying blueprints from the home-computer shop; blocks for the base events; model files per piece;
 an e2e test of placing in Play.
 
-### 12. Plant batching: tried and taken back
+### 12. Plant batching: back (2026-11-12)
+
+Back in, after the user's bench on mains power (RTX 5060 laptop: 11 fps, 80 ms of an 86 ms frame in drawing, nearly all of
+it Three.js walking ~9,000 plant objects once per pass, ~30 passes a frame; `npm run bench -- --breakdown --profile`).
+Different from the first try: plants cast bulb and spotlight shadows as before (no layer trick), plant holders stay out of
+the scene graph (only trees' far pictures are in it), and while a session plays the editor hides its own grass, terrain
+and plants (they were drawn a second time under the session's). Still culled a batch (2048 u area) at a time.
+The history of the first try:
+
 
 On 2026-11-07, Plant objects were drawn as instanced batches (by recipe, seed, level and 2048 u area; bulb shadows
 skipping them by a layer), commit 1d298d3. The bench's draw calls fell from ~5,400 to ~1,360. It was reverted
