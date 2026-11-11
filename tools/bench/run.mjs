@@ -73,6 +73,37 @@ async function launch() {
   return { app, page };
 }
 
+/** A CPU profile as two short tables: ms per frame in each function itself, and with all it calls. */
+function profileTable(profile, frames) {
+  const byId = new Map(profile.nodes.map((n) => [n.id, n]));
+  const parent = new Map();
+  for (const n of profile.nodes) for (const c of n.children ?? []) parent.set(c, n.id);
+  const name = (n) => {
+    const f = n.callFrame;
+    return f.url ? `${f.functionName || '(anonymous)'} ${f.url.split('/').pop()}:${f.lineNumber + 1}:${f.columnNumber + 1}` : f.functionName || '(native)';
+  };
+  const self = new Map(), total = new Map();
+  profile.samples.forEach((id, i) => {
+    const dt = profile.timeDeltas[i] ?? 0;
+    const k = name(byId.get(id));
+    self.set(k, (self.get(k) ?? 0) + dt);
+    const seen = new Set();
+    for (let c = id; c; c = parent.get(c)) {
+      const kk = name(byId.get(c));
+      if (seen.has(kk)) continue;
+      seen.add(kk);
+      total.set(kk, (total.get(kk) ?? 0) + dt);
+    }
+  });
+  const top = (m, count) =>
+    [...m]
+      .filter(([k]) => k !== '(root)' && k !== '(idle)')
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, count)
+      .map(([k, t]) => [k, +(t / 1000 / frames).toFixed(2)]);
+  return { self: top(self, 25), total: top(total, 40) };
+}
+
 async function quit(app) {
   const killer = setTimeout(() => app.process().kill('SIGKILL'), 8000);
   await app.close().catch(() => {});
@@ -162,25 +193,36 @@ try {
     breakdown = await page.evaluate(async (frames) => {
       window.__benchDebug = true;
       const r = window.__cwViewport.renderer, info = r.info.render, sm = r.shadowMap;
-      const counts = {};
+      const counts = {}, times = {};
       const add = (k, n) => (counts[k] = (counts[k] ?? 0) + n);
+      // (Time per pass with the card's work waited for: gl.finish() after each, so its cost lands on the pass.)
+      const gl = r.getContext();
+      const timed = (k, t0) => {
+        gl.finish();
+        times[k] = (times[k] ?? 0) + performance.now() - t0;
+      };
       const smRender = sm.render;
       let inShadow = 0;
       sm.render = function (lights, scene, camera) {
         for (const l of lights) {
           if (!l.castShadow) continue;
-          const c0 = info.calls;
+          const c0 = info.calls, t0 = performance.now();
           smRender.call(this, [l], scene, camera);
           add(`shadow: ${l.type}${l.name ? ` ${l.name}` : ''}`, info.calls - c0);
+          timed(`shadow: ${l.type}${l.name ? ` ${l.name}` : ''}`, t0);
           inShadow += info.calls - c0;
         }
       };
       const render = r.render;
       r.render = function (scene, camera) {
         const c0 = info.calls, s0 = inShadow, t = r.getRenderTarget();
+        const shadowMs = () => Object.entries(times).reduce((a, [k, v]) => a + (k.startsWith('shadow:') ? v : 0), 0);
+        const t0 = performance.now(), sh0 = shadowMs();
         render.call(this, scene, camera);
         const where = t ? (t.isWebGLCubeRenderTarget ? 'reflection capture' : 'to a texture') : 'screen';
         add(`${where}: ${scene.name || scene.type} (${camera.type})`, info.calls - c0 - (inShadow - s0));
+        // (Its shadows' time is counted under them, not twice.)
+        timed(`${where}: ${scene.name || scene.type} (${camera.type})`, t0 + (shadowMs() - sh0));
       };
       // (Frames from before the counting are dropped; then wait for frames drawn with it, two minutes at most.)
       window.__cwViewport.frames.take();
@@ -194,8 +236,19 @@ try {
       r.render = render;
       if (window.__benchDebug) console.log('breakdown', n, JSON.stringify(counts), 'lost:', r.getContext().isContextLost());
       n = Math.max(1, n);
-      return { frames: n, perFrame: Object.fromEntries(Object.entries(counts).sort((a, b) => b[1] - a[1]).map(([k, v]) => [k, Math.round(v / n)])) };
+      return {
+        frames: n,
+        perFrame: Object.fromEntries(Object.entries(counts).sort((a, b) => b[1] - a[1]).map(([k, v]) => [k, Math.round(v / n)])),
+        msPerFrame: Object.fromEntries(Object.entries(times).map(([k, v]) => [k, +(v / n).toFixed(2)])),
+      };
     }, SOFTWARE ? 3 : 120);
+  }
+  // Where the UI thread's time goes, function by function (--profile).
+  const cdp = flag('profile') ? await page.context().newCDPSession(page) : null;
+  if (cdp) {
+    await cdp.send('Profiler.enable');
+    await cdp.send('Profiler.setSamplingInterval', { interval: 250 });
+    await cdp.send('Profiler.start');
   }
   await page.evaluate(() => window.__cwViewport.frames.take());
   log(`measuring ${SECONDS} s (leave the window alone)…`);
@@ -206,6 +259,7 @@ try {
     const part = await page.evaluate(() => window.__cwViewport.frames.take());
     for (const k of Object.keys(frames)) frames[k].push(...part[k]);
   }
+  const cpuProfile = cdp ? (await cdp.send('Profiler.stop')).profile : null;
   await page.evaluate(() => clearInterval(window.__benchDrive));
   await fs.mkdir(resultsDir, { recursive: true });
   await page.screenshot({ path: path.join(resultsDir, 'last-run.png'), timeout: 180000 }).catch(() => log('(no picture of the last frame: it took too long)'));
@@ -222,6 +276,7 @@ try {
     return { mean: +mean.toFixed(2), median: +at(0.5).toFixed(2), p95: +at(0.95).toFixed(2), p99: +at(0.99).toFixed(2), worst: +(s[s.length - 1] ?? 0).toFixed(2) };
   };
   const n = frames.interval.length;
+  const profile = cpuProfile ? profileTable(cpuProfile, Math.max(1, n)) : null;
   const summary = {
     date: new Date().toISOString(),
     commit,
@@ -237,6 +292,7 @@ try {
     drawCalls: stat(frames.draws),
     triangles: stat(frames.triangles),
     ...(breakdown ? { breakdown } : {}),
+    ...(profile ? { profile } : {}),
   };
   const stamp = summary.date.slice(0, 19).replace(/[:T]/g, '-');
   const base = path.join(resultsDir, `${stamp}-${commit}`);
@@ -259,9 +315,24 @@ try {
     '',
     `Draw calls: median ${summary.drawCalls.median}, worst ${summary.drawCalls.worst}. Triangles: median ${Math.round(summary.triangles.median).toLocaleString('en')}.`,
     '',
-    ...(breakdown ? ['| Draw calls per frame, by pass | |', '|---|---|', ...Object.entries(breakdown.perFrame).map(([k, v]) => `| ${k} | ${v} |`), ''] : []),
+    ...(breakdown
+      ? ['| By pass, per frame | draw calls | ms (card waited for) |', '|---|---|---|', ...Object.entries(breakdown.perFrame).map(([k, v]) => `| ${k} | ${v} | ${breakdown.msPerFrame[k] ?? ''} |`), '']
+      : []),
+    ...(profile
+      ? [
+          '| UI thread, ms per frame: in the function itself | |',
+          '|---|---|',
+          ...profile.self.map(([k, v]) => `| ${k} | ${v} |`),
+          '',
+          '| UI thread, ms per frame: the function and all it calls | |',
+          '|---|---|',
+          ...profile.total.map(([k, v]) => `| ${k} | ${v} |`),
+          '',
+        ]
+      : []),
   ].join('\n');
   await fs.writeFile(`${base}.md`, md);
+  if (cpuProfile) await fs.writeFile(`${base}.cpuprofile`, JSON.stringify(cpuProfile));
   console.log(`\n${md}`);
   log(`written: ${path.relative(root, base)}.md (send this one) and .json`);
 } catch (e) {

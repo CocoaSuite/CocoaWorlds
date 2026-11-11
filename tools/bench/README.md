@@ -34,7 +34,8 @@ Options (after `--`, e.g. `npm run bench -- --seconds 60`):
 | `--seconds N` | Measure for N seconds (default 30), after 8 seconds of warming up. |
 | `--build` | Build the editor first (it is built by itself only when it has never been built). |
 | `--software` | Draw with the software renderer instead of the graphics card (for machines without one; much slower). |
-| `--breakdown` | Also count draw calls per pass (main view, the sun's shadow, each bulb's shadow, reflections, effects). |
+| `--breakdown` | Also count draw calls and time per pass (main view, the sun's shadow, each bulb's shadow, reflections, effects). The time waits for the graphics card after each pass, so it shows which pass is slow. |
+| `--profile` | Also record where the UI thread's time goes, function by function (two tables in the `.md`, and a `.cpuprofile` file DevTools can open). |
 
 If it fails, it says why and leaves a picture of the window in `tools/bench/results/failure.png`.
 
