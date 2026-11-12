@@ -141,6 +141,8 @@ function asDrawn<T>(r: THREE.WebGLRenderer, viaTarget: boolean, compile: () => T
 
 let compileTarget: THREE.WebGLRenderTarget | null = null;
 
+/** How often the graphics card is asked whether the shaders are compiled. */
+const COMPILE_POLL_MS = 100;
 /** Shaders still compiling after this long are waited for no more (the game then stalls where it first draws them). */
 const COMPILE_LIMIT_MS = 120000;
 
@@ -153,13 +155,23 @@ export function whenCompiled(r: THREE.WebGLRenderer, still: () => boolean, done:
   const ext = gl.getExtension('KHR_parallel_shader_compile') as { COMPLETION_STATUS_KHR: number } | null;
   const since = performance.now();
   const started = r.info.programs?.length ?? 0;
+  // (Asking is not free: each question goes to the graphics process and waits its turn behind the compiling. So one
+  // shader is asked about at a time, a few times a second, and none twice once it's done.)
+  const ready = new WeakSet<object>();
   const check = (): void => {
     if (!still()) return;
-    const waiting =
-      ext && !gl.isContextLost() && performance.now() - since < COMPILE_LIMIT_MS
-        ? (r.info.programs ?? []).some((p) => !gl.getProgramParameter((p as unknown as { program: WebGLProgram }).program, ext.COMPLETION_STATUS_KHR))
-        : false;
-    if (waiting) return void setTimeout(check, 16);
+    let waiting = false;
+    if (ext && !gl.isContextLost() && performance.now() - since < COMPILE_LIMIT_MS) {
+      for (const p of r.info.programs ?? []) {
+        if (ready.has(p)) continue;
+        if (!gl.getProgramParameter((p as unknown as { program: WebGLProgram }).program, ext.COMPLETION_STATUS_KHR)) {
+          waiting = true;
+          break;
+        }
+        ready.add(p);
+      }
+    }
+    if (waiting) return void setTimeout(check, COMPILE_POLL_MS);
     done({ parallel: !!ext, started, waitedMs: Math.round(performance.now() - since) });
   };
   check();
