@@ -63,25 +63,28 @@ export class AoRenderer {
       // Objects marked `noAo` (grass) are left out of what the occlusion is measured from, so they get only the
       // little the ground under them gets: barely any.
       const p = pass as unknown as { _overrideVisibility(): void; _restoreVisibility(): void; _visibilityCache: THREE.Object3D[] };
-      const hide = p._overrideVisibility.bind(p);
       const show = p._restoreVisibility.bind(p);
       // (Glass is left out too: it would make this pass draw the scene behind it once more.)
       const glass: THREE.Material[] = [];
-      p._overrideVisibility = () => {
-        hide();
-        scene.traverse((o) => {
-          // (Sprites too: drawn with this pass's own material they become flat black squares.)
-          if ((o.userData.noAo || (o as THREE.Sprite).isSprite) && o.visible) {
-            o.visible = false;
-            p._visibilityCache.push(o);
-          }
-          const m = (o as THREE.Mesh).material;
-          if (m) for (const x of Array.isArray(m) ? m : [m]) if ((x as THREE.MeshPhysicalMaterial).transmission > 0 && x.visible) {
-            x.visible = false;
-            glass.push(x);
-          }
-        });
+      // (One walk over what is shown, in place of the pass's own walk and another over every object in the scene,
+      // hidden ones too. What the pass itself leaves out, points and lines, is left out here.)
+      const walk = (o: THREE.Object3D): void => {
+        if (!o.visible) return;
+        const x = o as THREE.Object3D & { isPoints?: boolean; isLine?: boolean; isLine2?: boolean; isSprite?: boolean };
+        // (Sprites too: drawn with this pass's own material they become flat black squares.)
+        if (x.isPoints || x.isLine || x.isLine2 || o.userData.noAo || x.isSprite) {
+          o.visible = false;
+          p._visibilityCache.push(o);
+          return;
+        }
+        const m = (o as THREE.Mesh).material;
+        if (m) for (const y of Array.isArray(m) ? m : [m]) if ((y as THREE.MeshPhysicalMaterial).transmission > 0 && y.visible) {
+          y.visible = false;
+          glass.push(y);
+        }
+        for (const c of o.children) walk(c);
       };
+      p._overrideVisibility = () => walk(scene);
       p._restoreVisibility = () => {
         show();
         for (const x of glass) x.visible = true;

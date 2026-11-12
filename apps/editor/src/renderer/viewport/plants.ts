@@ -494,6 +494,10 @@ export class PlantRenderer {
   constructor(private onDraw: () => void = () => {}) {
     this.group.name = 'plants';
     this.picks.name = 'plant picks';
+    // (Sprites and never-drawn pick meshes: nothing here casts a shadow.)
+    this.picks.userData.noShadowPass = true;
+    // (And sprites are left out of what occlusion is measured from: the whole group at once.)
+    this.picks.userData.noAo = true;
     this.group.add(this.picks);
   }
 

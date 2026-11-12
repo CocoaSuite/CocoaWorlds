@@ -4,6 +4,8 @@
  * are only one material group of the level mesh. So instead of turning off `castShadow` per mesh, glass materials
  * are hidden for the shadow pass alone: Three.js skips a hidden material (or material group) when it draws the
  * shadow map, and everything else about the mesh still casts.
+ *
+ * The same hook hides groups marked `userData.noShadowPass` (nothing in them casts) for the shadow pass.
  */
 import * as THREE from 'three';
 
@@ -31,12 +33,29 @@ export function glassCastsNoShadow(r: THREE.WebGLRenderer): void {
   sm.render = (lights, scene, camera) => {
     // (Only when the shadow map will actually be drawn, so frames that keep it cost nothing extra.)
     if (!sm.enabled || (!sm.autoUpdate && !sm.needsUpdate) || lights.length === 0) return render(lights, scene, camera);
-    const glass = glassIn(scene);
+    // One walk finds both the glass and the groups that hold nothing that casts (marked `noShadowPass`: trees' far
+    // pictures). Those are hidden too, so none of the shadow passes (one for the sun, six for each bulb) steps
+    // through them.
+    const glass = new Set<THREE.Material>();
+    const skipped: THREE.Object3D[] = [];
+    const walk = (o: THREE.Object3D): void => {
+      if (!o.visible) return;
+      if (o.userData.noShadowPass) {
+        skipped.push(o);
+        return;
+      }
+      const m = (o as THREE.Mesh).material;
+      if (m) for (const x of Array.isArray(m) ? m : [m]) if (x.visible && isGlass(x)) glass.add(x);
+      for (const c of o.children) walk(c);
+    };
+    walk(scene);
     for (const m of glass) m.visible = false;
+    for (const o of skipped) o.visible = false;
     try {
       render(lights, scene, camera);
     } finally {
       for (const m of glass) m.visible = true;
+      for (const o of skipped) o.visible = true;
     }
   };
 }
