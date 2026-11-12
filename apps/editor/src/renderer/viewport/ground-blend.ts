@@ -71,9 +71,7 @@ export class GroundBlend {
     GROUND_BLEND.gbCam.value.w = mats.size ? 1 : 0;
     if (!mats.size) return;
     const size = r.getDrawingBufferSize(new THREE.Vector2());
-    const w = Math.max(1, Math.floor(size.x / 2)), h = Math.max(1, Math.floor(size.y / 2));
-    if (!this.target) this.target = new THREE.WebGLRenderTarget(w, h, { type: THREE.HalfFloatType, depthTexture: new THREE.DepthTexture(w, h) });
-    if (this.target.width !== w || this.target.height !== h) this.target.setSize(w, h);
+    this.fit(size);
     this.hidden = [...mats, ...glass];
     for (const m of this.hidden) m.visible = false;
     const off = [...aids, ...helpers.filter((h) => h.visible)];
@@ -82,7 +80,7 @@ export class GroundBlend {
     const auto = r.shadowMap.autoUpdate, fog = scene.fog, was = r.getRenderTarget();
     r.shadowMap.autoUpdate = false;
     scene.fog = null;
-    r.setRenderTarget(this.target);
+    r.setRenderTarget(this.target!);
     r.clear();
     r.render(scene, cam);
     r.setRenderTarget(was);
@@ -91,11 +89,48 @@ export class GroundBlend {
     for (const m of this.hidden) m.visible = true;
     for (const o of off) o.visible = true;
     this.hidden = [];
-    GROUND_BLEND.gbColour.value = this.target.texture;
-    GROUND_BLEND.gbDepth.value = this.target.depthTexture;
+    GROUND_BLEND.gbColour.value = this.target!.texture;
+    GROUND_BLEND.gbDepth.value = this.target!.depthTexture;
     GROUND_BLEND.gbRes.value.copy(size);
     const c = cam as THREE.PerspectiveCamera;
     GROUND_BLEND.gbCam.value.set(c.near, c.far, (cam as THREE.OrthographicCamera).isOrthographicCamera ? 1 : 0, 1);
+  }
+
+  private fit(size: THREE.Vector2): void {
+    const w = Math.max(1, Math.floor(size.x / 2)), h = Math.max(1, Math.floor(size.y / 2));
+    if (!this.target) this.target = new THREE.WebGLRenderTarget(w, h, { type: THREE.HalfFloatType, depthTexture: new THREE.DepthTexture(w, h) });
+    if (this.target.width !== w || this.target.height !== h) this.target.setSize(w, h);
+  }
+
+  /**
+   * Starts compiling the shaders `prepare` will draw `root` with (no fog, into its own target), without waiting for
+   * them: drawn before they are ready, each is waited for in turn, the window frozen meanwhile.
+   */
+  kick(r: THREE.WebGLRenderer, scene: THREE.Scene, cam: THREE.Camera, root: THREE.Object3D, helpers: THREE.Object3D[] = []): void {
+    let any = false;
+    root.traverse((o) => {
+      const m = (o as THREE.Mesh).material;
+      if (m && !any) any = (Array.isArray(m) ? m : [m]).some((x) => x.userData.groundBlend);
+    });
+    if (!any) return;
+    this.fit(r.getDrawingBufferSize(new THREE.Vector2()));
+    // (What the pass leaves out is hidden here too: lights that hang from it don't count, and how many lights there
+    // are is part of a shader.)
+    const off: THREE.Object3D[] = [...helpers.filter((h) => h.visible)];
+    scene.traverseVisible((o) => {
+      if ((o as THREE.Line).isLine || (o as THREE.Points).isPoints || (o as THREE.Sprite).isSprite) off.push(o);
+    });
+    for (const o of off) o.visible = false;
+    const fog = scene.fog, was = r.getRenderTarget();
+    scene.fog = null;
+    r.setRenderTarget(this.target);
+    try {
+      r.compile(root, cam, scene);
+    } finally {
+      r.setRenderTarget(was);
+      scene.fog = fog;
+      for (const o of off) o.visible = true;
+    }
   }
 
   dispose(): void {

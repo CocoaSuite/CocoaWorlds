@@ -327,6 +327,20 @@ Cost: the play-session chunk grew by ~4.3 MB (the physics engine, inlined once m
 Not done: the editor's walkable-area preview still measures on the UI thread after each edit; the rest of making the
 world (~0.3 s on the bench level) and shader compiling at the first frame are still on the UI thread.
 
+### 14c. Play start: shaders compiled in the background (2026-11-12)
+
+The real freeze entering Play (user's game, RTX 5060, D3D11: 21–25 s) was shaders, each waited for at its first draw
+(~0.4 s apiece through ANGLE): the reflection capture (`prime`, 13 s), then the ground-blend pass (9 s, its own
+variants: no fog). Started together and left alone, 120 of them compiled in under a second. So now (`warmPlay` in
+engine.ts, the same in game/runner.ts): after the session's first tick the shaders of all three passes are started
+(`SceneReflections.kick`, `prepareToDrawNow`, `GroundBlend.kick`: `renderer.compile` under each pass's own target and
+state, hiding what the pass hides, since lights hanging from sprites change the light count and so the shader), then
+`whenCompiled` (poster.ts) polls `KHR_parallel_shader_compile`; until it reports them done the session neither ticks
+nor is drawn (the last picture stays). Then `prime` draws the capture and the game runs. Cards without the extension
+(the test renderer) go on at once, as before. Still compiled at the first frame: shadow depth shaders, occlusion,
+bloom and other screen passes (small). `npm run bench -- --profile` reports the Play start: time, longest freeze,
+shader counts, and a profile of the way in.
+
 ### 15. New objects where the view aims
 
 Status: done. Add menus (scene tree, Tools, plants, models, prefabs, ladder, terrain, chicken) place the new object

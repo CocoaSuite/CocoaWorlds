@@ -2,7 +2,7 @@
  * The editor viewport: draws the level, grid and gizmos, handles camera navigation, picking, transform dragging
  * and the brush tool. Renders on demand (only after something changes) so an idle editor costs no GPU time.
  */
-import { prepareToDraw, prepareToDrawNow } from './poster';
+import { prepareToDraw, prepareToDrawNow, whenCompiled } from './poster';
 import { FrameLog } from './frame-log';
 import { SceneReflections, sceneProbes } from './reflections';
 import { GroundBlend } from './ground-blend';
@@ -170,9 +170,6 @@ const r3 = (n: number) => Math.round(n * 1000) / 1000;
 const AIM_REACH = 4096;
 const AIM_AHEAD = 512;
 const GROUND = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
-
-/** Shaders still compiling after this long are waited for no more: the game starts (and stalls where it draws them). */
-const WARM_LIMIT_MS = 120000;
 
 export class ViewportEngine {
   readonly renderer: THREE.WebGLRenderer;
@@ -621,6 +618,7 @@ export class ViewportEngine {
     this.play = null;
     this.warmed = null;
     this.warming = null;
+    this.compiled = null;
     this.queueNav(0);
     this.hudKey = '';
     this.cb.hud(null);
@@ -1690,9 +1688,9 @@ export class ViewportEngine {
         this.invalidate();
       }
     }
-    // (A session whose shaders are still compiling waits: it is drawn, which starts them, but doesn't tick.)
-    if (this.play && this.warmed !== this.play && this.warming !== this.play) this.needsRender = true;
-    if (this.play && this.warmed === this.play) {
+    // (A session whose shaders are compiling in the background waits, neither ticking nor drawn. Its first tick comes
+    // before: what it switches on and off, lights among them, decides which shaders are wanted.)
+    if (this.play && !(this.warming === this.play && this.warmed !== this.play)) {
       const frame = this.play.tick(dt);
       tickMs = performance.now() - now;
       const travel = this.play.travel;
@@ -1861,8 +1859,9 @@ export class ViewportEngine {
   private warmed: PlaySession | null = null;
   /** The last warm-up: whether the card compiles side by side, the shaders started, and how long they were waited for. */
   warmStats = { parallel: false, started: 0, waitedMs: 0 };
-  /** The session whose shaders are being compiled, in the background. */
+  /** The session whose shaders are being compiled, in the background; and the one whose shaders are all compiled. */
   private warming: PlaySession | null = null;
+  private compiled: PlaySession | null = null;
 
   /**
    * Before Play's first frame, compile the shaders of everything in the game, shown or not (levels of detail, blasts,
@@ -1872,32 +1871,34 @@ export class ViewportEngine {
   private warmPlay(cam: THREE.Camera, eye: THREE.Vector3): boolean {
     const play = this.play;
     if (!play || this.warmed === play) return true;
-    if (this.warming === play) return false;
-    this.warming = play;
-    // (Reflections first: switching them on changes the shaders of shiny materials.)
+    if (this.warming !== play) {
+      this.warming = play;
+      // Every shader the first frame draws the game with is started here, none waited for: the graphics card
+      // compiles them side by side, off this thread. (Drawn before they are ready, each is waited for in turn, the
+      // window frozen meanwhile: twenty seconds and more in a large game.) Three passes draw the game, each with
+      // shaders of its own: the reflection capture (first: switching reflections on changes the shaders of shiny
+      // materials), the view itself, and the ground that props blend into (no fog).
+      this.reflections?.kick(this.scene, eye, this.reflectOn(), play.group, [this.grid.object]);
+      prepareToDrawNow(this.renderer, play.group, cam, this.scene, this.drawsViaTarget());
+      this.groundBlend.kick(this.renderer, this.scene, cam, play.group, [this.grid.object]);
+      // Models that load later are compiled in the background before they appear.
+      play.warm = (o) => prepareToDraw(this.renderer, o, cam, this.scene, this.drawsViaTarget());
+      whenCompiled(
+        this.renderer,
+        () => !this.disposed && this.play === play,
+        (stats) => {
+          this.warmStats = stats;
+          this.compiled = play;
+          this.invalidate();
+        },
+      );
+    }
+    // The game starts (ticks, is drawn) once they are all compiled.
+    if (this.compiled !== play) return false;
     this.reflections?.prime(this.scene, eye, this.reflectOn(), [this.grid.object]);
-    // (Started, not waited for: the graphics card compiles them side by side, off this thread.)
-    prepareToDrawNow(this.renderer, play.group, cam, this.scene, this.drawsViaTarget());
-    // Models that load later are compiled in the background before they appear.
-    play.warm = (o) => prepareToDraw(this.renderer, o, cam, this.scene, this.drawsViaTarget());
-    // The game starts once they are all compiled. (Drawn before, each would be waited for in turn, the window frozen
-    // meanwhile: twenty seconds in a large game.)
-    const r = this.renderer;
-    const gl = r.getContext();
-    const ext = gl.getExtension('KHR_parallel_shader_compile') as { COMPLETION_STATUS_KHR: number } | null;
-    const since = performance.now();
-    this.warmStats = { parallel: !!ext, started: r.info.programs?.length ?? 0, waitedMs: 0 };
-    const check = (): void => {
-      if (this.disposed || this.play !== play) return;
-      const waiting = ext && !gl.isContextLost() && performance.now() - since < WARM_LIMIT_MS ? (r.info.programs ?? []).filter((p) => !gl.getProgramParameter((p as unknown as { program: WebGLProgram }).program, ext.COMPLETION_STATUS_KHR)).length : 0;
-      if (waiting) return void setTimeout(check, 16);
-      this.warmStats.waitedMs = Math.round(performance.now() - since);
-      this.warmed = play;
-      this.lastTick = performance.now();
-      this.invalidate();
-    };
-    check();
-    return this.warmed === play;
+    this.warmed = play;
+    this.lastTick = performance.now();
+    return true;
   }
 
   private render(): void {
@@ -1907,7 +1908,8 @@ export class ViewportEngine {
     r.setScissorTest(false);
     r.setViewport(0, 0, size.x, size.y);
     // (While a session's shaders compile nothing is drawn to the screen: the last picture stays.)
-    if (!this.play || this.warmed === this.play) r.clear();
+    const waiting = !!this.play && this.warmed !== this.play;
+    if (!waiting) r.clear();
     if (this.pivotMarker.visible) this.showPivotMarker();
     if (this.repeatHandle.visible) this.showRepeatHandle();
     // (Paths are an editing aid: not shown while playing.)
@@ -1920,6 +1922,7 @@ export class ViewportEngine {
       this.reflections ??= new SceneReflections(r);
       if (this.reflectOn()) this.syncProbes();
       if (!this.warmPlay(this.fpCam, this.fpCam.getWorldPosition(new THREE.Vector3()))) return;
+      if (waiting) r.clear();
       this.relight();
       (this.reflections ??= new SceneReflections(r)).update(this.scene, this.fpCam.getWorldPosition(new THREE.Vector3()), this.reflectOn(), [this.grid.object]);
       if (this.reflections.busy) this.invalidate();
@@ -1939,6 +1942,7 @@ export class ViewportEngine {
     this.reflections ??= new SceneReflections(r);
     if (this.reflectOn()) this.syncProbes();
     if (!this.warmPlay(this.rig.camera, this.rig.target.clone().add(new THREE.Vector3(0, 64, 0)))) return;
+    if (waiting) r.clear();
     this.relight();
     (this.reflections ??= new SceneReflections(r)).update(this.scene, this.rig.target.clone().add(new THREE.Vector3(0, 64, 0)), this.reflectOn(), [this.grid.object]);
     if (this.reflections.busy) this.invalidate();

@@ -2,7 +2,7 @@
  * An exported game (B4): one scene played full-window, with the same game code, controls, display and screen
  * UI as Play in the editor. Saved progress is kept in this browser's storage (a desktop game has its own).
  */
-import { prepareToDraw, prepareToDrawNow } from '../viewport/poster';
+import { prepareToDraw, prepareToDrawNow, whenCompiled } from '../viewport/poster';
 import { SceneReflections, sceneProbes } from '../viewport/reflections';
 import { GroundBlend } from '../viewport/ground-blend';
 import { SceneDoc, expandRepeats, parkAssets, type GameRules, type GameValue, type MaterialDef, type PlantDef, type SceneFile, type SurfaceSounds, type VfxEffect } from '@cocoaworlds/core';
@@ -237,7 +237,9 @@ export class GameRunner {
     const dt = Math.min(0.05, (now - this.last) / 1000);
     this.last = now;
     const play = this.play;
-    play.tick(dt);
+    // (A level whose shaders are compiling in the background waits: see below. Its first tick comes before: what it
+    // switches on and off, lights among them, decides which shaders are wanted.)
+    if (this.warmed === play || this.warming !== play) play.tick(dt);
     tickMaterials(now);
     const hud = hudOf(play, this.locked);
     this.followUiMouse(hud.ui.freesMouse);
@@ -268,11 +270,27 @@ export class GameRunner {
       }
       // Before its first frame, every shader of the scene is compiled under its lights and reflections (shown or
       // not), and models that load later are compiled in the background before they appear: nothing compiles mid-game.
+      // The shaders are started together and none waited for (the graphics card compiles them side by side, off this
+      // thread); the level starts, ticking and drawn, once they are all compiled. Drawn before, each would be waited
+      // for in turn, the window frozen meanwhile.
       if (this.warmed !== play) {
+        const eye = this.cam.getWorldPosition(new THREE.Vector3()), reflect = play.doc.settings.reflections !== false;
+        if (this.warming !== play) {
+          this.warming = play;
+          this.reflections.kick(this.scene, eye, reflect, play.group);
+          prepareToDrawNow(this.renderer, play.group, this.cam, this.scene, this.drawsViaTarget());
+          (this.groundBlend ??= new GroundBlend()).kick(this.renderer, this.scene, this.cam, play.group);
+          play.warm = (o) => prepareToDraw(this.renderer, o, this.cam, this.scene, this.drawsViaTarget());
+          whenCompiled(
+            this.renderer,
+            () => !this.disposed && this.play === play,
+            () => (this.compiled = play),
+          );
+        }
+        if (this.compiled !== play) return;
+        this.reflections.prime(this.scene, eye, reflect);
         this.warmed = play;
-        this.reflections.prime(this.scene, this.cam.getWorldPosition(new THREE.Vector3()), play.doc.settings.reflections !== false);
-        prepareToDrawNow(this.renderer, play.group, this.cam, this.scene, this.drawsViaTarget());
-        play.warm = (o) => prepareToDraw(this.renderer, o, this.cam, this.scene, this.drawsViaTarget());
+        this.last = performance.now();
       }
       // (The time of day changed the light enough: capture again, easing in.)
       if (this.lighting.dayVersion !== this.lightSeen) {
@@ -289,6 +307,8 @@ export class GameRunner {
   /** The scene being played. */
   private current!: SceneFile;
   private warmed: PlaySession | null = null;
+  private warming: PlaySession | null = null;
+  private compiled: PlaySession | null = null;
 
   /** Whether frames are drawn through occlusion and bloom's render target (shaders are compiled to match). */
   private drawsViaTarget(): boolean {

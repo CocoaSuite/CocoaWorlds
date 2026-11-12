@@ -203,6 +203,35 @@ export class SceneReflections {
     PROBES.cwProbeOn.value = 1;
   }
 
+  /**
+   * Starts compiling the shaders `prime` will draw `root` with (reflections switched on, into the capture's cube),
+   * without waiting for them: drawn before they are ready, each is waited for in turn, the window frozen meanwhile.
+   */
+  kick(scene: THREE.Scene, eye: THREE.Vector3, enabled: boolean, root: THREE.Object3D, helpers: THREE.Object3D[] = []): void {
+    if (!enabled || this.on) return;
+    const r = this.r;
+    // (What the capture leaves out is hidden here too: lights that hang from it don't count, and how many lights
+    // there are is part of a shader.)
+    const aids: THREE.Object3D[] = [...helpers.filter((h) => h.visible)];
+    scene.traverseVisible((o) => {
+      if ((o as THREE.Line).isLine || (o as THREE.Points).isPoints || (o as THREE.Sprite).isSprite || (o as THREE.Object3D & { isTransformControlsRoot?: boolean }).isTransformControlsRoot) aids.push(o);
+    });
+    for (const o of aids) o.visible = false;
+    this.env ??= this.pmrem.fromCubemap(this.cube.texture);
+    setSceneReflection(this.env.texture);
+    const cam = this.cam;
+    cam.position.copy(eye);
+    cam.updateMatrixWorld(true);
+    const target = r.getRenderTarget(), face = r.getActiveCubeFace(), mip = r.getActiveMipmapLevel();
+    r.setRenderTarget(this.cube, 0, cam.activeMipmapLevel);
+    try {
+      r.compile(root, cam.children[0] as THREE.Camera, scene);
+    } finally {
+      r.setRenderTarget(target, face, mip);
+      for (const o of aids) o.visible = true;
+    }
+  }
+
   /** Go on with the capture under way: the next views, then (once all six are drawn) its blur. */
   private go(scene: THREE.Scene, helpers: THREE.Object3D[]): void {
     const job = this.job!;

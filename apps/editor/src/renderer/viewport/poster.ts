@@ -141,6 +141,30 @@ function asDrawn<T>(r: THREE.WebGLRenderer, viaTarget: boolean, compile: () => T
 
 let compileTarget: THREE.WebGLRenderTarget | null = null;
 
+/** Shaders still compiling after this long are waited for no more (the game then stalls where it first draws them). */
+const COMPILE_LIMIT_MS = 120000;
+
+/**
+ * Calls `done` once every shader started so far is compiled (with how long that took), looking again each frame
+ * or so; at once on a graphics card that can't compile in the background. `still` false: forgotten.
+ */
+export function whenCompiled(r: THREE.WebGLRenderer, still: () => boolean, done: (stats: { parallel: boolean; started: number; waitedMs: number }) => void): void {
+  const gl = r.getContext();
+  const ext = gl.getExtension('KHR_parallel_shader_compile') as { COMPLETION_STATUS_KHR: number } | null;
+  const since = performance.now();
+  const started = r.info.programs?.length ?? 0;
+  const check = (): void => {
+    if (!still()) return;
+    const waiting =
+      ext && !gl.isContextLost() && performance.now() - since < COMPILE_LIMIT_MS
+        ? (r.info.programs ?? []).some((p) => !gl.getProgramParameter((p as unknown as { program: WebGLProgram }).program, ext.COMPLETION_STATUS_KHR))
+        : false;
+    if (waiting) return void setTimeout(check, 16);
+    done({ parallel: !!ext, started, waitedMs: Math.round(performance.now() - since) });
+  };
+  check();
+}
+
 // Three.js draws a cut-out material's shadow (a map or an opacity map, with alpha test) with a depth material of
 // its own, made and compiled at its first shadow; `compile` doesn't do it. Shadow shaders with the same settings
 // are shared, so compiling one stand-in for each kind (kept, so the shared shader stays) readies them all.
