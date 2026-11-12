@@ -69,7 +69,7 @@ import { scriptTargets } from './script-targets';
 import { PLAYER, Player, fallDamage, type PlayerInput } from './player';
 import { Weapons, type V3 } from './weapons';
 import { ANIM_ROLES, Npc, type AnimRole } from './npc';
-import { NavGrid } from './navgrid';
+import { NavGrid, openNavJob, type NavBuilder, type NavJob } from './navgrid';
 import { Acoustics } from './acoustics';
 import { FrameSnapshot } from './snapshot';
 import { PowerGrid, bulbPoints, dist3, dropOf, rayNearLine, wirePoints, type P3 } from './power';
@@ -536,9 +536,14 @@ export class GameWorld {
       arrive?: Travel | null;
       /** Base building: extra pieces and settings (JSON, as `settings.building` of the scene). */
       building?: { pieces?: unknown[]; base?: unknown };
+      /**
+       * Measures where creatures can walk off this thread (workers), so a large level doesn't hold up the start.
+       * Wait for `navReady` before the first step. Without it the level is measured here, as the world is made.
+       */
+      navBuilder?: NavBuilder;
     } = {},
   ): GameWorld {
-    const w = new GameWorld(scene, gameRules({ game: options.rules }), options.values ?? [], options.models ?? new Map(), options.terrains ?? new Map(), options.trunks ?? new Map());
+    const w = new GameWorld(scene, gameRules({ game: options.rules }), options.values ?? [], options.models ?? new Map(), options.terrains ?? new Map(), options.trunks ?? new Map(), options.navBuilder);
     if (options.clock) w.clock = options.clock;
     if (options.surfaces) w.surfaces = options.surfaces;
     w.sceneName = scene.name;
@@ -1032,7 +1037,7 @@ export class GameWorld {
   private terrains: Map<string, ModelMesh[]>;
   private trunks: Map<string, { width: number; height: number }>;
 
-  private constructor(scene: SceneFile, rules: GameRules, values: GameValueDef[], models: Map<string, ModelMesh>, terrains: Map<string, ModelMesh[]>, trunks: Map<string, { width: number; height: number }>) {
+  private constructor(scene: SceneFile, rules: GameRules, values: GameValueDef[], models: Map<string, ModelMesh>, terrains: Map<string, ModelMesh[]>, trunks: Map<string, { width: number; height: number }>, navBuilder?: NavBuilder) {
     this.models = models;
     this.terrains = terrains;
     this.trunks = trunks;
@@ -1242,7 +1247,10 @@ export class GameWorld {
       }
     for (const id of this.spots.keys()) this.spotReach = Math.max(this.spotReach, this.reachOf(id));
     // Measured now (while loading) rather than on the first creature's first walk.
-    if (this.npcs.size) this.navigation();
+    if (this.npcs.size) {
+      if (navBuilder) this.navigationElsewhere(navBuilder);
+      else this.navigation();
+    }
 
     // The player: at the first visible Player start, facing the way it faces.
     const spawn = doc.entities.find((e) => e.components.playerSpawn && shown(e));
@@ -1582,6 +1590,17 @@ export class GameWorld {
    */
   navigation(): NavGrid | null {
     if (this.nav !== undefined) return this.nav;
+    // (Being measured elsewhere, and wanted now: measured here instead, from the same picture of the level.)
+    if (this.navJob) {
+      const job = this.navJob;
+      this.navJob = null;
+      const level = openNavJob(job);
+      try {
+        return (this.nav = NavGrid.fromRows([level.rows(0, level.nz)], job.min, job.max, job.opts));
+      } finally {
+        level.free();
+      }
+    }
     const x = this.extent;
     if (!x) return (this.nav = null);
     // (Queries only see colliders once the physics has stepped: a step of no time, collecting no events.)
@@ -1589,12 +1608,48 @@ export class GameWorld {
     this.world.timestep = 0;
     this.world.step();
     this.world.timestep = dt;
-    this.nav = NavGrid.build(
-      { world: this.world, solid: (c) => !!c.parent()?.isFixed() && !this.triggers.has(c.handle) && !this.volumes.has(c.handle) && !this.standIns.has(c.handle) && !this.standInOf.has(c.handle) && !this.npcs.has(this.owner.get(c.handle) ?? '') },
-      [x.min[0] - 32, x.min[1] - 32, x.min[2] - 32],
-      [x.max[0] + 32, x.max[1] + 32, x.max[2] + 32],
-    );
+    this.nav = NavGrid.build({ world: this.world, solid: (c) => this.navSolid(c) }, [x.min[0] - 32, x.min[1] - 32, x.min[2] - 32], [x.max[0] + 32, x.max[1] + 32, x.max[2] + 32]);
     return this.nav;
+  }
+
+  private navSolid(c: RAPIER.Collider): boolean {
+    return !!c.parent()?.isFixed() && !this.triggers.has(c.handle) && !this.volumes.has(c.handle) && !this.standIns.has(c.handle) && !this.standInOf.has(c.handle) && !this.npcs.has(this.owner.get(c.handle) ?? '');
+  }
+
+  /** The level as it stands, being measured elsewhere (until the grid is in, or is asked for and measured here). */
+  private navJob: NavJob | null = null;
+  /**
+   * Settles once where creatures can walk is known. A world made with a `navBuilder` must not be stepped before
+   * (nothing breaks if it is: the first creature to look for a way has the level measured there and then).
+   */
+  navReady: Promise<void> = Promise.resolve();
+
+  /**
+   * The same grid `navigation()` measures, measured by `builder` (off this thread) from a snapshot of the physics
+   * as it stands now. Should that fail, it's measured here when first asked for.
+   */
+  private navigationElsewhere(builder: NavBuilder): void {
+    const x = this.extent;
+    if (!x) return void (this.nav = null);
+    // (The step of no time `navigation()` takes, taken here all the same: the physics goes on from the same state.)
+    const dt = this.world.timestep;
+    this.world.timestep = 0;
+    this.world.step();
+    this.world.timestep = dt;
+    const solid: number[] = [];
+    this.world.forEachCollider((c) => {
+      if (this.navSolid(c)) solid.push(c.handle);
+    });
+    const job: NavJob = { snapshot: this.world.takeSnapshot(), solid: Float64Array.from(solid), min: [x.min[0] - 32, x.min[1] - 32, x.min[2] - 32], max: [x.max[0] + 32, x.max[1] + 32, x.max[2] + 32] };
+    this.navJob = job;
+    this.navReady = builder(job).then(
+      (bands) => {
+        if (this.navJob !== job) return;
+        this.navJob = null;
+        this.nav = NavGrid.fromRows(bands, job.min, job.max, job.opts);
+      },
+      () => {},
+    );
   }
 
   private sound: Acoustics | null = null;

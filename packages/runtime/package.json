@@ -5,7 +5,8 @@
   "type": "module",
   "description": "The game world: builds physics from a scene, steps it, and reports what happens (trigger events, moving bodies). No rendering or DOM.",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./navgrid": "./src/navgrid.ts"
   },
   "dependencies": {
     "@cocoaworlds/core": "^0.1.0",

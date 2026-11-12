@@ -168,10 +168,26 @@ try {
   }
   await page.getByTestId('viewport').click({ position: { x: 20, y: 20 } }).catch(() => {});
   await page.keyboard.press('Escape');
+  // Entering Play: how long it takes, and the longest the window stops answering on the way (a timer that should
+  // tick every few ms, and the longest gap between two ticks).
+  await page.evaluate(() => {
+    const w = { t0: performance.now(), last: performance.now(), freeze: 0 };
+    w.timer = setInterval(() => {
+      const t = performance.now();
+      w.freeze = Math.max(w.freeze, t - w.last);
+      w.last = t;
+    }, 4);
+    window.__benchStart = w;
+  });
   await page.keyboard.press('F5');
   await page.getByTestId('play-banner').waitFor();
   if (await page.getByTestId('click-to-play').count()) await page.getByTestId('click-to-play').click({ timeout: 3000 }).catch(() => {});
   await until(() => page.evaluate(() => window.__cwViewport.warmed === window.__cwViewport.play && !!window.__cwViewport.play), 180000, 'Play to start');
+  const entering = await page.evaluate(() => {
+    const w = window.__benchStart;
+    clearInterval(w.timer);
+    return { seconds: +((performance.now() - w.t0) / 1000).toFixed(2), freezeMs: Math.round(Math.max(w.freeze, performance.now() - w.last)) };
+  });
   const machine = await page.evaluate(() => {
     const gl = window.__cwViewport.renderer.getContext();
     const ext = gl.getExtension('WEBGL_debug_renderer_info');
@@ -312,6 +328,7 @@ try {
     ms: { frame: stat(frames.interval), tick: stat(frames.tick), world: stat(frames.world), draw: stat(frames.draw) },
     drawCalls: stat(frames.draws),
     triangles: stat(frames.triangles),
+    entering,
     ...(breakdown ? { breakdown } : {}),
     ...(profile ? { profile } : {}),
   };
@@ -326,6 +343,8 @@ try {
     `${summary.machine.gpu} · ${summary.machine.cpu} (${summary.machine.cores} threads, ${summary.machine.memoryGB} GB) · ${summary.machine.os} · Electron ${electronVersion} · canvas ${machine.canvas.join('×')}${SOFTWARE ? ' · software GPU' : ''}`,
     '',
     `**${summary.fps} fps** over ${SECONDS} s (${n} frames, no vsync); frames over 33 ms: ${summary.over33ms}, over 50 ms: ${summary.over50ms}.`,
+    '',
+    `Entering Play: ${entering.seconds} s; longest freeze on the way: ${entering.freezeMs} ms.`,
     '',
     '| ms | mean | median | 95% | 99% | worst |',
     '|---|---|---|---|---|---|',

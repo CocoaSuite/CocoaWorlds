@@ -63,6 +63,7 @@ how fast the game could go.
 | world step alone | Physics, creatures and their path search, scripts, weapons. This is what moving the world to a worker (step 2) takes off the frame. |
 | drawing (CPU side) | Preparing and sending the frame to the graphics card. Many draw calls make this large: instancing (step 3) cuts them. |
 | draw calls, triangles | How much is sent each frame. |
+| Entering Play | From pressing Play until the game runs, and the longest the window stopped answering on the way (the freeze you feel). |
 
 If the whole frame is much longer than the tick and the drawing together, the graphics card itself is the limit
 (its time isn't measured directly): fewer triangles, cheaper shadows, or WebGPU later.

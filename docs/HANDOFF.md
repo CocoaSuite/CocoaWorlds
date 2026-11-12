@@ -309,6 +309,24 @@ Clock (2026-11-07): Inspector › Show the clock on screen (`DayCycle.showClock`
 
 Next, if wanted: weekday names; a 12-hour clock option.
 
+### 14b. Navigation measured in workers when Play starts (2026-11-12)
+
+Building the game world froze the window when Play started (bench level: ~1.6 s of ~1.9 s was `NavGrid.build`, ~620,000
+ray and capsule queries). Now a Play session's world is made with `navBuilder` (`GameWorld.create` option): the world
+takes the same step of no time as before, snapshots the physics (`World.takeSnapshot`, ~4 ms) and posts a `NavJob`
+(snapshot, the solid colliders' handles, the box); `nav-pool.ts` shares the grid's rows out in bands between up to 4
+workers (`nav-worker.ts`, inlined like the level worker so exported games have it), each of which reads the snapshot
+back (`openNavJob`) and measures its rows (`NavGrid.measure`); `NavGrid.fromRows` joins them. `PlaySession.create`
+awaits `world.navReady`, so the world is never stepped before. The grid is identical to the one measured in place
+(same code, same physics state). If workers fail, time out (30 s), or `navigation()` is asked for first, the level is
+measured on the spot from the same snapshot. Without `navBuilder` (tests, the editor's walkable-area preview) nothing
+changed. Tests: `packages/runtime/test/nav-elsewhere.test.ts`, `apps/editor/test-e2e/nav-workers.test.mjs`.
+The bench reports `Entering Play: … s; longest freeze on the way: … ms`.
+
+Cost: the play-session chunk grew by ~4.3 MB (the physics engine, inlined once more for the workers).
+Not done: the editor's walkable-area preview still measures on the UI thread after each edit; the rest of making the
+world (~0.3 s on the bench level) and shader compiling at the first frame are still on the UI thread.
+
 ### 15. New objects where the view aims
 
 Status: done. Add menus (scene tree, Tools, plants, models, prefabs, ladder, terrain, chicken) place the new object

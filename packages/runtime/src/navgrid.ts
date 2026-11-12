@@ -36,6 +36,57 @@ export interface NavQuery {
   solid(c: RAPIER.Collider): boolean;
 }
 
+/** Rows of the grid, measured: each spot's place (x, y, z) and its column. */
+export interface NavRows {
+  spots: Float32Array;
+  colOf: Int32Array;
+}
+
+/** The grid's spacing and its columns along x and z, for a level between `min` and `max`. */
+export function navSize(min: readonly number[], max: readonly number[], opts: Partial<NavOptions> = {}): { cell: number; nx: number; nz: number } {
+  const o = { ...NAV_DEFAULTS, ...opts };
+  const sx = max[0]! - min[0]!, sz = max[2]! - min[2]!;
+  const cell = Math.max(o.cell, Math.ceil(Math.max(sx, sz) / o.maxSide));
+  return { cell, nx: Math.max(1, Math.ceil(sx / cell)), nz: Math.max(1, Math.ceil(sz / cell)) };
+}
+
+/**
+ * A level to measure somewhere else (a worker): the physics as it stood (a Rapier snapshot), which colliders are
+ * ground and walls, and the box to measure. Plain data, so it can be posted.
+ */
+export interface NavJob {
+  snapshot: Uint8Array;
+  solid: Float64Array;
+  min: [number, number, number];
+  max: [number, number, number];
+  opts?: Partial<NavOptions>;
+}
+
+/** Measures a job's level, however it likes (in workers, say): the bands of rows in order, covering every row. */
+export type NavBuilder = (job: NavJob) => Promise<NavRows[]>;
+
+let physics: Promise<void> | null = null;
+/** The physics engine, loaded (for a worker that measures jobs and nothing else). */
+export function initNavPhysics(): Promise<void> {
+  return (physics ??= RAPIER.init());
+}
+
+/** A job's level, ready to measure rows of: `rows(j0, j1)` as often as wanted, then `free()`. */
+export function openNavJob(job: NavJob): { nz: number; rows(j0: number, j1: number): NavRows; free(): void } {
+  const world = RAPIER.World.restoreSnapshot(job.snapshot);
+  if (!world) throw new Error('the level could not be read back');
+  // (Queries only see colliders once the physics has stepped: a step of no time.)
+  world.timestep = 0;
+  world.step();
+  const solid = new Set(job.solid);
+  const q: NavQuery = { world, solid: (c) => solid.has(c.handle) };
+  return {
+    nz: navSize(job.min, job.max, job.opts).nz,
+    rows: (j0, j1) => NavGrid.measure(q, job.min, job.max, job.opts ?? {}, j0, j1),
+    free: () => world.free(),
+  };
+}
+
 const NEIGHBOURS = [
   [1, 0], [-1, 0], [0, 1], [0, -1],
   [1, 1], [1, -1], [-1, 1], [-1, -1],
@@ -97,10 +148,27 @@ export class NavGrid {
 
   /** Measure the level between `min` and `max` (world, u). */
   static build(q: NavQuery, min: [number, number, number], max: [number, number, number], opts: Partial<NavOptions> = {}): NavGrid {
+    const { nz } = navSize(min, max, opts);
+    return NavGrid.fromRows([NavGrid.measure(q, min, max, opts, 0, nz)], min, max, opts);
+  }
+
+  /** The grid from its rows measured apart (bands in order, each from `measure`): the same grid `build` makes. */
+  static fromRows(bands: readonly NavRows[], min: [number, number, number], max: [number, number, number], opts: Partial<NavOptions> = {}): NavGrid {
     const o = { ...NAV_DEFAULTS, ...opts };
-    const sx = max[0] - min[0], sz = max[2] - min[2];
-    const cell = Math.max(o.cell, Math.ceil(Math.max(sx, sz) / o.maxSide));
-    const nx = Math.max(1, Math.ceil(sx / cell)), nz = Math.max(1, Math.ceil(sz / cell));
+    const { cell, nx, nz } = navSize(min, max, opts);
+    const spots: number[] = [];
+    const colOf: number[] = [];
+    for (const b of bands) {
+      for (let k = 0; k < b.spots.length; k++) spots.push(b.spots[k]!);
+      for (let k = 0; k < b.colOf.length; k++) colOf.push(b.colOf[k]!);
+    }
+    return new NavGrid(spots, colOf, cell, min[0], min[2], nx, nz, o);
+  }
+
+  /** The standing spots of rows `j0` … `j1` − 1 of the grid (each column is measured on its own, so rows can be shared out). */
+  static measure(q: NavQuery, min: [number, number, number], max: [number, number, number], opts: Partial<NavOptions>, j0: number, j1: number): NavRows {
+    const o = { ...NAV_DEFAULTS, ...opts };
+    const { cell, nx } = navSize(min, max, opts);
     const top = max[1] + 1, bottom = min[1] - 1;
     const minUp = Math.cos((o.slope * Math.PI) / 180);
     const filter = RAPIER.QueryFilterFlags.EXCLUDE_SENSORS;
@@ -110,7 +178,7 @@ export class NavGrid {
     const pass = (c: RAPIER.Collider) => q.solid(c);
     const spots: number[] = [];
     const colOf: number[] = [];
-    for (let j = 0; j < nz; j++) {
+    for (let j = j0; j < j1; j++) {
       for (let i = 0; i < nx; i++) {
         const x = min[0] + (i + 0.5) * cell, z = min[2] + (j + 0.5) * cell;
         let y = top;
@@ -134,7 +202,7 @@ export class NavGrid {
         }
       }
     }
-    return new NavGrid(spots, colOf, cell, min[0], min[2], nx, nz, o);
+    return { spots: Float32Array.from(spots), colOf: Int32Array.from(colOf) };
   }
 
   private at(id: number): V {

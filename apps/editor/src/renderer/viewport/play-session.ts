@@ -5,6 +5,7 @@
  * With a Player start in the scene you play as the player (first person); without one, Play is a physics
  * preview watched with the free camera.
  */
+import { navInWorkers } from './nav-pool';
 import { SceneDoc, expandRepeats, parkAssets, posterOf, readComponent, type ParticlesData, type VfxData, type ColliderData, type GameRules, type GameValue, type EntityData, type GooglyEyesData, type ModelData, type PrinterData, type SceneFile, type SignData, type TerrainData } from '@cocoaworlds/core';
 import { buildMesh, isInvisibleMaterial, type Brush, type VoxelField, type WorldBrush } from '@cocoaworlds/geometry';
 import { GameWorld, initPhysics, POSE, AT, NPC, type AcousticVoice, type BuildPrompt, type FrameSnapshot, type Hearing, type NavGrid, type BodyInfo, type ModelMesh, type SavedProgress, type Travel, type UiState, type PlayerInput, type PlayerStatus, type ScriptLog, type TriggerEvent } from '@cocoaworlds/runtime';
@@ -133,12 +134,16 @@ export class PlaySession {
     }
     // Invisible colliders (COL) collide but aren't drawn in the game.
     const hidden = new THREE.MeshBasicMaterial({ visible: false });
-    return new PlaySession(scene, (name, tint) => (isInvisibleMaterial(name) ? hidden : material(name, tint)), rules, values, models, terrains, trunks, saved ?? null, arrive ?? null);
+    const session = new PlaySession(scene, (name, tint) => (isInvisibleMaterial(name) ? hidden : material(name, tint)), rules, values, models, terrains, trunks, saved ?? null, arrive ?? null);
+    // (Where creatures can walk is measured in background workers: the session is handed over once that's in, so the
+    // world is never stepped before.)
+    await session.world.navReady;
+    return session;
   }
 
   private constructor(scene: SceneFile, material: (name: string, tint?: string) => THREE.Material, rules: GameRules | undefined, values: GameValue[] | undefined, models: Map<string, ModelMesh>, terrains: Map<string, ModelMesh[]>, trunks: Map<string, { width: number; height: number }>, saved: SavedProgress | null, arrive: Travel | null) {
     this.group.name = 'play';
-    this.world = GameWorld.create(scene, { rules, values, models, terrains, trunks, saved, arrive, surfaces: materialSurfaces(projectMaterials()) });
+    this.world = GameWorld.create(scene, { rules, values, models, terrains, trunks, saved, arrive, surfaces: materialSurfaces(projectMaterials()), navBuilder: navInWorkers });
     // (Loaded now, so the first footstep or thud isn't late.)
     for (const f of allSurfaceFiles()) void PlaySession.load(f).catch(() => {});
     // (Blasts light their surroundings with lights made now: adding lights later would compile every material again.)
