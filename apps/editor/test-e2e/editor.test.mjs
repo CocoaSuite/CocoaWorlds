@@ -158,11 +158,11 @@ test('create, edit, undo, save and reopen a project', async () => {
 
     // Language switch
     await page.getByRole('menubar').getByRole('button', { name: 'View' }).click();
-    await page.getByRole('menuitem', { name: /Русский/ }).click();
+    await page.getByRole('menuitemcheckbox', { name: /Русский/ }).click();
     await page.getByRole('menubar').getByText('Правка', { exact: true }).waitFor();
     await shot(page, '05-russian');
     await page.getByRole('menubar').getByText('Вид', { exact: true }).click();
-    await page.getByRole('menuitem', { name: /English/ }).click();
+    await page.getByRole('menuitemcheckbox', { name: /English/ }).click();
   } catch (e) {
     await shot(page, 'failure');
     throw e;

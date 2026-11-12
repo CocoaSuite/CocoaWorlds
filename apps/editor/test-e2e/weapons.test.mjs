@@ -51,7 +51,7 @@ test('weapons: a pistol with ammo breaks a crate', async () => {
     await page.getByLabel('Pistol: Ready-made weapon').selectOption({ label: 'Pistol' });
     await until(() => page.getByLabel('Pistol: Uses up').inputValue(), '9mm');
     await shot(page, 'g01-weapon-settings');
-    await ws.getByRole('tab', { name: 'Scene' }).click();
+    await ws.getByRole('tab', { name: 'Level' }).click();
 
     await page.getByRole('button', { name: 'Play', exact: true }).click();
     await page.getByTestId('play-banner').waitFor();

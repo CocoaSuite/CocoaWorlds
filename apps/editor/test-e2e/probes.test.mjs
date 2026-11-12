@@ -11,7 +11,7 @@ test('reflection probes for rooms', async () => {
     await newProject(page, 'Probes');
     await page.getByRole('tablist', { name: 'Workspace' }).getByRole('tab', { name: 'Materials' }).click();
     await page.getByRole('button', { name: '+ Material', exact: true }).click();
-    await page.getByRole('tablist', { name: 'Workspace' }).getByRole('tab', { name: 'Scene' }).click();
+    await page.getByRole('tablist', { name: 'Workspace' }).getByRole('tab', { name: 'Level' }).click();
     const n = await page.evaluate(() => {
       const st = window.__cwStore.getState();
       const m = { ...st.session.project.settings.materials[0], color: '#d8d8d8', metalness: 1, roughness: 0.12 };

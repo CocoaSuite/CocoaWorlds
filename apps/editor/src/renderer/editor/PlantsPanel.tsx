@@ -156,7 +156,7 @@ export function PlantsPanel() {
                 }}
               />
             ) : (
-              <button key={x.id} type="button" role="option" aria-selected={x.id === sel} className={`cw-plants-item${x.id === sel ? ' on' : ''}`} title={L('Double-click to rename', 'Двойной щелчок — переименовать')} onClick={() => setSel(x.id)} onDoubleClick={() => setRenaming(x.id)}>
+              <button key={x.id} type="button" role="option" aria-selected={x.id === sel} className={`cw-plants-item${x.id === sel ? ' on' : ''}`} onClick={() => setSel(x.id)} onDoubleClick={() => setRenaming(x.id)}>
                 <Thumb def={x} />
                 <span>{x.name}</span>
               </button>
@@ -379,7 +379,9 @@ function PlantPreview({ def }: { def: PlantDef }) {
   }, [def]);
   return (
     <div className="cw-plants-preview" ref={host} data-testid="plant-preview">
-      <div className="cw-plants-height">{(h / UNITS_PER_METRE).toFixed(2)} m · {Math.round(h)} u · {L('triangles', 'треугольников')}: {tris.map((n) => n.toLocaleString()).join(' / ')} {def.form === 'tree' ? L('(near / mid / far) · then a 2-triangle picture', '(близко / средне / далеко) · дальше картинка из 2 треугольников') : L('(near / mid / far)', '(близко / средне / далеко)')}</div>
+      <div className="cw-plants-height"><span>{(h / UNITS_PER_METRE).toFixed(2)} m ({Math.round(h)} u)</span>
+        <span>{L('Triangles near, mid, far', 'Треугольников близко, средне, далеко')}: {tris.map((n) => n.toLocaleString()).join(', ')}</span>
+        {def.form === 'tree' && <span>{L('Beyond that, a 2-triangle picture.', 'Дальше картинка из 2 треугольников.')}</span>}</div>
     </div>
   );
 }

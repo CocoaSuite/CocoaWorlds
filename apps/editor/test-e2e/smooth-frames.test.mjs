@@ -54,7 +54,7 @@ test('smooth frames: pooled blasts and tracers, signs redrawn in place, reflecti
       await page.getByLabel(`${name}: Ready-made weapon`).selectOption({ label: ready });
       await until(() => page.getByLabel(`${name}: Uses up`).inputValue(), ammo);
     }
-    await ws.getByRole('tab', { name: 'Scene' }).click();
+    await ws.getByRole('tab', { name: 'Level' }).click();
 
     await page.getByRole('button', { name: 'Play', exact: true }).click();
     await page.getByTestId('play-banner').waitFor();

@@ -1,4 +1,5 @@
 /** React wrapper around ViewportEngine plus the viewport overlays (view switcher, grid/snap pill, stats, selection readout). */
+import { createPortal } from 'react-dom';
 import { shown } from '../axes';
 import { uiOf, type SceneFile, type Vec3 } from '@cocoaworlds/core';
 import { SaveMenu } from '../ui/SaveMenu';
@@ -342,7 +343,6 @@ export function Viewport() {
         <select
           className="cw-pill-select mono"
           aria-label={t('grid.size')}
-          title={t('grid.sizeTitle')}
           value={gridSize}
           onPointerDown={(e) => e.stopPropagation()}
           onChange={(e) => useEditor.getState().setGridSize(Number(e.currentTarget.value))}
@@ -363,7 +363,6 @@ export function Viewport() {
               type="button"
               className="cw-pill-btn"
               aria-pressed={gameLighting}
-              title={t('view.gameLightingHint')}
               onClick={() => useEditor.getState().toggle('gameLighting')}
             >
               <span className="cw-pill-k">{t('view.lighting')}</span> {gameLighting ? t('view.lightingGame') : t('view.lightingPreview')}
@@ -381,13 +380,18 @@ export function Viewport() {
           <span>{one.name}</span>
         </div>
       )}
-      {showStats && stats && (
-        <div className="cw-ov cw-ov-br mono" data-testid="viewport-stats">
-          {stats.building ? `${t('stats.building')} · ` : ''}
-          {stats.worldMs !== null ? `${t('stats.world')} ${stats.worldMs.toFixed(1)} ms\u00a0\u00a0 ${t('stats.draw')} ` : ''}
-          {stats.frameMs.toFixed(1)} ms&nbsp;&nbsp; {stats.draws} draws&nbsp;&nbsp; {stats.triangles.toLocaleString()} tris&nbsp;&nbsp; {t('stats.build')} {stats.buildMs} ms
-        </div>
-      )}
+      {showStats && stats && document.getElementById('cw-sb-stats') &&
+        createPortal(
+          <span data-testid="viewport-stats">
+            {stats.building && <span>{t('stats.building')}</span>}
+            {stats.worldMs !== null && <span>{t('stats.world')} {stats.worldMs.toFixed(1)} ms</span>}
+            <span>{stats.worldMs !== null ? `${t('stats.draw')} ` : ''}{stats.frameMs.toFixed(1)} ms</span>
+            <span>{stats.draws} draws</span>
+            <span>{stats.triangles.toLocaleString()} tris</span>
+            <span>{t('stats.build')} {stats.buildMs} ms</span>
+          </span>,
+          document.getElementById('cw-sb-stats')!,
+        )}
       {playing && showPlayBar && (
         <div className="cw-ov cw-play-banner" data-testid="play-banner">
           <span className="cw-live-dot" />
@@ -395,7 +399,7 @@ export function Viewport() {
           <button type="button" className="cw-play-stop" onClick={() => useEditor.getState().stopPlaying()}>
             {t('play.stop')}
           </button>
-          <button type="button" className="cw-play-hide" data-testid="play-banner-hide" title={`${t('play.hideBar')} (F6)`} aria-label={t('play.hideBar')} onClick={() => useEditor.getState().toggle('showPlayBar')}>
+          <button type="button" className="cw-play-hide" data-testid="play-banner-hide" aria-label={t('play.hideBar')} onClick={() => useEditor.getState().toggle('showPlayBar')}>
             ×
           </button>
         </div>

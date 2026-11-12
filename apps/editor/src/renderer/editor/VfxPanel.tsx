@@ -130,7 +130,6 @@ export function VfxPanel() {
                 <button
                   type="button"
                   className="cw-vfx-row-main"
-                  title={L('Double-click to rename', 'Двойной щелчок — переименовать')}
                   onClick={() => {
                     setPick(e.id);
                     setLayerId(null);
@@ -246,7 +245,7 @@ export function VfxPanel() {
         {fx && layer && (
           <>
             <div className="cw-lib-cats-h">
-              {layer.kind === 'emitter' ? L('Emitter', 'Эмиттер') : L('Shape animation', 'Анимация фигуры')} · {layer.name}
+              {layer.kind === 'emitter' ? L('Emitter', 'Эмиттер') : L('Shape animation', 'Анимация фигуры')}: {layer.name}
             </div>
             <Row label={L('Name', 'Имя')}>
               <input key={layer.id} className="cw-input" aria-label={L('Layer name', 'Имя слоя')} defaultValue={layer.name} onKeyDown={(ev) => ev.stopPropagation()} onBlur={(ev) => ev.currentTarget.value.trim() && editLayer((l) => void (l.name = ev.currentTarget.value.trim()))} />
@@ -704,13 +703,12 @@ function Timeline({ fx, tr, layerId, onPickLayer, onPickKey, onMoveLayer }: { fx
         {fx.layers.map((l) => (
           <div key={l.id} className={`cw-vfx-track${l.id === layerId ? ' on' : ''}${l.visible ? '' : ' off'}`}>
             <button type="button" className="cw-vfx-track-name" onClick={() => onPickLayer(l.id)}>
-              {l.name} · {l.kind === 'emitter' ? L('Emitter', 'Эмиттер') : L('Shape', 'Фигура')}
+              {l.name} ({l.kind === 'emitter' ? L('Emitter', 'Эмиттер') : L('Shape', 'Фигура')})
             </button>
             <div className="cw-vfx-lane" onPointerDown={(ev) => ev.target === ev.currentTarget && scrub(ev, ev.currentTarget)}>
               <span
                 className={`cw-vfx-bar ${l.kind}`}
                 style={{ left: pct(l.start), width: `calc(${pct(l.start + Math.max(l.duration, 0.01))} - ${pct(l.start)})` }}
-                title={L('Drag to move when it starts', 'Тяните, чтобы сдвинуть начало')}
                 onPointerDown={(ev) => {
                   ev.stopPropagation();
                   onPickLayer(l.id);

@@ -259,13 +259,13 @@ export function MaterialsPanel() {
           {t('mat.fromImage')}
         </Button>
         <span className="cw-mats-io">
-          <Button size="sm" disabled={!mat} title={t('mex.selectHint')} onClick={(e) => {
+          <Button size="sm" disabled={!mat} onClick={(e) => {
             const r = e.currentTarget.getBoundingClientRect();
             setMenu({ x: r.left, y: r.bottom + 4 });
           }}>
             {t('mex.exportMenu')}
           </Button>
-          <Button size="sm" title={t('mex.importHint')} onClick={() => void importFiles()}>
+          <Button size="sm" onClick={() => void importFiles()}>
             {t('mex.import')}
           </Button>
         </span>
@@ -474,7 +474,7 @@ function MaterialProps({
         </Row>
       )}
       {m.map && (
-        <label className="cw-screens-sw" title={t('mat.cutoutHint')}>
+        <label className="cw-screens-sw">
           <Switch label={t('mat.cutout')} checked={m.cutout !== false} onChange={(v) => edit({ cutout: v ? undefined : false }, v ? 'Cut-out on' : 'Cut-out off')} />
           {t('mat.cutout')}
         </label>
@@ -567,7 +567,7 @@ function MaterialProps({
         </>
       )}
       <WearSettings m={m} edit={edit} />
-      <label className="cw-screens-sw" title={t('mat.twoSidedHint')}>
+      <label className="cw-screens-sw">
         <Switch label={t('mat.twoSided')} checked={!!m.doubleSided} onChange={(v) => edit({ doubleSided: v || undefined }, v ? 'Two-sided on' : 'Two-sided off')} />
         {t('mat.twoSided')}
       </label>
@@ -752,7 +752,7 @@ export function WearSettings({ m, edit }: { m: MaterialDef; edit: (patch: Partia
   const set = (patch: Partial<WearDef>, label: string, key?: string) => w && edit({ wear: { ...w, ...patch } }, label, key ? `wear-${key}-${m.id}` : undefined);
   return (
     <div className="cm-own" role="group" aria-label={t('wear.title')}>
-      <label className="cw-screens-sw" title={t('wear.hint')}>
+      <label className="cw-screens-sw">
         <Switch label={t('wear.title')} checked={!!w} onChange={(v) => edit({ wear: v ? newWear() : undefined }, v ? 'Wear on' : 'Wear off')} />
         {t('wear.title')}
       </label>

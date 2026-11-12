@@ -19,8 +19,8 @@ test('uv editor: hotspot sheet, automap on paint, move islands', async () => {
     // A material with a trim sheet that maps itself when painted.
     await page.getByRole('tablist', { name: 'Workspace' }).getByRole('tab', { name: 'Materials' }).click();
     await page.getByRole('button', { name: '+ Material', exact: true }).click();
-    await page.getByRole('tablist', { name: 'Workspace' }).getByRole('tab', { name: 'Scene' }).click();
-    await page.getByRole('toolbar', { name: 'Tools' }).getByRole('button', { name: 'UV', exact: true }).click();
+    await page.getByRole('tablist', { name: 'Workspace' }).getByRole('tab', { name: 'Level' }).click();
+    await page.locator('.cw-statusbar').getByRole('button', { name: 'UV', exact: true }).click();
     await page.getByRole('radio', { name: 'Hotspots' }).click();
     await page.getByRole('button', { name: 'Trims' }).click();
     await page.getByRole('switch', { name: 'Map when painted' }).click();

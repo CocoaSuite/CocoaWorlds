@@ -137,7 +137,7 @@ test('materials: make, edit with undo, paint, delete', async () => {
     await until(async () => (await savedMaterials()).length, 2, 6000);
 
     // 6. Play draws it too.
-    await ws.getByRole('tab', { name: 'Scene' }).click();
+    await ws.getByRole('tab', { name: 'Level' }).click();
     await page.getByRole('button', { name: 'Play', exact: true }).click();
     await page.getByTestId('play-banner').waitFor();
     await page.keyboard.press('F5');

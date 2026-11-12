@@ -22,7 +22,7 @@ test('plants of one kind: one batch, still picked one by one, shown in Play', as
     await ws.getByRole('tab', { name: 'Plants' }).click();
     await page.getByRole('button', { name: '+ Willow' }).click();
     await page.getByRole('button', { name: 'Place in scene' }).click();
-    await ws.getByRole('tab', { name: 'Scene' }).click();
+    await ws.getByRole('tab', { name: 'Level' }).click();
     await tree.getByRole('treeitem', { name: /willow/ }).first().waitFor();
     // Five more copies of it in a row (duplicated, then moved apart).
     const ids = await page.evaluate(() => {

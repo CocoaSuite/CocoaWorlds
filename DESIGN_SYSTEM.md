@@ -4,6 +4,16 @@ CocoaWorlds is a member of the Cocoa software family. Its editor must look and b
 
 **Reference inspected:** `CocoaSuite/cocoacanvas`, `editor.html` (the shipped editor; identical to `CocoaCanvas-standalone.html`).
 
+## 0. Where CocoaWorlds now differs (Nov 2026 redo)
+
+The colours below still come from CocoaCanvas. The sizes and the frame are CocoaWorlds' own and take priority over sections 2.2 to 4 wherever they disagree:
+
+- **Scale:** three text sizes (`--fs-s` 11, `--fs-m` 12, `--fs-l` 13), two radii (`--r-s` 4, `--r-m` 6), one row height (`--row` 24), one bar height (`--bar` 30). No literal sizes in editor CSS. Start screen, dialogs and in-game UI keep their own sizes.
+- **Frame:** top bar, workspace tab row, then tool rail | list | view | properties, then a status bar. Tools are a vertical rail at the far left, not a bar under the view.
+- **Headers:** sentence case, 12px, weight 500. No uppercase labels.
+- **Tooltips:** only a plain name on icon-only buttons. Anything longer is one sentence in the status bar (`hint.*` strings).
+- **Text:** no `·` separators and no `✓` typed into labels. Separate facts are separate elements; checked menu items set `checked` on the entry.
+
 ## 1. What CocoaCanvas is, technically
 
 | Aspect | Finding | Consequence for CocoaWorlds |

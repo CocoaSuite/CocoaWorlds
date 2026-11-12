@@ -19,7 +19,9 @@ export function BevelPanel({ info, onAdjust }: { info: BevelInfo; onAdjust: (p: 
       {info.live ? (
         <>
           <div className="cw-brush-row mono" data-testid="bevel-live">
-            {L('Width', 'Ширина')} {info.typed ? `${info.typed}|` : info.width.toFixed(2)} · {L('Segments', 'Сегменты')} {info.segments} · {L('Profile', 'Профиль')} {info.profile.toFixed(2)}
+            <span>{L('Width', 'Ширина')} {info.typed ? `${info.typed}|` : info.width.toFixed(2)}</span>
+            <span>{L('Segments', 'Сегменты')} {info.segments}</span>
+            <span>{L('Profile', 'Профиль')} {info.profile.toFixed(2)}</span>
             {info.profileMode ? ` (${L('moving the profile', 'меняется профиль')})` : ''}
           </div>
           <div className="cw-brush-hint">

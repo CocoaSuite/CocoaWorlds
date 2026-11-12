@@ -58,10 +58,10 @@ test('foliage: tufts on a brush top, shown in the editor and in Play', async () 
     // View › Show grass hides it in the editor, and shows it again.
     const grassShown = () => page.evaluate(() => window.__cwViewport.foliage.group.visible);
     await page.getByRole('menubar').getByRole('button', { name: 'View' }).click();
-    await page.getByRole('menuitem', { name: /Show grass/ }).click();
+    await page.getByRole('menuitemcheckbox', { name: /Show grass/ }).click();
     await until(grassShown, false, 4000);
     await page.getByRole('menubar').getByRole('button', { name: 'View' }).click();
-    await page.getByRole('menuitem', { name: /Show grass/ }).click();
+    await page.getByRole('menuitemcheckbox', { name: /Show grass/ }).click();
     await until(grassShown, true, 4000);
     const before = await tufts();
     // Play: the same tufts are drawn in the game, and the player can still stand on the block.

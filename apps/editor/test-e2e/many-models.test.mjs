@@ -34,7 +34,7 @@ test('many copies of a model: batched in Play', async () => {
     // the renderer's counter keeps adding up between frames.)
     await until(() => page.evaluate(() => !window.__cwViewport.reflections?.busy), true, 10000);
     await new Promise((r) => setTimeout(r, 1000));
-    const draws = Number((await page.getByText(/ draws · /).textContent()).match(/(\d+) draws/)[1]);
+    const draws = Number((await page.getByTestId('viewport-stats').getByText(/^\d+ draws$/).textContent()).match(/(\d+) draws/)[1]);
     assert.ok(draws < 60, `${draws} draw calls`);
     await shot(page, 'many-models');
   } catch (e) {

@@ -145,7 +145,7 @@ export function ScreensPanel() {
                     <Switch label={t('ui.shownAtStart')} checked={s.shownAtStart} onChange={(v) => editScreen(s.id, (x) => ({ ...x, shownAtStart: v }), 'Screen shown at start')} />
                     {t('ui.shownAtStart')}
                   </label>
-                  <label className="cw-screens-sw" title={t('ui.freesMouseHint')}>
+                  <label className="cw-screens-sw">
                     <Switch label={t('ui.freesMouse')} checked={s.freesMouse} onChange={(v) => editScreen(s.id, (x) => ({ ...x, freesMouse: v }), 'Screen frees the mouse')} />
                     {t('ui.freesMouse')}
                   </label>
@@ -513,7 +513,7 @@ function Items({
   return (
     <section className="cw-screens-items" aria-label={t('ui.items')}>
       <div className="cw-screens-h">
-        <span title={t('ui.itemsHint')}>{t('ui.items')}</span>
+        <span>{t('ui.items')}</span>
         <Button size="sm" onClick={() => update((u) => ({ ...u, items: [...u.items, { name: unique('Item', u.items.map((x) => x.name)), icon: '' }] }), 'Add item')}>
           {t('ui.addItem')}
         </Button>

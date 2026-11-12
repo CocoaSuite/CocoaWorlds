@@ -43,7 +43,7 @@ test('navigation workers: Play measures the level off the UI thread', async () =
     await page.keyboard.press('F5');
     await until(() => page.evaluate(() => !window.__cwViewport.play), true, 10000);
     await page.getByRole('menubar').getByRole('button', { name: 'View' }).click();
-    await page.getByRole('menuitem', { name: 'Show where creatures can walk' }).click();
+    await page.getByRole('menuitemcheckbox', { name: 'Show where creatures can walk' }).click();
     await until(() => page.evaluate(() => (window.__cwViewport.navDraw?.userData.spots ?? 0) > 0), true, 15000);
     assert.equal(await page.evaluate(() => window.__cwViewport.navDraw.userData.spots), inPlay.count);
 

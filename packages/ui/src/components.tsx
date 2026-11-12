@@ -40,7 +40,7 @@ export function ToolButton({ icon, label, active, shortcut, ...rest }: { icon: I
       type="button"
       aria-label={label}
       aria-pressed={!!active}
-      title={shortcut ? `${label} (${shortcut})` : label}
+      title={label}
       className={cx('cw-tool', active && 'on')}
       {...rest}
     >
@@ -54,9 +54,11 @@ export const Spacer = () => <div className="cw-sp" />;
 
 // ── Menus ──
 
-export type MenuEntry = { label: string; shortcut?: string; disabled?: boolean; hint?: string; onSelect: () => void } | 'separator';
+/** `checked` (true or false) puts the item in a menu with a check column; leave it out for plain commands. */
+export type MenuEntry = { label: string; shortcut?: string; disabled?: boolean; checked?: boolean; hint?: string; onSelect: () => void } | 'separator';
 
 function MenuItems({ items, close }: { items: MenuEntry[]; close: () => void }) {
+  const checks = items.some((it) => it !== 'separator' && it.checked !== undefined);
   return (
     <>
       {items.map((it, i) =>
@@ -66,14 +68,16 @@ function MenuItems({ items, close }: { items: MenuEntry[]; close: () => void }) 
           <button
             key={i}
             type="button"
-            role="menuitem"
+            role={it.checked === undefined ? 'menuitem' : 'menuitemcheckbox'}
+            aria-checked={it.checked}
             disabled={it.disabled}
-            title={it.hint}
+            title={it.disabled ? it.hint : undefined}
             onClick={() => {
               close();
               it.onSelect();
             }}
           >
+            {checks && <span className="cw-mi-check">{it.checked && <Icon name="check" size={13} />}</span>}
             {it.label}
             {it.shortcut && <kbd>{it.shortcut}</kbd>}
           </button>

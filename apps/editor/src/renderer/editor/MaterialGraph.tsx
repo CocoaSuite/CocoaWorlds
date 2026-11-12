@@ -81,7 +81,7 @@ function CmNodeView({ id, data, selected }: NodeProps<CmNode>) {
   const { errors, lift } = useContext(GraphCtx);
   const err = errors.get(id);
   return (
-    <div className={`cm-node g-${def.group}${def.group === 'output' ? ' out' : ''}${selected ? ' on' : ''}${err ? ' bad' : ''}`} title={err ?? say(def.hint)} data-node-type={def.type} aria-label={say(def.label)}>
+    <div className={`cm-node g-${def.group}${def.group === 'output' ? ' out' : ''}${selected ? ' on' : ''}${err ? ' bad' : ''}`} title={err ?? undefined} data-node-type={def.type} aria-label={say(def.label)}>
       <div className="cm-node-h">{say(def.label)}</div>
       <div className="cm-node-b">
         <div className="cm-ports">
@@ -151,7 +151,7 @@ function AddMenu({ at, onPick, onClose }: { at: { x: number; y: number }; onPick
             <div key={g.id}>
               <div className="cm-add-g">{say(g.label)}</div>
               {items.map((n) => (
-                <button key={n.type} type="button" role="menuitem" className={list[hi] === n ? 'hi' : ''} title={say(n.hint)} onClick={() => onPick(n.type)}>
+                <button key={n.type} type="button" role="menuitem" className={list[hi] === n ? 'hi' : ''} onClick={() => onPick(n.type)}>
                   <i className={`cm-dot g-${n.group}`} />
                   {say(n.label)}
                 </button>
@@ -212,7 +212,6 @@ function NodeLibrary({ onAdd, onHide, wide }: { onAdd: (type: string) => void; o
                       type="button"
                       className="cm-lib-item"
                       draggable
-                      title={`${say(n.hint)}\n${t('cm.libraryHint')}`}
                       aria-label={say(n.label)}
                       onDragStart={(e) => {
                         e.dataTransfer.setData(NODE_DRAG, n.type);
@@ -620,7 +619,7 @@ function ParamField({ p, value, onChange, textures, label: named }: { p: Param; 
       return (
         <span className="cw-screens-pair">
           <NumberField label="#" ariaLabel={label} value={Number(value)} onCommit={(v) => onChange(Math.round(v))} />
-          <Button size="sm" title={t('cm.newSeed')} onClick={() => onChange(Math.floor(Math.random() * 9999) + 1)}>
+          <Button size="sm" onClick={() => onChange(Math.floor(Math.random() * 9999) + 1)}>
             {t('cm.reroll')}
           </Button>
         </span>
@@ -676,7 +675,6 @@ function NodeProps({ path, graph, node, onSelect }: { path: string; graph: MatGr
                 className={`cw-iconbtn cm-expose${shown ? ' on' : ''}`}
                 aria-pressed={shown}
                 aria-label={`${t('cm.expose')} ${say(p.label)}`}
-                title={shown ? t('cm.exposedHint') : t('cm.exposeHint')}
                 onClick={() =>
                   setGraph(
                     path,
@@ -860,11 +858,11 @@ function GraphMaterialProps({
         </>
       )}
       <WearSettings m={m} edit={edit} />
-      <label className="cw-screens-sw" title={t('mat.cutoutHint')}>
+      <label className="cw-screens-sw">
         <Switch label={t('mat.cutout')} checked={m.cutout !== false} onChange={(v) => edit({ cutout: v ? undefined : false }, v ? 'Cut-out on' : 'Cut-out off')} />
         {t('mat.cutout')}
       </label>
-      <label className="cw-screens-sw" title={t('mat.twoSidedHint')}>
+      <label className="cw-screens-sw">
         <Switch label={t('mat.twoSided')} checked={!!m.doubleSided} onChange={(v) => edit({ doubleSided: v || undefined }, v ? 'Two-sided on' : 'Two-sided off')} />
         {t('mat.twoSided')}
       </label>
@@ -876,7 +874,7 @@ function GraphMaterialProps({
       </Row>
       <p className="cw-muted cw-screens-note">{t('cm.pickNodeHint')}</p>
       <div className="cw-screens-pair">
-        <Button size="sm" onClick={onVariant} title={t('cm.variantHint')}>
+        <Button size="sm" onClick={onVariant}>
           {t('cm.variant')}
         </Button>
         <Button size="sm" onClick={onDuplicate}>

@@ -125,7 +125,7 @@ export function SkyPanel() {
                   }}
                 />
               ) : (
-                <button type="button" className="cw-sky-preset" aria-label={L(`Use sky ${x.name}`, `Взять небо ${x.name}`)} title={L('Double-click to rename', 'Двойной щелчок — переименовать')} onClick={() => apply({ name: { en: x.name }, sky: x.sky, sun: x.sun })} onDoubleClick={() => setRenaming(x.id)}>
+                <button type="button" className="cw-sky-preset" aria-label={L(`Use sky ${x.name}`, `Взять небо ${x.name}`)} onClick={() => apply({ name: { en: x.name }, sky: x.sky, sun: x.sun })} onDoubleClick={() => setRenaming(x.id)}>
                   <span className="cw-sky-swatch" style={swatch(x.sky)} />
                   <span>{x.name}</span>
                 </button>

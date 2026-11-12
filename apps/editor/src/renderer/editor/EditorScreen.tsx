@@ -1,4 +1,4 @@
-/** The main editor window: CocoaCanvas frame (top bar, scene list, stage, inspector) plus the bottom workspace. Mockup 01. */
+/** The main editor window: top bar, workspace tabs, then tool rail, scene list, stage and inspector, with the status bar underneath. */
 import { SkyPanel } from './SkyPanel';
 import { VfxPanel } from './VfxPanel';
 import { UvPane } from './UvPanel';
@@ -12,7 +12,8 @@ import { BottomPanel } from './BottomPanel';
 import { Inspector } from './Inspector';
 import { SceneTree } from './SceneTree';
 import { ToolBar } from './ToolBar';
-import { TopBar } from './TopBar';
+import { StatusBar } from './StatusBar';
+import { TopBar, WorkspaceTabs } from './TopBar';
 import { ScreensPanel } from './ScreensPanel';
 import { MaterialsPanel } from './MaterialsPanel';
 import { PlantsPanel } from './PlantsPanel';
@@ -38,6 +39,7 @@ export function EditorScreen() {
   return (
     <div className="cw-editor">
       <TopBar onShowKeys={() => setKeysOpen(true)} />
+      <WorkspaceTabs />
       {/* The scene stays mounted (hidden) under other workspaces, so its 3D view keeps its state. */}
       {workspace === 'screens' && <ScreensPanel />}
       {workspace === 'materials' && <MaterialsPanel />}
@@ -47,6 +49,7 @@ export function EditorScreen() {
       <div className={`cw-mid${playing ? ' cw-playing' : ''}`} hidden={workspace !== 'scene'}>
         {/* While playing, editing panels are inert: the game runs from a snapshot of the scene. */}
         <div className="cw-inert-wrap" inert={playing}>
+          <ToolBar />
           <SceneTree />
         </div>
         <div className="cw-stage">
@@ -54,15 +57,13 @@ export function EditorScreen() {
             <Viewport />
             {uvPane && !playing && <UvPane />}
           </div>
-          <div className="cw-inert-wrap" inert={playing}>
-            <ToolBar />
-          </div>
           {showBottom && <BottomPanel />}
         </div>
         <div className="cw-inert-wrap" inert={playing}>
           <Inspector />
         </div>
       </div>
+      <StatusBar />
 
       <MakePrefabDialog />
       <RecipesDialog />

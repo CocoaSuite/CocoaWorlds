@@ -104,6 +104,17 @@ import type { LiveChange } from './viewport/engine';
 import { cloneSnapshot, isGroup, rootsOf, snapshotSubtrees } from './scene-ops';
 import { getLang, setLang, t, type Lang } from './i18n';
 
+export type BottomMode = 'collapsed' | 'docked' | 'full';
+
+function storedBottomMode(): BottomMode {
+  try {
+    const v = localStorage.getItem('cw-bottom-mode');
+    return v === 'collapsed' || v === 'full' ? v : 'docked';
+  } catch {
+    return 'docked';
+  }
+}
+
 export type Tool = 'select' | 'move' | 'rotate' | 'scale' | 'brush' | 'face' | 'paint' | 'vertex' | 'clip' | 'loopcut' | 'terrain';
 
 /** The Terrain tool's brush: what it does, how big (u), how strong (0…1), and the layer it paints (0…3). */
@@ -197,6 +208,8 @@ interface State {
   dialog: 'makePrefab' | 'recipes' | null;
   /** The bottom workspace's open tab. */
   bottomTab: 'script' | 'assets' | 'console' | 'problems';
+  /** Bottom panel size: just its tab strip, docked under the view, or covering the whole stage. */
+  bottomMode: BottomMode;
   /** Which workspace fills the window: the scene (3D view and panels) or the screen UI editor. */
   workspace: 'scene' | 'screens' | 'materials' | 'plants' | 'sky' | 'vfx';
   /** While playing: the blocks each object's script is running (for highlighting). */
@@ -346,6 +359,7 @@ interface Actions {
   /** Change a material without an undo step (baked map paths: they follow the graph, not the user). */
   patchMaterialQuietly(id: string, patch: Partial<MaterialDef>): void;
   setBottomTab(tab: State['bottomTab']): void;
+  setBottomMode(mode: BottomMode): void;
   setWorkspace(w: State['workspace']): void;
   /** Change an object's script (the whole `script` component) as one undo step, merging with `mergeKey`. */
   updateScript(id: string, fn: (s: Script) => Script, label: string, mergeKey?: string): void;
@@ -421,6 +435,7 @@ export const useEditor = create<State & Actions>()((set, get) => ({
   placementPoint: () => null,
   dialog: null,
   bottomTab: 'console',
+  bottomMode: storedBottomMode(),
   workspace: 'scene',
   activeBlocks: new Map(),
 
@@ -1323,7 +1338,7 @@ export const useEditor = create<State & Actions>()((set, get) => ({
     if (name === 'googlyEyes' && model && /(^|\/)chicken_rigged(_\d+)?\.glb$/.test(model)) Object.assign(data, CHICKEN_EYES);
     else if (name === 'googlyEyes' && e.components.npc && !model) Object.assign(data, { offset: [0, 60, -17], size: 11, spacing: 13 });
     get().execute(setComponentCmd(doc, id, name, data as never, `Add ${label}`));
-    if (name === 'script') set({ bottomTab: 'script', showBottom: true });
+    if (name === 'script') set((st) => ({ bottomTab: 'script', showBottom: true, bottomMode: st.bottomMode === 'collapsed' ? 'docked' : st.bottomMode }));
   },
 
   applyRecipe(id, recipeId) {
@@ -1380,8 +1395,17 @@ export const useEditor = create<State & Actions>()((set, get) => ({
     set({ workspace });
   },
 
+  setBottomMode(bottomMode) {
+    set({ bottomMode, showBottom: true });
+    try {
+      localStorage.setItem('cw-bottom-mode', bottomMode);
+    } catch {
+      /* storage can be unavailable; the mode just won't be remembered */
+    }
+  },
   setBottomTab(bottomTab) {
-    set({ bottomTab, showBottom: true });
+    // Picking a tab on a collapsed panel opens it.
+    set((st) => ({ bottomTab, showBottom: true, bottomMode: st.bottomMode === 'collapsed' ? 'docked' : st.bottomMode }));
   },
 
   updateScript(id, fn, label, mergeKey) {

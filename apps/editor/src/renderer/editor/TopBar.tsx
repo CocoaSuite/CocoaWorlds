@@ -11,7 +11,6 @@ export function TopBar({ onShowKeys }: { onShowKeys: () => void }) {
   const session = s.session!;
   useEditor((x) => x.rev);
   const h = s.history;
-  const status = s.saving ? t('status.saving') : s.dirty ? t('status.edited') : t('status.saved');
 
   const [asking, setAsking] = useState(false);
   const [building, setBuilding] = useState(false);
@@ -57,27 +56,27 @@ export function TopBar({ onShowKeys }: { onShowKeys: () => void }) {
           {
             label: t('menu.view'),
             items: [
-              { label: `${s.view === 'perspective' ? '✓ ' : ''}${t('view.perspective')}`, shortcut: '1', onSelect: () => s.setView('perspective') },
-              { label: `${s.view === 'top' ? '✓ ' : ''}${t('view.top')}`, shortcut: '2', onSelect: () => s.setView('top') },
-              { label: `${s.view === 'front' ? '✓ ' : ''}${t('view.front')}`, shortcut: '3', onSelect: () => s.setView('front') },
-              { label: `${s.view === 'side' ? '✓ ' : ''}${t('view.side')}`, shortcut: '4', onSelect: () => s.setView('side') },
+              { label: t('view.perspective'), checked: s.view === 'perspective', shortcut: '1', onSelect: () => s.setView('perspective') },
+              { label: t('view.top'), checked: s.view === 'top', shortcut: '2', onSelect: () => s.setView('top') },
+              { label: t('view.front'), checked: s.view === 'front', shortcut: '3', onSelect: () => s.setView('front') },
+              { label: t('view.side'), checked: s.view === 'side', shortcut: '4', onSelect: () => s.setView('side') },
               'separator',
               { label: t('view.frame'), shortcut: 'F', disabled: !s.selection.length, onSelect: s.frameSelection },
               'separator',
-              { label: `${s.showGrid ? '✓ ' : ''}${t('view.grid')}`, onSelect: () => s.toggle('showGrid') },
-              { label: `${s.showNav ? '✓ ' : ''}${t('view.nav')}`, onSelect: () => s.toggle('showNav') },
-              { label: `${s.showGrass ? '✓ ' : ''}${t('view.grass')}`, onSelect: () => s.toggle('showGrass') },
-              { label: `${s.showProbes ? '✓ ' : ''}${t('view.probes')}`, onSelect: () => s.toggle('showProbes') },
-              { label: `${s.showCollisions ? '✓ ' : ''}${t('view.collisions')}`, onSelect: () => s.toggle('showCollisions') },
-              { label: `${s.uvPane ? '✓ ' : ''}${t('view.uv')}`, onSelect: () => s.toggle('uvPane') },
-              { label: `${s.zUp ? '✓ ' : ''}${t('view.zUp')}`, onSelect: () => s.toggle('zUp') },
-              { label: `${s.gameLighting ? '✓ ' : ''}${t('view.gameLighting')}`, onSelect: () => s.toggle('gameLighting') },
-              { label: `${s.showStats ? '✓ ' : ''}${t('view.stats')}`, onSelect: () => s.toggle('showStats') },
-              { label: `${s.showPlayBar ? '✓ ' : ''}${t('view.playBar')}`, shortcut: 'F6', onSelect: () => s.toggle('showPlayBar') },
-              { label: `${s.showBottom ? '✓ ' : ''}${t('view.bottom')}`, onSelect: () => s.toggle('showBottom') },
+              { label: t('view.grid'), checked: s.showGrid, onSelect: () => s.toggle('showGrid') },
+              { label: t('view.nav'), checked: s.showNav, onSelect: () => s.toggle('showNav') },
+              { label: t('view.grass'), checked: s.showGrass, onSelect: () => s.toggle('showGrass') },
+              { label: t('view.probes'), checked: s.showProbes, onSelect: () => s.toggle('showProbes') },
+              { label: t('view.collisions'), checked: s.showCollisions, onSelect: () => s.toggle('showCollisions') },
+              { label: t('view.uv'), checked: s.uvPane, onSelect: () => s.toggle('uvPane') },
+              { label: t('view.zUp'), checked: s.zUp, onSelect: () => s.toggle('zUp') },
+              { label: t('view.gameLighting'), checked: s.gameLighting, onSelect: () => s.toggle('gameLighting') },
+              { label: t('view.stats'), checked: s.showStats, onSelect: () => s.toggle('showStats') },
+              { label: t('view.playBar'), checked: s.showPlayBar, shortcut: 'F6', onSelect: () => s.toggle('showPlayBar') },
+              { label: t('view.bottom'), checked: s.showBottom, onSelect: () => s.toggle('showBottom') },
               'separator',
-              { label: `${s.lang === 'en' ? '✓ ' : ''}English`, onSelect: () => s.setLang('en') },
-              { label: `${s.lang === 'ru' ? '✓ ' : ''}Русский`, onSelect: () => s.setLang('ru') },
+              { label: 'English', checked: s.lang === 'en', onSelect: () => s.setLang('en') },
+              { label: 'Русский', checked: s.lang === 'ru', onSelect: () => s.setLang('ru') },
             ],
           },
           {
@@ -122,11 +121,6 @@ export function TopBar({ onShowKeys }: { onShowKeys: () => void }) {
       <div className="cw-crumbs">
         {session.project.name} <span className="cw-crumb-sep">/</span> <ScenePicker />
       </div>
-      <Workspaces />
-      <div className="cw-status" data-testid="save-status">
-        <span className={`cw-dot ${s.dirty ? 'warn' : 'ok'}`} />
-        {status}
-      </div>
       <Spacer />
       <IconButton icon="undo" label={t('edit.undo')} disabled={!h.canUndo} onClick={s.undo} />
       <IconButton icon="redo" label={t('edit.redo')} disabled={!h.canRedo} onClick={s.redo} />
@@ -136,12 +130,12 @@ export function TopBar({ onShowKeys }: { onShowKeys: () => void }) {
       </Button>
       {building && <BuildDialog onClose={() => setBuilding(false)} />}
       {s.playing ? (
-        <Button variant="primary" onClick={s.stopPlaying} title={`${t('play.stop')} (Esc, F5)`}>
+        <Button variant="primary" onClick={s.stopPlaying}>
           <Icon name="stop" size={13} style={{ fill: 'currentColor', stroke: 'none' }} />
           {t('play.stop')}
         </Button>
       ) : (
-        <Button variant="primary" onClick={s.play} title={`${t('play')} (F5)`}>
+        <Button variant="primary" onClick={s.play}>
           <Icon name="play" size={13} style={{ fill: 'currentColor', stroke: 'none' }} />
           {t('play')}
         </Button>
@@ -199,7 +193,8 @@ function ScenePicker() {
           setMenu({ x: r.left, y: r.bottom + 4 });
         }}
       >
-        <b>{s.doc?.name}</b> ▾
+        <b>{s.doc?.name}</b>
+        <Icon name="chevronDown" size={12} />
       </button>
       {menu && (
         <ContextMenu
@@ -208,7 +203,8 @@ function ScenePicker() {
           onClose={() => setMenu(null)}
           items={[
             ...session.project.scenes.map((p) => ({
-              label: `${stem(p)}${p === start ? `  · ${t('scenes.startTag')}` : ''}${p === session.scenePath ? '  ✓' : ''}`,
+              label: p === start ? `${stem(p)} (${t('scenes.startTag')})` : stem(p),
+              checked: p === session.scenePath,
               disabled: p === session.scenePath,
               onSelect: () => void s.goToScene(p),
             })),
@@ -246,18 +242,18 @@ function ScenePicker() {
   );
 }
 
-/** Scene, Screens (the screen UI editor) and, later, Materials: each fills the window. */
-function Workspaces() {
+/** The workspace tab row under the top bar: Level, Materials, Plants, Sky, VFX, Screens. Each fills the window. */
+export function WorkspaceTabs() {
   const ws = useEditor((x) => x.workspace);
   const playing = useEditor((x) => !!x.playing);
   const set = useEditor((x) => x.setWorkspace);
   const tabs: { id: 'scene' | 'screens' | 'materials' | 'plants' | 'sky' | 'vfx'; label: string; soon?: boolean }[] = [
     { id: 'scene', label: t('ws.scene') },
-    { id: 'screens', label: t('ws.screens') },
     { id: 'materials', label: t('ws.materials') },
     { id: 'plants', label: t('ws.plants') },
     { id: 'sky', label: t('ws.sky') },
     { id: 'vfx', label: t('ws.vfx') },
+    { id: 'screens', label: t('ws.screens') },
   ];
   return (
     <div className="cw-ws" role="tablist" aria-label={t('ws.label')}>
@@ -269,7 +265,6 @@ function Workspaces() {
           aria-selected={ws === x.id}
           className={ws === x.id ? 'on' : ''}
           disabled={x.soon || (playing && x.id !== 'scene')}
-          title={x.soon ? t('ws.soon') : undefined}
           onClick={() => set(x.id)}
         >
           {x.label}
@@ -321,7 +316,7 @@ function BuildDialog({ onClose }: { onClose: () => void }) {
           <label key={x} className={`cw-export-target${target === x ? ' on' : ''}`}>
             <input type="radio" name="target" checked={target === x} disabled={busy} onChange={() => setTarget(x)} aria-label={names[x]} />
             <strong>{names[x]}</strong>
-            <span className="cw-muted">{x === 'web' ? t('export.webHint') : x === here ? `${t('export.thisComputer')} · ${t('export.desktopHint')}` : `${t('export.download')} · ${t('export.desktopHint')}`}</span>
+            <span className="cw-muted">{x === 'web' ? t('export.webHint') : x === here ? `${t('export.thisComputer')}. ${t('export.desktopHint')}` : `${t('export.download')}. ${t('export.desktopHint')}`}</span>
           </label>
         ))}
       </div>

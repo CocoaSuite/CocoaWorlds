@@ -55,7 +55,7 @@ export function TerrainPanel() {
         </div>
       )}
       {selected && (
-        <div className="cw-brush-row" role="group" aria-label={t('terrain.tiles')} title={t('terrain.tilesHint')}>
+        <div className="cw-brush-row" role="group" aria-label={t('terrain.tiles')}>
           <span className="cw-brush-k">{t('terrain.tiles')}</span>
           {SIDES.map((side) => (
             <Button key={side} size="sm" aria-label={t(`terrain.tile${side}`)} onClick={() => addTile(selected, side)}>

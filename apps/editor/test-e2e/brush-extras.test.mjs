@@ -53,7 +53,7 @@ test('planes, bevels, chosen cuts, glass', async () => {
     const mat = page.getByRole('complementary', { name: 'Material', exact: true });
     await mat.getByRole('slider', { name: 'Glass (see-through)' }).fill('1');
     await until(() => page.evaluate(() => window.__cwStore.getState().session.project.settings.materials[0].refraction), 1, 4000);
-    await page.getByRole('tablist', { name: 'Workspace' }).getByRole('tab', { name: 'Scene' }).click();
+    await page.getByRole('tablist', { name: 'Workspace' }).getByRole('tab', { name: 'Level' }).click();
     await page.getByRole('radio', { name: 'Perspective' }).click();
     await page.getByRole('tree').getByRole('treeitem', { name: 'block_2' }).click();
     await page.getByTestId('viewport').hover();

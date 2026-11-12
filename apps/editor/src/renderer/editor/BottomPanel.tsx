@@ -1,6 +1,7 @@
 /** Bottom workspace: the selected object's script (blocks), assets (prefabs), console and problems. */
 import { ScriptPanel } from './script/ScriptPanel';
 import { compileScript, type Problem, type Script } from '@cocoaworlds/scripting';
+import { IconButton } from '@cocoaworlds/ui';
 import { useEffect, useMemo, useRef } from 'react';
 import { t } from '../i18n';
 import { sceneInfo } from './script/scene-info';
@@ -12,6 +13,8 @@ type Tab = 'console' | 'problems' | 'script' | 'assets';
 export function BottomPanel() {
   const tab = useEditor((s) => s.bottomTab);
   const setTab = useEditor((s) => s.setBottomTab);
+  const mode = useEditor((s) => s.bottomMode);
+  const setMode = useEditor((s) => s.setBottomMode);
   const logs = useEditor((s) => s.logs);
   const problems = logs.filter((l) => l.level !== 'info');
   const scriptProblemCount = useScriptProblems().length;
@@ -29,15 +32,22 @@ export function BottomPanel() {
   ];
 
   return (
-    <section className={`cw-bottom${tab === 'script' ? ' tall' : tab === 'assets' ? ' lib' : ''}`} aria-label="Bottom panel">
-      <div className="cw-tabs" role="tablist">
-        {tabs.map((x) => (
-          <button key={x.id} type="button" role="tab" aria-selected={tab === x.id} className={tab === x.id ? 'on' : ''} onClick={() => setTab(x.id)}>
-            {x.label}
-          </button>
-        ))}
+    <section className={`cw-bottom ${mode}${tab === 'script' ? ' tall' : tab === 'assets' ? ' lib' : ''}`} aria-label="Bottom panel" data-mode={mode}>
+      <div className="cw-tabs">
+        <div className="cw-tabs-list" role="tablist">
+          {tabs.map((x) => (
+            <button key={x.id} type="button" role="tab" aria-selected={mode !== 'collapsed' && tab === x.id} className={mode !== 'collapsed' && tab === x.id ? 'on' : ''} onClick={() => setTab(x.id)}>
+              {x.label}
+            </button>
+          ))}
+        </div>
+        <div className="cw-tabs-tools" role="group" aria-label={t('panel.size')}>
+          <IconButton icon="chevronDown" label={t('panel.collapse')} aria-pressed={mode === 'collapsed'} className={mode === 'collapsed' ? 'on' : ''} onClick={() => setMode('collapsed')} />
+          <IconButton icon="panelBottom" label={t('panel.dock')} aria-pressed={mode === 'docked'} className={mode === 'docked' ? 'on' : ''} onClick={() => setMode('docked')} />
+          <IconButton icon="maximize" label={t('panel.full')} aria-pressed={mode === 'full'} className={mode === 'full' ? 'on' : ''} onClick={() => setMode('full')} />
+        </div>
       </div>
-      <div className={`cw-console cw-scroll${tab === 'assets' ? ' lib' : ''}`} role="tabpanel">
+      <div className={`cw-console cw-scroll${tab === 'assets' ? ' lib' : ''}`} role="tabpanel" hidden={mode === 'collapsed'}>
         {tab === 'script' && <ScriptPanel />}
         {tab === 'assets' && <AssetLibrary />}
         {(tab === 'console' || tab === 'problems') && (

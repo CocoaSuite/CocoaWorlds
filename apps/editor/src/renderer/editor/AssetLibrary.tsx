@@ -274,14 +274,12 @@ function AssetTile({ tile, showKind }: { tile: Tile; showKind: boolean }) {
   let extra: React.ReactNode = null;
   let picture: React.ReactNode;
   let action: string;
-  let title: string;
   let onClick: () => void;
   let onDouble: (() => void) | undefined;
   switch (tile.kind) {
     case 'materials':
       picture = <MaterialPicture def={tile.def} />;
       action = t('assets.paint');
-      title = `${tile.name}${tile.def.graph ? ` · ${t('assets.graphMaterial')}` : ''}\n${t('assets.materialHint')}`;
       onClick = () => {
         st.setWorkspace('scene');
         st.setPaintMaterial(tile.id);
@@ -292,19 +290,16 @@ function AssetTile({ tile, showKind }: { tile: Tile; showKind: boolean }) {
     case 'prefabs':
       picture = tile.model ? <ModelPicture path={tile.model} /> : <span className="cw-lib-pic icon"><Icon name="cube" /></span>;
       action = t('assets.place');
-      title = `${tile.name} · ${t('assets.objects').replace('{n}', String(tile.objects))}\n${tile.path}\n${t('assets.placeHint')}`;
       onClick = () => st.placePrefab(tile.prefabId);
       break;
     case 'models':
       picture = <ModelPicture path={tile.asset.path} />;
       action = t('assets.place');
-      title = `${tile.asset.path} · ${kb(tile.asset.bytes)}\n${t('assets.placeHint')}`;
       onClick = () => st.placeModel(tile.asset.path);
       break;
     case 'textures':
       picture = <TextureSwatch path={tile.asset.path} className="cw-lib-pic tex" />;
       action = t('assets.paint');
-      title = `${tile.asset.path} · ${kb(tile.asset.bytes)}\n${t('assets.paintWith')}`;
       onClick = () => {
         st.setPaintMaterial(tile.asset.path);
         st.setTool('paint');
@@ -317,7 +312,6 @@ function AssetTile({ tile, showKind }: { tile: Tile; showKind: boolean }) {
         </span>
       );
       action = listening ? t('assets.stopListening') : t('assets.listen');
-      title = `${tile.asset.path} · ${kb(tile.asset.bytes)}`;
       onClick = listen;
       break;
     case 'library': {
@@ -328,7 +322,6 @@ function AssetTile({ tile, showKind }: { tile: Tile; showKind: boolean }) {
         </span>
       );
       action = listening ? t('assets.stopListening') : t('assets.listen');
-      title = `${sound.group} · ${sound.name} · ${kb(sound.bytes)}`;
       onClick = listen;
       // Use: into the project's sounds (where Sound components can pick it); a tick once it's there.
       extra = tile.inProject ? (
@@ -340,7 +333,6 @@ function AssetTile({ tile, showKind }: { tile: Tile; showKind: boolean }) {
           type="button"
           className="cw-lib-use"
           aria-label={t('assets.useNamed').replace('{name}', sound.name)}
-          title={t('assets.useHint')}
           onClick={async () => {
             const dir = st.session?.dir;
             if (!dir) return;
@@ -372,7 +364,7 @@ function AssetTile({ tile, showKind }: { tile: Tile; showKind: boolean }) {
       : []),
   ];
   return (
-    <div className={`cw-lib-tile k-${tile.kind}`} role="listitem" aria-label={tile.name} title={title} onContextMenu={(e) => {
+    <div className={`cw-lib-tile k-${tile.kind}`} role="listitem" aria-label={tile.name} onContextMenu={(e) => {
         e.preventDefault();
         setCtx({ x: e.clientX, y: e.clientY });
       }}>

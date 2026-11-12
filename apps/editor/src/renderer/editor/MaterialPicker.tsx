@@ -118,7 +118,7 @@ export function MaterialPicker({ value, onChange, label }: { value: string | nul
           <span className="cw-lib-cur-t">
             <strong>{cur.name}</strong>
             <span>
-              {cur.folder} · {L(`used on ${uses} faces`, `на ${uses} гранях`)}
+              {cur.folder}, {L(`used on ${uses} faces`, `на ${uses} гранях`)}
             </span>
           </span>
           <button type="button" className={`cw-lib-star${favourites.includes(cur.id) ? ' on' : ''}`} aria-label={favourites.includes(cur.id) ? L('Unstar', 'Убрать звезду') : L('Star', 'Отметить звездой')} aria-pressed={favourites.includes(cur.id)} onClick={() => st.toggleFavouriteMaterial(cur.id)}>
@@ -178,7 +178,7 @@ export function MaterialPicker({ value, onChange, label }: { value: string | nul
         {!folders.size && <div className="cw-muted">{L('Nothing matches.', 'Ничего не найдено.')}</div>}
       </div>
       <div className="cw-lib-foot">
-        <span>{L('Right-click: star · Ctrl+click in view: pick up', 'Правый щелчок — звезда · Ctrl+щелчок в виде — взять')}</span>
+        <span>{L('Right-click stars a material. Ctrl+click in the view picks one up.', 'Правый щелчок отмечает материал звездой. Ctrl+щелчок в виде берёт его.')}</span>
         <span className="mono">{items.length}</span>
       </div>
     </div>

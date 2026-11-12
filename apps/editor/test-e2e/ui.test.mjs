@@ -106,7 +106,7 @@ test('screen UI: a shop with a button, a value text and a hotbar', async () => {
     await stage.locator('[data-ui="Pets"]').getByRole('option', { name: 'Dog' }).waitFor();
     await shot(page, 'ui01b-bag');
 
-    await ws.getByRole('tab', { name: 'Scene' }).click();
+    await ws.getByRole('tab', { name: 'Level' }).click();
     await page.getByTestId('viewport').waitFor();
     assert.equal(await page.getByRole('toolbar', { name: 'Tools' }).getByRole('button', { name: /Select/ }).first().getAttribute('aria-pressed'), 'true');
 

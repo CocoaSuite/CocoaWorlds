@@ -29,7 +29,7 @@ test('model materials: per-part materials from the Inspector and the Paint tool'
     await page.getByRole('button', { name: '+ Material', exact: true }).click();
     const props = page.getByRole('complementary', { name: 'Material', exact: true });
     await props.getByLabel('Colour', { exact: true }).fill('#d03020');
-    await ws.getByRole('tab', { name: 'Scene' }).click();
+    await ws.getByRole('tab', { name: 'Level' }).click();
 
     // 1. The chicken's parts are listed under its Model; Body takes the material.
     await page.getByRole('menubar').getByRole('button', { name: 'Add' }).click();

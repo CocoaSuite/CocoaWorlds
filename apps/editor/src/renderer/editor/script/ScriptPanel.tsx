@@ -321,7 +321,7 @@ function GameValues() {
   const edit = (i: number, next: GameValue) => put(list.map((v, j) => (j === i ? next : v)), `Changed the game value ${next.name}`);
   return (
     <div className="cw-vars" aria-label={t('script.gameValues')}>
-      <span className="cw-muted" title={t('script.gameValuesHint')}>
+      <span className="cw-muted">
         {t('script.gameValues')}
       </span>
       {list.map((v, i) => (
@@ -360,7 +360,7 @@ function GameValues() {
             <input type="checkbox" checked={v.show} aria-label={`${v.name}: ${t('script.showOnScreen')}`} onChange={(e) => edit(i, { ...v, show: e.target.checked })} />
             {t('script.showOnScreen')}
           </label>
-          <label className="cw-var-show" title={t('script.keptHint')}>
+          <label className="cw-var-show">
             <input type="checkbox" checked={!!v.saved} aria-label={`${v.name}: ${t('script.kept')}`} onChange={(e) => edit(i, { ...v, saved: e.target.checked })} />
             {t('script.kept')}
           </label>

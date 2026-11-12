@@ -16,7 +16,7 @@ test('navigation: the walkable area is drawn and follows the level', async () =>
     };
     await block([512, 16, 512], [-256, -16, -256]);
     await page.getByRole('menubar').getByRole('button', { name: 'View' }).click();
-    await page.getByRole('menuitem', { name: 'Show where creatures can walk' }).click();
+    await page.getByRole('menuitemcheckbox', { name: 'Show where creatures can walk' }).click();
     const spots = () => page.evaluate(() => window.__cwViewport.navDraw?.userData.spots ?? 0);
     await until(async () => (await spots()) > 500, true, 10000);
     const before = await spots();
@@ -27,7 +27,7 @@ test('navigation: the walkable area is drawn and follows the level', async () =>
     await until(async () => { const n = await spots(); return n === before - 100 + 64; }, true, 10000);
     // Switched off, nothing is drawn.
     await page.getByRole('menubar').getByRole('button', { name: 'View' }).click();
-    await page.getByRole('menuitem', { name: /Show where creatures can walk/ }).click();
+    await page.getByRole('menuitemcheckbox', { name: /Show where creatures can walk/ }).click();
     await until(() => page.evaluate(() => !window.__cwViewport.navDraw), true, 4000);
   } catch (e) {
     await shot(page, 'nav-failure');

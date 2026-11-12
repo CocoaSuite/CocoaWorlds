@@ -24,7 +24,7 @@ test('asset library: categories, search, pictures, place and paint', async () =>
     await page.getByRole('button', { name: '+ Graph material' }).click();
     await until(() => page.getByTestId('bake-status').textContent(), 'Baked', 30000);
     await page.getByRole('button', { name: '+ Material', exact: true }).click();
-    await page.getByRole('tablist', { name: 'Workspace' }).getByRole('tab', { name: 'Scene' }).click();
+    await page.getByRole('tablist', { name: 'Workspace' }).getByRole('tab', { name: 'Level' }).click();
     await page.getByRole('tab', { name: 'Assets' }).click();
     const f = path.join(tmp, 'hay_bale.png'); await fs.writeFile(f, png());
     await page.getByTestId('import-textures').setInputFiles(f);

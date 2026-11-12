@@ -110,7 +110,7 @@ export function ImagesDialog({ ms, onClose }: { ms: MaterialDef[]; onClose: () =
             ]}
           />
         </div>
-        <label className="cw-screens-sw" title={t('mex.ormHint')}>
+        <label className="cw-screens-sw">
           <Switch label={t('mex.orm')} checked={orm} onChange={setOrm} />
           {t('mex.orm')}
         </label>

@@ -468,9 +468,9 @@ export function UvPanel({ pane = false }: { pane?: boolean }) {
         <div className="cw-plants-height">
           {mode === 'uv'
             ? islands.length
-              ? `${islands.length} ${L('faces', 'граней')} · ${materialLabel(faceMat, getLang())} · ${L('G move · R turn · S scale · X/Y axis · A all · wheel zoom · middle-drag pan', 'G двигать · R вращать · S масштаб · X/Y ось · A все · колесо — масштаб · средняя кнопка — сдвиг')}`
+              ? `${islands.length} ${L('faces', 'граней')}, ${materialLabel(faceMat, getLang())}. ${L('G moves, R turns, S scales, X or Y locks an axis, A selects all. Wheel zooms, middle-drag pans.', 'G двигает, R вращает, S масштабирует, X или Y фиксирует ось, A выделяет всё. Колесо масштабирует, средняя кнопка сдвигает.')}`
               : L('Select faces (Face tool) or brushes to see their UVs.', 'Выберите грани (инструмент «Грани») или браши, чтобы увидеть их UV.')
-            : `${def ? def.name : L('No project materials yet', 'Пока нет материалов проекта')} · ${L('drag to draw a rectangle · click to select · Delete removes', 'тяните, чтобы нарисовать прямоугольник · щелчок — выбрать · Delete — удалить')}`}
+            : `${def ? def.name : L('No project materials yet', 'Пока нет материалов проекта')}. ${L('Drag to draw a rectangle, click to select, Delete removes.', 'Тяните, чтобы нарисовать прямоугольник, щелчок выделяет, Delete удаляет.')}`}
         </div>
       </div>
       <aside className="cw-plants-props" aria-label={L('UV editor', 'Редактор UV')}>

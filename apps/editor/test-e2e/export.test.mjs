@@ -81,7 +81,7 @@ test('export: web and desktop games, with saved progress', async () => {
     const text = page.getByRole('complementary', { name: 'Screen element' }).getByLabel('Text', { exact: true });
     await text.fill('Coins: {Cash}');
     await text.press('Enter');
-    await ws.getByRole('tab', { name: 'Scene' }).click();
+    await ws.getByRole('tab', { name: 'Level' }).click();
 
     // Play in the editor keeps it too: 1, then 2.
     for (const want of ['Coins: 1', 'Coins: 2']) {
