@@ -35,6 +35,7 @@ Options (after `--`, e.g. `npm run bench -- --seconds 60`):
 | `--build` | Build the editor first (it is built by itself only when it has never been built). |
 | `--software` | Draw with the software renderer instead of the graphics card (for machines without one; much slower). |
 | `--breakdown` | Also count draw calls and time per pass (main view, the sun's shadow, each bulb's shadow, reflections, effects). The time waits for the graphics card after each pass, so it shows which pass is slow. |
+| `--project <folder>` | Play a copy of your own project (its first scene) instead of the bench level; the original folder is not touched. The player only turns and walks (no rockets). |
 | `--profile` | Also record where the UI thread's time goes, function by function (two tables in the `.md`, and a `.cpuprofile` file DevTools can open). |
 
 If it fails, it says why and leaves a picture of the window in `tools/bench/results/failure.png`.

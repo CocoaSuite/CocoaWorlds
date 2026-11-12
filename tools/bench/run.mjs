@@ -21,6 +21,8 @@ const option = (name, fallback) => {
 const SECONDS = Number(option('seconds', 30));
 const WARMUP = 8;
 const SOFTWARE = flag('software');
+/** --project <folder>: play a copy of this project (its first scene) instead of the bench level. */
+const PROJECT = option('project', null);
 const log = (...a) => console.log('[bench]', ...a);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -113,6 +115,20 @@ async function quit(app) {
 let app, page;
 const resultsDir = path.join(here, 'results');
 try {
+  let projectName = 'Bench';
+  if (PROJECT) {
+    // A copy, so the original is never touched (Play can save progress, and the editor may tidy files on open).
+    const src = path.resolve(PROJECT);
+    const file = (await fs.readdir(src)).find((f) => f.endsWith('.cwproj'));
+    if (!file) throw new Error(`no .cwproj file in ${src}`);
+    projectName = JSON.parse(await fs.readFile(path.join(src, file), 'utf8')).name ?? path.basename(src);
+    log(`copying ${projectName} from ${src}…`);
+    await fs.mkdir(projectsDir, { recursive: true });
+    await fs.cp(src, path.join(projectsDir, path.basename(src)), { recursive: true, filter: (f) => !/[\\/](node_modules|\.git|export|builds?)$/.test(f) });
+    // Listed under Projects, as if opened before.
+    await fs.mkdir(userData, { recursive: true });
+    await fs.writeFile(path.join(userData, 'settings.json'), JSON.stringify({ recent: [{ name: projectName, dir: path.join(projectsDir, path.basename(src)), openedAt: new Date().toISOString() }] }));
+  } else {
   // A new project, made the way a person makes one.
   log('making the bench project…');
   ({ app, page } = await launch());
@@ -135,12 +151,14 @@ try {
   const old = JSON.parse(await fs.readFile(sceneFile, 'utf8'));
   const scene = benchScene();
   await fs.writeFile(sceneFile, JSON.stringify({ ...old, schemaVersion: scene.schemaVersion, entities: scene.entities, settings: { ...old.settings, ui: scene.settings.ui } }, null, 2));
+  }
 
   // Open it and play.
   log('opening it…');
   ({ app, page } = await launch());
-  await page.getByRole('button', { name: /Bench/ }).click();
-  await page.getByRole('tree').getByRole('treeitem', { name: /crate/ }).first().waitFor();
+  const esc = projectName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  await page.getByRole('button', { name: new RegExp(esc) }).first().click();
+  await page.getByRole('tree').getByRole('treeitem', PROJECT ? {} : { name: /crate/ }).first().waitFor();
   await until(() => page.evaluate(() => !!window.__cwViewport && !window.__cwViewport.world.building), 120000, 'the level to build');
   await sleep(1000);
   log('playing…');
@@ -165,12 +183,15 @@ try {
       pixelRatio: window.devicePixelRatio,
     };
   });
-  // The player turns round slowly and walks about; a rocket every three seconds.
-  await page.evaluate(() => {
+  // The player turns round slowly and walks about; on the bench level, a rocket every three seconds. (In a project of
+  // your own nothing is given or fired: only turning and walking.)
+  await page.evaluate((own) => {
     const p = window.__cwViewport.play;
-    p.giveItem('Launcher', 1);
-    p.giveItem('Rockets', 999);
-    p.selectSlot(0);
+    if (!own) {
+      p.giveItem('Launcher', 1);
+      p.giveItem('Rockets', 999);
+      p.selectSlot(0);
+    }
     const t0 = performance.now();
     let fired = 0;
     window.__benchDrive = setInterval(() => {
@@ -178,12 +199,12 @@ try {
       if (!q) return;
       const t = (performance.now() - t0) / 1000;
       q.setInput({ yaw: -0.6 + t * 0.5, pitch: -0.08 + Math.sin(t * 0.7) * 0.06, forward: Math.sin(t * 0.4) > -0.3 ? 1 : 0, right: Math.sin(t * 0.23) * 0.6 });
-      if (t - fired > 3) {
+      if (!own && t - fired > 3) {
         fired = t;
         q.useItem();
       }
     }, 16);
-  });
+  }, !!PROJECT);
   log(`warming up ${WARMUP} s…`);
   await sleep(WARMUP * 1000);
   // Where the draw calls come from, over a few frames (--breakdown): each shadow-casting light, each render.
@@ -300,7 +321,7 @@ try {
   const m = summary.ms;
   const row = (name, s) => `| ${name} | ${s.mean} | ${s.median} | ${s.p95} | ${s.p99} | ${s.worst} |`;
   const md = [
-    `# Bench ${summary.date.slice(0, 16).replace('T', ' ')} (commit ${commit})`,
+    `# Bench ${summary.date.slice(0, 16).replace('T', ' ')} (commit ${commit})${PROJECT ? ` · project: ${projectName}` : ''}`,
     '',
     `${summary.machine.gpu} · ${summary.machine.cpu} (${summary.machine.cores} threads, ${summary.machine.memoryGB} GB) · ${summary.machine.os} · Electron ${electronVersion} · canvas ${machine.canvas.join('×')}${SOFTWARE ? ' · software GPU' : ''}`,
     '',
