@@ -154,6 +154,7 @@ export function SkyPanel() {
             <option value="words">right, left, top…</option>
             <option value="axes">px, nx, py…</option>
             <option value="unity">Unity (Right, Up…)</option>
+            <option value="roblox">Roblox (Ft, Bk, Up…)</option>
           </select>
         </Row>
         <Row label={L('Layout', 'Раскладка')}>

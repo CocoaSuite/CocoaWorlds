@@ -465,13 +465,31 @@ export const SKYBOX_FACES: { key: 'right' | 'left' | 'top' | 'bottom' | 'front' 
   { key: 'back', dir: [0, 0, 1], up: [0, 1, 0] },
 ];
 
-export type SkyBoxNaming = 'words' | 'axes' | 'unity';
+export type SkyBoxNaming = 'words' | 'axes' | 'unity' | 'roblox';
 export type SkyBoxLayout = 'files' | 'cross' | 'strip';
 const FACE_NAMES: Record<SkyBoxNaming, Record<(typeof SKYBOX_FACES)[number]['key'], string>> = {
   words: { right: 'right', left: 'left', top: 'top', bottom: 'bottom', front: 'front', back: 'back' },
   axes: { right: 'px', left: 'nx', top: 'py', bottom: 'ny', front: 'pz', back: 'nz' }, // the usual skybox convention: front is +Z
   unity: { right: 'Right', left: 'Left', top: 'Up', bottom: 'Down', front: 'Front', back: 'Back' },
+  // Roblox's Sky: its Bk slot takes our front (and Ft our back); Up and Dn are turned (see FACE_TURN).
+  roblox: { right: 'Rt', left: 'Lf', top: 'Up', bottom: 'Dn', front: 'Bk', back: 'Ft' },
 };
+/** Faces a target wants turned (degrees, clockwise). */
+const FACE_TURN: Partial<Record<SkyBoxNaming, Partial<Record<(typeof SKYBOX_FACES)[number]['key'], number>>>> = {
+  roblox: { top: 90, bottom: -90 },
+};
+/** A face as the target wants it: the renderer's picture, turned if need be. */
+function turned(src: HTMLCanvasElement, deg: number | undefined): HTMLCanvasElement {
+  if (!deg) return src;
+  const c = document.createElement('canvas');
+  c.width = src.width;
+  c.height = src.height;
+  const g = c.getContext('2d')!;
+  g.translate(c.width / 2, c.height / 2);
+  g.rotate((deg * Math.PI) / 180);
+  g.drawImage(src, -src.width / 2, -src.height / 2);
+  return c;
+}
 /** Where each face sits in a 4×3 horizontal cross (column, row). */
 const CROSS: Record<string, [number, number]> = { top: [1, 0], left: [0, 1], front: [1, 1], right: [2, 1], back: [3, 1], bottom: [1, 2] };
 
@@ -508,10 +526,11 @@ export async function skyBoxPngs(
       cam.lookAt(...f.dir);
       cam.updateMatrixWorld();
       r.render(scene, cam);
-      if (!sheet) out.push({ name: `sky_${FACE_NAMES[naming][f.key]}.png`, bytes: await pngOf(r.domElement) });
+      const face = turned(r.domElement, FACE_TURN[naming]?.[f.key]);
+      if (!sheet) out.push({ name: `sky_${FACE_NAMES[naming][f.key]}.png`, bytes: await pngOf(face) });
       else {
         const [cx, cy] = layout === 'cross' ? CROSS[f.key]! : [i, 0];
-        sheet.getContext('2d')!.drawImage(r.domElement, cx * size, cy * size);
+        sheet.getContext('2d')!.drawImage(face, cx * size, cy * size);
       }
     }
     if (sheet) out.push({ name: `sky_${layout}.png`, bytes: await pngOf(sheet) });
