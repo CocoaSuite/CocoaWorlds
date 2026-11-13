@@ -239,7 +239,7 @@ export function skyOf(s: SkySettings | undefined): Required<SkySettings> {
   return {
     ...defaultSky(),
     haze: 0.4,
-    sunSize: 1.6,
+    sunSize: 5,
     sunGlow: 0.5,
     clouds: 0,
     cloudSoftness: 0.5,
@@ -263,12 +263,12 @@ export interface SavedSky {
 
 /** Ready-made skies, each with where its sun stands (degrees up, its colour and brightness). */
 export const SKY_PRESETS: { key: string; name: { en: string; ru: string }; sky: Omit<SkySettings, 'enabled'>; sun: { height: number; colour: string; intensity: number } }[] = [
-  { key: 'day', name: { en: 'Clear day', ru: 'Ясный день' }, sky: { top: '#3f78c9', horizon: '#cfe3f3', ground: '#4a4740', haze: 0.35, sunSize: 1.6, sunGlow: 0.55, clouds: 0.28, cloudSoftness: 0.5, cloudSize: 1, cloudSpeed: 0.5, cloudColour: '#ffffff', cloudShade: '#a3afbd', stars: 0, lightFromSky: true }, sun: { height: 55, colour: '#fff4e0', intensity: 2.2 } },
-  { key: 'morning', name: { en: 'Morning', ru: 'Утро' }, sky: { top: '#6f9ad0', horizon: '#f3d7b8', ground: '#4a4238', haze: 0.6, sunSize: 2, sunGlow: 0.7, clouds: 0.3, cloudSoftness: 0.55, cloudSize: 1.2, cloudSpeed: 0.4, cloudColour: '#fff1e2', cloudShade: '#a99aa6', stars: 0, lightFromSky: true }, sun: { height: 14, colour: '#ffd9a8', intensity: 1.6 } },
-  { key: 'sunset', name: { en: 'Sunset', ru: 'Закат' }, sky: { top: '#2f3f75', horizon: '#ff9a5c', ground: '#3a2c2a', haze: 0.8, sunSize: 2.6, sunGlow: 0.9, clouds: 0.45, cloudSoftness: 0.45, cloudSize: 1.3, cloudSpeed: 0.3, cloudColour: '#ffc9a0', cloudShade: '#6a4a6a', stars: 0.15, lightFromSky: true }, sun: { height: 4, colour: '#ffad6b', intensity: 1.3 } },
+  { key: 'day', name: { en: 'Clear day', ru: 'Ясный день' }, sky: { top: '#3f78c9', horizon: '#cfe3f3', ground: '#4a4740', haze: 0.35, sunSize: 5, sunGlow: 0.55, clouds: 0.28, cloudSoftness: 0.5, cloudSize: 1, cloudSpeed: 0.5, cloudColour: '#ffffff', cloudShade: '#a3afbd', stars: 0, lightFromSky: true }, sun: { height: 55, colour: '#fff4e0', intensity: 2.2 } },
+  { key: 'morning', name: { en: 'Morning', ru: 'Утро' }, sky: { top: '#6f9ad0', horizon: '#f3d7b8', ground: '#4a4238', haze: 0.6, sunSize: 6, sunGlow: 0.7, clouds: 0.3, cloudSoftness: 0.55, cloudSize: 1.2, cloudSpeed: 0.4, cloudColour: '#fff1e2', cloudShade: '#a99aa6', stars: 0, lightFromSky: true }, sun: { height: 14, colour: '#ffd9a8', intensity: 1.6 } },
+  { key: 'sunset', name: { en: 'Sunset', ru: 'Закат' }, sky: { top: '#2f3f75', horizon: '#ff9a5c', ground: '#3a2c2a', haze: 0.8, sunSize: 7.5, sunGlow: 0.9, clouds: 0.45, cloudSoftness: 0.45, cloudSize: 1.3, cloudSpeed: 0.3, cloudColour: '#ffc9a0', cloudShade: '#6a4a6a', stars: 0.15, lightFromSky: true }, sun: { height: 4, colour: '#ffad6b', intensity: 1.3 } },
   { key: 'overcast', name: { en: 'Overcast', ru: 'Пасмурно' }, sky: { top: '#8d99a6', horizon: '#c3cad1', ground: '#4c4f52', haze: 0.9, sunSize: 0, sunGlow: 0.15, clouds: 0.88, cloudSoftness: 0.75, cloudSize: 1.4, cloudSpeed: 0.6, cloudColour: '#d9dde2', cloudShade: '#8a9098', stars: 0, lightFromSky: true }, sun: { height: 50, colour: '#e8eef5', intensity: 0.8 } },
   { key: 'storm', name: { en: 'Stormy', ru: 'Гроза' }, sky: { top: '#3b4450', horizon: '#7d858d', ground: '#2b2d30', haze: 0.7, sunSize: 0, sunGlow: 0.1, clouds: 0.72, cloudSoftness: 0.3, cloudSize: 0.7, cloudSpeed: 2, cloudColour: '#9aa2ab', cloudShade: '#3c434c', stars: 0, lightFromSky: true }, sun: { height: 30, colour: '#c9d2dc', intensity: 0.7 } },
-  { key: 'night', name: { en: 'Night', ru: 'Ночь' }, sky: { top: '#050a1a', horizon: '#1b2440', ground: '#0a0b10', haze: 0.5, sunSize: 1.3, sunGlow: 0.25, clouds: 0.15, cloudSoftness: 0.6, cloudSize: 1, cloudSpeed: 0.3, cloudColour: '#3a4560', cloudShade: '#141a2a', stars: 0.9, lightFromSky: true }, sun: { height: 40, colour: '#9fb3d9', intensity: 0.35 } },
+  { key: 'night', name: { en: 'Night', ru: 'Ночь' }, sky: { top: '#050a1a', horizon: '#1b2440', ground: '#0a0b10', haze: 0.5, sunSize: 4, sunGlow: 0.25, clouds: 0.15, cloudSoftness: 0.6, cloudSize: 1, cloudSpeed: 0.3, cloudColour: '#3a4560', cloudShade: '#141a2a', stars: 0.9, lightFromSky: true }, sun: { height: 40, colour: '#9fb3d9', intensity: 0.35 } },
 ];
 
 /** A scene's settings with everything filled in (older files lack the sky). */

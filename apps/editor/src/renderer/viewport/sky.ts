@@ -21,7 +21,7 @@ export function skyMaterial(): THREE.ShaderMaterial {
       haze: { value: 0.4 },
       sunDir: { value: DEFAULT_SUN_DIR.clone() },
       sunColour: { value: new THREE.Color(1, 1, 1) },
-      sunSize: { value: 1.6 },
+      sunSize: { value: 5 },
       sunGlow: { value: 0.5 },
       clouds: { value: 0 },
       cloudSoft: { value: 0.5 },
@@ -70,8 +70,10 @@ export function skyMaterial(): THREE.ShaderMaterial {
         c += sunColour * sunGlow * (pow(max(s, 0.0), 6.0) * 0.25 + pow(max(s, 0.0), 48.0) * 0.6) * mix(1.0, 0.6, above * y);
         // The disc.
         if (sunSize > 0.0) {
-          float r = cos(radians(sunSize * 0.5));
-          float disc = smoothstep(r - (1.0 - r) * 0.25, r + (1.0 - r) * 0.1, s) * above;
+          // Soft-edged: fades from 60% of its radius out to 140%.
+          float a = degrees(acos(clamp(s, -1.0, 1.0)));
+          float R = sunSize * 0.5;
+          float disc = (1.0 - smoothstep(R * 0.6, R * 1.4, a)) * above;
           c = mix(c, sunColour * 1.4 + 0.25, disc);
         }
         // Stars where the sky is dark.
@@ -184,6 +186,43 @@ export async function skyEnvPng(settings: SkySettings | undefined, sun: { dir: T
     mat.dispose();
     quad.dispose();
     cube.dispose();
+    r.dispose();
+  }
+}
+
+/** Skybox faces, as a viewer at the centre sees them (front: -Z; top/bottom seen while facing front). */
+export const SKYBOX_FACES: { name: string; dir: [number, number, number]; up: [number, number, number] }[] = [
+  { name: 'right', dir: [1, 0, 0], up: [0, 1, 0] },
+  { name: 'left', dir: [-1, 0, 0], up: [0, 1, 0] },
+  { name: 'top', dir: [0, 1, 0], up: [0, 0, 1] },
+  { name: 'bottom', dir: [0, -1, 0], up: [0, 0, -1] },
+  { name: 'front', dir: [0, 0, -1], up: [0, 1, 0] },
+  { name: 'back', dir: [0, 0, 1], up: [0, 1, 0] },
+];
+
+/** The sky cut into six square skybox textures (PNG each). */
+export async function skyBoxPngs(settings: SkySettings | undefined, sun: { dir: THREE.Vector3; colour: THREE.Color } | null, size = 1024): Promise<{ name: string; bytes: Uint8Array }[]> {
+  const r = new THREE.WebGLRenderer({ preserveDrawingBuffer: true });
+  const mat = skyMaterial();
+  try {
+    applySky(mat, settings, sun);
+    const scene = new THREE.Scene();
+    scene.add(skyMesh(mat));
+    r.setSize(size, size, false);
+    const cam = new THREE.PerspectiveCamera(90, 1, 0.1, 5000);
+    const out: { name: string; bytes: Uint8Array }[] = [];
+    for (const f of SKYBOX_FACES) {
+      cam.up.set(...f.up);
+      cam.lookAt(...f.dir);
+      cam.updateMatrixWorld();
+      r.render(scene, cam);
+      const blob = await new Promise<Blob | null>((ok) => r.domElement.toBlob(ok, 'image/png'));
+      if (!blob) throw new Error('The sky could not be drawn.');
+      out.push({ name: `sky_${f.name}.png`, bytes: new Uint8Array(await blob.arrayBuffer()) });
+    }
+    return out;
+  } finally {
+    mat.dispose();
     r.dispose();
   }
 }

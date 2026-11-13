@@ -11,7 +11,7 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { getLang } from '../i18n';
 import { useEditor } from '../store';
 import { PLANT_TIME, aimRim, plantGeometry, plantMaterial, setPlantWind } from '../viewport/plants';
-import { applySky, skyAmbient, skyEnvPng, skyMaterial, skyMesh, sunSkyColour } from '../viewport/sky';
+import { applySky, skyAmbient, skyBoxPngs, skyEnvPng, skyMaterial, skyMesh, sunSkyColour } from '../viewport/sky';
 import { Row } from './MaterialsPanel';
 
 const L = (en: string, ru: string) => (getLang() === 'ru' ? ru : en);
@@ -64,13 +64,14 @@ export function SkyPanel() {
     st.setSkies([...saved, item], 'Save sky');
     setRenaming(item.id);
   };
-  const exportEnv = async () => {
+  const exportSky = async (as: 'env' | 'box') => {
     try {
       const r = await window.cocoa.materials.pickFolder(L('Export sky to…', 'Экспорт неба в…'));
       if (!r.ok) throw new Error(r.error);
       if (!r.value) return;
-      const bytes = await skyEnvPng(sky, sun ? { dir: sun.toward, colour: sunSkyColour(sun.colour, sun.intensity) } : null);
-      const w = await window.cocoa.materials.writeFiles(r.value, [{ name: 'sky_env.png', bytes }]);
+      const lit = sun ? { dir: sun.toward, colour: sunSkyColour(sun.colour, sun.intensity) } : null;
+      const files = as === 'env' ? [{ name: 'sky_env.png', bytes: await skyEnvPng(sky, lit) }] : await skyBoxPngs(sky, lit);
+      const w = await window.cocoa.materials.writeFiles(r.value, files);
       if (!w.ok) throw new Error(w.error);
       st.notify(L('Sky exported', 'Небо экспортировано'));
     } catch (e) {
@@ -137,7 +138,8 @@ export function SkyPanel() {
           ))}
         </div>
         <Button onClick={save}>{L('Save this sky', 'Сохранить это небо')}</Button>
-        <Button onClick={() => void exportEnv()}>{L('Export sky as env texture', 'Экспорт неба как текстуры окружения')}</Button>
+        <Button onClick={() => void exportSky('env')}>{L('Export sky as env texture', 'Экспорт неба как текстуры окружения')}</Button>
+        <Button onClick={() => void exportSky('box')}>{L('Export sky as skybox (6 squares)', 'Экспорт неба как скайбокса (6 квадратов)')}</Button>
         <div className="cw-muted cw-hint">{L('A preset also sets the scene’s Sun: its height, colour and brightness (not its direction). Saved skies are kept in the project, for every scene; double-click one to rename it.', 'Заготовка задаёт и Солнце сцены: высоту, цвет и яркость (не направление). Сохранённое небо хранится в проекте, для всех сцен; двойной щелчок — переименовать.')}</div>
       </aside>
       <div className="cw-plants-view">
