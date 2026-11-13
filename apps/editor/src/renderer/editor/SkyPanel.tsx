@@ -90,7 +90,7 @@ export function SkyPanel() {
       </Row>
     );
   };
-  const colour = (k: 'top' | 'horizon' | 'ground' | 'cloudColour' | 'cloudShade' | 'mtnRock' | 'mtnSnowColour' | 'valleyFogColour', label: string) => (
+  const colour = (k: 'top' | 'horizon' | 'ground' | 'cloudColour' | 'cloudShade' | 'mtnRock' | 'mtnSnowColour' | 'valleyFogColour' | 'seaColour', label: string) => (
     <Row label={label}>
       <ColorField label={label} value={sky[k]} onChange={(v) => setSky({ [k]: v }, k)} />
     </Row>
@@ -239,6 +239,18 @@ export function SkyPanel() {
             {num('valleyFog', L('Valley fog', 'Туман в долинах'), 0, 1, 0.05)}
             {num('valleyFogHeight', L('Fog height', 'Высота тумана'), 0.1, 10, 0.1, '°')}
             {colour('valleyFogColour', L('Fog colour', 'Цвет тумана'))}
+          </>
+        )}
+        <div className="cw-lib-cats-h">{L('Sea', 'Море')}</div>
+        <Row label={L('Sea', 'Море')}>
+          <Switch label={L('Sea on', 'Море включено')} checked={sky.sea} onChange={(v) => setSky({ sea: v })} />
+        </Row>
+        {sky.sea && (
+          <>
+            {colour('seaColour', L('Water colour', 'Цвет воды'))}
+            {num('seaWaves', L('Wave size', 'Размер волн'), 0.1, 5, 0.1, '×')}
+            {num('seaChop', L('Choppiness', 'Волнение'), 0, 1, 0.05)}
+            {num('seaReflect', L('Reflection', 'Отражение'), 0, 1, 0.05)}
           </>
         )}
         <div className="cw-lib-cats-h">{L('Night', 'Ночь')}</div>

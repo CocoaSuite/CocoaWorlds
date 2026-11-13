@@ -43,6 +43,11 @@ export function skyMaterial(): THREE.ShaderMaterial {
       vFog: { value: 0 },
       vFogHeight: { value: 1.5 },
       vFogCol: { value: new THREE.Color() },
+      sea: { value: 0 },
+      seaCol: { value: new THREE.Color() },
+      seaWaves: { value: 1 },
+      seaChop: { value: 0.5 },
+      seaReflect: { value: 0.8 },
       time: SKY_TIME,
     },
     vertexShader: /* glsl */ `
@@ -63,6 +68,7 @@ export function skyMaterial(): THREE.ShaderMaterial {
       uniform vec3 mtnRock; uniform vec3 mtnSnowCol;
       uniform float mtnSeed; uniform float mtnLayers; uniform float mtnDetail; uniform float mtnSmooth;
       uniform float vFog; uniform float vFogHeight; uniform vec3 vFogCol;
+      uniform float sea; uniform vec3 seaCol; uniform float seaWaves; uniform float seaChop; uniform float seaReflect;
       varying vec3 vDir;
       float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
       float hash3(vec3 p) { return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453); }
@@ -112,8 +118,7 @@ export function skyMaterial(): THREE.ShaderMaterial {
         }
         return v / max(tot, 1e-4);
       }
-      void main() {
-        vec3 d = normalize(vDir);
+      vec3 skyColour(vec3 d) {
         float y = d.y;
         // Gradient: haze lifts the horizon's colour higher up the sky.
         vec3 c = y >= 0.0 ? mix(horizon, top, pow(y, mix(0.9, 0.25, haze))) : mix(horizon, ground, pow(-y, 0.4));
@@ -154,7 +159,8 @@ export function skyMaterial(): THREE.ShaderMaterial {
         // with valley fog lying between them.
         float maxH = radians(mtnHeight) * 1.8;
         float el = asin(clamp(y, -1.0, 1.0));
-        if (mtn > 0.5 && el > -0.02 && el < maxH) {
+        float foot = maxH * 0.25; // the ranges carry on below the horizon, fading into the ground
+        if (mtn > 0.5 && el > -foot && el < maxH) {
           float az = atan(d.x, d.z);
           vec2 circ = vec2(cos(az), sin(az));
           float sunAz = atan(sunDir.x, sunDir.z);
@@ -199,6 +205,7 @@ export function skyMaterial(): THREE.ShaderMaterial {
               // Haze: thicker for farther ranges and near each range's foot.
               float hz = (2.0 - fl) * 0.3 + 0.05 + (1.0 - smoothstep(0.0, scale * 0.3, el)) * 0.3;
               col = mix(col, c, clamp(hz * (0.6 + haze * 0.6), 0.0, 1.0));
+              col = mix(col, c, 1.0 - smoothstep(-foot, scale * 0.15, el)); // fade out at the foot
               c = mix(c, col, cover);
             }
             // Valley fog in front of this range (behind the nearer ones): a wispy band low on the horizon.
@@ -207,9 +214,48 @@ export function skyMaterial(): THREE.ShaderMaterial {
               float wisp = vnoise(vec3(circ * (24.0 + fl * 9.0), el / max(fh, 1e-4) * 1.5 + time * 0.02 + fl * 5.0));
               float band = 1.0 - smoothstep(0.0, fh, el + (wisp - 0.5) * fh * 0.8);
               vec3 fc = vFogCol * mix(vec3(0.75), sunLight, 0.45);
-              c = mix(c, fc, clamp(band * vFog * 0.55, 0.0, 1.0));
+              c = mix(c, fc, clamp(band * vFog * 0.55 * smoothstep(-foot, -foot * 0.2, el), 0.0, 1.0));
             }
           }
+        }
+        return c;
+      }
+      // Waves: a few drifting noise layers; returns the height's slope (d/dx, d/dz) at p.
+      vec2 waveSlope(vec2 p, float fade) {
+        vec2 g = vec2(0.0);
+        float a = 1.0, f = 1.0;
+        for (int i = 0; i < 5; i++) {
+          vec2 q = p * f + vec2(time * 0.35, time * 0.21) * (1.0 + float(i) * 0.3);
+          float e = 0.05;
+          vec3 b = vec3(q, float(i) * 3.1);
+          g += a * vec2(vnoise(b + vec3(e, 0, 0)) - vnoise(b - vec3(e, 0, 0)), vnoise(b + vec3(0, e, 0)) - vnoise(b - vec3(0, e, 0))) / (2.0 * e);
+          a *= 0.5 * fade; f *= 2.1;
+        }
+        return g;
+      }
+      void main() {
+        vec3 d = normalize(vDir);
+        vec3 c;
+        if (sea > 0.5 && d.y < 0.0) {
+          // The sea: a flat plane below, rippled by waves (calmer with distance, so it doesn't shimmer), reflecting the sky.
+          float t = 1.0 / max(-d.y, 1e-3);
+          vec2 p = d.xz * t * 6.0 / max(seaWaves, 0.05);
+          float dist = smoothstep(4.0, 60.0, t);
+          vec2 g = waveSlope(p, 1.0 - dist * 0.6) * seaChop * 0.25 * (1.0 - dist * 0.85);
+          vec3 n = normalize(vec3(-g.x, 1.0, -g.y));
+          vec3 r = reflect(d, n);
+          r.y = abs(r.y);
+          float fres = 0.02 + 0.98 * pow(1.0 - max(dot(-d, n), 0.0), 5.0);
+          vec3 refl = skyColour(normalize(r));
+          vec3 body = seaCol * (top * 0.35 + horizon * 0.25 + sunColour * max(sunDir.y, 0.0) * 0.35);
+          c = mix(body, refl, clamp(fres * seaReflect + seaReflect * 0.25, 0.0, 1.0));
+          // Glitter: the sun's sparkle on the wave faces.
+          c += sunColour * pow(max(dot(normalize(r), sunDir), 0.0), 300.0) * 2.0 * seaReflect * step(0.0, sunDir.y);
+          // Toward the horizon it melts into the sky's horizon colour (with the sun's glow there), so there's no line.
+          float meet = pow(1.0 - smoothstep(0.0, 0.03 + haze * 0.12, -d.y), 1.5);
+          if (meet > 0.002) c = mix(c, skyColour(normalize(vec3(d.x, 0.002, d.z))), meet);
+        } else {
+          c = skyColour(d);
         }
         gl_FragColor = vec4(c, 1.0);
         #include <colorspace_fragment>
@@ -251,6 +297,11 @@ export function applySky(m: THREE.ShaderMaterial, settings: SkySettings | undefi
   u.vFog!.value = s.valleyFog;
   u.vFogHeight!.value = s.valleyFogHeight;
   u.vFogCol!.value.set(s.valleyFogColour);
+  u.sea!.value = s.sea ? 1 : 0;
+  u.seaCol!.value.set(s.seaColour);
+  u.seaWaves!.value = s.seaWaves;
+  u.seaChop!.value = s.seaChop;
+  u.seaReflect!.value = s.seaReflect;
 }
 
 /** A sky dome that follows the camera (so it never gets nearer). */

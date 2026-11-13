@@ -246,6 +246,12 @@ export interface SkySettings {
   valleyFog?: number;
   valleyFogHeight?: number;
   valleyFogColour?: string;
+  /** A sea below the horizon: on, its colour, wave size (×), choppiness (0…1) and how much it reflects (0…1). */
+  sea?: boolean;
+  seaColour?: string;
+  seaWaves?: number;
+  seaChop?: number;
+  seaReflect?: number;
 }
 
 export const defaultSky = (): SkySettings => ({ enabled: true, top: '#4a7fc1', horizon: '#c9dcef', ground: '#3b3a36' });
@@ -278,6 +284,11 @@ export function skyOf(s: SkySettings | undefined): Required<SkySettings> {
     valleyFog: 0,
     valleyFogHeight: 1.5,
     valleyFogColour: '#e6ebf0',
+    sea: false,
+    seaColour: '#1d4a5e',
+    seaWaves: 1,
+    seaChop: 0.5,
+    seaReflect: 0.8,
     ...(s ?? {}),
   } as Required<SkySettings>;
 }
