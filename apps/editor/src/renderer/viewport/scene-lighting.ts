@@ -10,7 +10,7 @@ import { dayOf, readComponent, sceneSettings, skyOf, type DayCycle, type EntityD
 import { MOON, dayLook } from './day';
 import * as THREE from 'three';
 import { setReflection } from './project-materials';
-import { applySky, skyAmbient, skyMaterial, skyMesh, sunSkyColour } from './sky';
+import { applySky, cachedSkyMesh, disposeSky, skyAmbient, skyMaterial, sunSkyColour } from './sky';
 
 type LightData = {
   kind: 'point' | 'spot' | 'directional';
@@ -92,7 +92,7 @@ export class SceneLighting {
   constructor() {
     this.group.name = 'scene-lighting';
     this.skyMat = skyMaterial();
-    this.sky = skyMesh(this.skyMat);
+    this.sky = cachedSkyMesh(this.skyMat);
   }
 
   /**
@@ -348,7 +348,7 @@ export class SceneLighting {
 
   dispose(): void {
     this.clear();
-    this.sky.geometry.dispose();
+    disposeSky(this.sky);
     this.skyMat.dispose();
   }
 }

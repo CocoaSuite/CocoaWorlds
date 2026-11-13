@@ -11,7 +11,7 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { getLang } from '../i18n';
 import { useEditor } from '../store';
 import { PLANT_TIME, aimRim, plantGeometry, plantMaterial, setPlantWind } from '../viewport/plants';
-import { applySky, skyAmbient, skyBoxPngs, skyEnvPng, type SkyBoxLayout, type SkyBoxNaming, skyMaterial, skyMesh, sunSkyColour } from '../viewport/sky';
+import { applySky, skyAmbient, skyBoxPngs, skyEnvPng, type SkyBoxLayout, type SkyBoxNaming, skyMaterial, cachedSkyMesh, disposeSky, sunSkyColour } from '../viewport/sky';
 import { Row } from './MaterialsPanel';
 
 const L = (en: string, ru: string) => (getLang() === 'ru' ? ru : en);
@@ -301,7 +301,7 @@ function SkyPreview({ sky, ambient, sun }: { sky: SkySettings | undefined; ambie
     el.appendChild(r.domElement);
     const scene = new THREE.Scene();
     const mat = skyMaterial();
-    const dome = skyMesh(mat);
+    const dome = cachedSkyMesh(mat);
     scene.add(dome);
     const hemi = new THREE.HemisphereLight('#ffffff', '#444444', 1);
     const light = new THREE.DirectionalLight('#ffffff', 2);
@@ -355,6 +355,7 @@ function SkyPreview({ sky, ambient, sun }: { sky: SkySettings | undefined; ambie
     return () => {
       cancelAnimationFrame(raf);
       ctl.dispose();
+      disposeSky(dome);
       mat.dispose();
       r.dispose();
       el.removeChild(r.domElement);

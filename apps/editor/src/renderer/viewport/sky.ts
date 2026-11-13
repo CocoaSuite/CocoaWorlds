@@ -436,6 +436,7 @@ export async function skyEnvPng(settings: SkySettings | undefined, sun: { dir: T
   });
   try {
     applySky(mat, settings, sun);
+    mat.uniforms.time = { value: SKY_TIME.value }; // one moment for every face (clouds drift otherwise)
     const scene = new THREE.Scene();
     scene.add(skyMesh(mat));
     new THREE.CubeCamera(0.1, 5000, cube).update(r, scene);
@@ -468,7 +469,7 @@ export type SkyBoxNaming = 'words' | 'axes' | 'unity';
 export type SkyBoxLayout = 'files' | 'cross' | 'strip';
 const FACE_NAMES: Record<SkyBoxNaming, Record<(typeof SKYBOX_FACES)[number]['key'], string>> = {
   words: { right: 'right', left: 'left', top: 'top', bottom: 'bottom', front: 'front', back: 'back' },
-  axes: { right: 'px', left: 'nx', top: 'py', bottom: 'ny', front: 'nz', back: 'pz' },
+  axes: { right: 'px', left: 'nx', top: 'py', bottom: 'ny', front: 'pz', back: 'nz' }, // the usual skybox convention: front is +Z
   unity: { right: 'Right', left: 'Left', top: 'Up', bottom: 'Down', front: 'Front', back: 'Back' },
 };
 /** Where each face sits in a 4×3 horizontal cross (column, row). */
@@ -496,6 +497,7 @@ export async function skyBoxPngs(
   }
   try {
     applySky(mat, settings, sun);
+    mat.uniforms.time = { value: SKY_TIME.value }; // one moment for every face (clouds drift otherwise)
     const scene = new THREE.Scene();
     scene.add(skyMesh(mat));
     r.setSize(size, size, false);
@@ -518,4 +520,140 @@ export async function skyBoxPngs(
     mat.dispose();
     r.dispose();
   }
+}
+
+/** Read a sky material's settings as numbers (all but the clock), to tell when it needs drawing again. */
+function skySignature(m: THREE.ShaderMaterial): number[] {
+  const out: number[] = [];
+  for (const [k, u] of Object.entries(m.uniforms)) {
+    if (k === 'time') continue;
+    const v = u.value as unknown;
+    if (typeof v === 'number') out.push(v);
+    else if (v instanceof THREE.Color) out.push(v.r, v.g, v.b);
+    else if (v instanceof THREE.Vector3) out.push(v.x, v.y, v.z);
+  }
+  return out;
+}
+const sigDiffers = (a: number[] | null, b: number[], tol = 0.002) => !a || a.length !== b.length || a.some((v, i) => Math.abs(v - b[i]!) > tol * 0.05 + tol * Math.abs(v));
+/** A gradual change is redrawn a quarter face a frame (cheaper than drawing the sky directly). */
+const STRIPS = 4;
+
+/**
+ * The sky, frozen: drawn once into a cube texture and shown from it (nearly free), drawn again only when its
+ * settings or the sun change. Big changes (editing) are drawn at once; gradual ones (a day cycle) a quarter face a
+ * frame into a second cube, swapped in when complete, so there's no hitch and no seam. Clouds and waves hold still. Dispose with disposeSky.
+ */
+export function cachedSkyMesh(m: THREE.ShaderMaterial): THREE.Mesh {
+  m.uniforms.time = { value: 0 }; // its own, still clock
+  const inner = new THREE.Scene();
+  inner.add(skyMesh(m));
+  const cubeCam = new THREE.CubeCamera(0.1, 5000, new THREE.WebGLCubeRenderTarget(1));
+  cubeCam.updateMatrixWorld(true);
+  let size = 0;
+  let front: THREE.WebGLCubeRenderTarget | null = null, back: THREE.WebGLCubeRenderTarget | null = null;
+  let frontSig: number[] | null = null, buildSig: number[] = [], lastSig: number[] | null = null;
+  let building = -1; // the next strip (face × STRIPS + strip) to draw into back (-1: not drawing)
+  const make = (n: number) => new THREE.WebGLCubeRenderTarget(n, { type: THREE.UnsignedByteType, colorSpace: THREE.SRGBColorSpace, generateMipmaps: false, minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter, depthBuffer: false });
+  const show = new THREE.ShaderMaterial({
+    uniforms: { env: { value: null as THREE.Texture | null } },
+    vertexShader: /* glsl */ `
+      varying vec3 vDir;
+      void main() {
+        vDir = position;
+        vec4 p = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        gl_Position = p.xyww;
+      }`,
+    fragmentShader: /* glsl */ `
+      uniform samplerCube env; varying vec3 vDir;
+      void main() {
+        gl_FragColor = vec4(textureCube(env, normalize(vDir)).rgb, 1.0);
+        #include <colorspace_fragment>
+      }`,
+    side: THREE.BackSide,
+    depthWrite: false,
+  });
+  const drawFace = (r: THREE.WebGLRenderer, rt: THREE.WebGLCubeRenderTarget, face: number, strip = -1) => {
+    if (cubeCam.coordinateSystem !== r.coordinateSystem) {
+      cubeCam.coordinateSystem = r.coordinateSystem;
+      cubeCam.updateCoordinateSystem();
+      cubeCam.updateMatrixWorld(true);
+    }
+    const prev = r.getRenderTarget(), prevFace = r.getActiveCubeFace(), prevMip = r.getActiveMipmapLevel(), xr = r.xr.enabled;
+    r.xr.enabled = false;
+    if (strip >= 0) {
+      const h = Math.ceil(rt.height / STRIPS);
+      rt.scissor.set(0, strip * h, rt.width, h);
+      rt.scissorTest = true;
+    }
+    r.setRenderTarget(rt, face);
+    r.render(inner, cubeCam.children[face] as THREE.Camera);
+    rt.scissorTest = false;
+    r.setRenderTarget(prev, prevFace, prevMip);
+    r.xr.enabled = xr;
+  };
+  const mesh = new THREE.Mesh(new THREE.SphereGeometry(1, 48, 24), show);
+  mesh.name = 'sky';
+  mesh.frustumCulled = false;
+  mesh.renderOrder = -100;
+  mesh.onBeforeRender = (r, _s, cam) => {
+    cam.getWorldPosition(mesh.position);
+    mesh.scale.setScalar(1000);
+    mesh.updateMatrixWorld();
+    // Sharp enough for the main view: a face as many pixels across as 90° takes on screen (grown, never shrunk).
+    if (r.getRenderTarget() === null && (cam as THREE.PerspectiveCamera).isPerspectiveCamera) {
+      const h = r.getDrawingBufferSize(new THREE.Vector2()).y;
+      const want = Math.min(2048, Math.max(256, Math.ceil(((h / THREE.MathUtils.degToRad((cam as THREE.PerspectiveCamera).fov)) * Math.PI) / 2 / 256) * 256));
+      if (want > size) {
+        size = want;
+        front?.dispose();
+        back?.dispose();
+        front = back = null;
+      }
+    }
+    if (!front || !back) {
+      const n = size || 512;
+      front = make(n);
+      back = make(n);
+      frontSig = null;
+      building = -1;
+    }
+    const sig = skySignature(m);
+    // A big jump since the last frame (editing) is drawn at once; a slow drift (a day cycle) a strip at a time.
+    const jumped = sigDiffers(lastSig, sig, 0.02);
+    lastSig = sig;
+    if (!frontSig || jumped) {
+      // Nothing to show yet, or a big change: draw it all now.
+      for (let f = 0; f < 6; f++) drawFace(r, front, f);
+      frontSig = sig;
+      building = -1;
+    } else if (building >= 0) {
+      drawFace(r, back, Math.floor(building / STRIPS), building % STRIPS);
+      if (++building === 6 * STRIPS) {
+        [front, back] = [back, front];
+        frontSig = buildSig;
+        building = -1;
+      }
+    } else if (sigDiffers(frontSig, sig)) {
+      buildSig = sig;
+      building = 0;
+      drawFace(r, back, 0, 0);
+      building = 1;
+    }
+    show.uniforms.env!.value = front.texture;
+  };
+  mesh.userData.disposeSky = () => {
+    front?.dispose();
+    back?.dispose();
+    cubeCam.renderTarget.dispose();
+    show.dispose();
+    mesh.geometry.dispose();
+    (inner.children[0] as THREE.Mesh).geometry.dispose();
+  };
+  return mesh;
+}
+
+/** Free a sky mesh's textures (cachedSkyMesh) and geometry. */
+export function disposeSky(mesh: THREE.Mesh): void {
+  if (typeof mesh.userData.disposeSky === 'function') mesh.userData.disposeSky();
+  else mesh.geometry.dispose();
 }
