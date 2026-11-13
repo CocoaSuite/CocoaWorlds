@@ -246,6 +246,15 @@ export interface SkySettings {
   valleyFog?: number;
   valleyFogHeight?: number;
   valleyFogColour?: string;
+  /** Forest on the mountains: cover (0…1), tree line (0…1 of a range's height), colour, tree size (×), and a
+   *  forested shore band along the horizon (its height, degrees; 0: none). */
+  forest?: number;
+  forestLine?: number;
+  forestColour?: string;
+  treeSize?: number;
+  forestBand?: number;
+  /** Which trees: conifers, broadleaf or a mix. */
+  forestType?: 'conifer' | 'broadleaf' | 'mixed';
   /** A sea below the horizon: on, its colour, wave size (×), choppiness (0…1) and how much it reflects (0…1). */
   sea?: boolean;
   seaColour?: string;
@@ -284,6 +293,12 @@ export function skyOf(s: SkySettings | undefined): Required<SkySettings> {
     valleyFog: 0,
     valleyFogHeight: 1.5,
     valleyFogColour: '#e6ebf0',
+    forest: 0,
+    forestLine: 0.45,
+    forestColour: '#2c4a2e',
+    treeSize: 1,
+    forestBand: 0,
+    forestType: 'conifer',
     sea: false,
     seaColour: '#1d4a5e',
     seaWaves: 1,

@@ -43,6 +43,12 @@ export function skyMaterial(): THREE.ShaderMaterial {
       vFog: { value: 0 },
       vFogHeight: { value: 1.5 },
       vFogCol: { value: new THREE.Color() },
+      forest: { value: 0 },
+      forestLine: { value: 0.5 },
+      forestCol: { value: new THREE.Color() },
+      treeSize: { value: 1 },
+      forestType: { value: 0 },
+      forestBand: { value: 0 },
       sea: { value: 0 },
       seaCol: { value: new THREE.Color() },
       seaWaves: { value: 1 },
@@ -68,6 +74,7 @@ export function skyMaterial(): THREE.ShaderMaterial {
       uniform vec3 mtnRock; uniform vec3 mtnSnowCol;
       uniform float mtnSeed; uniform float mtnLayers; uniform float mtnDetail; uniform float mtnSmooth;
       uniform float vFog; uniform float vFogHeight; uniform vec3 vFogCol;
+      uniform float forest; uniform float forestLine; uniform vec3 forestCol; uniform float treeSize; uniform float forestBand; uniform float forestType;
       uniform float sea; uniform vec3 seaCol; uniform float seaWaves; uniform float seaChop; uniform float seaReflect;
       varying vec3 vDir;
       float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
@@ -117,6 +124,32 @@ export function skyMaterial(): THREE.ShaderMaterial {
           a *= 0.5; m *= 2.03;
         }
         return v / max(tot, 1e-4);
+      }
+      // Tree tops along the horizon, w wide (angle): conifers (spikes), broadleaf (round crowns) or mixed.
+      // Returns (height in tree heights, a per-tree random, 1 if round). Finer than a pixel: they melt into their average.
+      vec3 treeRow(float az, float w, float seed, float pix) {
+        w = 6.2831853 / max(1.0, floor(6.2831853 / w)); // a whole number of trees round the circle: no seam
+        float cell = az / w;
+        float id = floor(cell);
+        float r = hash(vec2(id, seed));
+        float r2 = hash(vec2(id + 0.37, seed + 1.9));
+        float round_ = forestType > 1.5 ? step(0.5, r2) : step(0.5, forestType);
+        float x = fract(cell) - 0.5 + (r - 0.5) * mix(0.3, 0.12, round_);
+        float cone = max(0.0, 1.0 - abs(x) * 2.3) * (0.6 + 0.6 * r);
+        float crown = sqrt(max(0.0, 1.0 - x * x * 3.6)) * (0.7 + 0.4 * r);
+        float tree = mix(cone, crown, round_);
+        float fade = smoothstep(pix, pix * 3.0, w);
+        return vec3(mix(0.45, tree, fade), r, round_);
+      }
+      // Where forest grows on a range: below the tree line (in patches), on the gentler faces.
+      float forestMask(float rel, float slope, vec2 circ, float freq, float seed) {
+        if (forest <= 0.0) return 0.0;
+        float patches = vnoise(vec3(circ * freq * 3.0, seed + 40.0 + rel * 2.5));
+        float line = forestLine + (patches - 0.5) * 0.35;
+        float m = 1.0 - smoothstep(line - 0.06, line + 0.06, rel);
+        m *= smoothstep(1.0 - forest, 1.0 - forest + 0.15, patches * 0.6 + 0.4 * forest);
+        m = max(m, 1.0 - smoothstep(0.0, 0.2, rel)); // always wooded at the foot
+        return m * (1.0 - smoothstep(1.0, 1.6, abs(slope)));
       }
       vec3 skyColour(vec3 d) {
         float y = d.y;
@@ -176,6 +209,13 @@ export function skyMaterial(): THREE.ShaderMaterial {
             float freq = 3.0 + fl * 2.5, amp = 1.0 - fl * 0.22, seed = mtnSeed * 13.7 + fl * 17.0;
             float scale = maxH * amp;
             float h = ridgeLine(circ, freq, seed, ridgeOct) * scale;
+            // Trees along the ridge where the forest reaches it.
+            float th = radians(treeSize) * 0.06 * (0.5 + fl * 0.4);
+            if (forest > 0.0) {
+              float he = 0.02;
+              float sl0 = (ridgeLine(vec2(cos(az + he), sin(az + he)), freq, seed, 3) - ridgeLine(vec2(cos(az - he), sin(az - he)), freq, seed, 3)) / (2.0 * he) / freq;
+              h += treeRow(az, th * (0.5 + 0.3 * step(0.5, forestType)), seed, pix).x * th * forestMask(h / max(scale, 1e-4), sl0, circ, freq, seed);
+            }
             float edge = mtnSmooth > 0.5 ? max(fwidth(el), 1e-5) : 1e-5;
             float cover = smoothstep(-edge, edge, h - el);
             if (cover > 0.0) {
@@ -197,6 +237,14 @@ export function skyMaterial(): THREE.ShaderMaterial {
               lit = clamp(lit, 0.0, 1.0);
               vec3 light = mix(shadeLight, sunLight, lit);
               vec3 col = mtnRock * light * 1.3;
+              // Forest: dark canopy, bumpy, lit like the rock.
+              float fm = forestMask(el / max(scale, 1e-4), slope, circ, freq, seed);
+              if (fm > 0.0) {
+                float canopy = vnoise(vec3(circ * R * 4.0, dep * R * 1.6 + seed + 9.0));
+                float cw = mtnSmooth > 0.5 ? 1.0 - smoothstep(0.2, 0.6, tpx * 4.0) : 1.0;
+                float fl2 = clamp(lit * 0.85 + (canopy - 0.5) * 0.5 * cw, 0.0, 1.0);
+                col = mix(col, forestCol * mix(shadeLight, sunLight, fl2) * 1.2, fm);
+              }
               // Snow: high up, on the gentler faces, its line broken by the crags.
               float rel = el / max(scale, 1e-4);
               float line = mix(0.95, 0.0, mtnSnow) + (0.45 - g0) * 0.4;
@@ -215,6 +263,38 @@ export function skyMaterial(): THREE.ShaderMaterial {
               float band = 1.0 - smoothstep(0.0, fh, el + (wisp - 0.5) * fh * 0.8);
               vec3 fc = vFogCol * mix(vec3(0.75), sunLight, 0.45);
               c = mix(c, fc, clamp(band * vFog * 0.55 * smoothstep(-foot, -foot * 0.2, el), 0.0, 1.0));
+            }
+          }
+        }
+        // A forested shore: a low, dense band of trees along the horizon, in front of everything.
+        if (forestBand > 0.0) {
+          float elb = asin(clamp(y, -1.0, 1.0));
+          float bh = radians(forestBand);
+          if (elb > -bh * 0.3 && elb < bh * 2.5) {
+            float az = atan(d.x, d.z);
+            vec2 circ = vec2(cos(az), sin(az));
+            float pix = length(fwidth(d));
+            float base = bh * (0.55 + 0.6 * ridgeLine(circ, 6.0, mtnSeed * 3.1 + 77.0, 4));
+            float th = radians(treeSize) * 0.6;
+            float tw = forestType > 0.5 && forestType < 1.5 ? 0.75 : 0.45;
+            vec3 t0 = treeRow(az, th * tw, mtnSeed + 5.0, pix);
+            vec3 t1 = treeRow(az + th * 0.2, th * tw * 0.66, mtnSeed + 9.0, pix);
+            float h = base + max(t0.x * th, t1.x * th * 0.6);
+            vec3 tt = t0.x * th >= t1.x * th * 0.6 ? t0 : t1;
+            float edge = mtnSmooth > 0.5 ? max(fwidth(elb), 1e-5) : 1e-5;
+            float cover = smoothstep(-edge, edge, h - elb);
+            if (cover > 0.0) {
+              float sunAz = atan(sunDir.x, sunDir.z);
+              float day = smoothstep(-0.15, 0.2, sunDir.y);
+              vec3 shadeLight = top * 0.45 + horizon * 0.15;
+              vec3 sunLight = sunColour * day + shadeLight;
+              float canopy = vnoise(vec3(circ * 260.0, (h - elb) / max(th, 1e-4) * 2.0));
+              float lit = clamp(0.4 - 0.15 * cos(az - sunAz) + (canopy - 0.5) * 0.45 + (elb - base) / max(th, 1e-4) * 0.15, 0.0, 1.0);
+              // Each tree a little different; broadleaf a touch lighter and warmer than conifers.
+              vec3 tint = forestCol * (0.85 + 0.3 * tt.y) * mix(vec3(1.0), vec3(1.15, 1.2, 0.95), tt.z);
+              vec3 col = tint * mix(shadeLight, sunLight, lit) * 0.85;
+              col = mix(col, c, (0.15 + haze * 0.25) * (1.0 - smoothstep(-bh * 0.3, bh, elb)) + 0.04);
+              c = mix(c, col, cover);
             }
           }
         }
@@ -297,6 +377,12 @@ export function applySky(m: THREE.ShaderMaterial, settings: SkySettings | undefi
   u.vFog!.value = s.valleyFog;
   u.vFogHeight!.value = s.valleyFogHeight;
   u.vFogCol!.value.set(s.valleyFogColour);
+  u.forest!.value = s.forest;
+  u.forestLine!.value = s.forestLine;
+  u.forestCol!.value.set(s.forestColour);
+  u.treeSize!.value = s.treeSize;
+  u.forestType!.value = s.forestType === 'broadleaf' ? 1 : s.forestType === 'mixed' ? 2 : 0;
+  u.forestBand!.value = s.forestBand;
   u.sea!.value = s.sea ? 1 : 0;
   u.seaCol!.value.set(s.seaColour);
   u.seaWaves!.value = s.seaWaves;

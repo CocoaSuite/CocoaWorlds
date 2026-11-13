@@ -90,7 +90,7 @@ export function SkyPanel() {
       </Row>
     );
   };
-  const colour = (k: 'top' | 'horizon' | 'ground' | 'cloudColour' | 'cloudShade' | 'mtnRock' | 'mtnSnowColour' | 'valleyFogColour' | 'seaColour', label: string) => (
+  const colour = (k: 'top' | 'horizon' | 'ground' | 'cloudColour' | 'cloudShade' | 'mtnRock' | 'mtnSnowColour' | 'valleyFogColour' | 'seaColour' | 'forestColour', label: string) => (
     <Row label={label}>
       <ColorField label={label} value={sky[k]} onChange={(v) => setSky({ [k]: v }, k)} />
     </Row>
@@ -241,6 +241,19 @@ export function SkyPanel() {
             {colour('valleyFogColour', L('Fog colour', 'Цвет тумана'))}
           </>
         )}
+        <div className="cw-lib-cats-h">{L('Forest', 'Лес')}</div>
+        {num('forest', L('Cover on mountains', 'Лес на горах'), 0, 1, 0.05)}
+        {num('forestLine', L('Tree line', 'Граница леса'), 0, 1, 0.05)}
+        {num('forestBand', L('Shore forest', 'Лес у горизонта'), 0, 10, 0.1, '°')}
+        <Row label={L('Trees', 'Деревья')}>
+          <select className="cw-input" aria-label={L('Tree type', 'Тип деревьев')} value={sky.forestType} onChange={(e) => setSky({ forestType: e.currentTarget.value as SkySettings['forestType'] })}>
+            <option value="conifer">{L('Conifers', 'Хвойные')}</option>
+            <option value="broadleaf">{L('Broadleaf', 'Лиственные')}</option>
+            <option value="mixed">{L('Mixed', 'Смешанный')}</option>
+          </select>
+        </Row>
+        {num('treeSize', L('Tree size', 'Размер деревьев'), 0.2, 4, 0.1, '×')}
+        {colour('forestColour', L('Forest colour', 'Цвет леса'))}
         <div className="cw-lib-cats-h">{L('Sea', 'Море')}</div>
         <Row label={L('Sea', 'Море')}>
           <Switch label={L('Sea on', 'Море включено')} checked={sky.sea} onChange={(v) => setSky({ sea: v })} />
