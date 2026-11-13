@@ -30,6 +30,19 @@ export function skyMaterial(): THREE.ShaderMaterial {
       cloudColour: { value: new THREE.Color() },
       cloudShade: { value: new THREE.Color() },
       stars: { value: 0 },
+      mtn: { value: 0 },
+      mtnHeight: { value: 8 },
+      mtnRugged: { value: 0.6 },
+      mtnSnow: { value: 0.5 },
+      mtnRock: { value: new THREE.Color() },
+      mtnSnowCol: { value: new THREE.Color() },
+      mtnSeed: { value: 1 },
+      mtnLayers: { value: 3 },
+      mtnDetail: { value: 5 },
+      mtnSmooth: { value: 1 },
+      vFog: { value: 0 },
+      vFogHeight: { value: 1.5 },
+      vFogCol: { value: new THREE.Color() },
       time: SKY_TIME,
     },
     vertexShader: /* glsl */ `
@@ -46,6 +59,10 @@ export function skyMaterial(): THREE.ShaderMaterial {
       uniform float clouds; uniform float cloudSoft; uniform float cloudSize; uniform float cloudSpeed;
       uniform vec3 cloudColour; uniform vec3 cloudShade;
       uniform float stars; uniform float time;
+      uniform float mtn; uniform float mtnHeight; uniform float mtnRugged; uniform float mtnSnow;
+      uniform vec3 mtnRock; uniform vec3 mtnSnowCol;
+      uniform float mtnSeed; uniform float mtnLayers; uniform float mtnDetail; uniform float mtnSmooth;
+      uniform float vFog; uniform float vFogHeight; uniform vec3 vFogCol;
       varying vec3 vDir;
       float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
       float hash3(vec3 p) { return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453); }
@@ -58,6 +75,42 @@ export function skyMaterial(): THREE.ShaderMaterial {
         float v = 0.0, a = 0.5;
         for (int i = 0; i < 5; i++) { v += a * noise(p); p = p * 2.03 + vec2(17.1, 9.2); a *= 0.5; }
         return v;
+      }
+      float vnoise(vec3 p) {
+        vec3 i = floor(p), f = fract(p);
+        vec3 u = f * f * (3.0 - 2.0 * f);
+        return mix(
+          mix(mix(hash3(i), hash3(i + vec3(1, 0, 0)), u.x), mix(hash3(i + vec3(0, 1, 0)), hash3(i + vec3(1, 1, 0)), u.x), u.y),
+          mix(mix(hash3(i + vec3(0, 0, 1)), hash3(i + vec3(1, 0, 1)), u.x), mix(hash3(i + vec3(0, 1, 1)), hash3(i + vec3(1, 1, 1)), u.x), u.y),
+          u.z);
+      }
+      // A range's ridge line: ridged fractal noise round the horizon circle (so it wraps seamlessly), 0…~1.
+      float ridgeLine(vec2 circ, float freq, float seed, int oct) {
+        float v = 0.0, a = 0.5;
+        vec3 p = vec3(circ * freq, seed);
+        for (int i = 0; i < 7; i++) {
+          if (i >= oct) break;
+          float n = vnoise(p);
+          float r = 1.0 - abs(n * 2.0 - 1.0);
+          v += a * mix(n, r * r, mtnRugged);
+          p = p * 2.07 + vec3(5.1, 1.7, 3.3);
+          a *= 0.5;
+        }
+        return v;
+      }
+      // Rock texture (gullies and crags), its octaves faded out where they'd be finer than a pixel (when smooth).
+      float rockTex(vec3 p, float px) {
+        float v = 0.0, a = 0.5, m = 1.0, tot = 0.0;
+        for (int i = 0; i < 8; i++) {
+          if (float(i) >= mtnDetail) break;
+          float w = mtnSmooth > 0.5 ? 1.0 - smoothstep(0.2, 0.6, px * m) : 1.0;
+          float r = 1.0 - abs(vnoise(p) * 2.0 - 1.0);
+          v += a * w * r * r + a * (1.0 - w) * 0.33; // a faded octave becomes its average
+          tot += a;
+          p = p * 2.03 + vec3(7.0, 3.0, 1.3);
+          a *= 0.5; m *= 2.03;
+        }
+        return v / max(tot, 1e-4);
       }
       void main() {
         vec3 d = normalize(vDir);
@@ -97,6 +150,67 @@ export function skyMaterial(): THREE.ShaderMaterial {
           col += sunColour * pow(max(s, 0.0), 10.0) * (1.0 - density) * 0.8;
           c = mix(c, col, density * 0.96);
         }
+        // Mountains: up to three ranges, far to near, lit from the sun's side, snow-capped, hazed with distance,
+        // with valley fog lying between them.
+        float maxH = radians(mtnHeight) * 1.8;
+        float el = asin(clamp(y, -1.0, 1.0));
+        if (mtn > 0.5 && el > -0.02 && el < maxH) {
+          float az = atan(d.x, d.z);
+          vec2 circ = vec2(cos(az), sin(az));
+          float sunAz = atan(sunDir.x, sunDir.z);
+          float side = sin(az - sunAz), facing = cos(az - sunAz);
+          float pix = length(fwidth(d)); // a pixel's size, as an angle
+          float day = smoothstep(-0.15, 0.2, sunDir.y);
+          vec3 shadeLight = top * 0.45 + horizon * 0.15;
+          vec3 sunLight = sunColour * day + shadeLight;
+          int ridgeOct = mtnSmooth > 0.5 ? int(clamp(floor(log2(0.04 / max(pix, 1e-5))), 3.0, 7.0)) : 7;
+          for (int L = 0; L < 3; L++) {
+            if (float(L) < 3.0 - mtnLayers) continue;
+            float fl = float(L);
+            float freq = 3.0 + fl * 2.5, amp = 1.0 - fl * 0.22, seed = mtnSeed * 13.7 + fl * 17.0;
+            float scale = maxH * amp;
+            float h = ridgeLine(circ, freq, seed, ridgeOct) * scale;
+            float edge = mtnSmooth > 0.5 ? max(fwidth(el), 1e-5) : 1e-5;
+            float cover = smoothstep(-edge, edge, h - el);
+            if (cover > 0.0) {
+              // Big faces: the slope of a smoothed ridge line, lit when it turns toward the sun.
+              float e = 0.02;
+              float hs0 = ridgeLine(vec2(cos(az - e), sin(az - e)), freq, seed, 3);
+              float hs1 = ridgeLine(vec2(cos(az + e), sin(az + e)), freq, seed, 3);
+              float slope = (hs1 - hs0) / (2.0 * e) / freq;
+              // Gullies: rock texture in (around the horizon, down from the ridge), lit by its own slope.
+              float R = freq * 6.0;
+              float dep = (h - el) / max(scale, 1e-4);
+              vec3 tp = vec3(circ * R, dep * R * 0.35 + seed);
+              float tpx = pix * R * max(1.0, 0.35 / max(scale, 1e-4));
+              float g0 = rockTex(tp, tpx);
+              float g1 = rockTex(tp + vec3(-circ.y, circ.x, 0.0) * 0.08, tpx);
+              float lit = 0.5 - 0.15 * facing;
+              lit += clamp(slope * side * 1.6, -0.35, 0.35);
+              lit += clamp((g1 - g0) * side * 5.0, -0.3, 0.3) + (g0 - 0.45) * 0.35 * mtnRugged;
+              lit = clamp(lit, 0.0, 1.0);
+              vec3 light = mix(shadeLight, sunLight, lit);
+              vec3 col = mtnRock * light * 1.3;
+              // Snow: high up, on the gentler faces, its line broken by the crags.
+              float rel = el / max(scale, 1e-4);
+              float line = mix(0.95, 0.0, mtnSnow) + (0.45 - g0) * 0.4;
+              float snow = smoothstep(line - 0.03, line + 0.03, rel) * (1.0 - smoothstep(0.7, 1.2, abs(slope)));
+              col = mix(col, mtnSnowCol * mix(shadeLight * 1.3, sunLight, lit), snow);
+              // Haze: thicker for farther ranges and near each range's foot.
+              float hz = (2.0 - fl) * 0.3 + 0.05 + (1.0 - smoothstep(0.0, scale * 0.3, el)) * 0.3;
+              col = mix(col, c, clamp(hz * (0.6 + haze * 0.6), 0.0, 1.0));
+              c = mix(c, col, cover);
+            }
+            // Valley fog in front of this range (behind the nearer ones): a wispy band low on the horizon.
+            if (vFog > 0.0) {
+              float fh = radians(vFogHeight);
+              float wisp = vnoise(vec3(circ * (24.0 + fl * 9.0), el / max(fh, 1e-4) * 1.5 + time * 0.02 + fl * 5.0));
+              float band = 1.0 - smoothstep(0.0, fh, el + (wisp - 0.5) * fh * 0.8);
+              vec3 fc = vFogCol * mix(vec3(0.75), sunLight, 0.45);
+              c = mix(c, fc, clamp(band * vFog * 0.55, 0.0, 1.0));
+            }
+          }
+        }
         gl_FragColor = vec4(c, 1.0);
         #include <colorspace_fragment>
       }`,
@@ -124,6 +238,19 @@ export function applySky(m: THREE.ShaderMaterial, settings: SkySettings | undefi
   u.cloudColour!.value.set(s.cloudColour);
   u.cloudShade!.value.set(s.cloudShade);
   u.stars!.value = s.stars;
+  u.mtn!.value = s.mountains ? 1 : 0;
+  u.mtnHeight!.value = s.mtnHeight;
+  u.mtnRugged!.value = s.mtnRugged;
+  u.mtnSnow!.value = s.mtnSnow;
+  u.mtnRock!.value.set(s.mtnRock);
+  u.mtnSnowCol!.value.set(s.mtnSnowColour);
+  u.mtnSeed!.value = s.mtnSeed;
+  u.mtnLayers!.value = Math.round(Math.min(3, Math.max(1, s.mtnLayers)));
+  u.mtnDetail!.value = Math.round(Math.min(8, Math.max(1, s.mtnDetail)));
+  u.mtnSmooth!.value = s.mtnSmooth ? 1 : 0;
+  u.vFog!.value = s.valleyFog;
+  u.vFogHeight!.value = s.valleyFogHeight;
+  u.vFogCol!.value.set(s.valleyFogColour);
 }
 
 /** A sky dome that follows the camera (so it never gets nearer). */
@@ -191,19 +318,45 @@ export async function skyEnvPng(settings: SkySettings | undefined, sun: { dir: T
 }
 
 /** Skybox faces, as a viewer at the centre sees them (front: -Z; top/bottom seen while facing front). */
-export const SKYBOX_FACES: { name: string; dir: [number, number, number]; up: [number, number, number] }[] = [
-  { name: 'right', dir: [1, 0, 0], up: [0, 1, 0] },
-  { name: 'left', dir: [-1, 0, 0], up: [0, 1, 0] },
-  { name: 'top', dir: [0, 1, 0], up: [0, 0, 1] },
-  { name: 'bottom', dir: [0, -1, 0], up: [0, 0, -1] },
-  { name: 'front', dir: [0, 0, -1], up: [0, 1, 0] },
-  { name: 'back', dir: [0, 0, 1], up: [0, 1, 0] },
+export const SKYBOX_FACES: { key: 'right' | 'left' | 'top' | 'bottom' | 'front' | 'back'; dir: [number, number, number]; up: [number, number, number] }[] = [
+  { key: 'right', dir: [1, 0, 0], up: [0, 1, 0] },
+  { key: 'left', dir: [-1, 0, 0], up: [0, 1, 0] },
+  { key: 'top', dir: [0, 1, 0], up: [0, 0, 1] },
+  { key: 'bottom', dir: [0, -1, 0], up: [0, 0, -1] },
+  { key: 'front', dir: [0, 0, -1], up: [0, 1, 0] },
+  { key: 'back', dir: [0, 0, 1], up: [0, 1, 0] },
 ];
 
-/** The sky cut into six square skybox textures (PNG each). */
-export async function skyBoxPngs(settings: SkySettings | undefined, sun: { dir: THREE.Vector3; colour: THREE.Color } | null, size = 1024): Promise<{ name: string; bytes: Uint8Array }[]> {
+export type SkyBoxNaming = 'words' | 'axes' | 'unity';
+export type SkyBoxLayout = 'files' | 'cross' | 'strip';
+const FACE_NAMES: Record<SkyBoxNaming, Record<(typeof SKYBOX_FACES)[number]['key'], string>> = {
+  words: { right: 'right', left: 'left', top: 'top', bottom: 'bottom', front: 'front', back: 'back' },
+  axes: { right: 'px', left: 'nx', top: 'py', bottom: 'ny', front: 'nz', back: 'pz' },
+  unity: { right: 'Right', left: 'Left', top: 'Up', bottom: 'Down', front: 'Front', back: 'Back' },
+};
+/** Where each face sits in a 4×3 horizontal cross (column, row). */
+const CROSS: Record<string, [number, number]> = { top: [1, 0], left: [0, 1], front: [1, 1], right: [2, 1], back: [3, 1], bottom: [1, 2] };
+
+const pngOf = async (c: HTMLCanvasElement): Promise<Uint8Array> => {
+  const blob = await new Promise<Blob | null>((ok) => c.toBlob(ok, 'image/png'));
+  if (!blob) throw new Error('The sky could not be drawn.');
+  return new Uint8Array(await blob.arrayBuffer());
+};
+
+/** The sky cut into six square skybox faces: six PNGs, or one PNG laid out as a cross or a strip. */
+export async function skyBoxPngs(
+  settings: SkySettings | undefined,
+  sun: { dir: THREE.Vector3; colour: THREE.Color } | null,
+  opts: { size?: number; naming?: SkyBoxNaming; layout?: SkyBoxLayout } = {},
+): Promise<{ name: string; bytes: Uint8Array }[]> {
+  const size = opts.size ?? 1024, naming = opts.naming ?? 'words', layout = opts.layout ?? 'files';
   const r = new THREE.WebGLRenderer({ preserveDrawingBuffer: true });
   const mat = skyMaterial();
+  const sheet = layout === 'files' ? null : document.createElement('canvas');
+  if (sheet) {
+    sheet.width = size * (layout === 'cross' ? 4 : 6);
+    sheet.height = size * (layout === 'cross' ? 3 : 1);
+  }
   try {
     applySky(mat, settings, sun);
     const scene = new THREE.Scene();
@@ -211,15 +364,18 @@ export async function skyBoxPngs(settings: SkySettings | undefined, sun: { dir: 
     r.setSize(size, size, false);
     const cam = new THREE.PerspectiveCamera(90, 1, 0.1, 5000);
     const out: { name: string; bytes: Uint8Array }[] = [];
-    for (const f of SKYBOX_FACES) {
+    for (const [i, f] of SKYBOX_FACES.entries()) {
       cam.up.set(...f.up);
       cam.lookAt(...f.dir);
       cam.updateMatrixWorld();
       r.render(scene, cam);
-      const blob = await new Promise<Blob | null>((ok) => r.domElement.toBlob(ok, 'image/png'));
-      if (!blob) throw new Error('The sky could not be drawn.');
-      out.push({ name: `sky_${f.name}.png`, bytes: new Uint8Array(await blob.arrayBuffer()) });
+      if (!sheet) out.push({ name: `sky_${FACE_NAMES[naming][f.key]}.png`, bytes: await pngOf(r.domElement) });
+      else {
+        const [cx, cy] = layout === 'cross' ? CROSS[f.key]! : [i, 0];
+        sheet.getContext('2d')!.drawImage(r.domElement, cx * size, cy * size);
+      }
     }
+    if (sheet) out.push({ name: `sky_${layout}.png`, bytes: await pngOf(sheet) });
     return out;
   } finally {
     mat.dispose();

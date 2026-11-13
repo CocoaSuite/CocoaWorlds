@@ -230,6 +230,22 @@ export interface SkySettings {
   stars?: number;
   /** The scene's ambient light (and fog) take their colours from the sky. */
   lightFromSky?: boolean;
+  /** Distant mountains round the horizon: on, how high (degrees), how rugged (0…1), snow (0…1: none…all), colours,
+   *  shape seed, ranges (1…3), texture detail (1…8 octaves) and smooth (filtered) texture. */
+  mountains?: boolean;
+  mtnHeight?: number;
+  mtnRugged?: number;
+  mtnSnow?: number;
+  mtnRock?: string;
+  mtnSnowColour?: string;
+  mtnSeed?: number;
+  mtnLayers?: number;
+  mtnDetail?: number;
+  mtnSmooth?: boolean;
+  /** Valley fog between the ranges: amount (0…1), how high it reaches (degrees) and its colour. */
+  valleyFog?: number;
+  valleyFogHeight?: number;
+  valleyFogColour?: string;
 }
 
 export const defaultSky = (): SkySettings => ({ enabled: true, top: '#4a7fc1', horizon: '#c9dcef', ground: '#3b3a36' });
@@ -249,6 +265,19 @@ export function skyOf(s: SkySettings | undefined): Required<SkySettings> {
     cloudShade: '#9aa6b4',
     stars: 0,
     lightFromSky: false,
+    mountains: false,
+    mtnHeight: 8,
+    mtnRugged: 0.6,
+    mtnSnow: 0.4,
+    mtnRock: '#76685c',
+    mtnSnowColour: '#f4f6fa',
+    mtnSeed: 1,
+    mtnLayers: 3,
+    mtnDetail: 5,
+    mtnSmooth: true,
+    valleyFog: 0,
+    valleyFogHeight: 1.5,
+    valleyFogColour: '#e6ebf0',
     ...(s ?? {}),
   } as Required<SkySettings>;
 }

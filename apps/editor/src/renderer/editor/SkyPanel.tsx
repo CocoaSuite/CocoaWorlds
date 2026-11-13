@@ -11,7 +11,7 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { getLang } from '../i18n';
 import { useEditor } from '../store';
 import { PLANT_TIME, aimRim, plantGeometry, plantMaterial, setPlantWind } from '../viewport/plants';
-import { applySky, skyAmbient, skyBoxPngs, skyEnvPng, skyMaterial, skyMesh, sunSkyColour } from '../viewport/sky';
+import { applySky, skyAmbient, skyBoxPngs, skyEnvPng, type SkyBoxLayout, type SkyBoxNaming, skyMaterial, skyMesh, sunSkyColour } from '../viewport/sky';
 import { Row } from './MaterialsPanel';
 
 const L = (en: string, ru: string) => (getLang() === 'ru' ? ru : en);
@@ -37,6 +37,9 @@ export function SkyPanel() {
   const st = useEditor.getState();
   const saved = useEditor((s) => s.session?.project.settings.skies) ?? [];
   const [renaming, setRenaming] = useState<string | null>(null);
+  const [faceSize, setFaceSize] = useState(1024);
+  const [naming, setNaming] = useState<SkyBoxNaming>('words');
+  const [layout, setLayout] = useState<SkyBoxLayout>('files');
   if (!doc) return null;
   const settings = sceneSettings(doc.settings);
   const sky = skyOf(settings.sky);
@@ -70,7 +73,7 @@ export function SkyPanel() {
       if (!r.ok) throw new Error(r.error);
       if (!r.value) return;
       const lit = sun ? { dir: sun.toward, colour: sunSkyColour(sun.colour, sun.intensity) } : null;
-      const files = as === 'env' ? [{ name: 'sky_env.png', bytes: await skyEnvPng(sky, lit) }] : await skyBoxPngs(sky, lit);
+      const files = as === 'env' ? [{ name: 'sky_env.png', bytes: await skyEnvPng(sky, lit, faceSize * 2) }] : await skyBoxPngs(sky, lit, { size: faceSize, naming, layout });
       const w = await window.cocoa.materials.writeFiles(r.value, files);
       if (!w.ok) throw new Error(w.error);
       st.notify(L('Sky exported', 'Небо экспортировано'));
@@ -87,7 +90,7 @@ export function SkyPanel() {
       </Row>
     );
   };
-  const colour = (k: 'top' | 'horizon' | 'ground' | 'cloudColour' | 'cloudShade', label: string) => (
+  const colour = (k: 'top' | 'horizon' | 'ground' | 'cloudColour' | 'cloudShade' | 'mtnRock' | 'mtnSnowColour' | 'valleyFogColour', label: string) => (
     <Row label={label}>
       <ColorField label={label} value={sky[k]} onChange={(v) => setSky({ [k]: v }, k)} />
     </Row>
@@ -138,6 +141,28 @@ export function SkyPanel() {
           ))}
         </div>
         <Button onClick={save}>{L('Save this sky', 'Сохранить это небо')}</Button>
+        <div className="cw-lib-cats-h">{L('Export', 'Экспорт')}</div>
+        <Row label={L('Face size', 'Размер грани')}>
+          <select className="cw-input" aria-label={L('Face size', 'Размер грани')} value={faceSize} onChange={(e) => setFaceSize(Number(e.currentTarget.value))}>
+            {[512, 1024, 2048, 4096].map((n) => (
+              <option key={n} value={n}>{n}</option>
+            ))}
+          </select>
+        </Row>
+        <Row label={L('Naming', 'Имена')}>
+          <select className="cw-input" aria-label={L('Naming', 'Имена')} value={naming} onChange={(e) => setNaming(e.currentTarget.value as SkyBoxNaming)}>
+            <option value="words">right, left, top…</option>
+            <option value="axes">px, nx, py…</option>
+            <option value="unity">Unity (Right, Up…)</option>
+          </select>
+        </Row>
+        <Row label={L('Layout', 'Раскладка')}>
+          <select className="cw-input" aria-label={L('Layout', 'Раскладка')} value={layout} onChange={(e) => setLayout(e.currentTarget.value as SkyBoxLayout)}>
+            <option value="files">{L('6 files', '6 файлов')}</option>
+            <option value="cross">{L('Cross (one image)', 'Крест (одно изображение)')}</option>
+            <option value="strip">{L('Strip 6×1', 'Полоса 6×1')}</option>
+          </select>
+        </Row>
         <Button onClick={() => void exportSky('env')}>{L('Export sky as env texture', 'Экспорт неба как текстуры окружения')}</Button>
         <Button onClick={() => void exportSky('box')}>{L('Export sky as skybox (6 squares)', 'Экспорт неба как скайбокса (6 квадратов)')}</Button>
         <div className="cw-muted cw-hint">{L('A preset also sets the scene’s Sun: its height, colour and brightness (not its direction). Saved skies are kept in the project, for every scene; double-click one to rename it.', 'Заготовка задаёт и Солнце сцены: высоту, цвет и яркость (не направление). Сохранённое небо хранится в проекте, для всех сцен; двойной щелчок — переименовать.')}</div>
@@ -192,6 +217,30 @@ export function SkyPanel() {
         {num('cloudSpeed', L('Drift speed', 'Скорость'), 0, 5, 0.1, '×')}
         {colour('cloudColour', L('Lit side', 'Светлая сторона'))}
         {colour('cloudShade', L('Shaded side', 'Тёмная сторона'))}
+        <div className="cw-lib-cats-h">{L('Mountains', 'Горы')}</div>
+        <Row label={L('Mountains', 'Горы')}>
+          <Switch label={L('Mountains on', 'Горы включены')} checked={sky.mountains} onChange={(v) => setSky({ mountains: v })} />
+        </Row>
+        {sky.mountains && (
+          <>
+            {num('mtnHeight', L('Height', 'Высота'), 0.5, 30, 0.5, '°')}
+            {num('mtnRugged', L('Ruggedness', 'Изрезанность'), 0, 1, 0.05)}
+            {num('mtnLayers', L('Ranges', 'Хребты'), 1, 3, 1)}
+            {num('mtnSnow', L('Snow', 'Снег'), 0, 1, 0.05)}
+            {colour('mtnRock', L('Rock', 'Камень'))}
+            {colour('mtnSnowColour', L('Snow colour', 'Цвет снега'))}
+            {num('mtnDetail', L('Texture detail', 'Детализация текстуры'), 1, 8, 1)}
+            <Row label={L('Smooth texture', 'Сглаживание текстуры')}>
+              <Switch label={L('Smooth texture', 'Сглаживание текстуры')} checked={sky.mtnSmooth} onChange={(v) => setSky({ mtnSmooth: v })} />
+            </Row>
+            <Row label={L('Shape', 'Форма')}>
+              <Button onClick={() => setSky({ mtnSeed: Math.floor(Math.random() * 1000) + 1 })}>{L('Reroll', 'Перебросить')}</Button>
+            </Row>
+            {num('valleyFog', L('Valley fog', 'Туман в долинах'), 0, 1, 0.05)}
+            {num('valleyFogHeight', L('Fog height', 'Высота тумана'), 0.1, 10, 0.1, '°')}
+            {colour('valleyFogColour', L('Fog colour', 'Цвет тумана'))}
+          </>
+        )}
         <div className="cw-lib-cats-h">{L('Night', 'Ночь')}</div>
         {num('stars', L('Stars', 'Звёзды'), 0, 1, 0.05)}
         <div className="cw-lib-cats-h">{L('Lighting', 'Освещение')}</div>
