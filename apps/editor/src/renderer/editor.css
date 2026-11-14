@@ -854,3 +854,4 @@ button.cw-sec.cw-fold { width: 100%; border: 0; border-top: 1px solid var(--line
 .cw-dev-log { flex: 1; overflow-y: auto; padding: 8px 12px; white-space: pre-wrap; user-select: text; }
 .cw-dev-in { color: var(--cw-brand-hi); }
 .cw-dev-line { all: unset; border-top: 1px solid var(--line); padding: 6px 12px; color: #fff; font: inherit; }
+.cw-mine-half { flex: 1; }

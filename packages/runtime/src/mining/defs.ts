@@ -81,6 +81,40 @@ export interface MobDef {
   anims: { idle: string; walk: string; attack: string; die: string };
 }
 
+/** A twist rolled each time the mine regenerates. */
+export interface TwistDef {
+  id: string;
+  label: string;
+  text: string;
+  weight: number;
+  /** Ore id → how much likelier. */
+  ores?: Record<string, number>;
+  density?: number;
+  caves?: number;
+  hardness?: number;
+  value?: number;
+  /** Monsters: how many (0: none), and what they pay. */
+  mobs?: number;
+  reward?: number;
+  light?: number;
+  /** Added chance of a second ore. */
+  double?: number;
+}
+
+export interface DynamiteDef {
+  /** Price of one stick at the first pickaxe; × `growth` for each pickaxe tier. */
+  price: number;
+  growth: number;
+  /** Blast radius in blocks; breaks rock up to one tier past the pickaxe. */
+  radius: number;
+  fuse: number;
+  /** Throw speed (blocks a second). */
+  speed: number;
+  /** Hurts the player standing in it (monsters take far more). */
+  damage: number;
+  key: string;
+}
+
 export interface MineConfig {
   /** Block size (u). */
   block: number;
@@ -120,8 +154,10 @@ export interface MineConfig {
   sellRadius: number;
   pickaxeLevels: { price: number; growth: number; power: number };
   menuKey: string;
+  twists: TwistDef[];
+  dynamite: DynamiteDef;
   homeKey: string;
-  sounds: { hit: string; break: string; ore: string; sell: string; buy: string; mobHit: string; mobDie: string; arrow: string };
+  sounds: { hit: string; break: string; ore: string; sell: string; buy: string; mobHit: string; mobDie: string; arrow: string; fuse: string; boom: string };
   zones: ZoneDef[];
   ores: OreDef[];
   pickaxes: PickaxeDef[];

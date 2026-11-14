@@ -5312,6 +5312,7 @@ export class GameWorld {
     const m = this.mine!;
     if (code === m.config.menuKey) m.action('menu');
     else if (code === m.config.homeKey) m.action('home');
+    else if (code === m.config.dynamite.key) m.action('throw');
     else if (code === 'Escape' && m.menuOpen) m.action('menu', 'close');
     else return false;
     return true;

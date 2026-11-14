@@ -204,6 +204,55 @@ describe('the pickaxe, the backpack and buying', () => {
     expect(m.money).toBe(10);
   });
 
+  it('dynamite: bought, thrown, it blows a hole (ores in the backpack) and hurts monsters and the player', () => {
+    const h = host([0, 0, 0], [1, 0, 0]);
+    const m = make(h);
+    expect(m.throwDynamite()).toBe(false);
+    m.money = 1000;
+    expect(m.buyDynamite(5)).toBe(true);
+    expect(m.dynamite).toBe(5);
+    m.blocks.set(12, 2, 0, 1 + 1);
+    m.explode([12.5, 2.5, 0.5]);
+    for (const [x, y, z] of [[12, 2, 0], [13, 2, 0], [12, 3, 1], [11, 1, 0]]) expect(m.blocks.get(x!, y!, z!)).toBe(AIR);
+    expect(m.carried).toBeGreaterThan(0);
+    expect(h.hurtBy).toBe(0);
+    h.dir = [0, -1, 0];
+    expect(m.throwDynamite()).toBe(true);
+    expect(m.dynamite).toBe(4);
+    for (let i = 0; i < 60 * 3; i++) {
+      h.advance(1 / 60);
+      m.tick(1 / 60, false);
+    }
+    expect(m.bombs).toHaveLength(0);
+    expect(h.hurtBy).toBeGreaterThan(0);
+  });
+
+  it('each regeneration rolls a twist that changes the mine', () => {
+    const h = host();
+    const m = make(h, { twists: [{ id: 'normal', weight: 0 }, { id: 'gold_rush', weight: 0 }, { id: 'crystal_bloom', weight: 0 }, { id: 'rich_veins', weight: 0 }, { id: 'swarm', weight: 0 }, { id: 'pitch_dark', weight: 0 }, { id: 'hollow_earth', weight: 0 }, { id: 'lucky_day', weight: 0 }, { id: 'calm', weight: 0 }] });
+    expect(m.twist.id).toBe('soft_rock');
+    const soft = m.hud();
+    expect(soft.twist).toBe('Soft Rock');
+    const back = make(h);
+    back.load(JSON.parse(JSON.stringify(m.save())));
+    expect(back.twist.id).toBe('soft_rock');
+    back.regenerate(false);
+    expect(back.twist.id).not.toBe('soft_rock');
+  });
+
+  it('monsters never appear in the cave the player is in', () => {
+    const h = host([20.5 * 40, -30 * 40, 0.5 * 40]);
+    const m = make(h, { maxMobs: 50, spawnEvery: 0.01 });
+    // (A big closed room round the player, and an open cave elsewhere.)
+    for (let x = 12; x < 30; x++) for (let y = -32; y < -26; y++) for (let z = -8; z < 9; z++) m.blocks.set(x, y, z, AIR);
+    for (let x = 12; x < 30; x++) for (let z = -8; z < 9; z++) m.blocks.set(x, -33, z, 1);
+    for (let i = 0; i < 400; i++) {
+      h.advance(0.05);
+      m.tick(1 / 60, false);
+    }
+    expect(m.mobs.every((x) => !(x.pos[0] > 12 && x.pos[0] < 30 && x.pos[1] >= -32 && x.pos[1] < -26 && Math.abs(x.pos[2]) < 9))).toBe(true);
+  });
+
   it('dying loses part of the backpack; saving keeps it all; the mine regenerates on time', () => {
     const h = host();
     const m = make(h);

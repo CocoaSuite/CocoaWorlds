@@ -35,19 +35,35 @@ export class MineBlocks {
   private edits = new Map<string, Map<number, number>>();
   /** Bumps whenever a block changes or a chunk loads. */
   version = 0;
-  private tables: { ores: number[]; cum: number[] }[];
+  private tables: { ores: number[]; cum: number[] }[] = [];
+  /** The current twist's effect on what the seed makes. */
+  private boost: Record<string, number> = {};
+  private densityMul = 1;
+  private caveMul = 1;
 
   constructor(
     readonly cfg: MineConfig,
     public seed: number,
   ) {
     this.size = cfg.chunk;
-    const ids = cfg.ores.map((o) => o.id);
-    this.tables = cfg.zones.map((z) => {
+    this.makeTables();
+  }
+
+  /** A twist changes ore odds, how many veins and how many caves (for the next mine made). */
+  setTwist(t: { ores?: Record<string, number>; density?: number; caves?: number } | null): void {
+    this.boost = t?.ores ?? {};
+    this.densityMul = t?.density ?? 1;
+    this.caveMul = t?.caves ?? 1;
+    this.makeTables();
+  }
+
+  private makeTables(): void {
+    const ids = this.cfg.ores.map((o) => o.id);
+    this.tables = this.cfg.zones.map((z) => {
       const ores: number[] = [], cum: number[] = [];
       let t = 0;
-      for (const [id, w] of Object.entries(z.ores)) {
-        const i = ids.indexOf(id);
+      for (const [id, w0] of Object.entries(z.ores)) {
+        const i = ids.indexOf(id), w = w0 * (this.boost[id] ?? 1);
         if (i < 0 || !(w > 0)) continue;
         t += w;
         ores.push(i);
@@ -83,15 +99,16 @@ export class MineBlocks {
     const s = this.seed, [bx, , bz] = this.cfg.base, c = this.cfg;
     if (c.surface && y >= -c.crust && (Math.abs(x) > c.patch || Math.abs(z) > c.patch)) return EDGE;
     const d = Math.hypot(x, y, z);
-    if (c.caves > 0 && (c.surface ? y < -c.crust - 3 : d > Math.max(bx, bz) + 6)) {
-      if (fbm3(x * 0.07, y * 0.09, z * 0.07, s + 1) > 1 - 0.31 * this.cfg.caves) return AIR;
+    const cv = c.caves * this.caveMul;
+    if (cv > 0 && (c.surface ? y < -c.crust - 3 : d > Math.max(bx, bz) + 6)) {
+      if (fbm3(x * 0.07, y * 0.09, z * 0.07, s + 1) > 1 - 0.31 * cv) return AIR;
       const a = noise3(x * 0.045, y * 0.06, z * 0.045, s + 2), b = noise3(x * 0.045, y * 0.06, z * 0.045, s + 3);
-      if (Math.abs(a - 0.5) < 0.045 * this.cfg.caves && Math.abs(b - 0.5) < 0.045 * this.cfg.caves) return AIR;
+      if (Math.abs(a - 0.5) < 0.045 * cv && Math.abs(b - 0.5) < 0.045 * cv) return AIR;
     }
     const zone = this.zoneAt(this.depth(x, y, z) + (noise3(x * 0.05, y * 0.05, z * 0.05, s + 4) - 0.5) * 6);
     const cx = Math.floor(x / 3), cy = Math.floor(y / 3), cz = Math.floor(z / 3);
     const t = this.tables[zone]!;
-    if (t.ores.length && hash3(cx, cy, cz, s + 5) < c.oreDensity && hash3(x, y, z, s + 7) < 0.6) {
+    if (t.ores.length && hash3(cx, cy, cz, s + 5) < c.oreDensity * this.densityMul && hash3(x, y, z, s + 7) < 0.6) {
       const r = hash3(cx, cy, cz, s + 6);
       let i = 0;
       while (i + 1 < t.cum.length && r > t.cum[i]!) i++;

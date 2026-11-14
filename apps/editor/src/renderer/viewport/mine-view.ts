@@ -396,6 +396,10 @@ export class MineView {
     } else this.cracks.visible = false;
     for (const f of m.drainFx()) {
       if (f.kind === 'mob') continue;
+      if (f.kind === 'boom') {
+        this.boom(m.toWorld(f.x, f.y, f.z), f.r * B);
+        continue;
+      }
       const colour = this.colors[Math.min(this.rows - 1, zoneOf(f.block)) * this.tiles + oreOf(f.block) + 1]!;
       const w = m.toWorld(f.x + 0.5, f.y + 0.5, f.z + 0.5);
       for (let i = 0; i < (f.kind === 'break' ? 14 : 3); i++) this.chip(w, colour, B);
@@ -403,6 +407,7 @@ export class MineView {
     this.stepChips(dt);
     this.drawMobs(time);
     this.drawArrows();
+    this.drawBombs(dt, time);
     if (time - this.senseAt > 0.5 || time < this.senseAt) {
       this.senseAt = time;
       this.drawSense(at);
@@ -471,6 +476,59 @@ export class MineView {
         .catch(() => holder.add(figure(mob)));
     } else holder.add(figure(mob));
     return v;
+  }
+
+  private bombMeshes: THREE.Group[] = [];
+  private booms: { mesh: THREE.Mesh; t: number; r: number }[] = [];
+
+  /** Lit sticks: red with a flickering spark on top. */
+  private drawBombs(dt: number, time: number): void {
+    const m = this.mine;
+    while (this.bombMeshes.length < m.bombs.length) {
+      const g = new THREE.Group();
+      const stick = new THREE.Mesh(new THREE.BoxGeometry(6, 16, 6), new THREE.MeshBasicMaterial({ color: 0xc8352c }));
+      const band = new THREE.Mesh(new THREE.BoxGeometry(6.4, 3, 6.4), new THREE.MeshBasicMaterial({ color: 0x3a2a20 }));
+      const spark = new THREE.Mesh(new THREE.BoxGeometry(3, 3, 3), new THREE.MeshBasicMaterial({ color: 0xffd060 }));
+      spark.position.y = 10;
+      spark.name = 'spark';
+      g.add(stick, band, spark);
+      for (const o of g.children) o.userData.noAo = true;
+      this.group.add(g);
+      this.bombMeshes.push(g);
+    }
+    this.bombMeshes.forEach((g, i) => {
+      const b = m.bombs[i];
+      g.visible = !!b;
+      if (!b) return;
+      g.position.set(...m.toWorld(b.pos[0], b.pos[1], b.pos[2]));
+      g.rotation.z = Math.sin(time * 3 + i) * 0.4;
+      const s = g.getObjectByName('spark')!;
+      s.scale.setScalar(0.6 + Math.abs(Math.sin(time * 40)) * 0.8);
+    });
+    // Blasts: a quick orange ball that swells and fades.
+    this.booms = this.booms.filter((b) => {
+      b.t += dt;
+      const k = b.t / 0.45;
+      if (k >= 1) {
+        this.group.remove(b.mesh);
+        b.mesh.geometry.dispose();
+        (b.mesh.material as THREE.Material).dispose();
+        return false;
+      }
+      b.mesh.scale.setScalar(b.r * (0.4 + k * 0.8));
+      (b.mesh.material as THREE.MeshBasicMaterial).opacity = 0.85 * (1 - k);
+      return true;
+    });
+  }
+
+  private boom(at: [number, number, number], r: number): void {
+    const mesh = new THREE.Mesh(new THREE.IcosahedronGeometry(1, 1), new THREE.MeshBasicMaterial({ color: 0xffa040, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }));
+    mesh.position.set(...at);
+    mesh.userData.noAo = true;
+    this.group.add(mesh);
+    this.booms.push({ mesh, t: 0, r });
+    const dust = new THREE.Color(0x8a8070);
+    for (let i = 0; i < 40; i++) this.chip(at, dust, r);
   }
 
   private drawArrows(): void {

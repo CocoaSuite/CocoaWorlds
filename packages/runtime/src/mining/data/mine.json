@@ -39,7 +39,9 @@
   "buy": "",
   "mobHit": "",
   "mobDie": "",
-  "arrow": ""
+  "arrow": "",
+  "fuse": "",
+  "boom": ""
  },
  "zones": [
   {
@@ -1105,5 +1107,104 @@
   }
  ],
  "oreDensity": 0.3,
- "sellRadius": 3
+ "sellRadius": 3,
+ "dynamite": {
+  "price": 30,
+  "growth": 1.8,
+  "radius": 2.6,
+  "fuse": 2.2,
+  "speed": 14,
+  "damage": 25,
+  "key": "KeyG"
+ },
+ "twists": [
+  {
+   "id": "normal",
+   "label": "Quiet mine",
+   "text": "Nothing special this time.",
+   "weight": 2
+  },
+  {
+   "id": "gold_rush",
+   "label": "Gold Rush",
+   "text": "Gold, silver and platinum everywhere.",
+   "weight": 1,
+   "ores": {
+    "gold": 4,
+    "silver": 4,
+    "platinum": 4
+   }
+  },
+  {
+   "id": "crystal_bloom",
+   "label": "Crystal Bloom",
+   "text": "Gems grow thick in the rock.",
+   "weight": 1,
+   "ores": {
+    "quartz": 3,
+    "jade": 3,
+    "azurite": 3,
+    "emerald": 3,
+    "sapphire": 3,
+    "topaz": 3,
+    "ruby": 3,
+    "opal": 3,
+    "amethyst": 3,
+    "moonstone": 3,
+    "diamond": 3,
+    "prismite": 3
+   }
+  },
+  {
+   "id": "rich_veins",
+   "label": "Rich Veins",
+   "text": "Far more ore in every layer.",
+   "weight": 1,
+   "density": 1.6
+  },
+  {
+   "id": "soft_rock",
+   "label": "Soft Rock",
+   "text": "The rock breaks easily.",
+   "weight": 1,
+   "hardness": 0.6
+  },
+  {
+   "id": "swarm",
+   "label": "Swarm",
+   "text": "Twice the monsters, twice the bounty.",
+   "weight": 1,
+   "mobs": 2,
+   "reward": 2
+  },
+  {
+   "id": "pitch_dark",
+   "label": "Pitch Dark",
+   "text": "Your lamp barely helps, but ore is worth more.",
+   "weight": 1,
+   "light": 0.6,
+   "value": 1.5
+  },
+  {
+   "id": "hollow_earth",
+   "label": "Hollow Earth",
+   "text": "Huge caves everywhere.",
+   "weight": 1,
+   "caves": 1.6
+  },
+  {
+   "id": "lucky_day",
+   "label": "Lucky Day",
+   "text": "Ores often come in twos.",
+   "weight": 1,
+   "double": 0.25
+  },
+  {
+   "id": "calm",
+   "label": "Calm",
+   "text": "No monsters at all.",
+   "weight": 1,
+   "mobs": 0
+  }
+ ]
 }

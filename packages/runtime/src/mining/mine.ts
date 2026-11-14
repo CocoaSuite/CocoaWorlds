@@ -3,7 +3,7 @@
  * buys them, money buys pickaxes and skills. Monsters live in the caves. The mine regenerates on a timer.
  */
 import { AIR, blockId, EDGE, MineBlocks, oreOf, zoneOf, type Chunk, type RayHit } from './blocks';
-import { mineConfig, type MineConfig, type MobDef, type Stat } from './defs';
+import { mineConfig, type MineConfig, type MobDef, type Stat, type TwistDef } from './defs';
 import { Mob, stepArrow, type Arrow, type MobWorld } from './mobs';
 
 export interface MineHost {
@@ -24,7 +24,15 @@ export interface MineHost {
 export type MineFx =
   | { kind: 'break'; x: number; y: number; z: number; block: number }
   | { kind: 'hit'; x: number; y: number; z: number; block: number }
-  | { kind: 'mob'; id: string };
+  | { kind: 'mob'; id: string }
+  | { kind: 'boom'; x: number; y: number; z: number; r: number };
+
+/** A lit stick of dynamite (block space). */
+export interface Bomb {
+  pos: [number, number, number];
+  vel: [number, number, number];
+  at: number;
+}
 
 export interface MineHud {
   money: number;
@@ -42,6 +50,9 @@ export interface MineHud {
   atSell: boolean;
   /** What the backpack holds: ore id, name, how many. */
   items: { id: string; label: string; n: number }[];
+  /** This mine's twist. */
+  twist: string;
+  dynamite: number;
   /** The block aimed at: how broken (0…1), or why it can't be (needs a better pickaxe). */
   aim: { label: string; broken: number; needs: string } | null;
 }
@@ -54,6 +65,8 @@ export interface MineMenu {
   bag: { id: string; label: string; n: number; value: number; color: string }[];
   /** Where ores sell: a sell zone, or anywhere back home. */
   sellZone: boolean;
+  twist: { label: string; text: string };
+  dynamite: { n: number; price: number };
   cap: number;
   home: boolean;
   surface: boolean;
@@ -83,6 +96,10 @@ export class MineSystem {
   /** When the pickaxe last swung (game time), for drawing. */
   swungAt = -1;
   private spawnAt = 0;
+  /** This mine's twist (rolled each time it regenerates). */
+  twist!: TwistDef;
+  dynamite = 0;
+  bombs: Bomb[] = [];
   private fx: MineFx[] = [];
   private statCache: Map<Stat, number> | null = null;
   private saidAt = new Map<string, number>();
@@ -100,7 +117,22 @@ export class MineSystem {
     this.config = mineConfig(over);
     this.B = this.config.block;
     this.blocks = new MineBlocks(this.config, this.newSeed());
+    this.useTwist(this.rollTwist());
+    this.blocks.reset(this.blocks.seed);
     this.nextRegen = host.now() + this.config.regenMinutes * 60000;
+  }
+
+  private rollTwist(): TwistDef {
+    const list = this.config.twists.filter((t) => t.weight > 0 && t.id !== this.twist?.id);
+    const total = list.reduce((s, t) => s + t.weight, 0);
+    let r = this.host.random() * total;
+    for (const t of list) if ((r -= t.weight) <= 0) return t;
+    return list[list.length - 1] ?? { id: 'normal', label: '', text: '', weight: 1 };
+  }
+
+  private useTwist(t: TwistDef): void {
+    this.twist = t;
+    this.blocks.setTwist(t);
   }
 
   private newSeed(): number {
@@ -154,12 +186,12 @@ export class MineSystem {
   }
 
   lightRadius(): number {
-    return this.config.light + this.stat('light');
+    return (this.config.light + this.stat('light')) * (this.twist.light ?? 1);
   }
 
   private hardness(id: number, d: number): number {
     const z = this.config.zones[zoneOf(id)]!, o = oreOf(id);
-    return z.hardness * (o >= 0 ? this.config.ores[o]!.hardness : 1) * Math.pow(this.config.hardGrowth, d);
+    return z.hardness * (o >= 0 ? this.config.ores[o]!.hardness : 1) * Math.pow(this.config.hardGrowth, d) * (this.twist.hardness ?? 1);
   }
 
   private label(id: number): string {
@@ -198,10 +230,90 @@ export class MineSystem {
     for (const m of this.mobs) m.step(dt, world, time);
     this.mobs = this.mobs.filter((m) => !(m.dead && time - m.diedAt > 1.5) && Math.hypot(m.pos[0] - px, m.pos[1] - py, m.pos[2] - pz) < 48);
     this.arrows = this.arrows.filter((a) => stepArrow(a, dt, world, time));
+    this.bombs = this.bombs.filter((b) => this.stepBomb(b, dt, time));
     if (time >= this.spawnAt) {
-      this.spawnAt = time + this.config.spawnEvery;
-      if (this.mobs.filter((m) => !m.dead).length < this.config.maxMobs) this.spawn(px, py, pz);
+      const many = this.twist.mobs ?? 1;
+      this.spawnAt = time + this.config.spawnEvery / Math.max(1, many);
+      if (this.mobs.filter((m) => !m.dead).length < Math.round(this.config.maxMobs * many)) this.spawn(px, py, pz);
     }
+  }
+
+  // ── Dynamite ──
+
+  dynamitePrice(): number {
+    const d = this.config.dynamite;
+    return Math.round(d.price * Math.pow(d.growth, this.tier));
+  }
+
+  buyDynamite(n: number): boolean {
+    const cost = this.dynamitePrice() * n;
+    if (n <= 0 || this.money < cost) return false;
+    this.money -= cost;
+    this.dynamite += n;
+    this.play('buy', null);
+    return true;
+  }
+
+  /** Throw a lit stick where the player looks. */
+  throwDynamite(): boolean {
+    const pl = this.host.player();
+    if (!pl || this.dynamite <= 0 || !this.handFree || this.menuOpen) return false;
+    this.dynamite--;
+    const e = this.toBlock(pl.eye), d = pl.dir, s = this.config.dynamite.speed;
+    this.bombs.push({ pos: [e[0] + d[0] * 0.5, e[1] + d[1] * 0.5, e[2] + d[2] * 0.5], vel: [d[0] * s, d[1] * s + 2, d[2] * s], at: this.host.time() + this.config.dynamite.fuse });
+    this.play('fuse', null);
+    return true;
+  }
+
+  private stepBomb(b: Bomb, dt: number, time: number): boolean {
+    if (time >= b.at) {
+      this.explode(b.pos);
+      return false;
+    }
+    b.vel[1] -= (800 / this.B) * dt;
+    for (const i of [0, 1, 2] as const) {
+      const was = b.pos[i];
+      b.pos[i] += b.vel[i] * dt;
+      if (this.blocks.solid(Math.floor(b.pos[0]), Math.floor(b.pos[1]), Math.floor(b.pos[2]))) {
+        b.pos[i] = was;
+        b.vel[i] *= -0.25;
+        // (It settles on the ground.)
+        if (i === 1) {
+          b.vel[0] *= 0.6;
+          b.vel[2] *= 0.6;
+        }
+      }
+    }
+    return true;
+  }
+
+  /** Blow up: rock up to one tier past the pickaxe breaks (ores go in the backpack); monsters and the player get hurt. */
+  explode(at: [number, number, number]): void {
+    const r = this.config.dynamite.radius, [cx, cy, cz] = at;
+    for (let y = Math.floor(cy - r); y <= Math.floor(cy + r); y++)
+      for (let z = Math.floor(cz - r); z <= Math.floor(cz + r); z++)
+        for (let x = Math.floor(cx - r); x <= Math.floor(cx + r); x++) {
+          if (Math.hypot(x + 0.5 - cx, y + 0.5 - cy, z + 0.5 - cz) > r) continue;
+          const id = this.blocks.get(x, y, z);
+          if (id === AIR || id === EDGE || this.blocks.inBase(x, y, z)) continue;
+          if (this.config.zones[zoneOf(id)]!.tier > this.tier + 1) continue;
+          this.breakBlock(x, y, z, id, true);
+        }
+    const time = this.host.time();
+    for (const m of this.mobs) {
+      const d = Math.hypot(m.pos[0] - cx, m.pos[1] + m.h / 2 - cy, m.pos[2] - cz);
+      if (m.dead || d > r + 1) continue;
+      const l = Math.hypot(m.pos[0] - cx, m.pos[2] - cz) || 1;
+      m.hit(m.maxHp * 0.8 + this.power() * 10, [((m.pos[0] - cx) / l) * 8, ((m.pos[2] - cz) / l) * 8], time);
+      if (m.dead) this.paid(m);
+    }
+    const pl = this.host.player();
+    if (pl) {
+      const [px, py, pz] = this.toBlock(pl.feet);
+      if (Math.hypot(px - cx, py + 0.9 - cy, pz - cz) < r + 0.5) this.host.hurt(this.config.dynamite.damage, 'dynamite');
+    }
+    this.fx.push({ kind: 'boom', x: cx, y: cy, z: cz, r });
+    this.play('boom', { x: cx - 0.5, y: cy - 0.5, z: cz - 0.5 });
   }
 
   private loaded = 0;
@@ -263,12 +375,12 @@ export class MineSystem {
     }
   }
 
-  private breakBlock(x: number, y: number, z: number, id: number): void {
+  private breakBlock(x: number, y: number, z: number, id: number, quiet = false): void {
     this.blocks.set(x, y, z, AIR);
     this.fx.push({ kind: 'break', x, y, z, block: id });
     let ore = oreOf(id);
     let n = 0;
-    if (ore >= 0) n = 1 + (this.host.random() < this.stat('doubleOre') ? 1 : 0);
+    if (ore >= 0) n = 1 + (this.host.random() < this.stat('doubleOre') + (this.twist.double ?? 0) ? 1 : 0);
     else if (this.host.random() < this.stat('oreChance')) {
       const t = this.config.zones[zoneOf(id)]!.ores, ids = Object.keys(t);
       if (ids.length) {
@@ -276,12 +388,12 @@ export class MineSystem {
         n = ore >= 0 ? 1 : 0;
       }
     }
-    this.play(n ? 'ore' : 'break', { x, y, z });
+    if (!quiet) this.play(n ? 'ore' : 'break', { x, y, z });
     if (!n) return;
     const room = this.capacity - this.carried;
-    if (room <= 0) return this.once('full', 'Backpack full. Go home to sell.');
+    if (room <= 0) return this.once('full', 'Backpack full. Go and sell.');
     n = Math.min(n, room);
-    const value = this.config.ores[ore]!.value * Math.pow(this.config.valueGrowth, this.distance(x, y, z)) * (1 + this.stat('oreValue'));
+    const value = this.config.ores[ore]!.value * Math.pow(this.config.valueGrowth, this.distance(x, y, z)) * (1 + this.stat('oreValue')) * (this.twist.value ?? 1);
     const b = this.bag.get(ore) ?? { n: 0, value: 0 };
     b.n += n;
     b.value += value * n;
@@ -296,7 +408,11 @@ export class MineSystem {
     const at = { x: m.pos[0] - 0.5, y: m.pos[1], z: m.pos[2] - 0.5 };
     if (!m.dead) return this.play('mobHit', at);
     this.play('mobDie', at);
-    const pay = Math.round(m.reward * (1 + this.stat('bounty')));
+    this.paid(m);
+  }
+
+  private paid(m: Mob): void {
+    const pay = Math.round(m.reward * (1 + this.stat('bounty')) * (this.twist.reward ?? 1));
     if (pay > 0) {
       this.money += pay;
       this.host.say(`${m.def.label} +$${pay}`, 2);
@@ -333,6 +449,8 @@ export class MineSystem {
   private spawn(px: number, py: number, pz: number): void {
     const rnd = () => this.host.random();
     const [bx, , bz] = this.config.base, c0 = this.config;
+    // (Not in the cave the player is in: they come from elsewhere.)
+    const here = this.reach(Math.floor(px), Math.floor(py + 0.1), Math.floor(pz), 4000);
     for (let tries = 0; tries < 12; tries++) {
       const a = rnd() * Math.PI * 2, e = (rnd() - 0.5) * 1.2, r = 12 + rnd() * 14;
       const x = Math.floor(px + Math.cos(a) * Math.cos(e) * r), z = Math.floor(pz + Math.sin(a) * Math.cos(e) * r);
@@ -342,6 +460,7 @@ export class MineSystem {
       let k = 0;
       while (k++ < 8 && !this.blocks.solid(x, y - 1, z)) y--;
       if (!this.blocks.solid(x, y - 1, z) || this.blocks.solid(x, y + 1, z)) continue;
+      if (here.has(`${x},${y},${z}`)) continue;
       const d = this.distance(x, y, z), zone = this.blocks.zoneAt(d);
       const kinds = this.config.mobs.filter((m) => m.zone <= zone && m.weight > 0);
       const def = pick(kinds, rnd());
@@ -351,6 +470,18 @@ export class MineSystem {
       this.mobs.push(new Mob(def, [x + 0.5, y, z + 0.5], this.B, def.damage * Math.pow(c.mobHitGrowth, d), def.reward * Math.pow(c.valueGrowth, d), def.health * Math.pow(c.mobGrowth, d)));
       return;
     }
+  }
+
+  /** The open space joined to a block (up to `limit` blocks of it). */
+  private reach(x: number, y: number, z: number, limit: number): Set<string> {
+    const seen = new Set<string>(), todo: [number, number, number][] = [[x, y, z]];
+    while (todo.length && seen.size < limit) {
+      const [a, b, c] = todo.pop()!, k = `${a},${b},${c}`;
+      if (seen.has(k) || this.blocks.solid(a, b, c)) continue;
+      seen.add(k);
+      todo.push([a + 1, b, c], [a - 1, b, c], [a, b + 1, c], [a, b - 1, c], [a, b, c + 1], [a, b, c - 1]);
+    }
+    return seen;
   }
 
   // ── Base, menus and buying ──
@@ -428,17 +559,21 @@ export class MineSystem {
       this.host.home();
     } else if (name === 'pickaxe') this.buyPickaxe();
     else if (name === 'skill') this.buySkill(arg);
+    else if (name === 'dynamite') this.buyDynamite(Math.max(1, Math.floor(Number(arg) || 1)));
+    else if (name === 'throw') this.throwDynamite();
   }
 
   /** Regenerate: a new mine, the player taken home (unless already there). */
   regenerate(announce: boolean): void {
+    this.useTwist(this.rollTwist());
     this.blocks.reset(this.newSeed());
     this.mobs = [];
     this.arrows = [];
+    this.bombs = [];
     this.dug = null;
     this.nextRegen = this.host.now() + this.config.regenMinutes * 60000;
     if (!this.inBase) this.host.home();
-    if (announce) this.host.say('The mine has shifted.', 4);
+    if (announce) this.host.say(`The mine has shifted: ${this.twist.label}. ${this.twist.text}`, 6);
   }
 
   hud(): MineHud {
@@ -450,7 +585,9 @@ export class MineSystem {
       const id = this.blocks.get(this.aim.x, this.aim.y, this.aim.z);
       const z = this.config.zones[Math.min(this.config.zones.length - 1, zoneOf(id))]!;
       const dug = this.dug && this.dug.x === this.aim.x && this.dug.y === this.aim.y && this.dug.z === this.aim.z ? this.dug.damage : 0;
-      if (id === EDGE) aim = { label: this.label(id), broken: 0, needs: '' };
+      // (The aimed block may have just been dug out.)
+      if (id === AIR) aim = null;
+      else if (id === EDGE) aim = { label: this.label(id), broken: 0, needs: '' };
       else aim = { label: this.label(id), broken: Math.min(1, dug / this.hardness(id, this.distance(this.aim.x, this.aim.y, this.aim.z))), needs: z.tier > this.tier ? this.config.pickaxes[z.tier]!.label : '' };
     }
     const p = this.config.pickaxes[this.tier]!;
@@ -465,6 +602,8 @@ export class MineSystem {
       home: this.inBase,
       surface: this.config.surface,
       atSell: !!this.sellAt && this.atSell,
+      twist: this.twist.label,
+      dynamite: this.dynamite,
       items: [...this.bag].map(([i, b]) => ({ id: this.config.ores[i]!.id, label: this.config.ores[i]!.label, n: b.n })),
       aim,
     };
@@ -479,6 +618,8 @@ export class MineSystem {
       skills: this.config.skills.map((d) => ({ id: d.id, branch: d.branch, label: d.label, text: d.text, level: this.skills.get(d.id) ?? 0, max: d.max, cost: this.skillCost(d.id), at: d.at, needs: d.needs, open: this.skillOpen(d.id) })),
       branches: this.config.branches,
       sellZone: !!this.sellAt,
+      twist: { label: this.twist.label, text: this.twist.text },
+      dynamite: { n: this.dynamite, price: this.dynamitePrice() },
       bag: [...this.bag].map(([i, b]) => ({ id: this.config.ores[i]!.id, label: this.config.ores[i]!.label, n: b.n, value: Math.round(b.value), color: this.config.ores[i]!.color })),
       cap: this.capacity,
       home: this.inBase,
@@ -524,6 +665,8 @@ export class MineSystem {
       skills: Object.fromEntries(this.skills),
       bag: [...this.bag].map(([i, b]) => [this.config.ores[i]!.id, b.n, b.value]),
       seed: this.blocks.seed,
+      twist: this.twist.id,
+      dynamite: this.dynamite,
       next: this.nextRegen,
       dug: this.blocks.save(),
     };
@@ -548,10 +691,14 @@ export class MineSystem {
         if (i >= 0 && typeof e[1] === 'number' && e[1] > 0) this.bag.set(i, { n: Math.floor(e[1]), value: num(e[2], 0) });
       }
     this.nextRegen = num(o.next, this.nextRegen);
+    this.dynamite = Math.max(0, Math.floor(num(o.dynamite, 0)));
     if (typeof o.seed === 'number' && this.host.now() < this.nextRegen) {
+      const t = this.config.twists.find((x) => x.id === o.twist);
+      if (t) this.useTwist(t);
       this.blocks.reset(o.seed);
       this.blocks.load(o.dug);
     } else {
+      this.useTwist(this.rollTwist());
       this.blocks.reset(this.newSeed());
       this.nextRegen = this.host.now() + this.config.regenMinutes * 60000;
     }

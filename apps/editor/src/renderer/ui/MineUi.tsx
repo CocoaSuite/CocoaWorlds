@@ -125,7 +125,10 @@ export function MineUi({ hud, menu, onAction }: { hud: MineHud; menu: MineMenu |
           {hud.home ? (hud.surface ? 'Surface' : 'Base') : `${hud.zone} · ${hud.distance}`}
         </div>
         <div className="cw-mine-dim">{hud.pickaxe}</div>
-        <div className="cw-mine-dim">Mine resets in {clock(hud.regen)}</div>
+        {hud.dynamite > 0 && <div>Dynamite × {hud.dynamite}</div>}
+        <div className="cw-mine-dim">
+          {hud.twist} · resets in {clock(hud.regen)}
+        </div>
       </div>
       {!hud.home && (
         <button type="button" className="cw-ov cw-mine-home" onClick={() => onAction('home')} data-testid="mine-home">
@@ -172,6 +175,17 @@ export function MineUi({ hud, menu, onAction }: { hud: MineHud; menu: MineMenu |
                     <span className="cw-mine-cost">${money(menu.pickaxe.next.price)}</span>
                   </button>
                 )}
+                <div className="cw-mine-sub">Dynamite × {menu.dynamite.n}</div>
+                <div className="cw-mine-row">
+                  {[1, 5].map((n) => (
+                    <button key={n} type="button" className="cw-mine-buy cw-mine-half" disabled={menu.money < menu.dynamite.price * n} onClick={() => onAction('dynamite', String(n))} data-testid={`buy-dynamite-${n}`}>
+                      <span>+{n}</span>
+                      <span className="cw-mine-cost">${money(menu.dynamite.price * n)}</span>
+                    </button>
+                  ))}
+                </div>
+                <div className="cw-mine-sub">{menu.twist.label}</div>
+                <div className="cw-mine-dim">{menu.twist.text}</div>
                 <div className="cw-mine-sub">
                   Backpack {menu.bag.reduce((s, b) => s + b.n, 0)}/{menu.cap}
                 </div>

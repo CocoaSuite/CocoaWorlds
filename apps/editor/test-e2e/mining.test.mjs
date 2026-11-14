@@ -66,8 +66,16 @@ test('mining', async () => {
     await page.getByTestId('skill-swing').click();
     await until(() => world(() => window.__cwViewport.play.world.mine.skills.get('swing') ?? 0), 1);
     await shot(page, 'm04-menu');
+    await page.getByTestId('buy-dynamite-5').click();
+    await until(() => world(() => window.__cwViewport.play.world.mine.dynamite), 5);
     await page.getByTestId('mine-close').click();
     await until(() => page.getByTestId('mine-menu').count(), 0);
+    // Dynamite: thrown ahead, it blows a hole.
+    await world(() => { const w = window.__cwViewport.play.world; w.setPlayerInput({ yaw: -Math.PI / 2, pitch: -0.2 }); w.baseKey('KeyG'); });
+    await until(() => world(() => window.__cwViewport.play.world.mine.dynamite), 4);
+    await new Promise((r) => setTimeout(r, 2600));
+    await shot(page, 'm05-boom');
+    await until(() => world(() => window.__cwViewport.play.world.mine.bombs.length), 0, 30000);
     await page.keyboard.press('F5');
   } finally {
     await quit(app);
