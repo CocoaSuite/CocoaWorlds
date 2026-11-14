@@ -1526,7 +1526,7 @@ export class PlaySession {
     cam.rotation.set(v[4]!, v[3]!, 0, 'YXZ');
     cam.updateMatrixWorld();
     this.easeFov(cam, f);
-    this.mineView?.placeHand(cam, this.world.time);
+    this.mineView?.placeHand(cam, this.world.time, !!f.thirdPerson);
     // Third person: the player is seen, as a simple body turned the way they look.
     if (f.thirdPerson) {
       this.body ??= this.makeBody();

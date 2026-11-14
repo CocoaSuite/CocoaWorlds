@@ -10,11 +10,11 @@ beforeAll(async () => {
 describe('the mine', () => {
   const blocks = () => new MineBlocks(mineConfig({ seed: 7, surface: false }), 7);
 
-  it('built-in settings: 12 rock zones (one for each pickaxe), 13 ores, 4 skill branches', () => {
+  it('built-in settings: 12 rock zones (one for each pickaxe), 25 ores, 4 skill branches', () => {
     const c = mineConfig();
     expect(c.zones).toHaveLength(12);
     expect(c.zones.map((z) => z.tier)).toEqual(c.pickaxes.map((_, i) => i));
-    expect(c.ores).toHaveLength(13);
+    expect(c.ores).toHaveLength(25);
     expect(c.pickaxes).toHaveLength(12);
     expect(new Set(c.skills.map((s) => s.branch))).toEqual(new Set(['mining', 'backpack', 'combat', 'vision']));
     for (const s of c.skills) for (const n of s.needs) expect(c.skills.some((d) => d.id === n)).toBe(true);

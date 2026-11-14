@@ -87,6 +87,8 @@ export class MineSystem {
   private statCache: Map<Stat, number> | null = null;
   private saidAt = new Map<string, number>();
   inBase = false;
+  /** Nothing else in the player's hands (set by the world): the pickaxe is out. */
+  handFree = true;
   /** The sell zone's middle (world), from a scene object called “Sell”; null: selling happens on getting home. */
   sellAt: [number, number, number] | null = null;
   atSell = false;
@@ -462,7 +464,7 @@ export class MineSystem {
       regen: Math.max(0, Math.ceil((this.nextRegen - this.host.now()) / 1000)),
       home: this.inBase,
       surface: this.config.surface,
-      atSell: this.atSell,
+      atSell: !!this.sellAt && this.atSell,
       items: [...this.bag].map(([i, b]) => ({ id: this.config.ores[i]!.id, label: this.config.ores[i]!.label, n: b.n })),
       aim,
     };

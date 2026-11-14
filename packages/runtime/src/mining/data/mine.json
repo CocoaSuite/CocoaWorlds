@@ -52,8 +52,10 @@
    "ores": {
     "coal": 6,
     "copper": 4,
+    "sulfur": 3,
     "iron": 2,
-    "silver": 0.6
+    "silver": 0.6,
+    "fossil": 0.4
    }
   },
   {
@@ -65,9 +67,11 @@
    "tier": 1,
    "ores": {
     "coal": 4,
-    "copper": 5,
+    "copper": 4,
+    "sulfur": 2,
     "iron": 3,
     "silver": 1.5,
+    "fossil": 1,
     "gold": 0.5
    }
   },
@@ -79,11 +83,12 @@
    "hardness": 9,
    "tier": 2,
    "ores": {
-    "coal": 3,
-    "copper": 3,
+    "coal": 2,
     "iron": 4,
     "silver": 3,
+    "fossil": 2,
     "gold": 1.5,
+    "malachite": 1,
     "quartz": 0.4
    }
   },
@@ -95,11 +100,12 @@
    "hardness": 16,
    "tier": 3,
    "ores": {
-    "copper": 2,
-    "iron": 4,
+    "iron": 3,
     "silver": 3,
     "gold": 3,
+    "malachite": 2,
     "quartz": 1,
+    "platinum": 0.5,
     "azurite": 0.3
    }
   },
@@ -111,10 +117,12 @@
    "hardness": 28,
    "tier": 4,
    "ores": {
-    "iron": 3,
-    "silver": 3,
-    "gold": 4,
+    "silver": 2,
+    "gold": 3,
     "quartz": 3,
+    "malachite": 2,
+    "platinum": 1.5,
+    "jade": 0.8,
     "azurite": 1
    }
   },
@@ -126,9 +134,10 @@
    "hardness": 49,
    "tier": 5,
    "ores": {
-    "silver": 2,
-    "gold": 4,
-    "quartz": 3,
+    "gold": 3,
+    "quartz": 2,
+    "platinum": 2,
+    "jade": 1.5,
     "azurite": 2.5,
     "emerald": 0.6
    }
@@ -141,10 +150,12 @@
    "hardness": 86,
    "tier": 6,
    "ores": {
-    "gold": 2,
-    "quartz": 3,
-    "azurite": 5,
+    "quartz": 2,
+    "platinum": 1,
+    "jade": 2,
+    "azurite": 4,
     "emerald": 2,
+    "sapphire": 1,
     "topaz": 0.5
    }
   },
@@ -156,11 +167,13 @@
    "hardness": 151,
    "tier": 7,
    "ores": {
-    "quartz": 2,
-    "azurite": 3,
-    "emerald": 4,
+    "jade": 1,
+    "azurite": 2,
+    "emerald": 3,
+    "sapphire": 3,
     "topaz": 2,
-    "ruby": 0.5
+    "ruby": 0.5,
+    "opal": 0.4
    }
   },
   {
@@ -171,10 +184,11 @@
    "hardness": 264,
    "tier": 8,
    "ores": {
-    "azurite": 2,
-    "emerald": 3,
+    "emerald": 2,
     "topaz": 3,
     "ruby": 4,
+    "sapphire": 1,
+    "opal": 1.5,
     "amethyst": 0.5
    }
   },
@@ -186,10 +200,11 @@
    "hardness": 462,
    "tier": 9,
    "ores": {
-    "emerald": 2,
-    "topaz": 3,
-    "ruby": 4,
+    "ruby": 3,
+    "opal": 2,
     "amethyst": 3,
+    "moonstone": 1.2,
+    "mithril": 0.6,
     "diamond": 0.4
    }
   },
@@ -201,10 +216,11 @@
    "hardness": 808,
    "tier": 10,
    "ores": {
-    "topaz": 2,
-    "ruby": 3,
-    "amethyst": 4,
+    "amethyst": 3,
+    "moonstone": 2,
+    "mithril": 2,
     "diamond": 2,
+    "sunstone": 1,
     "voidstone": 0.3
    }
   },
@@ -216,10 +232,12 @@
    "hardness": 1414,
    "tier": 11,
    "ores": {
-    "ruby": 1,
-    "amethyst": 3,
-    "diamond": 4,
-    "voidstone": 3
+    "diamond": 3,
+    "mithril": 1.5,
+    "sunstone": 2,
+    "voidstone": 3,
+    "prismite": 1.5,
+    "starmetal": 0.5
    }
   }
  ],
@@ -231,6 +249,15 @@
    "hardness": 1.2,
    "texture": "",
    "color": "#3a3b46",
+   "glow": 0
+  },
+  {
+   "id": "sulfur",
+   "label": "Sulfur",
+   "value": 3,
+   "hardness": 1.25,
+   "texture": "",
+   "color": "#e8cc28",
    "glow": 0
   },
   {
@@ -252,6 +279,15 @@
    "glow": 0
   },
   {
+   "id": "fossil",
+   "label": "Fossil",
+   "value": 15,
+   "hardness": 1.45,
+   "texture": "",
+   "color": "#d6c6a6",
+   "glow": 0
+  },
+  {
    "id": "silver",
    "label": "Silver",
    "value": 20,
@@ -270,6 +306,15 @@
    "glow": 0.15
   },
   {
+   "id": "malachite",
+   "label": "Malachite",
+   "value": 40,
+   "hardness": 1.65,
+   "texture": "",
+   "color": "#1e8c50",
+   "glow": 0.1
+  },
+  {
    "id": "quartz",
    "label": "Quartz",
    "value": 50,
@@ -279,6 +324,15 @@
    "glow": 0.2
   },
   {
+   "id": "platinum",
+   "label": "Platinum",
+   "value": 65,
+   "hardness": 1.75,
+   "texture": "",
+   "color": "#c4ccd8",
+   "glow": 0.15
+  },
+  {
    "id": "azurite",
    "label": "Azurite",
    "value": 80,
@@ -286,6 +340,15 @@
    "texture": "",
    "color": "#2c64d8",
    "glow": 0.35
+  },
+  {
+   "id": "jade",
+   "label": "Jade",
+   "value": 120,
+   "hardness": 1.9,
+   "texture": "",
+   "color": "#78c48c",
+   "glow": 0.2
   },
   {
    "id": "emerald",
@@ -306,6 +369,15 @@
    "glow": 0.4
   },
   {
+   "id": "sapphire",
+   "label": "Sapphire",
+   "value": 400,
+   "hardness": 2.15,
+   "texture": "",
+   "color": "#1e46c8",
+   "glow": 0.35
+  },
+  {
    "id": "ruby",
    "label": "Ruby",
    "value": 500,
@@ -313,6 +385,15 @@
    "texture": "",
    "color": "#d02440",
    "glow": 0.4
+  },
+  {
+   "id": "opal",
+   "label": "Opal",
+   "value": 800,
+   "hardness": 2.3,
+   "texture": "",
+   "color": "#d8e4f0",
+   "glow": 0.3
   },
   {
    "id": "amethyst",
@@ -324,6 +405,24 @@
    "glow": 0.45
   },
   {
+   "id": "moonstone",
+   "label": "Moonstone",
+   "value": 1600,
+   "hardness": 2.45,
+   "texture": "",
+   "color": "#aac8f0",
+   "glow": 0.6
+  },
+  {
+   "id": "mithril",
+   "label": "Mithril",
+   "value": 2200,
+   "hardness": 2.55,
+   "texture": "",
+   "color": "#96d2f0",
+   "glow": 0.6
+  },
+  {
    "id": "diamond",
    "label": "Diamond",
    "value": 3000,
@@ -333,6 +432,24 @@
    "glow": 0.55
   },
   {
+   "id": "sunstone",
+   "label": "Sunstone",
+   "value": 4000,
+   "hardness": 2.75,
+   "texture": "",
+   "color": "#f89628",
+   "glow": 0.7
+  },
+  {
+   "id": "prismite",
+   "label": "Prismite",
+   "value": 6000,
+   "hardness": 2.85,
+   "texture": "",
+   "color": "#e6c83c",
+   "glow": 0.5
+  },
+  {
    "id": "voidstone",
    "label": "Voidstone",
    "value": 8000,
@@ -340,6 +457,15 @@
    "texture": "",
    "color": "#b45cf2",
    "glow": 0.7
+  },
+  {
+   "id": "starmetal",
+   "label": "Starmetal",
+   "value": 12000,
+   "hardness": 3.2,
+   "texture": "",
+   "color": "#343a5c",
+   "glow": 0.5
   }
  ],
  "pickaxes": [

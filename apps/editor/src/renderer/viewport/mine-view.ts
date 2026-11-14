@@ -17,24 +17,36 @@ import copperPng from '../assets/mine/copper.png';
 import crimsonrockPng from '../assets/mine/crimson_rock.png';
 import deepslatePng from '../assets/mine/deepslate.png';
 import diamondPng from '../assets/mine/diamond.png';
-import emeraldPng from '../assets/mine/emerald.png';
 import emberrockPng from '../assets/mine/ember_rock.png';
+import emeraldPng from '../assets/mine/emerald.png';
+import fossilPng from '../assets/mine/fossil.png';
 import frostrockPng from '../assets/mine/frost_rock.png';
 import goldPng from '../assets/mine/gold.png';
 import granitePng from '../assets/mine/granite.png';
 import ironPng from '../assets/mine/iron.png';
+import jadePng from '../assets/mine/jade.png';
+import malachitePng from '../assets/mine/malachite.png';
 import marblePng from '../assets/mine/marble.png';
+import mithrilPng from '../assets/mine/mithril.png';
+import moonstonePng from '../assets/mine/moonstone.png';
 import obsidianPng from '../assets/mine/obsidian.png';
+import opalPng from '../assets/mine/opal.png';
+import platinumPng from '../assets/mine/platinum.png';
+import prismitePng from '../assets/mine/prismite.png';
 import quartzPng from '../assets/mine/quartz.png';
 import rubyPng from '../assets/mine/ruby.png';
+import sapphirePng from '../assets/mine/sapphire.png';
 import shalePng from '../assets/mine/shale.png';
 import silverPng from '../assets/mine/silver.png';
+import starmetalPng from '../assets/mine/starmetal.png';
 import stonePng from '../assets/mine/stone.png';
+import sulfurPng from '../assets/mine/sulfur.png';
+import sunstonePng from '../assets/mine/sunstone.png';
 import topazPng from '../assets/mine/topaz.png';
 import voidrockPng from '../assets/mine/void_rock.png';
 import voidstonePng from '../assets/mine/voidstone.png';
 
-const builtIn: Record<string, string> = { amethyst: amethystPng, azure_rock: azurerockPng, azurite: azuritePng, basalt: basaltPng, coal: coalPng, copper: copperPng, crimson_rock: crimsonrockPng, deepslate: deepslatePng, diamond: diamondPng, emerald: emeraldPng, ember_rock: emberrockPng, frost_rock: frostrockPng, gold: goldPng, granite: granitePng, iron: ironPng, marble: marblePng, obsidian: obsidianPng, quartz: quartzPng, ruby: rubyPng, shale: shalePng, silver: silverPng, stone: stonePng, topaz: topazPng, void_rock: voidrockPng, voidstone: voidstonePng };
+const builtIn: Record<string, string> = { amethyst: amethystPng, azure_rock: azurerockPng, azurite: azuritePng, basalt: basaltPng, coal: coalPng, copper: copperPng, crimson_rock: crimsonrockPng, deepslate: deepslatePng, diamond: diamondPng, ember_rock: emberrockPng, emerald: emeraldPng, fossil: fossilPng, frost_rock: frostrockPng, gold: goldPng, granite: granitePng, iron: ironPng, jade: jadePng, malachite: malachitePng, marble: marblePng, mithril: mithrilPng, moonstone: moonstonePng, obsidian: obsidianPng, opal: opalPng, platinum: platinumPng, prismite: prismitePng, quartz: quartzPng, ruby: rubyPng, sapphire: sapphirePng, shale: shalePng, silver: silverPng, starmetal: starmetalPng, stone: stonePng, sulfur: sulfurPng, sunstone: sunstonePng, topaz: topazPng, void_rock: voidrockPng, voidstone: voidstonePng };
 const builtInUrl = (id: string) => builtIn[id] ?? '';
 const T = 16;
 
@@ -501,27 +513,32 @@ export class MineView {
     if (this.sense.instanceColor) this.sense.instanceColor.needsUpdate = true;
   }
 
-  /** The pickaxe model in hand, swinging, placed by the camera (after it moved). */
-  placeHand(cam: THREE.Camera, time: number): void {
-    const m = this.mine, want = m.config.pickaxes[m.tier]?.model ?? '';
+  /** The pickaxe in hand (Minecraft style: its pixels as little blocks, or the pickaxe's own model), swinging, placed by
+   * the camera after it moved. Hidden in third person and while something else is in hand. */
+  placeHand(cam: THREE.Camera, time: number, thirdPerson: boolean): void {
+    const m = this.mine, p = m.config.pickaxes[m.tier]!, want = p.model ? `model:${p.model}` : `pixels:${p.color}`;
     this.mat.uniforms.lamp!.value.setFromMatrixPosition(cam.matrixWorld);
+    this.hand.visible = !thirdPerson && m.handFree && !m.menuOpen;
     if (want !== this.handModel) {
       this.handModel = want;
       this.handInst?.dispose();
       this.handInst = null;
+      for (const c of this.hand.children) if ((c as THREE.Mesh).geometry) (c as THREE.Mesh).geometry.dispose();
       this.hand.clear();
-      if (want)
-        void modelInstance({ ...HAND, model: want })
+      if (p.model)
+        void modelInstance({ ...HAND, model: p.model })
           .then((inst) => {
             if (this.handModel !== want) return inst.dispose();
             this.handInst = inst;
             this.hand.add(inst.object);
           })
           .catch(() => {});
+      else this.hand.add(pickaxeMesh(p.color));
     }
-    if (!want) return;
-    const s = (time - m.swungAt) / 0.22, a = s >= 0 && s < 1 ? Math.sin(s * Math.PI) * 0.9 : 0;
-    this.local.compose(this.v.set(12, -13, -22), this.q.setFromEuler(new THREE.Euler(-a, 0.35, -a * 0.3)), new THREE.Vector3(1, 1, 1));
+    const s = (time - m.swungAt) / 0.25, a = s >= 0 && s < 1 ? Math.sin(s * Math.PI) : 0;
+    // (The pixel pickaxe is mirrored: head up to the left, handle down to the right, like a tool held in the right hand.)
+    const k = p.model ? 1 : 0.48;
+    this.local.compose(this.v.set(11, -10 - a * 2, -15 - a * 3), this.q.setFromEuler(new THREE.Euler(0.15 - a * 1.2, 0.4 - a * 0.25, 0.1, 'YXZ')), new THREE.Vector3(p.model ? 1 : -k, k, k));
     this.hand.matrix.multiplyMatrices(cam.matrixWorld, this.local);
     this.hand.matrixWorldNeedsUpdate = true;
   }
@@ -534,6 +551,74 @@ export class MineView {
     for (const t of this.crackTex) t.dispose();
     this.handInst?.dispose();
   }
+}
+
+const PICKAXE = [
+  '................',
+  '....ooooo.......',
+  '...ohhllloo.....',
+  '....oommlllo....',
+  '........oomlo...',
+  '.......o2oomlo..',
+  '......o32o.omdo.',
+  '.....o32o...omo.',
+  '....o32o....omo.',
+  '...o32o.....odo.',
+  '..o32o......odo.',
+  '.o32o.......oo..',
+  'o32o............',
+  'o2o.............',
+  '.o..............',
+  '................',
+];
+
+/** A pickaxe from its pixels: each one a little block, the head in the pickaxe's colour. Grip at the origin. */
+function pickaxeMesh(colour: string): THREE.Mesh {
+  const c = new THREE.Color(colour), dark = new THREE.Color(0x0a080e), light = new THREE.Color(0xfffaeb);
+  const col: Record<string, THREE.Color> = {
+    o: c.clone().lerp(dark, 0.75),
+    d: c.clone().lerp(dark, 0.4),
+    m: c.clone(),
+    l: c.clone().lerp(light, 0.3),
+    h: c.clone().lerp(light, 0.6),
+    '2': new THREE.Color().setRGB(110 / 255, 78 / 255, 44 / 255, THREE.SRGBColorSpace),
+    '3': new THREE.Color().setRGB(150 / 255, 112 / 255, 66 / 255, THREE.SRGBColorSpace),
+    w: new THREE.Color().setRGB(40 / 255, 26 / 255, 14 / 255, THREE.SRGBColorSpace),
+  };
+  const at = (x: number, y: number) => (x < 0 || y < 0 || x > 15 || y > 15 ? '.' : PICKAXE[y]![x]!);
+  const P = 1.5, pos: number[] = [], rgb: number[] = [], idx: number[] = [];
+  const quad = (pts: number[][], k: THREE.Color, shade: number) => {
+    const b = pos.length / 3;
+    for (const q of pts) {
+      pos.push(q[0]! * P, q[1]! * P, q[2]! * P);
+      rgb.push(k.r * shade, k.g * shade, k.b * shade);
+    }
+    idx.push(b, b + 1, b + 2, b, b + 2, b + 3);
+  };
+  for (let y = 0; y < 16; y++)
+    for (let x = 0; x < 16; x++) {
+      let ch = at(x, y);
+      if (ch === '.') continue;
+      if (ch === 'o' && /[23]/.test(at(x - 1, y) + at(x + 1, y))) ch = 'w';
+      const k = col[ch]!;
+      // (Grip at the origin; y up; half a pixel thick each way.)
+      const x0 = x - 2, x1 = x - 1, y0 = 12 - y, y1 = 13 - y, z0 = -0.5, z1 = 0.5;
+      quad([[x0, y0, z1], [x1, y0, z1], [x1, y1, z1], [x0, y1, z1]], k, 1);
+      quad([[x1, y0, z0], [x0, y0, z0], [x0, y1, z0], [x1, y1, z0]], k, 0.75);
+      if (at(x, y - 1) === '.') quad([[x0, y1, z1], [x1, y1, z1], [x1, y1, z0], [x0, y1, z0]], k, 0.95);
+      if (at(x, y + 1) === '.') quad([[x0, y0, z0], [x1, y0, z0], [x1, y0, z1], [x0, y0, z1]], k, 0.55);
+      if (at(x + 1, y) === '.') quad([[x1, y0, z1], [x1, y0, z0], [x1, y1, z0], [x1, y1, z1]], k, 0.85);
+      if (at(x - 1, y) === '.') quad([[x0, y0, z0], [x0, y0, z1], [x0, y1, z1], [x0, y1, z0]], k, 0.7);
+    }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute('color', new THREE.Float32BufferAttribute(rgb, 3));
+  g.setIndex(idx);
+  g.computeBoundingSphere();
+  const mesh = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ vertexColors: true }));
+  mesh.userData.noAo = true;
+  mesh.frustumCulled = false;
+  return mesh;
 }
 
 /** A word on a board that turns to face the camera, hanging over the sell zone. */

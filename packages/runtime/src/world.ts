@@ -5228,6 +5228,7 @@ export class GameWorld {
   private stepMine(): void {
     const m = this.mine!, p = this.player!;
     const free = !this.held && !this.equipped && !this.plugHand && !this.weaponInHand() && !this.hiding && !this.frozen;
+    m.handFree = free;
     m.tick(STEP, free && !!p.input.fire);
     this.syncMineColliders(false);
   }
