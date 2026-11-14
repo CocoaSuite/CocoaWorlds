@@ -478,7 +478,7 @@ model sample; an e2e test of a print in Play.
 
 ### 28. Mining (Azure Mines style)
 
-Status: first playable version. Game rule `mining`; see `docs/mining.md`. Endless cube-block mine (40 u blocks,
+Status: first playable version. Game rule `mining`; see `docs/mining.md`. Endless cube-block mine (48 u blocks,
 16³ chunks made from a seed, edits saved), six rock zones by distance, ten ores (pixel tiles drawn for it in
 `renderer/assets/mine/`), 12 pickaxes then endless levels, a 25-node skill tree in four branches with endless last
 nodes, backpack sold on entering the base, Home (H), death loses part of the backpack, regenerates every 40 minutes.

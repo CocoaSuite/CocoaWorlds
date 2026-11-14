@@ -106,7 +106,7 @@ describe('the pickaxe, the backpack and buying', () => {
     };
     return h;
   }
-  const make = (h: MineHost, over: unknown = {}) => new MineSystem({ seed: 3, maxMobs: 0, ...(over as object) }, h);
+  const make = (h: MineHost, over: unknown = {}) => new MineSystem({ seed: 3, maxMobs: 0, block: 40, ...(over as object) }, h);
 
   it('swings break blocks; ores go in the backpack and sell at the base', () => {
     const h = host([6 * 40, 0, 0]);
@@ -222,6 +222,17 @@ describe('in the game world', () => {
     expect(w.mine!.blocks.get(0, -1, 0)).toBe(AIR);
     run(w, 1);
     expect(w.player!.feetPosition.y).toBeLessThan(-30);
+  });
+
+  it('long falls do no harm and the mine has no bottom', () => {
+    const w = game();
+    run(w, 0.2);
+    const m = w.mine!;
+    for (let y = -1; y > -80; y--) m.blocks.set(0, y, 0, AIR);
+    run(w, 6);
+    expect(w.player!.feetPosition.y).toBeLessThan(-75 * m.B);
+    expect(w.playerStatus().health).toBe(100);
+    expect(w.player!.feetPosition.y).toBeLessThan(-2048);
   });
 
   it('Tab opens the menu (the mouse is freed); H goes home', () => {

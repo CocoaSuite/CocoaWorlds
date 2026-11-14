@@ -263,6 +263,8 @@ export class Player {
 
   /** Movement speed multiplier (1: normal; badly hurt players with hidden health move slower). */
   speedScale = 1;
+  /** Jump height factor (mining raises it so a block can be climbed). */
+  jumpScale = 1;
 
   /** Stamina on (a game rule): Shift sprints rather than walks, and sprinting and jumping tire the player. */
   tires = false;
@@ -408,7 +410,7 @@ export class Player {
       // Jump (pressing again each time; holding doesn't repeat).
       if (inp.jump && !this.jumpHeld && !this.riding && (!this.tires || this.stamina >= PLAYER.jumpCost)) {
         if (this.tires) this.tire(PLAYER.jumpCost);
-        this.velocity.y = PLAYER.jumpSpeed;
+        this.velocity.y = PLAYER.jumpSpeed * this.jumpScale;
         this.onGround = false;
       } else {
         this.applyFriction(dt);

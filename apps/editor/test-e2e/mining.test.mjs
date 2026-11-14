@@ -33,7 +33,7 @@ test('mining', async () => {
     // Dig out of the base: a tunnel ahead.
     await world(() => {
       const w = window.__cwViewport.play.world;
-      w.player.teleport({ x: 7 * 40, y: 0, z: 0 }, Math.PI / 2 * 3);
+      w.player.teleport({ x: 7 * w.mine.B, y: 0, z: 0 }, Math.PI / 2 * 3);
       w.setPlayerInput({ yaw: -Math.PI / 2, pitch: -0.1, fire: true, forward: 1 });
     });
     await until(() => world(() => window.__cwViewport.play.world.mine.blocks.get(8, 1, 0) === 0), true, 20000);
@@ -47,7 +47,7 @@ test('mining', async () => {
       m.money = 5e6;
       for (const id of ['feet', 'lantern', 'sense']) for (let i = 0; i < 3; i++) m.buySkill(id);
       for (let x = 18; x < 30; x++) for (let y = 0; y < 3; y++) for (let z = -2; z < 3; z++) m.blocks.set(x, y, z, 0);
-      w.player.teleport({ x: 19 * 40, y: 0, z: 0 });
+      w.player.teleport({ x: 19 * m.B, y: 0, z: 0 });
       w.setPlayerInput({ yaw: -Math.PI / 2, pitch: -0.05 });
     });
     // (A monster in front: a plain figure, as the scene has no Zombie object.)

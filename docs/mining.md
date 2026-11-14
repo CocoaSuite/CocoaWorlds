@@ -11,7 +11,7 @@ Code: `packages/runtime/src/mining/` (`defs.ts` settings, `data/mine.json` the b
 ## Playing
 
 - The Player start is the base: a room (`base`, half size in blocks) cut into the rock. Rock fills everything else,
-  in every direction, with caves and tunnels. Blocks are 40 u (the player jumps one, fits a 1 × 2 tunnel).
+  in every direction, with caves and tunnels. Blocks are 48 u (jumps are raised to clear one; the player fits a 1 × 2 tunnel). No fall damage, no falling out of the world.
 - Click (held) swings the pickaxe at the aimed block (reach 4.5 blocks); damage wears it down (cracks), then it
   breaks. Ores go in the backpack. A zone needs a pickaxe tier (“Too hard. Needs a … pickaxe.”).
 - Farther from the base: rock zones (stone, deepslate, basalt, azure rock, crimson rock, void rock, the last one

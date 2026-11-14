@@ -2854,7 +2854,8 @@ export class GameWorld {
         this.player.step(STEP);
         this.playerNoise();
         if (this.player.landingSpeed) {
-          const damage = fallDamage(this.player.landingSpeed);
+          // (No fall damage in the mine.)
+          const damage = this.mine ? 0 : fallDamage(this.player.landingSpeed);
           this.player.landingSpeed = 0;
           if (damage > 0) this.hurt(damage, 'a fall', true);
         }
@@ -5208,7 +5209,13 @@ export class GameWorld {
       random: () => this.random(),
     });
     const p = this.player;
-    if (p) this.mine.origin = [p.spawn.feet.x, p.spawn.feet.y, p.spawn.feet.z];
+    if (p) {
+      this.mine.origin = [p.spawn.feet.x, p.spawn.feet.y, p.spawn.feet.z];
+      // (Jumps clear a block, whatever its size.)
+      p.jumpScale = Math.max(1, Math.sqrt((1.25 * this.mine.B) / (PLAYER.jumpSpeed ** 2 / (2 * 800))));
+    }
+    // (The mine goes down forever: no falling out of the world.)
+    this.killY = -Infinity;
     this.mineBody = this.world.createRigidBody(RAPIER.RigidBodyDesc.fixed());
     this.syncMineColliders(true);
   }
