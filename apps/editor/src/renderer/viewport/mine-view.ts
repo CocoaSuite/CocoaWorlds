@@ -4,7 +4,7 @@
  */
 import * as THREE from 'three';
 import { readComponent, type ModelData } from '@cocoaworlds/core';
-import { AIR, EDGE, oreOf, zoneOf, type Chunk, type MineSystem, type Mob } from '@cocoaworlds/runtime';
+import { AIR, EDGE, isMat, MAT, oreOf, zoneOf, type Chunk, type MineSystem, type Mob } from '@cocoaworlds/runtime';
 import { assetUrl } from '../assets';
 import { modelInstance, type ModelInstance } from './models';
 
@@ -45,8 +45,25 @@ import sunstonePng from '../assets/mine/sunstone.png';
 import topazPng from '../assets/mine/topaz.png';
 import voidrockPng from '../assets/mine/void_rock.png';
 import voidstonePng from '../assets/mine/voidstone.png';
+import beamPng from '../assets/mine/beam.png';
+import calcitePng from '../assets/mine/calcite.png';
+import carvedstonePng from '../assets/mine/carved_stone.png';
+import carvedtemplePng from '../assets/mine/carved_temple.png';
+import chestPng from '../assets/mine/chest.png';
+import crackedbricksPng from '../assets/mine/cracked_bricks.png';
+import crystalblockPng from '../assets/mine/crystal_block.png';
+import goldblockPng from '../assets/mine/gold_block.png';
+import lanternPng from '../assets/mine/lantern.png';
+import lavaPng from '../assets/mine/lava.png';
+import planksPng from '../assets/mine/planks.png';
+import railPng from '../assets/mine/rail.png';
+import stonebricksPng from '../assets/mine/stone_bricks.png';
+import templebricksPng from '../assets/mine/temple_bricks.png';
+import vaultPng from '../assets/mine/vault.png';
+import webPng from '../assets/mine/web.png';
+import { BossModel } from './boss-models';
 
-const builtIn: Record<string, string> = { amethyst: amethystPng, azure_rock: azurerockPng, azurite: azuritePng, basalt: basaltPng, coal: coalPng, copper: copperPng, crimson_rock: crimsonrockPng, deepslate: deepslatePng, diamond: diamondPng, ember_rock: emberrockPng, emerald: emeraldPng, fossil: fossilPng, frost_rock: frostrockPng, gold: goldPng, granite: granitePng, iron: ironPng, jade: jadePng, malachite: malachitePng, marble: marblePng, mithril: mithrilPng, moonstone: moonstonePng, obsidian: obsidianPng, opal: opalPng, platinum: platinumPng, prismite: prismitePng, quartz: quartzPng, ruby: rubyPng, sapphire: sapphirePng, shale: shalePng, silver: silverPng, starmetal: starmetalPng, stone: stonePng, sulfur: sulfurPng, sunstone: sunstonePng, topaz: topazPng, void_rock: voidrockPng, voidstone: voidstonePng };
+const builtIn: Record<string, string> = { amethyst: amethystPng, azure_rock: azurerockPng, azurite: azuritePng, basalt: basaltPng, coal: coalPng, copper: copperPng, crimson_rock: crimsonrockPng, deepslate: deepslatePng, diamond: diamondPng, ember_rock: emberrockPng, emerald: emeraldPng, fossil: fossilPng, frost_rock: frostrockPng, gold: goldPng, granite: granitePng, iron: ironPng, jade: jadePng, malachite: malachitePng, marble: marblePng, mithril: mithrilPng, moonstone: moonstonePng, obsidian: obsidianPng, opal: opalPng, platinum: platinumPng, prismite: prismitePng, quartz: quartzPng, ruby: rubyPng, sapphire: sapphirePng, shale: shalePng, silver: silverPng, starmetal: starmetalPng, stone: stonePng, sulfur: sulfurPng, sunstone: sunstonePng, topaz: topazPng, void_rock: voidrockPng, voidstone: voidstonePng, beam: beamPng, calcite: calcitePng, carved_stone: carvedstonePng, carved_temple: carvedtemplePng, chest: chestPng, cracked_bricks: crackedbricksPng, crystal_block: crystalblockPng, gold_block: goldblockPng, lantern: lanternPng, lava: lavaPng, planks: planksPng, rail: railPng, stone_bricks: stonebricksPng, temple_bricks: templebricksPng, vault: vaultPng, web: webPng };
 const builtInUrl = (id: string) => builtIn[id] ?? '';
 const T = 16;
 
@@ -83,7 +100,11 @@ void main() {
   gl_Position = projectionMatrix * viewMatrix * w;
 }`;
 
+/** Lit blocks (lanterns, crystal, lava) nearest the player that light the rock. */
+const NL = 12;
+
 const FRAG = /* glsl */ `
+#define NL ${NL}
 uniform sampler2D map;
 uniform vec3 lamp;
 uniform float radius;
@@ -91,17 +112,25 @@ uniform float ambient;
 uniform float skyY;
 uniform float skyFade;
 uniform float sky;
+uniform vec3 lp[NL];
+uniform vec4 lc[NL];
 varying vec3 vC;
 varying vec2 vUv;
 varying vec3 vW;
 void main() {
   vec4 t = texture2D(map, vUv);
+  if (t.a < 0.002) discard;
+  vec3 lit = vec3(0.0);
+  for (int i = 0; i < NL; i++) {
+    float k = clamp(1.0 - distance(vW, lp[i]) / lc[i].w, 0.0, 1.0);
+    lit += lc[i].rgb * k * k;
+  }
   float l = clamp(1.0 - distance(vW, lamp) / radius, 0.0, 1.0);
   l = l * l * (3.0 - 2.0 * l);
   // (Daylight near the surface, fading out a few blocks down.)
   l = max(l, sky * smoothstep(skyY - skyFade, skyY, vW.y));
   float glow = 1.0 - t.a;
-  gl_FragColor = vec4(t.rgb * vC * (ambient + l * (1.0 - ambient)) + t.rgb * glow * 0.85, 1.0);
+  gl_FragColor = vec4(t.rgb * vC * (ambient + l * (1.0 - ambient) + lit) + t.rgb * glow * 0.85, 1.0);
   #include <tonemapping_fragment>
   #include <colorspace_fragment>
 }`;
@@ -116,8 +145,10 @@ export class MineView {
   private atlas: THREE.DataTexture;
   private tiles: number;
   private rows: number;
+  /** Rows of rock (the rest of the atlas holds built blocks). */
+  private zrows: number;
   private mat: THREE.ShaderMaterial;
-  private meshes = new Map<string, { mesh: THREE.Mesh; version: number; chunk: Chunk }>();
+  private meshes = new Map<string, { mesh: THREE.Mesh; version: number; chunk: Chunk; lights: number[] }>();
   /** Average colours of each tile (zone × ore), for chips. */
   private colors: THREE.Color[] = [];
   private outline: THREE.LineSegments;
@@ -133,6 +164,8 @@ export class MineView {
   private handModel = '';
   private handInst: ModelInstance | null = null;
   private local = new THREE.Matrix4();
+  private handAt = 0;
+  private guardK = 0;
   private senseAt = -1;
   private mobs = new Map<string, { holder: THREE.Group; inst: ModelInstance | null; anim: string }>();
   private seen = 0;
@@ -148,7 +181,8 @@ export class MineView {
     const c = mine.config;
     this.group.name = 'mine';
     this.tiles = c.ores.length + 1;
-    this.rows = c.zones.length;
+    this.zrows = c.zones.length;
+    this.rows = this.zrows + Math.ceil(c.materials.length / this.tiles);
     const data = new Uint8Array(this.tiles * T * this.rows * T * 4).fill(255);
     this.atlas = new THREE.DataTexture(data, this.tiles * T, this.rows * T, THREE.RGBAFormat);
     this.atlas.magFilter = this.atlas.minFilter = THREE.NearestFilter;
@@ -158,7 +192,7 @@ export class MineView {
     for (let i = 0; i < this.tiles * this.rows; i++) this.colors.push(new THREE.Color(0x777777));
     void this.loadAtlas();
     this.mat = new THREE.ShaderMaterial({
-      uniforms: { map: { value: this.atlas }, lamp: { value: new THREE.Vector3() }, radius: { value: 400 }, ambient: { value: c.ambient }, skyY: { value: mine.origin[1] }, skyFade: { value: 5 * mine.B }, sky: { value: c.surface ? 0.9 : 0 } },
+      uniforms: { map: { value: this.atlas }, lamp: { value: new THREE.Vector3() }, radius: { value: 400 }, ambient: { value: c.ambient }, skyY: { value: mine.origin[1] }, skyFade: { value: 5 * mine.B }, sky: { value: c.surface ? 0.9 : 0 }, lp: { value: Array.from({ length: NL }, () => new THREE.Vector3()) }, lc: { value: Array.from({ length: NL }, () => new THREE.Vector4(0, 0, 0, 1)) } },
       vertexShader: VERT,
       fragmentShader: FRAG,
     });
@@ -224,7 +258,7 @@ export class MineView {
               cr += (ore![s]! - cr) * oa;
               cg += (ore![s + 1]! - cg) * oa;
               cb += (ore![s + 2]! - cb) * oa;
-              a = Math.round(255 * (1 - oa * glow));
+              a = Math.max(1, Math.round(255 * (1 - oa * glow)));
               if (oa > 0.9) {
                 r += ore![s]!;
                 g += ore![s + 1]!;
@@ -243,6 +277,27 @@ export class MineView {
         if (n) this.colors[row * this.tiles + col]!.setRGB(r / n / 255, g / n / 255, b / n / 255, THREE.SRGBColorSpace);
       }
     });
+    // Built blocks: their own tiles. Clear pixels show through; bright ones of glowing blocks glow.
+    const mats = await Promise.all(c.materials.map(async (m) => pixels(await url(m.texture, m.id))));
+    mats.forEach((px, i) => {
+      const row = this.zrows + Math.floor(i / this.tiles), col = i % this.tiles, md = c.materials[i]!, fb = new THREE.Color(0x8a7a66);
+      let r = 0, g = 0, b = 0, n = 0;
+      for (let py = 0; py < T; py++)
+        for (let x = 0; x < T; x++) {
+          const s = (py * T + x) * 4, d = ((row * T + (T - 1 - py)) * W + col * T + x) * 4;
+          const cr = px ? px[s]! : fb.r * 255, cg = px ? px[s + 1]! : fb.g * 255, cb = px ? px[s + 2]! : fb.b * 255;
+          const lum = (0.3 * cr + 0.59 * cg + 0.11 * cb) / 255, w = Math.min(1, Math.max(0, (lum - 0.3) / 0.3));
+          const a = px && px[s + 3]! < 128 ? 0 : Math.max(1, Math.round(255 * (1 - md.glow * w)));
+          data.set([cr, cg, cb, a], d);
+          if (a) {
+            r += cr;
+            g += cg;
+            b += cb;
+            n++;
+          }
+        }
+      if (n) this.colors[row * this.tiles + col]!.setRGB(r / n / 255, g / n / 255, b / n / 255, THREE.SRGBColorSpace);
+    });
     this.atlas.needsUpdate = true;
     // (Icons: each ore on the first rock.)
     const icon = document.createElement('canvas');
@@ -260,15 +315,16 @@ export class MineView {
     });
   }
 
-  /** Mesh one chunk: faces next to air only. */
-  private build(ch: Chunk): THREE.BufferGeometry {
-    const m = this.mine, b = m.blocks, S = b.size, B = m.B, d = ch.data;
+  /** Mesh one chunk: faces next to air (or webs) only. Lit blocks are gathered as lights (a few per chunk). */
+  private build(ch: Chunk): { g: THREE.BufferGeometry; lights: number[] } {
+    const m = this.mine, b = m.blocks, S = b.size, B = m.B, d = ch.data, mats = m.config.materials;
     const x0 = ch.cx * S, y0 = ch.cy * S, z0 = ch.cz * S;
-    const solid = (x: number, y: number, z: number) => {
+    const at = (x: number, y: number, z: number) => {
       const lx = x - x0, ly = y - y0, lz = z - z0;
-      if (lx >= 0 && ly >= 0 && lz >= 0 && lx < S && ly < S && lz < S) return d[lx + S * (lz + S * ly)] !== AIR;
-      return b.solid(x, y, z);
+      return lx >= 0 && ly >= 0 && lz >= 0 && lx < S && ly < S && lz < S ? d[lx + S * (lz + S * ly)]! : b.get(x, y, z);
     };
+    const solid = (x: number, y: number, z: number) => !b.clear(at(x, y, z));
+    const glow = new Map<number, number[]>();
     const pos: number[] = [], uv: number[] = [], col: number[] = [], nrm: number[] = [], idx: number[] = [];
     const [ox, oy, oz] = m.origin;
     const W = this.tiles * T, H = this.rows * T;
@@ -282,13 +338,24 @@ export class MineView {
           // (The mine's edge looks like darker stone, seen only from inside the mine.)
           const edge = id === EDGE;
           const P = m.config.patch + 1, rim = edge && m.config.surface && y === -1 && Math.max(Math.abs(x), Math.abs(z)) === P;
-          const tile = edge ? 0 : oreOf(id) + 1, row = edge ? 0 : Math.min(this.rows - 1, zoneOf(id));
+          const mi = isMat(id) ? id - MAT : -1;
+          const tile = edge ? 0 : mi >= 0 ? mi % this.tiles : oreOf(id) + 1, row = edge ? 0 : mi >= 0 ? this.zrows + Math.floor(mi / this.tiles) : Math.min(this.zrows - 1, zoneOf(id));
+          const light = mi >= 0 ? mats[mi]!.light : undefined;
+          if (light) {
+            const k = mi * 4096 + ((x >> 2) & 15) * 256 + ((y >> 2) & 15) * 16 + ((z >> 2) & 15), e = glow.get(k) ?? [0, 0, 0, 0];
+            e[0]! += x + 0.5;
+            e[1]! += y + 0.5;
+            e[2]! += z + 0.5;
+            e[3]!++;
+            glow.set(k, e);
+          }
           const u0 = (tile * T + 0.02) / W, u1 = ((tile + 1) * T - 0.02) / W, v0 = (row * T + 0.02) / H, v1 = ((row + 1) * T - 0.02) / H;
           for (let axis = 0; axis < 3; axis++)
             for (const sign of [1, -1]) {
               n[0] = n[1] = n[2] = 0;
               n[axis] = sign;
-              if (solid(x + n[0]!, y + n[1]!, z + n[2]!)) continue;
+              const nb = at(x + n[0]!, y + n[1]!, z + n[2]!);
+              if (!b.clear(nb) || nb === id) continue;
               // (Edge faces show only from inside the mine, and on top of the ring just round the patch: its border.)
               if (edge && y + n[1]! >= 0 && !(rim && n[1] === 1)) continue;
               const ua = (axis + 1) % 3, va = (axis + 2) % 3;
@@ -331,7 +398,12 @@ export class MineView {
     g.setAttribute('normal', new THREE.Float32BufferAttribute(nrm, 3));
     g.setIndex(idx);
     g.computeBoundingSphere();
-    return g;
+    const lights: number[] = [];
+    for (const [k, [sx, sy, sz, n]] of glow) {
+      const [colour, r] = mats[Math.floor(k / 4096)]!.light!, c = new THREE.Color(colour);
+      lights.push(...m.toWorld(sx! / n!, sy! / n!, sz! / n!), c.r, c.g, c.b, r * B * Math.min(1.6, 0.8 + n! * 0.05));
+    }
+    return { g, lights };
   }
 
   /** Bring the drawing up to date. `eye`: where the player's lamp is (world). */
@@ -366,19 +438,21 @@ export class MineView {
     for (const [r, ch] of todo) {
       if (performance.now() > until && r > 2) break;
       const k = `${ch.cx},${ch.cy},${ch.cz}`, e = this.meshes.get(k);
-      const g = this.build(ch);
+      const { g, lights } = this.build(ch);
+      this.lightsAt = -1;
       if (e) {
         e.mesh.geometry.dispose();
         e.mesh.geometry = g;
         e.version = ch.version;
         e.chunk = ch;
+        e.lights = lights;
       } else {
         const mesh = new THREE.Mesh(g, this.mat);
         mesh.matrixAutoUpdate = false;
         // (Blocks shade their own corners; screen occlusion would blacken every tunnel.)
         mesh.userData.noAo = true;
         this.group.add(mesh);
-        this.meshes.set(k, { mesh, version: ch.version, chunk: ch });
+        this.meshes.set(k, { mesh, version: ch.version, chunk: ch, lights });
       }
     }
     // The aimed block: outline and cracks.
@@ -400,7 +474,8 @@ export class MineView {
         this.boom(m.toWorld(f.x, f.y, f.z), f.r * B);
         continue;
       }
-      const colour = this.colors[Math.min(this.rows - 1, zoneOf(f.block)) * this.tiles + oreOf(f.block) + 1]!;
+      const mi = isMat(f.block) ? f.block - MAT : -1;
+      const colour = this.colors[mi >= 0 ? (this.zrows + Math.floor(mi / this.tiles)) * this.tiles + (mi % this.tiles) : Math.min(this.zrows - 1, zoneOf(f.block)) * this.tiles + oreOf(f.block) + 1]!;
       const w = m.toWorld(f.x + 0.5, f.y + 0.5, f.z + 0.5);
       for (let i = 0; i < (f.kind === 'break' ? 14 : 3); i++) this.chip(w, colour, B);
     }
@@ -408,6 +483,11 @@ export class MineView {
     this.drawMobs(time);
     this.drawArrows();
     this.drawBombs(dt, time);
+    this.drawBosses(dt, time, eye);
+    if (time - this.lightsAt > 0.25 || time < this.lightsAt) {
+      this.lightsAt = time;
+      this.pickLights(eye);
+    }
     if (time - this.senseAt > 0.5 || time < this.senseAt) {
       this.senseAt = time;
       this.drawSense(at);
@@ -476,6 +556,76 @@ export class MineView {
         .catch(() => holder.add(figure(mob)));
     } else holder.add(figure(mob));
     return v;
+  }
+
+  private lightsAt = -1;
+  private bosses = new Map<string, BossModel>();
+  private shots: THREE.InstancedMesh | null = null;
+
+  /** The lit blocks nearest the eye light the rock. */
+  private pickLights(eye: [number, number, number]): void {
+    const all: number[][] = [];
+    for (const e of this.meshes.values()) for (let i = 0; i < e.lights.length; i += 7) all.push(e.lights.slice(i, i + 7));
+    all.sort((a, b) => Math.hypot(a[0]! - eye[0], a[1]! - eye[1], a[2]! - eye[2]) - Math.hypot(b[0]! - eye[0], b[1]! - eye[1], b[2]! - eye[2]));
+    const lp = this.mat.uniforms.lp!.value as THREE.Vector3[], lc = this.mat.uniforms.lc!.value as THREE.Vector4[];
+    for (let i = 0; i < NL; i++) {
+      const l = all[i];
+      if (l) {
+        lp[i]!.set(l[0]!, l[1]!, l[2]!);
+        lc[i]!.set(l[3]! * 0.9, l[4]! * 0.9, l[5]! * 0.9, l[6]!);
+      } else lc[i]!.set(0, 0, 0, 1);
+    }
+  }
+
+  /** How lit a point is (0…1), as the rock there would be. */
+  private lightAt(w: [number, number, number], eye: [number, number, number]): number {
+    const u = this.mat.uniforms, r = u.radius!.value as number;
+    let l = Math.max(0, 1 - Math.hypot(w[0] - eye[0], w[1] - eye[1], w[2] - eye[2]) / r);
+    l = l * l * (3 - 2 * l);
+    const lp = u.lp!.value as THREE.Vector3[], lc = u.lc!.value as THREE.Vector4[];
+    for (let i = 0; i < NL; i++) {
+      const k = Math.max(0, 1 - lp[i]!.distanceTo(this.v.set(...w)) / lc[i]!.w);
+      l += k * k * Math.max(lc[i]!.x, lc[i]!.y, lc[i]!.z);
+    }
+    return Math.min(1, (u.ambient!.value as number) + l + 0.15);
+  }
+
+  private drawBosses(dt: number, time: number, eye: [number, number, number]): void {
+    const m = this.mine, live = new Set<string>();
+    for (const b of m.bosses) {
+      live.add(b.id);
+      let v = this.bosses.get(b.id);
+      if (!v) {
+        v = new BossModel(b, m.B);
+        this.bosses.set(b.id, v);
+        this.group.add(v.root);
+      }
+      const w = m.toWorld(b.pos[0], b.pos[1], b.pos[2]);
+      v.animate(w, time, dt, this.lightAt([w[0], w[1] + b.h * m.B * 0.5, w[2]], eye));
+    }
+    for (const [id, v] of this.bosses) {
+      if (live.has(id)) continue;
+      this.group.remove(v.root);
+      v.dispose();
+      this.bosses.delete(id);
+    }
+    // Their shots: glowing cubes in the boss's colour (white once parried back).
+    if (!this.shots) {
+      this.shots = new THREE.InstancedMesh(new THREE.BoxGeometry(14, 14, 14), new THREE.MeshBasicMaterial(), 64);
+      this.shots.frustumCulled = false;
+      this.shots.userData.noAo = true;
+      this.group.add(this.shots);
+    }
+    const list = m.shots.slice(0, 64), c = new THREE.Color();
+    list.forEach((s, i) => {
+      this.q.setFromEuler(new THREE.Euler(time * 7 + i, time * 5, 0));
+      this.m4.compose(this.v.set(...m.toWorld(s.pos[0], s.pos[1], s.pos[2])), this.q, new THREE.Vector3(1, 1, 1));
+      this.shots!.setMatrixAt(i, this.m4);
+      this.shots!.setColorAt(i, s.back ? c.set(0xfff4c8) : c.set(s.boss.def.color));
+    });
+    this.shots.count = list.length;
+    this.shots.instanceMatrix.needsUpdate = true;
+    if (this.shots.instanceColor) this.shots.instanceColor.needsUpdate = true;
   }
 
   private bombMeshes: THREE.Group[] = [];
@@ -555,7 +705,7 @@ export class MineView {
           for (let x = -r; x <= r && n < 400; x++) {
             if (x * x + y * y + z * z > r * r) continue;
             const id = m.blocks.get(cx + x, cy + y, cz + z);
-            const o = id === AIR || id === EDGE ? -1 : oreOf(id);
+            const o = id === AIR || id === EDGE || isMat(id) ? -1 : oreOf(id);
             if (o < 0) continue;
             const bx = cx + x, by = cy + y, bz = cz + z, b = m.blocks;
             // (Ores in plain sight need no sensing.)
@@ -594,9 +744,18 @@ export class MineView {
       else this.hand.add(pickaxeMesh(p.color));
     }
     const s = (time - m.swungAt) / 0.25, a = s >= 0 && s < 1 ? Math.sin(s * Math.PI) : 0;
+    // (Guarding: brought up across the view; a parry knocks it back a little.)
+    const dt = Math.min(0.1, Math.max(0, time - this.handAt));
+    this.handAt = time;
+    this.guardK += ((m.blocking ? 1 : 0) - this.guardK) * Math.min(1, dt * 14);
+    const g = this.guardK, kick = m.hud().guard === 'parry' ? 1 : 0;
     // (Handle up from the bottom right corner, leaning in a little; the head arches over the top.)
     const k = p.model ? 1 : 0.5;
-    this.local.compose(this.v.set(p.model ? 11 : 9.5, -12 - a * 2, -15 - a * 3), this.q.setFromEuler(new THREE.Euler(0.1 - a * 1.2, -0.3 + a * 0.2, p.model ? -0.1 : 1.08, 'YXZ')), new THREE.Vector3(k, k, k));
+    this.local.compose(
+      this.v.set((p.model ? 11 : 9.5) - g * 5, -12 - a * 2 + g * 1.5, -15 - a * 3 + kick * 2),
+      this.q.setFromEuler(new THREE.Euler(0.1 - a * 1.2 + g * 0.1, -0.3 + a * 0.2 + g * 0.2, (p.model ? -0.1 : 1.08) + g * 0.75 + kick * 0.15, 'YXZ')),
+      new THREE.Vector3(k, k, k),
+    );
     this.hand.matrix.multiplyMatrices(cam.matrixWorld, this.local);
     this.hand.matrixWorldNeedsUpdate = true;
   }
@@ -604,6 +763,7 @@ export class MineView {
   dispose(): void {
     for (const e of this.meshes.values()) e.mesh.geometry.dispose();
     for (const v of this.mobs.values()) v.inst?.dispose();
+    for (const v of this.bosses.values()) v.dispose();
     this.mat.dispose();
     this.atlas.dispose();
     for (const t of this.crackTex) t.dispose();

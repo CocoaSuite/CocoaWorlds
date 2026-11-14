@@ -101,6 +101,63 @@ export interface TwistDef {
   double?: number;
 }
 
+/** Built blocks in structures: planks, bricks, lanterns, chests, lava, webs. */
+export interface MaterialDef {
+  id: string;
+  label: string;
+  texture: string;
+  /** Times the rock's hardness where it lies. Up to 0.5: any pickaxe breaks it. */
+  hardness: number;
+  glow: number;
+  /** False: walked through (lava, webs). */
+  solid?: boolean;
+  /** Seen through (webs). */
+  clear?: boolean;
+  /** Can't be aimed at or dug (lava). */
+  fluid?: boolean;
+  /** Casts light: colour and radius in blocks. */
+  light?: [string, number];
+  /** Health lost a second inside it. */
+  hurt?: number;
+  /** Movement inside it (× speed). */
+  slow?: number;
+  /** Breaking it gives ore, money (share of the next pickaxe's price where it lies) or dynamite. */
+  drops?: { ore?: string; n?: number; money?: number; dynamite?: number };
+  /** Opens only once the structure's boss is beaten. */
+  locked?: boolean;
+}
+
+export interface StructureDef {
+  /** mine_complex, dwarven_city, crystal_cathedral or sunken_temple. */
+  id: string;
+  label: string;
+  /** Shallowest depth it's found at. */
+  from: number;
+  weight: number;
+  boss: string;
+}
+
+export type BossAttack = 'swing' | 'slam' | 'charge' | 'volley' | 'summon';
+
+export interface BossDef {
+  id: string;
+  label: string;
+  /** Health in hits of the pickaxe expected where it lives. */
+  health: number;
+  damage: number;
+  /** Blocks a second. */
+  speed: number;
+  /** Share of the next pickaxe's price. */
+  reward: number;
+  /** Width and height in blocks. */
+  size: [number, number];
+  attacks: BossAttack[];
+  /** Monster it calls up (mob id). */
+  minion: string;
+  /** Its shots' colour. */
+  color: string;
+}
+
 export interface DynamiteDef {
   /** Price of one stick at the first pickaxe; × `growth` for each pickaxe tier. */
   price: number;
@@ -159,7 +216,14 @@ export interface MineConfig {
   twists: TwistDef[];
   dynamite: DynamiteDef;
   homeKey: string;
-  sounds: { hit: string; break: string; ore: string; sell: string; buy: string; mobHit: string; mobDie: string; arrow: string; fuse: string; boom: string };
+  sounds: { hit: string; break: string; ore: string; sell: string; buy: string; mobHit: string; mobDie: string; arrow: string; fuse: string; boom: string; parry: string; block: string; roar: string };
+  materials: MaterialDef[];
+  /** Structures: one may stand in each region (`region` blocks across and high), by `chance`. */
+  structures: { region: [number, number]; chance: number; kinds: StructureDef[] };
+  bosses: BossDef[];
+  /** Holding block: damage taken (× `block`) and movement (× `slow`). Pressing it opens a parry `window` (s), no
+   * more often than `cooldown`; a parried boss is open for `stagger` seconds. */
+  guard: { window: number; cooldown: number; block: number; slow: number; stagger: number };
   zones: ZoneDef[];
   ores: OreDef[];
   pickaxes: PickaxeDef[];
@@ -194,5 +258,6 @@ function merge(base: unknown, over: unknown): unknown {
 export function mineConfig(over?: unknown): MineConfig {
   const c = merge(structuredClone(defaults), over ?? {}) as MineConfig;
   c.zones = [...c.zones].sort((a, b) => a.from - b.from);
+  c.structures.kinds = [...c.structures.kinds].sort((a, b) => a.from - b.from);
   return c;
 }

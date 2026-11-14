@@ -41,6 +41,23 @@ can't enter the base, and give money when killed with the pickaxe. Each uses the
 like its `template` (Zombie, Skeleton, Spider), with animations called by `anims` (Idle, Walk, Attack, Die);
 without one they are plain red figures. Hide the template objects in the scene: their model is only copied.
 
+## Structures and bosses
+
+Under the shaft, roughly every 80 blocks down, a giant structure stands in the rock (`mining/structures.ts`), made
+from the seed: an abandoned mine (timbered tunnels on three levels, stairwells, store rooms, the great dig), a
+dwarven city (a pillared hall over a lava chasm, bridges, houses, a forge, a sealed gold vault, the throne room), a
+crystal cathedral (a vast geode of crystal spires and gem pockets) and a sunken temple (a stepped pyramid in its own
+cave, a maze of webs and lava pits, the sanctum). Deeper kinds come with depth (`structures.kinds[].from`). Built
+blocks are `materials`: planks, bricks, lanterns and crystal that light the rock, chests (money and dynamite), lava
+(burns, can't be dug), webs (slow), gold blocks, and the strongbox (`locked`: opens once the boss is beaten).
+
+Each structure's boss sleeps at its heart and wakes when the player comes close. Every attack winds up first and its
+weapon glows: gold can be parried, red (a slam) can only be blocked or dodged. Holding right mouse blocks (less
+damage, slower walking, no swinging); pressing it just as a blow lands parries it: no damage, and the boss staggers,
+taking double damage. Parried shots fly back at the boss. At half health it gets faster. Beaten, it pays and its
+strongbox opens until the mine regenerates. Bosses are figures of pixel blocks animated in code
+(`renderer/viewport/boss-models.ts`). `bosses` and `guard` in the settings tune them.
+
 ## Settings are JSON
 
 `settings.mining` in the scene file is laid over `data/mine.json`. Lists merge by `id` (an entry replaces the

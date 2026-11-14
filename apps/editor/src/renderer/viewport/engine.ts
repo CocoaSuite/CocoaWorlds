@@ -779,7 +779,7 @@ export class ViewportEngine {
       return;
     }
     this.rotating = false;
-    if (!this.locked) this.play?.setInput({ fire: false });
+    if (!this.locked) this.play?.setInput({ fire: false, block: false });
     if (!this.asPlayer) return;
     if (!this.locked && !this.uiFree) {
       this.gameKeys.clear();
@@ -2182,7 +2182,10 @@ export class ViewportEngine {
     el.focus();
     if (this.asPlayer) {
       // (A right click stops placing a blueprint.)
-      if (this.locked && e.button === 2) this.play?.stopPlacing();
+      if (this.locked && e.button === 2) {
+        this.play?.stopPlacing();
+        this.play?.setInput({ block: true });
+      }
       if (this.locked && e.button === 0) {
         this.play?.useItem();
         this.play?.setInput({ fire: true });
@@ -2606,6 +2609,7 @@ export class ViewportEngine {
 
   private onPointerUp = (e: PointerEvent): void => {
     if (this.asPlayer && e.button === 0) this.play?.setInput({ fire: false });
+    if (this.asPlayer && e.button === 2) this.play?.setInput({ block: false });
     const d = this.drag;
     this.drag = null;
     if (!d) return;

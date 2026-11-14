@@ -124,6 +124,7 @@ export function MineUi({ hud, menu, onAction }: { hud: MineHud; menu: MineMenu |
         <div className="cw-mine-dim">
           {hud.home ? (hud.surface ? 'Surface' : 'Base') : `${hud.zone} · ${hud.distance}`}
         </div>
+        {hud.place && <div className="cw-mine-place">{hud.place}</div>}
         <div className="cw-mine-dim">{hud.pickaxe}</div>
         {hud.dynamite > 0 && <div>Dynamite × {hud.dynamite}</div>}
         <div className="cw-mine-dim">
@@ -135,6 +136,15 @@ export function MineUi({ hud, menu, onAction }: { hud: MineHud; menu: MineMenu |
           Home
         </button>
       )}
+      {hud.boss && (
+        <div className={`cw-ov cw-mine-boss${hud.boss.phase > 1 ? ' angry' : ''}`} data-testid="mine-boss">
+          <span>{hud.boss.label}</span>
+          <span className="cw-mine-bar">
+            <span style={{ width: `${Math.max(0, hud.boss.hp * 100)}%` }} />
+          </span>
+        </div>
+      )}
+      {hud.guard && <div key={hud.guard} className={`cw-ov cw-mine-flash ${hud.guard}`} />}
       {hud.aim && !menu && (
         <div className="cw-ov cw-mine-aim">
           <span>{hud.aim.label}</span>

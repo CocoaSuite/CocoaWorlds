@@ -2850,7 +2850,7 @@ export class GameWorld {
         if (this.useQueued) this.doUse();
       } else if (this.player) {
         if (this.frozen) Object.assign(this.player.input, { forward: 0, right: 0, jump: false, crouch: false, fire: false, use: false });
-        this.player.speedScale = (1 - WEAK.slow * this.weakness()) * (1 + (this.mine?.stat('moveSpeed') ?? 0)) * this.dev.speed;
+        this.player.speedScale = (1 - WEAK.slow * this.weakness()) * (1 + (this.mine?.stat('moveSpeed') ?? 0)) * (this.mine?.moveScale() ?? 1) * this.dev.speed;
         this.player.step(STEP);
         this.playerNoise();
         if (this.player.landingSpeed) {
@@ -5260,7 +5260,7 @@ export class GameWorld {
     const m = this.mine!, p = this.player!;
     const free = !this.held && !this.equipped && !this.plugHand && !this.weaponInHand() && !this.hiding && !this.frozen;
     m.handFree = free;
-    m.tick(STEP, free && !!p.input.fire);
+    m.tick(STEP, free && !!p.input.fire, free && !!p.input.block);
     this.syncMineColliders(false);
   }
 

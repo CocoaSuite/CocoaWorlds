@@ -41,7 +41,10 @@
   "mobDie": "",
   "arrow": "",
   "fuse": "",
-  "boom": ""
+  "boom": "",
+  "parry": "",
+  "block": "",
+  "roar": ""
  },
  "zones": [
   {
@@ -1211,5 +1214,277 @@
   "size": 8,
   "per": 45,
   "max": 3
+ },
+ "materials": [
+  {
+   "id": "planks",
+   "label": "Planks",
+   "texture": "",
+   "hardness": 0.4,
+   "glow": 0
+  },
+  {
+   "id": "beam",
+   "label": "Timber",
+   "texture": "",
+   "hardness": 0.5,
+   "glow": 0
+  },
+  {
+   "id": "rail",
+   "label": "Rail",
+   "texture": "",
+   "hardness": 0.4,
+   "glow": 0
+  },
+  {
+   "id": "stone_bricks",
+   "label": "Stone bricks",
+   "texture": "",
+   "hardness": 1.5,
+   "glow": 0
+  },
+  {
+   "id": "cracked_bricks",
+   "label": "Cracked bricks",
+   "texture": "",
+   "hardness": 0.8,
+   "glow": 0
+  },
+  {
+   "id": "carved_stone",
+   "label": "Carved stone",
+   "texture": "",
+   "hardness": 2,
+   "glow": 0
+  },
+  {
+   "id": "temple_bricks",
+   "label": "Temple bricks",
+   "texture": "",
+   "hardness": 1.5,
+   "glow": 0
+  },
+  {
+   "id": "carved_temple",
+   "label": "Carved temple stone",
+   "texture": "",
+   "hardness": 2,
+   "glow": 0
+  },
+  {
+   "id": "calcite",
+   "label": "Calcite",
+   "texture": "",
+   "hardness": 1,
+   "glow": 0
+  },
+  {
+   "id": "crystal_block",
+   "label": "Crystal",
+   "texture": "",
+   "hardness": 1.2,
+   "glow": 0.6,
+   "light": [
+    "#7fd6ff",
+    7
+   ],
+   "drops": {
+    "ore": "quartz",
+    "n": 1
+   }
+  },
+  {
+   "id": "gold_block",
+   "label": "Gold block",
+   "texture": "",
+   "hardness": 1.2,
+   "glow": 0,
+   "drops": {
+    "ore": "gold",
+    "n": 2
+   }
+  },
+  {
+   "id": "lantern",
+   "label": "Lantern",
+   "texture": "",
+   "hardness": 0.2,
+   "glow": 1,
+   "light": [
+    "#ffb35a",
+    8
+   ]
+  },
+  {
+   "id": "chest",
+   "label": "Chest",
+   "texture": "",
+   "hardness": 0.3,
+   "glow": 0,
+   "drops": {
+    "money": 0.1,
+    "dynamite": 1
+   }
+  },
+  {
+   "id": "vault",
+   "label": "Strongbox",
+   "texture": "",
+   "hardness": 0.5,
+   "glow": 0.3,
+   "locked": true,
+   "drops": {
+    "money": 1,
+    "dynamite": 3
+   }
+  },
+  {
+   "id": "lava",
+   "label": "Lava",
+   "texture": "",
+   "hardness": 1,
+   "glow": 1,
+   "solid": false,
+   "fluid": true,
+   "light": [
+    "#ff6a20",
+    6
+   ],
+   "hurt": 30
+  },
+  {
+   "id": "web",
+   "label": "Web",
+   "texture": "",
+   "hardness": 0.1,
+   "glow": 0,
+   "solid": false,
+   "clear": true,
+   "slow": 0.3
+  }
+ ],
+ "structures": {
+  "region": [
+   176,
+   80
+  ],
+  "chance": 0.75,
+  "kinds": [
+   {
+    "id": "mine_complex",
+    "label": "Abandoned mine",
+    "from": 12,
+    "weight": 1,
+    "boss": "foreman"
+   },
+   {
+    "id": "dwarven_city",
+    "label": "Dwarven city",
+    "from": 40,
+    "weight": 1,
+    "boss": "forge_king"
+   },
+   {
+    "id": "crystal_cathedral",
+    "label": "Crystal cathedral",
+    "from": 130,
+    "weight": 1,
+    "boss": "crystal_golem"
+   },
+   {
+    "id": "sunken_temple",
+    "label": "Sunken temple",
+    "from": 210,
+    "weight": 1,
+    "boss": "broodmother"
+   }
+  ]
+ },
+ "bosses": [
+  {
+   "id": "foreman",
+   "label": "The Foreman",
+   "health": 40,
+   "damage": 18,
+   "speed": 3.2,
+   "reward": 0.4,
+   "size": [
+    1.8,
+    3.4
+   ],
+   "attacks": [
+    "swing",
+    "charge",
+    "summon"
+   ],
+   "minion": "zombie",
+   "color": "#ffd25a"
+  },
+  {
+   "id": "forge_king",
+   "label": "The Forge King",
+   "health": 55,
+   "damage": 22,
+   "speed": 2.8,
+   "reward": 0.4,
+   "size": [
+    2.4,
+    3.8
+   ],
+   "attacks": [
+    "swing",
+    "slam",
+    "volley"
+   ],
+   "minion": "skeleton",
+   "color": "#ff7a2a"
+  },
+  {
+   "id": "crystal_golem",
+   "label": "Crystal Golem",
+   "health": 70,
+   "damage": 26,
+   "speed": 2.4,
+   "reward": 0.4,
+   "size": [
+    3.2,
+    4.6
+   ],
+   "attacks": [
+    "slam",
+    "volley",
+    "swing"
+   ],
+   "minion": "skeleton",
+   "color": "#8fe3ff"
+  },
+  {
+   "id": "broodmother",
+   "label": "The Broodmother",
+   "health": 80,
+   "damage": 24,
+   "speed": 4,
+   "reward": 0.4,
+   "size": [
+    4.4,
+    2.6
+   ],
+   "attacks": [
+    "charge",
+    "volley",
+    "summon",
+    "swing"
+   ],
+   "minion": "spider",
+   "color": "#e8e8e0"
+  }
+ ],
+ "guard": {
+  "window": 0.25,
+  "cooldown": 0.6,
+  "block": 0.3,
+  "slow": 0.45,
+  "stagger": 2.2
  }
 }

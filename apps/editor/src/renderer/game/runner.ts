@@ -445,7 +445,10 @@ export class GameRunner {
 
   private mouseDown = (e: MouseEvent): void => {
     // (A right click stops placing a blueprint.)
-    if (e.button === 2 && this.locked) this.play?.stopPlacing();
+    if (e.button === 2 && this.locked) {
+      this.play?.stopPlacing();
+      this.play?.setInput({ block: true });
+    }
     if (e.button !== 0 || !this.play) return;
     if (this.locked) {
       this.play.useItem();
@@ -462,6 +465,7 @@ export class GameRunner {
 
   private mouseUp = (e: MouseEvent): void => {
     if (e.button === 0) this.play?.setInput({ fire: false });
+    if (e.button === 2) this.play?.setInput({ block: false });
   };
 
   private rotating = false;
@@ -473,7 +477,7 @@ export class GameRunner {
       return;
     }
     this.rotating = false;
-    if (!this.locked) this.play?.setInput({ fire: false });
+    if (!this.locked) this.play?.setInput({ fire: false, block: false });
     if (!this.locked && !this.uiFree) {
       this.keys.clear();
       this.send();

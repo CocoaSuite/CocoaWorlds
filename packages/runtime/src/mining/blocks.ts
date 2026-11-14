@@ -1,6 +1,7 @@
 /** The mine's blocks: made from the seed as they're needed, in chunks, with what was dug out kept as edits. */
-import type { MineConfig } from './defs';
+import type { MineConfig, StructureDef } from './defs';
 import { fbm3, hash3, noise3 } from './noise';
+import { buildStructure, KEEP, STRUCTURE_BOSS, STRUCTURE_SIZE, type StructureKind } from './structures';
 
 export const AIR = 0;
 /** The mine's edge (surface mines: around the patch, down to the crust): solid, never dug. */
@@ -8,6 +9,22 @@ export const EDGE = 0xffff;
 export const blockId = (zone: number, ore: number) => 1 + zone * 64 + (ore + 1);
 export const zoneOf = (id: number) => (id - 1) >> 6;
 export const oreOf = (id: number) => ((id - 1) & 63) - 1;
+/** Built blocks (structures): MAT + index in `materials`. */
+export const MAT = 0xf000;
+export const isMat = (id: number) => id >= MAT && id < EDGE;
+
+/** A structure standing in the mine (block space). */
+export interface Structure {
+  key: string;
+  def: StructureDef;
+  at: [number, number, number];
+  size: [number, number, number];
+  /** Where its boss waits. */
+  boss: [number, number, number];
+  data: Uint16Array | null;
+}
+
+const OPEN = 1, CLEAR = 2, FLUID = 4;
 
 export interface Chunk {
   cx: number;
@@ -40,6 +57,12 @@ export class MineBlocks {
   private boost: Record<string, number> = {};
   private densityMul = 1;
   private caveMul = 1;
+  /** Per block id: walked through, seen through, can't be aimed at. */
+  private flags = new Uint8Array(65536);
+  private regions = new Map<number, Structure | null>();
+  private built: Structure[] = [];
+  private lastRegion = NaN;
+  private lastStructure: Structure | null = null;
 
   constructor(
     readonly cfg: MineConfig,
@@ -47,6 +70,8 @@ export class MineBlocks {
   ) {
     this.size = cfg.chunk;
     this.makeTables();
+    this.flags[AIR] = OPEN | CLEAR;
+    cfg.materials.forEach((m, i) => (this.flags[MAT + i] = (m.solid === false ? OPEN : 0) | (m.clear ? CLEAR : 0) | (m.fluid ? FLUID : 0)));
   }
 
   /** A twist changes ore odds, how many veins and how many caves (for the next mine made). */
@@ -98,6 +123,11 @@ export class MineBlocks {
     if (this.inBase(x, y, z)) return AIR;
     const s = this.seed, [bx, , bz] = this.cfg.base, c = this.cfg;
     if (c.surface && y >= -c.crust && (Math.abs(x) > c.patch || Math.abs(z) > c.patch)) return EDGE;
+    const st = this.structureAt(x, y, z);
+    if (st) {
+      const v = this.cell(st, x, y, z);
+      if (v !== KEEP) return v;
+    }
     const d = Math.hypot(x, y, z);
     const cv = c.caves * this.caveMul;
     if (cv > 0 && (c.surface ? y < -c.crust - 3 : d > Math.max(bx, bz) + 6)) {
@@ -161,7 +191,93 @@ export class MineBlocks {
   }
 
   solid(x: number, y: number, z: number): boolean {
-    return this.get(x, y, z) !== AIR;
+    return !(this.flags[this.get(x, y, z)]! & OPEN);
+  }
+
+  /** Walked through (air, lava, webs). */
+  open(id: number): boolean {
+    return !!(this.flags[id]! & OPEN);
+  }
+
+  /** Seen through (air, webs). */
+  clear(id: number): boolean {
+    return !!(this.flags[id]! & CLEAR);
+  }
+
+  // ── Structures ──
+
+  /** The structure whose box holds this block, if any. */
+  structureAt(x: number, y: number, z: number): Structure | null {
+    const st = this.cfg.structures;
+    if (!st?.kinds.length) return null;
+    const [RW, RH] = st.region;
+    const rx = Math.floor((x + RW / 2) / RW), ry = Math.floor(y / RH), rz = Math.floor((z + RW / 2) / RW);
+    const k = ((rx + 512) * 1024 + (ry + 512)) * 1024 + (rz + 512);
+    let s: Structure | null | undefined;
+    if (k === this.lastRegion) s = this.lastStructure;
+    else {
+      s = this.regions.get(k);
+      if (s === undefined) this.regions.set(k, (s = this.place(rx, ry, rz)));
+      this.lastRegion = k;
+      this.lastStructure = s;
+    }
+    if (!s) return null;
+    const [ax, ay, az] = s.at, [sx, sy, sz] = s.size;
+    return x >= ax && y >= ay && z >= az && x < ax + sx && y < ay + sy && z < az + sz ? s : null;
+  }
+
+  /** Where a region's structure stands (from the seed), or null. Kinds come by depth; the deepest allowed most often. */
+  private place(rx: number, ry: number, rz: number): Structure | null {
+    const c = this.cfg, st = c.structures, s = this.seed + 101;
+    if (hash3(rx, ry, rz, s) >= st.chance) return null;
+    const [RW, RH] = st.region, ox = rx * RW - RW / 2, oy = ry * RH, oz = rz * RW - RW / 2;
+    const ok = st.kinds.filter((k) => k.weight > 0 && k.id in STRUCTURE_SIZE && k.from <= this.depth(ox + RW / 2, oy + RH / 2, oz + RW / 2));
+    if (!ok.length) return null;
+    let def = ok[ok.length - 1]!;
+    if (hash3(rx, ry, rz, s + 1) > 0.55) {
+      let r = hash3(rx, ry, rz, s + 2) * ok.reduce((a, k) => a + k.weight, 0);
+      def = ok.find((k) => (r -= k.weight) <= 0) ?? def;
+    }
+    const size = STRUCTURE_SIZE[def.id as StructureKind];
+    if (size[0] > RW - 2 || size[1] > RH || size[2] > RW - 2) return null;
+    let ax = ox + 1 + Math.floor(hash3(rx, ry, rz, s + 3) * (RW - 2 - size[0])), az = oz + 1 + Math.floor(hash3(rx, ry, rz, s + 4) * (RW - 2 - size[2]));
+    // (Under a surface mine, they stand across the shaft: digging straight down finds them.)
+    if (c.surface && rx === 0 && rz === 0) {
+      ax = Math.max(ox + 1, Math.min(ox + RW - 1 - size[0], -4 - Math.floor(hash3(rx, ry, rz, s + 3) * (size[0] - 8))));
+      az = Math.max(oz + 1, Math.min(oz + RW - 1 - size[2], -4 - Math.floor(hash3(rx, ry, rz, s + 4) * (size[2] - 8))));
+    }
+    let ay = oy + Math.floor(hash3(rx, ry, rz, s + 5) * (RH - size[1]));
+    if (c.surface) {
+      ay = Math.min(ay, -c.crust - 6 - size[1]);
+      if (ay < oy) return null;
+    } else {
+      const [bx, by, bz] = c.base;
+      if (ax < bx + 10 && ax + size[0] > -bx - 10 && az < bz + 10 && az + size[2] > -bz - 10 && ay < by + 10 && ay + size[1] > -10) return null;
+    }
+    const b = STRUCTURE_BOSS[def.id as StructureKind];
+    return { key: `${rx},${ry},${rz}`, def, at: [ax, ay, az], size: [...size], boss: [ax + b[0], ay + b[1], az + b[2]], data: null };
+  }
+
+  private cell(st: Structure, x: number, y: number, z: number): number {
+    if (!st.data) {
+      const zone = this.zoneAt(this.depth(st.at[0] + st.size[0] / 2, st.at[1] + st.size[1] / 2, st.at[2] + st.size[2] / 2));
+      const mats = this.cfg.materials, ores = this.cfg.ores;
+      st.data = buildStructure(st.def.id as StructureKind, hash3(st.at[0], st.at[1], st.at[2], this.seed + 9) * 2 ** 31, {
+        mat: (n) => {
+          const i = mats.findIndex((m) => m.id === n);
+          return i < 0 ? KEEP : MAT + i;
+        },
+        ore: (n) => {
+          const i = ores.findIndex((o) => o.id === n);
+          return i < 0 ? 0 : blockId(zone, i);
+        },
+      });
+      // (A few stay made; the rest are made again when needed.)
+      this.built.push(st);
+      if (this.built.length > 3) this.built.shift()!.data = null;
+    }
+    const [sx, , sz] = st.size;
+    return st.data[x - st.at[0] + sx * (z - st.at[2] + sz * (y - st.at[1]))]!;
   }
 
   set(x: number, y: number, z: number, id: number): void {
@@ -191,7 +307,7 @@ export class MineBlocks {
   }
 
   /** First solid block along a ray (block space: block (i, j, k) fills [i, i + 1)). */
-  raycast(ox: number, oy: number, oz: number, dx: number, dy: number, dz: number, maxT: number): RayHit | null {
+  raycast(ox: number, oy: number, oz: number, dx: number, dy: number, dz: number, maxT: number, aim = false): RayHit | null {
     const len = Math.hypot(dx, dy, dz) || 1;
     dx /= len;
     dy /= len;
@@ -204,7 +320,8 @@ export class MineBlocks {
     let tz = sz ? (sz > 0 ? z + 1 - oz : oz - z) * tdz : Infinity;
     let n: [number, number, number] = [0, 0, 0], t = 0;
     for (let i = 0; i < 256 && t <= maxT; i++) {
-      if (this.solid(x, y, z)) return { x, y, z, n, t };
+      const id = this.get(x, y, z), f = this.flags[id]!;
+      if (aim ? id !== AIR && !(f & FLUID) : !(f & OPEN)) return { x, y, z, n, t };
       if (tx < ty && tx < tz) {
         x += sx;
         t = tx;
@@ -229,7 +346,7 @@ export class MineBlocks {
   boxes(c: Chunk): number[][] {
     const S = this.size, d = c.data, done = new Uint8Array(S * S * S);
     const at = (x: number, y: number, z: number) => x + S * (z + S * y);
-    const free = (x: number, y: number, z: number) => d[at(x, y, z)] !== AIR && !done[at(x, y, z)];
+    const free = (x: number, y: number, z: number) => !(this.flags[d[at(x, y, z)]!]! & OPEN) && !done[at(x, y, z)];
     const out: number[][] = [];
     for (let y = 0; y < S; y++)
       for (let z = 0; z < S; z++)
@@ -259,6 +376,9 @@ export class MineBlocks {
   /** A fresh mine: a new seed, nothing dug. */
   reset(seed: number): void {
     this.seed = seed;
+    this.regions.clear();
+    this.built = [];
+    this.lastRegion = NaN;
     this.edits.clear();
     this.chunks.clear();
     this.version++;

@@ -811,6 +811,14 @@ button.cw-sec.cw-fold { width: 100%; border: 0; border-top: 1px solid var(--line
 .cw-mine-aim { left: 50%; top: calc(50% + 22px); transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; gap: 3px; color: #fff; font-size: 12px; pointer-events: none; text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8); }
 .cw-mine-aim .cw-mine-bar { min-width: 60px; }
 .cw-mine-needs { color: #ff8a7a; }
+.cw-mine-place { color: #f2c14e; }
+.cw-mine-boss { left: 50%; top: 56px; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; gap: 5px; color: #fff; font-weight: 600; pointer-events: none; text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8); }
+.cw-mine-boss .cw-mine-bar { width: min(520px, 60vw); height: 8px; border-radius: 3px; color: #d8453a; background: rgba(0, 0, 0, 0.5); }
+.cw-mine-boss.angry .cw-mine-bar { color: #ff7a2a; }
+.cw-mine-flash { inset: 0; pointer-events: none; animation: cw-mine-flash 0.3s ease-out forwards; }
+.cw-mine-flash.parry { box-shadow: inset 0 0 120px 30px rgba(255, 220, 110, 0.55); }
+.cw-mine-flash.block { box-shadow: inset 0 0 90px 10px rgba(170, 200, 255, 0.3); }
+@keyframes cw-mine-flash { from { opacity: 1; } to { opacity: 0; } }
 .cw-mine-menu { position: absolute; inset: 0; z-index: 5; display: flex; align-items: center; justify-content: center; background: rgba(0, 0, 0, 0.35); }
 .cw-mine-panel { width: min(1100px, 94%); height: min(780px, 92%); display: flex; flex-direction: column; background: #16181c; color: #e8e8ea; border-radius: 10px; overflow: hidden; }
 .cw-mine-head { display: flex; align-items: center; gap: 8px; padding: 10px 14px; background: #1e2026; }

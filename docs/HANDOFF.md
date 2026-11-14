@@ -485,4 +485,9 @@ nodes, backpack sold on entering the base, Home (H), death loses part of the bac
 Monsters (zombie, skeleton with arrows, spider climbing) walk the blocks themselves (`mining/mobs.ts`, A* over the
 blocks), drawn with the model of the scene object named after them.
 
+Giant structures (`mining/structures.ts`: abandoned mine, dwarven city, crystal cathedral, sunken temple) built
+from the seed into a block volume per region, with built blocks (`materials`, ids from `MAT`), lit by up to 12
+nearby light blocks in the rock shader. Bosses (`mining/bosses.ts`) guard them: telegraphed attacks, block (right
+mouse, `PlayerInput.block`) and timed parry, stagger, phase 2, shots that reflect; strongboxes open once beaten.
+
 Next, if wanted: the user's monster models and a pickaxe model; sounds; tuning prices after playing.

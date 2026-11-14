@@ -2,8 +2,9 @@
  * Mining: an endless block mine around the base. Pickaxe swings break blocks, ores fill the backpack, the base
  * buys them, money buys pickaxes and skills. Monsters live in the caves. The mine regenerates on a timer.
  */
-import { AIR, blockId, EDGE, MineBlocks, oreOf, zoneOf, type Chunk, type RayHit } from './blocks';
-import { mineConfig, type MineConfig, type MobDef, type Stat, type TwistDef } from './defs';
+import { AIR, blockId, EDGE, isMat, MAT, MineBlocks, oreOf, zoneOf, type Chunk, type RayHit } from './blocks';
+import { Boss, type BossWorld, type Shot } from './bosses';
+import { mineConfig, type BossAttack, type MaterialDef, type MineConfig, type MobDef, type Stat, type TwistDef } from './defs';
 import { Mob, stepArrow, type Arrow, type MobWorld } from './mobs';
 
 export interface MineHost {
@@ -55,6 +56,13 @@ export interface MineHud {
   dynamite: number;
   /** The block aimed at: how broken (0…1), or why it can't be (needs a better pickaxe). */
   aim: { label: string; broken: number; needs: string } | null;
+  /** The structure the player is in. */
+  place: string;
+  /** The boss fighting the player. */
+  boss: { label: string; hp: number; phase: number } | null;
+  blocking: boolean;
+  /** Just parried or blocked (for a flash). */
+  guard: '' | 'parry' | 'block';
 }
 
 export interface MineMenu {
@@ -111,6 +119,19 @@ export class MineSystem {
   /** The sell zone's middle (world), from a scene object called “Sell”; null: selling happens on getting home. */
   sellAt: [number, number, number] | null = null;
   atSell = false;
+  bosses: Boss[] = [];
+  shots: Shot[] = [];
+  /** Structures whose boss is beaten (their strongboxes open). */
+  readonly beaten = new Set<string>();
+  /** Holding block; a fresh press parries for a moment. */
+  blocking = false;
+  private parryUntil = -1;
+  private pressAt = -99;
+  private guardAt = -99;
+  private guardKind: MineHud['guard'] = '';
+  private hurtAt = 0;
+  private slow = 1;
+  private bossAt = 0;
 
   constructor(
     over: unknown,
@@ -191,20 +212,57 @@ export class MineSystem {
     return (this.config.light + this.stat('light')) * (this.twist.light ?? 1);
   }
 
-  private hardness(id: number, d: number): number {
-    const z = this.config.zones[zoneOf(id)]!, o = oreOf(id);
-    return z.hardness * (o >= 0 ? this.config.ores[o]!.hardness : 1) * Math.pow(this.config.hardGrowth, d) * (this.twist.hardness ?? 1);
+  /** A built block's settings (null: rock, ore, air or the edge). */
+  material(id: number): MaterialDef | null {
+    return isMat(id) ? (this.config.materials[id - MAT] ?? null) : null;
+  }
+
+  /** The zone a block belongs to (built blocks: the rock round them). */
+  private zone(id: number, x: number, y: number, z: number): number {
+    return isMat(id) ? this.blocks.zoneAt(this.distance(x, y, z)) : Math.min(this.config.zones.length - 1, zoneOf(id));
+  }
+
+  /** Pickaxe tier a block needs (soft built blocks: none). */
+  private needs(id: number, x: number, y: number, z: number): number {
+    const m = this.material(id);
+    return m && m.hardness <= 0.5 ? 0 : this.config.zones[this.zone(id, x, y, z)]!.tier;
+  }
+
+  private hardness(id: number, x: number, y: number, z: number): number {
+    const z0 = this.config.zones[this.zone(id, x, y, z)]!, m = this.material(id), o = m ? -1 : oreOf(id);
+    const k = m ? m.hardness : o >= 0 ? this.config.ores[o]!.hardness : 1;
+    return z0.hardness * k * Math.pow(this.config.hardGrowth, this.distance(x, y, z)) * (this.twist.hardness ?? 1);
   }
 
   private label(id: number): string {
     if (id === EDGE) return 'Mine edge';
+    const m = this.material(id);
+    if (m) return m.label;
     const o = oreOf(id);
     return o >= 0 ? this.config.ores[o]!.label : this.config.zones[zoneOf(id)]!.label;
   }
 
+  /** What the next pickaxe costs where this block lies (rewards are shares of it). */
+  private worth(x: number, y: number, z: number): number {
+    const t = this.config.zones[this.blocks.zoneAt(this.distance(x, y, z))]!.tier, ps = this.config.pickaxes;
+    return t + 1 < ps.length ? ps[t + 1]!.price : this.config.pickaxeLevels.price;
+  }
+
+  /** Can't be dug yet: a strongbox whose guardian lives. */
+  private sealed(id: number, x: number, y: number, z: number): boolean {
+    if (!this.material(id)?.locked) return false;
+    const st = this.blocks.structureAt(x, y, z);
+    return !!st && !this.beaten.has(st.key);
+  }
+
+  /** Movement (× speed): slowed by blocking and webs. */
+  moveScale(): number {
+    return this.slow * (this.blocking ? this.config.guard.slow : 1);
+  }
+
   // ── Each step ──
 
-  tick(dt: number, fire: boolean): void {
+  tick(dt: number, fire: boolean, block = false): void {
     const time = this.host.time();
     if (this.host.now() >= this.nextRegen) this.regenerate(true);
     const pl = this.host.player();
@@ -217,12 +275,25 @@ export class MineSystem {
     if (this.atSell && !wasSell) this.sell();
     const regen = this.stat('regen');
     if (regen > 0) this.host.heal(regen * dt);
+    this.setBlock(block && this.handFree && !this.menuOpen, time);
+    // (Lava burns and webs hold, at the feet or the chest.)
+    this.slow = 1;
+    let burn = 0, cause = '';
+    for (const dy of [0.2, 1.1]) {
+      const m = this.material(this.blocks.get(Math.floor(px), Math.floor(py + dy), Math.floor(pz)));
+      if (m?.slow) this.slow = Math.min(this.slow, m.slow);
+      if (m?.hurt && m.hurt > burn) [burn, cause] = [m.hurt, m.label.toLowerCase()];
+    }
+    if (burn && time >= this.hurtAt) {
+      this.hurtAt = time + 0.5;
+      this.host.hurt(burn * 0.5, cause);
+    }
 
     const eye = this.toBlock(pl.eye), d = pl.dir;
     const reach = this.config.reach;
-    this.aim = this.menuOpen ? null : this.blocks.raycast(eye[0], eye[1], eye[2], d[0], d[1], d[2], reach);
+    this.aim = this.menuOpen ? null : this.blocks.raycast(eye[0], eye[1], eye[2], d[0], d[1], d[2], reach, true);
     if (this.aim && this.blocks.inBase(this.aim.x, this.aim.y, this.aim.z)) this.aim = null;
-    if (fire && !this.menuOpen && time >= this.nextSwing) {
+    if (fire && !this.menuOpen && !this.blocking && time >= this.nextSwing) {
       const speed = this.config.pickaxes[this.tier]!.speed * (1 + this.stat('swingSpeed'));
       this.nextSwing = time + 1 / speed;
       this.swungAt = time;
@@ -233,6 +304,7 @@ export class MineSystem {
     this.mobs = this.mobs.filter((m) => !(m.dead && time - m.diedAt > 1.5) && Math.hypot(m.pos[0] - px, m.pos[1] - py, m.pos[2] - pz) < 48);
     this.arrows = this.arrows.filter((a) => stepArrow(a, dt, world, time));
     this.bombs = this.bombs.filter((b) => this.stepBomb(b, dt, time));
+    this.stepBosses(dt, time, px, py, pz);
     if (time >= this.spawnAt) {
       const many = this.twist.mobs ?? 1;
       this.spawnAt = time + this.config.spawnEvery / Math.max(1, many);
@@ -297,8 +369,8 @@ export class MineSystem {
         for (let x = Math.floor(cx - r); x <= Math.floor(cx + r); x++) {
           if (Math.hypot(x + 0.5 - cx, y + 0.5 - cy, z + 0.5 - cz) > r) continue;
           const id = this.blocks.get(x, y, z);
-          if (id === AIR || id === EDGE || this.blocks.inBase(x, y, z)) continue;
-          if (this.config.zones[zoneOf(id)]!.tier > this.tier + 1) continue;
+          if (id === AIR || id === EDGE || this.blocks.inBase(x, y, z) || this.material(id)?.fluid || this.sealed(id, x, y, z)) continue;
+          if (this.needs(id, x, y, z) > this.tier + 1) continue;
           this.breakBlock(x, y, z, id, true);
         }
     const time = this.host.time();
@@ -308,6 +380,11 @@ export class MineSystem {
       const l = Math.hypot(m.pos[0] - cx, m.pos[2] - cz) || 1;
       m.hit(m.maxHp * 0.8 + this.power() * 10, [((m.pos[0] - cx) / l) * 8, ((m.pos[2] - cz) / l) * 8], time);
       if (m.dead) this.paid(m);
+    }
+    for (const b of this.bosses) {
+      if (b.dead || Math.hypot(b.pos[0] - cx, b.pos[1] + b.h / 2 - cy, b.pos[2] - cz) > r + b.w / 2 + 1) continue;
+      b.hit(b.maxHp * 0.08, [0, 0], time, this.bossWorld());
+      if (b.dead) this.bossDown(b);
     }
     const pl = this.host.player();
     if (pl) {
@@ -351,21 +428,31 @@ export class MineSystem {
         bestT = t;
       }
     }
+    let boss: Boss | null = null;
+    for (const b of this.bosses) {
+      if (b.dead) continue;
+      const t = rayBox(eye, dir, [b.pos[0] - b.w / 2, b.pos[1], b.pos[2] - b.w / 2], [b.pos[0] + b.w / 2, b.pos[1] + b.h, b.pos[2] + b.w / 2]);
+      if (t !== null && t < bestT) {
+        boss = b;
+        bestT = t;
+      }
+    }
+    if (boss) return this.hitBoss(boss, dir, time);
     if (best) return this.hitMob(best, dir, time);
     const a = this.aim;
     if (!a) return;
     const id = this.blocks.get(a.x, a.y, a.z);
     if (id === EDGE) return this.once('edge', 'That is the edge of the mine.');
-    const zone = this.config.zones[zoneOf(id)]!;
-    if (zone.tier > this.tier) {
-      this.once(`tier${zone.tier}`, `Too hard. Needs a ${this.config.pickaxes[zone.tier]!.label}.`);
+    const tier = this.needs(id, a.x, a.y, a.z);
+    if (tier > this.tier) {
+      this.once(`tier${tier}`, `Too hard. Needs a ${this.config.pickaxes[tier]!.label}.`);
       return;
     }
-    const d = this.distance(a.x, a.y, a.z);
+    if (this.sealed(id, a.x, a.y, a.z)) return this.once('sealed', 'Sealed. Its guardian still lives.');
     if (!this.dug || this.dug.x !== a.x || this.dug.y !== a.y || this.dug.z !== a.z) this.dug = { x: a.x, y: a.y, z: a.z, damage: 0 };
     this.dug.damage += this.power() * (1 + this.stat('mineDamage'));
     this.fx.push({ kind: 'hit', x: a.x, y: a.y, z: a.z, block: id });
-    if (this.dug.damage < this.hardness(id, d)) {
+    if (this.dug.damage < this.hardness(id, a.x, a.y, a.z)) {
       this.play('hit', a);
       return;
     }
@@ -373,16 +460,23 @@ export class MineSystem {
     this.breakBlock(a.x, a.y, a.z, id);
     if (this.host.random() < this.stat('multiBreak')) {
       const bx = a.x - a.n[0], by = a.y - a.n[1], bz = a.z - a.n[2], back = this.blocks.get(bx, by, bz);
-      if (back !== AIR && back !== EDGE && !this.blocks.inBase(bx, by, bz) && this.config.zones[zoneOf(back)]!.tier <= this.tier) this.breakBlock(bx, by, bz, back);
+      if (back !== AIR && back !== EDGE && !this.blocks.inBase(bx, by, bz) && !this.material(back)?.fluid && !this.sealed(back, bx, by, bz) && this.needs(back, bx, by, bz) <= this.tier) this.breakBlock(bx, by, bz, back);
     }
   }
 
   private breakBlock(x: number, y: number, z: number, id: number, quiet = false): void {
     this.blocks.set(x, y, z, AIR);
     this.fx.push({ kind: 'break', x, y, z, block: id });
-    let ore = oreOf(id);
+    const mat = this.material(id);
+    let ore = mat ? this.config.ores.findIndex((o) => o.id === mat.drops?.ore) : oreOf(id);
     let n = 0;
-    if (ore >= 0) n = 1 + (this.host.random() < this.stat('doubleOre') + (this.twist.double ?? 0) ? 1 : 0);
+    if (mat) {
+      n = ore >= 0 ? (mat.drops?.n ?? 1) : 0;
+      const pay = Math.round((mat.drops?.money ?? 0) * this.worth(x, y, z)), sticks = mat.drops?.dynamite ?? 0;
+      if (pay > 0) this.money += pay;
+      this.dynamite += sticks;
+      if (pay > 0 || sticks > 0) this.host.say([pay > 0 ? `+$${pay}` : '', sticks > 0 ? `+${sticks} dynamite` : ''].filter(Boolean).join('   '), 2.5);
+    } else if (ore >= 0) n = 1 + (this.host.random() < this.stat('doubleOre') + (this.twist.double ?? 0) ? 1 : 0);
     else if (this.host.random() < this.stat('oreChance')) {
       const t = this.config.zones[zoneOf(id)]!.ores, ids = Object.keys(t);
       if (ids.length) {
@@ -390,7 +484,7 @@ export class MineSystem {
         n = ore >= 0 ? 1 : 0;
       }
     }
-    if (!quiet) this.play(n ? 'ore' : 'break', { x, y, z });
+    if (!quiet) this.play(n && !mat ? 'ore' : 'break', { x, y, z });
     if (!n) return;
     const room = this.capacity - this.carried;
     if (room <= 0) return this.once('full', 'Backpack full. Go and sell.');
@@ -427,6 +521,134 @@ export class MineSystem {
     }
   }
 
+  // ── Blocking and parrying ──
+
+  private setBlock(held: boolean, time: number): void {
+    if (held && !this.blocking && time - this.pressAt >= this.config.guard.cooldown) {
+      this.parryUntil = time + this.config.guard.window;
+      this.pressAt = time;
+    }
+    this.blocking = held;
+  }
+
+  /** Damage coming at the player: parried (none), blocked (less) or taken. Blocking works facing it (`from`, block space). */
+  private guard(amount: number, cause: string, from: [number, number, number] | null, parryable: boolean): 'parry' | 'block' | 'hit' {
+    const time = this.host.time(), pl = this.host.player();
+    let front = true;
+    if (from && pl) {
+      const [px, , pz] = this.toBlock(pl.feet), dx = from[0] - px, dz = from[2] - pz, l = Math.hypot(dx, dz) || 1, dl = Math.hypot(pl.dir[0], pl.dir[2]) || 1;
+      front = (dx * pl.dir[0] + dz * pl.dir[2]) / (l * dl) > 0.2;
+    }
+    if (this.blocking && front) {
+      this.guardAt = time;
+      if (parryable && time <= this.parryUntil) {
+        this.guardKind = 'parry';
+        this.play('parry', null);
+        return 'parry';
+      }
+      this.guardKind = 'block';
+      this.play('block', null);
+      this.host.hurt(amount * this.config.guard.block * (parryable ? 1 : 1.7), cause);
+      return 'block';
+    }
+    this.host.hurt(amount, cause);
+    return 'hit';
+  }
+
+  // ── Bosses ──
+
+  private bossWorld(): BossWorld {
+    const w = this.mobWorld() as BossWorld, self = this;
+    w.strike = (b: Boss, kind: BossAttack, damage: number, reach: number) => {
+      const pl = self.host.player();
+      if (!pl) return 'miss';
+      const [px, py, pz] = self.toBlock(pl.feet), dx = px - b.pos[0], dz = pz - b.pos[2], d = Math.hypot(dx, dz);
+      if (d > reach + 16 / self.B || py > b.pos[1] + b.h || py + 72 / self.B < b.pos[1]) return 'miss';
+      if (kind === 'slam') self.fx.push({ kind: 'boom', x: b.pos[0], y: b.pos[1] + 0.2, z: b.pos[2], r: reach });
+      // (A swing reaches in front of it only.)
+      if (kind === 'swing' && d > 0.5 && (-Math.sin(b.yaw) * dx - Math.cos(b.yaw) * dz) / d < 0.3) return 'miss';
+      return self.guard(damage, b.def.label, [b.pos[0], b.pos[1], b.pos[2]], kind !== 'slam');
+    };
+    w.volley = (b, from, vel) => {
+      for (const v of vel) self.shots.push({ pos: [...from], vel: v, damage: b.damage * 0.6, boss: b, until: self.host.time() + 4, back: false });
+      self.play('arrow', { x: from[0] - 0.5, y: from[1], z: from[2] - 0.5 });
+    };
+    w.summon = (b, n) => {
+      const def = self.config.mobs.find((m) => m.id === b.def.minion);
+      if (!def || self.mobs.filter((m) => !m.dead && m.sector === b.key).length >= 4) return;
+      const c = self.config, d = self.distance(...b.home);
+      for (let i = 0; i < n; i++) {
+        const a = self.host.random() * Math.PI * 2, x = Math.floor(b.pos[0] + Math.cos(a) * (b.w + 1)), z = Math.floor(b.pos[2] + Math.sin(a) * (b.w + 1)), y = Math.floor(b.pos[1]);
+        if (self.blocks.get(x, y, z) !== AIR || self.blocks.get(x, y + 1, z) !== AIR) continue;
+        const m = new Mob(def, [x + 0.5, y, z + 0.5], self.B, def.damage * Math.pow(c.mobHitGrowth, d), 0, def.health * Math.pow(c.mobGrowth, d));
+        m.sector = b.key;
+        self.mobs.push(m);
+      }
+    };
+    w.roar = (b) => {
+      self.play('roar', { x: b.pos[0] - 0.5, y: b.pos[1], z: b.pos[2] - 0.5 });
+    };
+    return w;
+  }
+
+  /** Bosses wake in their structures; a boss the player walks away from goes (it'll be back, whole). */
+  private stepBosses(dt: number, time: number, px: number, py: number, pz: number): void {
+    if (time >= this.bossAt) {
+      this.bossAt = time + 0.5;
+      const st = this.blocks.structureAt(Math.floor(px), Math.floor(py), Math.floor(pz));
+      const def = st && this.config.bosses.find((b) => b.id === st.def.boss);
+      if (st && def && !this.beaten.has(st.key) && !this.bosses.some((b) => b.key === st.key)) {
+        const d = this.distance(...st.boss), tier = this.config.zones[this.blocks.zoneAt(d)]!.tier;
+        const power = this.config.pickaxes[Math.min(tier, this.config.pickaxes.length - 1)]!.power;
+        this.bosses.push(new Boss(def, st.key, st.boss, def.health * power, def.damage * Math.pow(this.config.mobHitGrowth, d), Math.round(def.reward * this.worth(...st.boss))));
+      }
+      this.bosses = this.bosses.filter((b) => !(b.dead && time - b.diedAt > 3) && (b.dead || Math.hypot(b.home[0] - px, b.home[1] - py, b.home[2] - pz) < 72));
+    }
+    if (!this.bosses.length && !this.shots.length) return;
+    const w = this.bossWorld();
+    for (const b of this.bosses) b.step(dt, w, time);
+    const pl = w.player();
+    this.shots = this.shots.filter((s) => {
+      if (time > s.until) return false;
+      s.pos = [s.pos[0] + s.vel[0] * dt, s.pos[1] + s.vel[1] * dt, s.pos[2] + s.vel[2] * dt];
+      if (this.blocks.solid(Math.floor(s.pos[0]), Math.floor(s.pos[1]), Math.floor(s.pos[2]))) return false;
+      const b = s.boss;
+      if (s.back) {
+        if (b.dead || Math.abs(s.pos[0] - b.pos[0]) > b.w / 2 + 0.3 || Math.abs(s.pos[2] - b.pos[2]) > b.w / 2 + 0.3 || s.pos[1] < b.pos[1] || s.pos[1] > b.pos[1] + b.h) return true;
+        b.hit(b.maxHp * 0.05, [0, 0], time, w);
+        if (b.dead) this.bossDown(b);
+        else if (b.state !== 'stagger') b.stagger(time, 0.8);
+        return false;
+      }
+      if (!pl || Math.hypot(s.pos[0] - pl.x, s.pos[2] - pl.z) > pl.r + 0.25 || s.pos[1] < pl.y || s.pos[1] > pl.y + pl.h) return true;
+      if (this.guard(s.damage, b.def.label, s.pos, true) !== 'parry') return false;
+      // (Parried: back where it came from, faster.)
+      const tx = b.pos[0] - s.pos[0], ty = b.pos[1] + b.h / 2 - s.pos[1], tz = b.pos[2] - s.pos[2], l = Math.hypot(tx, ty, tz) || 1, v = Math.hypot(...s.vel) * 1.4;
+      s.vel = [(tx / l) * v, (ty / l) * v, (tz / l) * v];
+      s.back = true;
+      s.until = time + 3;
+      return true;
+    });
+  }
+
+  private hitBoss(b: Boss, dir: [number, number, number], time: number): void {
+    const l = Math.hypot(dir[0], dir[2]) || 1;
+    b.hit(this.power() * (1 + this.stat('mobDamage')), [(dir[0] / l) * 3, (dir[2] / l) * 3], time, this.bossWorld());
+    this.fx.push({ kind: 'mob', id: b.id });
+    const at = { x: b.pos[0] - 0.5, y: b.pos[1], z: b.pos[2] - 0.5 };
+    if (!b.dead) return this.play('mobHit', at);
+    this.play('mobDie', at);
+    this.bossDown(b);
+  }
+
+  private bossDown(b: Boss): void {
+    this.beaten.add(b.key);
+    this.shots = this.shots.filter((s) => s.boss !== b);
+    for (const m of this.mobs) if (m.sector === b.key && !m.dead) m.hit(m.hp, [0, 0], this.host.time());
+    this.money += b.reward;
+    this.host.say(`${b.def.label} falls. +$${b.reward}. Its strongbox is open.`, 5);
+  }
+
   // ── Monsters ──
 
   private mobWorld(): MobWorld {
@@ -439,7 +661,7 @@ export class MineSystem {
         const [x, y, z] = self.toBlock(p.feet);
         return { x, y, z, h: 72 / self.B, r: 16 / self.B };
       },
-      hurt: (n, cause) => this.host.hurt(n, cause),
+      hurt: (n, cause) => void this.guard(n, cause, null, true),
       sees: (ax, ay, az, bx, by, bz) => {
         const dx = bx - ax, dy = by - ay, dz = bz - az, l = Math.hypot(dx, dy, dz);
         const hit = this.blocks.raycast(ax, ay, az, dx, dy, dz, l);
@@ -463,7 +685,7 @@ export class MineSystem {
       const x = Math.floor(px + Math.cos(a) * Math.cos(e) * r), z = Math.floor(pz + Math.sin(a) * Math.cos(e) * r);
       let y = Math.floor(py + Math.sin(e) * r);
       if (c0.surface ? y > -c0.crust - 2 : Math.max(Math.abs(x) - bx, Math.abs(z) - bz) < 6 && Math.abs(y) < 12) continue;
-      if (this.blocks.solid(x, y, z)) continue;
+      if (this.blocks.get(x, y, z) !== AIR) continue;
       let k = 0;
       while (k++ < 8 && !this.blocks.solid(x, y - 1, z)) y--;
       if (!this.blocks.solid(x, y - 1, z) || this.blocks.solid(x, y + 1, z)) continue;
@@ -589,6 +811,9 @@ export class MineSystem {
     this.mobs = [];
     this.arrows = [];
     this.bombs = [];
+    this.bosses = [];
+    this.shots = [];
+    this.beaten.clear();
     this.sectors.clear();
     this.dug = null;
     this.nextRegen = this.host.now() + this.config.regenMinutes * 60000;
@@ -602,16 +827,23 @@ export class MineSystem {
     const d = this.distance(b[0]! - 0.5, b[1]!, b[2]! - 0.5);
     let aim: MineHud['aim'] = null;
     if (this.aim) {
-      const id = this.blocks.get(this.aim.x, this.aim.y, this.aim.z);
-      const z = this.config.zones[Math.min(this.config.zones.length - 1, zoneOf(id))]!;
-      const dug = this.dug && this.dug.x === this.aim.x && this.dug.y === this.aim.y && this.dug.z === this.aim.z ? this.dug.damage : 0;
+      const { x, y, z } = this.aim, id = this.blocks.get(x, y, z);
+      const dug = this.dug && this.dug.x === x && this.dug.y === y && this.dug.z === z ? this.dug.damage : 0;
       // (The aimed block may have just been dug out.)
       if (id === AIR) aim = null;
       else if (id === EDGE) aim = { label: this.label(id), broken: 0, needs: '' };
-      else aim = { label: this.label(id), broken: Math.min(1, dug / this.hardness(id, this.distance(this.aim.x, this.aim.y, this.aim.z))), needs: z.tier > this.tier ? this.config.pickaxes[z.tier]!.label : '' };
+      else {
+        const tier = this.needs(id, x, y, z);
+        aim = { label: this.label(id), broken: Math.min(1, dug / this.hardness(id, x, y, z)), needs: tier > this.tier ? this.config.pickaxes[tier]!.label : '' };
+      }
     }
-    const p = this.config.pickaxes[this.tier]!;
+    const p = this.config.pickaxes[this.tier]!, time = this.host.time();
+    const boss = this.bosses.find((x) => !x.dead && x.state !== 'sleep');
     return {
+      place: this.blocks.structureAt(Math.floor(b[0]!), Math.floor(b[1]! + 0.1), Math.floor(b[2]!))?.def.label ?? '',
+      boss: boss ? { label: boss.def.label, hp: boss.hp / boss.maxHp, phase: boss.phase } : null,
+      blocking: this.blocking,
+      guard: time - this.guardAt < 0.3 ? this.guardKind : '',
       money: Math.floor(this.money),
       bag: this.carried,
       cap: this.capacity,
@@ -659,7 +891,7 @@ export class MineSystem {
     const a = this.aim, d = this.dug;
     if (!a || !d || d.x !== a.x || d.y !== a.y || d.z !== a.z) return 0;
     const id = this.blocks.get(a.x, a.y, a.z);
-    return id === AIR || id === EDGE ? 0 : Math.min(1, d.damage / this.hardness(id, this.distance(a.x, a.y, a.z)));
+    return id === AIR || id === EDGE ? 0 : Math.min(1, d.damage / this.hardness(id, a.x, a.y, a.z));
   }
 
   private play(kind: keyof MineConfig['sounds'], at: { x: number; y: number; z: number } | null): void {
@@ -688,6 +920,7 @@ export class MineSystem {
       twist: this.twist.id,
       dynamite: this.dynamite,
       caves: Object.fromEntries(this.sectors),
+      beaten: [...this.beaten],
       next: this.nextRegen,
       dug: this.blocks.save(),
     };
@@ -719,6 +952,8 @@ export class MineSystem {
       this.blocks.reset(o.seed);
       this.sectors.clear();
       if (o.caves && typeof o.caves === 'object') for (const [k, v] of Object.entries(o.caves)) if (typeof v === 'number' && v >= 0) this.sectors.set(k, Math.floor(v));
+      this.beaten.clear();
+      if (Array.isArray(o.beaten)) for (const k of o.beaten) if (typeof k === 'string') this.beaten.add(k);
       this.blocks.load(o.dug);
     } else {
       this.useTwist(this.rollTwist());
@@ -758,4 +993,4 @@ function rayBox(o: number[], d: number[], lo: number[], hi: number[]): number | 
   return t0;
 }
 
-export { AIR, blockId, EDGE, oreOf, zoneOf };
+export { AIR, blockId, EDGE, isMat, MAT, oreOf, zoneOf };

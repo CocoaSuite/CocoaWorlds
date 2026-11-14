@@ -1,7 +1,7 @@
 // Mining: the block mine (made from a seed), colliders, monsters' paths, the pickaxe, selling, buying and saving.
 import { beforeAll, describe, expect, it } from 'vitest';
 import { newEntity, newScene } from '@cocoaworlds/core';
-import { AIR, EDGE, findPath, GameWorld, initPhysics, mineConfig, MineBlocks, MineSystem, Mob, oreOf, zoneOf, type MineHost } from '../src';
+import { AIR, Boss, blockId, EDGE, findPath, GameWorld, initPhysics, MAT, mineConfig, MineBlocks, MineSystem, Mob, oreOf, zoneOf, type MineHost } from '../src';
 
 beforeAll(async () => {
   await initPhysics();
@@ -289,6 +289,147 @@ describe('the pickaxe, the backpack and buying', () => {
     back.tick(1 / 60, false);
     expect(back.blocks.get(9, 1, 0)).not.toBe(AIR);
     expect(h.feet).toEqual([0, 0, 0]);
+  });
+});
+
+describe('structures and bosses', () => {
+  function host(at: [number, number, number], dir: [number, number, number] = [1, 0, 0]) {
+    let t = 0;
+    const h: MineHost & { feet: [number, number, number]; dir: [number, number, number]; said: string[]; hurtBy: number; advance(s: number): void } = {
+      feet: at,
+      dir,
+      said: [],
+      hurtBy: 0,
+      time: () => t,
+      now: () => 1_000_000 + t * 1000,
+      player: () => ({ feet: h.feet, eye: [h.feet[0], h.feet[1] + 64, h.feet[2]], dir: h.dir }),
+      hurt: (n) => void (h.hurtBy += n),
+      heal: () => {},
+      say: (s) => void h.said.push(s),
+      sound: () => {},
+      home: () => {},
+      random: () => 0.99,
+      advance: (s) => void (t += s),
+    };
+    return h;
+  }
+  const mat = (m: MineSystem, id: string) => MAT + m.config.materials.findIndex((x) => x.id === id);
+
+  it('structures stand across the shaft, made the same from the seed, a boss waiting in the open', () => {
+    const find = () => {
+      const b = new MineBlocks(mineConfig({ seed: 7 }), 7);
+      for (let y = -12; y > -200; y--) {
+        const st = b.structureAt(0, y, 0);
+        if (st) return { b, st };
+      }
+      return null;
+    };
+    const f = find()!;
+    expect(find()!.st.at).toEqual(f.st.at);
+    const [x, y, z] = f.st.boss;
+    expect(f.b.get(x, y, z)).toBe(AIR);
+    expect(f.b.get(x, y + 1, z)).toBe(AIR);
+    expect(f.b.solid(x, y - 1, z)).toBe(true);
+    expect(f.b.get(x, y - 1, z)).toBeGreaterThanOrEqual(MAT);
+  });
+
+  function arena() {
+    const h = host([20 * 40, 0, 0]);
+    const m = new MineSystem({ seed: 3, maxMobs: 0, block: 40, surface: false, structures: { chance: 0 } }, h);
+    for (let x = 12; x < 32; x++)
+      for (let z = -4; z <= 4; z++) {
+        m.blocks.set(x, -1, z, blockId(0, -1));
+        for (let y = 0; y < 5; y++) m.blocks.set(x, y, z, AIR);
+      }
+    const boss = new Boss(m.config.bosses.find((b) => b.id === 'foreman')!, 'k', [23, 0, 0], 1000, 20, 50);
+    m.bosses.push(boss);
+    const run = (secs: number, until: () => boolean, block = () => false) => {
+      for (let i = 0; i < secs * 60 && !until(); i++) {
+        h.advance(1 / 60);
+        m.tick(1 / 60, false, block());
+      }
+    };
+    return { h, m, boss, run };
+  }
+
+  it('a boss wakes, winds up and hits; blocking takes less', () => {
+    const a = arena();
+    a.run(6, () => a.h.hurtBy > 0);
+    expect(a.boss.state).not.toBe('sleep');
+    expect(a.h.hurtBy).toBeCloseTo(20);
+    const b = arena();
+    b.run(6, () => b.h.hurtBy > 0, () => true);
+    expect(b.m.blocking).toBe(true);
+    expect(b.h.hurtBy).toBeCloseTo(20 * b.m.config.guard.block);
+    expect(b.m.moveScale()).toBeCloseTo(b.m.config.guard.slow);
+  });
+
+  it('a parry just as it lands: no damage, the boss staggers and takes double', () => {
+    const a = arena();
+    a.run(6, () => a.boss.state === 'windup' && a.boss.until - a.h.time() < 0.1);
+    a.run(1, () => a.boss.state !== 'windup', () => true);
+    expect(a.h.hurtBy).toBe(0);
+    expect(a.boss.state).toBe('stagger');
+    a.run(0.1, () => false);
+    const hp = a.boss.hp;
+    a.h.advance(1);
+    a.m.tick(1 / 60, true);
+    expect(hp - a.boss.hp).toBeCloseTo(2 * a.m.power());
+  });
+
+  it('shots parried fly back and hurt the boss', () => {
+    const a = arena();
+    a.boss.wake(a.m['bossWorld'](), 0);
+    a.m.shots.push({ pos: [26, 1, 0.5], vel: [-10, 0, 0], damage: 10, boss: a.boss, until: 9, back: false });
+    a.run(1, () => a.m.shots[0]!.pos[0] < 22.6);
+    a.run(1, () => a.m.shots[0]?.back === true || !a.m.shots.length, () => true);
+    expect(a.h.hurtBy).toBe(0);
+    const hp = a.boss.hp;
+    a.run(2, () => !a.m.shots.length);
+    expect(a.boss.hp).toBeLessThan(hp);
+  });
+
+  it('the strongbox stays sealed until its boss falls; lava burns, webs slow; saved', () => {
+    const b = new MineBlocks(mineConfig({ seed: 7 }), 7);
+    let st = null;
+    for (let y = -12; y > -200 && !st; y--) st = b.structureAt(0, y, 0);
+    const [x, y, z] = st!.boss;
+    const h = host([(x - 2) * 48, y * 48, z * 48 - 24]);
+    const m = new MineSystem({ seed: 7, maxMobs: 0 }, h);
+    m.blocks.reset(7);
+    m.bosses = [];
+    for (let i = -3; i <= 1; i++) for (let j = 0; j < 3; j++) m.blocks.set(x + i, y + j, z, AIR);
+    m.blocks.set(x, y + 1, z, mat(m, 'vault'));
+    m.tier = 11;
+    const swing = () => {
+      for (let i = 0; i < 40 && m.blocks.get(x, y + 1, z) !== AIR; i++) {
+        h.advance(0.5);
+        m.tick(1 / 60, true);
+        m.bosses = [];
+      }
+    };
+    swing();
+    expect(m.blocks.get(x, y + 1, z)).toBe(mat(m, 'vault'));
+    expect(h.said).toContain('Sealed. Its guardian still lives.');
+    m.beaten.add(st!.key);
+    const money = m.money;
+    swing();
+    expect(m.blocks.get(x, y + 1, z)).toBe(AIR);
+    expect(m.money).toBeGreaterThan(money);
+    expect(m.dynamite).toBe(3);
+    const back = new MineSystem({ seed: 7, maxMobs: 0 }, h);
+    back.load(m.save());
+    expect(back.beaten.has(st!.key)).toBe(true);
+    m.blocks.set(x - 2, y, z, mat(m, 'lava'));
+    h.hurtBy = 0;
+    for (let i = 0; i < 60; i++) {
+      h.advance(1 / 60);
+      m.tick(1 / 60, false);
+    }
+    expect(h.hurtBy).toBeGreaterThanOrEqual(30);
+    m.blocks.set(x - 2, y, z, mat(m, 'web'));
+    m.tick(1 / 60, false);
+    expect(m.moveScale()).toBeCloseTo(0.3);
   });
 });
 
