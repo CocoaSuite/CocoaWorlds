@@ -18,16 +18,28 @@ import crimsonrockPng from '../assets/mine/crimson_rock.png';
 import deepslatePng from '../assets/mine/deepslate.png';
 import diamondPng from '../assets/mine/diamond.png';
 import emeraldPng from '../assets/mine/emerald.png';
+import emberrockPng from '../assets/mine/ember_rock.png';
+import frostrockPng from '../assets/mine/frost_rock.png';
 import goldPng from '../assets/mine/gold.png';
+import granitePng from '../assets/mine/granite.png';
 import ironPng from '../assets/mine/iron.png';
+import marblePng from '../assets/mine/marble.png';
+import obsidianPng from '../assets/mine/obsidian.png';
+import quartzPng from '../assets/mine/quartz.png';
 import rubyPng from '../assets/mine/ruby.png';
+import shalePng from '../assets/mine/shale.png';
+import silverPng from '../assets/mine/silver.png';
 import stonePng from '../assets/mine/stone.png';
+import topazPng from '../assets/mine/topaz.png';
 import voidrockPng from '../assets/mine/void_rock.png';
 import voidstonePng from '../assets/mine/voidstone.png';
 
-const builtIn: Record<string, string> = { amethyst: amethystPng, azure_rock: azurerockPng, azurite: azuritePng, basalt: basaltPng, coal: coalPng, copper: copperPng, crimson_rock: crimsonrockPng, deepslate: deepslatePng, diamond: diamondPng, emerald: emeraldPng, gold: goldPng, iron: ironPng, ruby: rubyPng, stone: stonePng, void_rock: voidrockPng, voidstone: voidstonePng };
+const builtIn: Record<string, string> = { amethyst: amethystPng, azure_rock: azurerockPng, azurite: azuritePng, basalt: basaltPng, coal: coalPng, copper: copperPng, crimson_rock: crimsonrockPng, deepslate: deepslatePng, diamond: diamondPng, emerald: emeraldPng, ember_rock: emberrockPng, frost_rock: frostrockPng, gold: goldPng, granite: granitePng, iron: ironPng, marble: marblePng, obsidian: obsidianPng, quartz: quartzPng, ruby: rubyPng, shale: shalePng, silver: silverPng, stone: stonePng, topaz: topazPng, void_rock: voidrockPng, voidstone: voidstonePng };
 const builtInUrl = (id: string) => builtIn[id] ?? '';
 const T = 16;
+
+/** Ore icons (picture URLs by ore id) for the backpack, made once the tiles load. */
+export const oreIcons = new Map<string, string>();
 
 async function pixels(url: string): Promise<Uint8ClampedArray | null> {
   if (!url) return null;
@@ -160,6 +172,23 @@ export class MineView {
     // (Screen occlusion leaves out what isn't rock.)
     for (const o of [this.dark, this.cracks, this.sense, this.chips, this.arrows]) o.userData.noAo = true;
     this.hand.matrixAutoUpdate = false;
+    // The sell zone: a gold square on the ground and a sign over it.
+    if (mine.sellAt) {
+      const r = mine.config.sellRadius * B, pad = new THREE.Group();
+      const gold = new THREE.MeshBasicMaterial({ color: 0xf2c14e, transparent: true, opacity: 0.85 });
+      for (const [w, d, x, z] of [[2 * r, 6, 0, -r], [2 * r, 6, 0, r], [6, 2 * r, -r, 0], [6, 2 * r, r, 0]] as const) {
+        const bar = new THREE.Mesh(new THREE.BoxGeometry(w, 2, d), gold);
+        bar.position.set(x, 1, z);
+        pad.add(bar);
+      }
+      const fill = new THREE.Mesh(new THREE.PlaneGeometry(2 * r, 2 * r), new THREE.MeshBasicMaterial({ color: 0xf2c14e, transparent: true, opacity: 0.12, depthWrite: false }));
+      fill.rotation.x = -Math.PI / 2;
+      fill.position.y = 0.6;
+      pad.add(fill, sign('SELL', B));
+      pad.position.set(...mine.sellAt);
+      for (const o of pad.children) o.userData.noAo = true;
+      this.group.add(pad);
+    }
     this.group.add(this.outline, this.cracks, this.chips, this.arrows, this.sense, this.dark, this.hand);
   }
 
@@ -203,6 +232,20 @@ export class MineView {
       }
     });
     this.atlas.needsUpdate = true;
+    // (Icons: each ore on the first rock.)
+    const icon = document.createElement('canvas');
+    icon.width = icon.height = T;
+    const g = icon.getContext('2d')!;
+    c.ores.forEach((o, i) => {
+      const img = g.createImageData(T, T);
+      for (let py = 0; py < T; py++)
+        for (let px = 0; px < T; px++) {
+          const d = ((T - 1 - py) * W + (i + 1) * T + px) * 4, o4 = (py * T + px) * 4;
+          img.data.set([data[d]!, data[d + 1]!, data[d + 2]!, 255], o4);
+        }
+      g.putImageData(img, 0, 0);
+      oreIcons.set(o.id, icon.toDataURL());
+    });
   }
 
   /** Mesh one chunk: faces next to air only. */
@@ -491,6 +534,27 @@ export class MineView {
     for (const t of this.crackTex) t.dispose();
     this.handInst?.dispose();
   }
+}
+
+/** A word on a board that turns to face the camera, hanging over the sell zone. */
+function sign(text: string, B: number): THREE.Sprite {
+  const c = document.createElement('canvas');
+  c.width = 256;
+  c.height = 96;
+  const g = c.getContext('2d')!;
+  g.fillStyle = 'rgba(0,0,0,0.55)';
+  g.fillRect(0, 0, 256, 96);
+  g.fillStyle = '#f2c14e';
+  g.font = `600 58px ${getComputedStyle(document.body).fontFamily}`;
+  g.textAlign = 'center';
+  g.textBaseline = 'middle';
+  g.fillText(text, 128, 50);
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: t, transparent: true }));
+  sp.scale.set(B * 2.4, B * 0.9, 1);
+  sp.position.y = B * 2.6;
+  return sp;
 }
 
 /** A plain monster: a block figure its size (red), facing −Z. */

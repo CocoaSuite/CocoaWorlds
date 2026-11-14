@@ -842,3 +842,9 @@ button.cw-sec.cw-fold { width: 100%; border: 0; border-top: 1px solid var(--line
 .cw-mine-node.maxed { background: var(--c); color: #111; }
 .cw-mine-node-level { font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; }
 .cw-mine-info { display: flex; gap: 10px; align-items: baseline; padding: 10px 14px; background: #1e2026; font-size: 13px; min-height: 20px; }
+.cw-mine-items { display: flex; flex-direction: column; gap: 3px; margin: 2px 0; }
+.cw-mine-item { display: flex; align-items: center; gap: 6px; }
+.cw-mine-item img, .cw-mine-icon { width: 20px; height: 20px; image-rendering: pixelated; border-radius: 3px; flex: none; }
+.cw-mine-noicon { width: 20px; height: 20px; border-radius: 3px; background: rgba(255, 255, 255, 0.15); }
+.cw-mine-n { font-variant-numeric: tabular-nums; font-weight: 600; }
+.cw-mine-sell { color: #f2c14e; font-weight: 600; }

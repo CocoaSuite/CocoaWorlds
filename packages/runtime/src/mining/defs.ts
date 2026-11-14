@@ -4,7 +4,7 @@ import defaults from './data/mine.json';
 export interface ZoneDef {
   id: string;
   label: string;
-  /** Blocks from the base where it starts. */
+  /** Where it starts: blocks down from the surface (surface mines), or blocks from the base. */
   from: number;
   /** Project image (16 × 16 tile); '' uses the built-in one of the same id. */
   texture: string;
@@ -114,6 +114,10 @@ export interface MineConfig {
   maxMobs: number;
   spawnEvery: number;
   caves: number;
+  /** Share of 3 × 3 × 3 cells that hold an ore vein. */
+  oreDensity: number;
+  /** A scene object called “Sell”: the backpack sells within this many blocks of it. */
+  sellRadius: number;
   pickaxeLevels: { price: number; growth: number; power: number };
   menuKey: string;
   homeKey: string;

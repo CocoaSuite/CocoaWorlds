@@ -10,10 +10,11 @@ beforeAll(async () => {
 describe('the mine', () => {
   const blocks = () => new MineBlocks(mineConfig({ seed: 7, surface: false }), 7);
 
-  it('built-in settings: 6 rock zones, 10 ores, 12 pickaxes, 4 skill branches', () => {
+  it('built-in settings: 12 rock zones (one for each pickaxe), 13 ores, 4 skill branches', () => {
     const c = mineConfig();
-    expect(c.zones.map((z) => z.id)).toEqual(['stone', 'deepslate', 'basalt', 'azure_rock', 'crimson_rock', 'void_rock']);
-    expect(c.ores).toHaveLength(10);
+    expect(c.zones).toHaveLength(12);
+    expect(c.zones.map((z) => z.tier)).toEqual(c.pickaxes.map((_, i) => i));
+    expect(c.ores).toHaveLength(13);
     expect(c.pickaxes).toHaveLength(12);
     expect(new Set(c.skills.map((s) => s.branch))).toEqual(new Set(['mining', 'backpack', 'combat', 'vision']));
     for (const s of c.skills) for (const n of s.needs) expect(c.skills.some((d) => d.id === n)).toBe(true);
@@ -29,8 +30,8 @@ describe('the mine', () => {
     expect(b.solid(0, -1, 0)).toBe(true);
     expect(b.solid(8, 0, 0)).toBe(true);
     expect(b.zoneAt(0)).toBe(0);
-    expect(b.zoneAt(45)).toBe(1);
-    expect(b.zoneAt(10000)).toBe(5);
+    expect(b.zoneAt(45)).toBe(2);
+    expect(b.zoneAt(10000)).toBe(11);
   });
 
   it('on the surface: a flat patch of rock, its sides the mine edge down to the crust, rock all round below', () => {
@@ -60,7 +61,7 @@ describe('the mine', () => {
     expect(air / n).toBeGreaterThan(0.03);
     expect(air / n).toBeLessThan(0.3);
     expect(ore / n).toBeGreaterThan(0.03);
-    expect(ore / n).toBeLessThan(0.15);
+    expect(ore / n).toBeLessThan(0.25);
   });
 
   it('a chunk collides as boxes that cover exactly its rock', () => {
@@ -141,6 +142,20 @@ describe('the pickaxe, the backpack and buying', () => {
     expect(m.carried).toBe(0);
     expect(m.money).toBeGreaterThan(0);
     expect(h.said.some((s) => s.startsWith('Sold for'))).toBe(true);
+  });
+
+  it('with a sell zone, ores sell only there', () => {
+    const h = host([0, 0, 0]);
+    const m = make(h);
+    m.sellAt = [20 * 40, 0, 0];
+    m.bag.set(0, { n: 3, value: 30 });
+    m.tick(1 / 60, false);
+    expect(m.carried).toBe(3);
+    h.feet = [19 * 40, 0, 0];
+    m.tick(1 / 60, false);
+    expect(m.carried).toBe(0);
+    expect(m.money).toBe(30);
+    expect(m.hud().atSell).toBe(true);
   });
 
   it('pickaxes, endless levels and skills cost money; skills need the ones before', () => {

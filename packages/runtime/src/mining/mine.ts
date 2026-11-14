@@ -38,6 +38,10 @@ export interface MineHud {
   home: boolean;
   /** A surface mine (home is above ground). */
   surface: boolean;
+  /** Standing in the sell zone. */
+  atSell: boolean;
+  /** What the backpack holds: ore id, name, how many. */
+  items: { id: string; label: string; n: number }[];
   /** The block aimed at: how broken (0…1), or why it can't be (needs a better pickaxe). */
   aim: { label: string; broken: number; needs: string } | null;
 }
@@ -47,7 +51,9 @@ export interface MineMenu {
   pickaxe: { label: string; power: number; color: string; level: number; next: { label: string; price: number; power: number; color: string } | null };
   skills: { id: string; branch: string; label: string; text: string; level: number; max: number; cost: number; at: [number, number]; needs: string[]; open: boolean }[];
   branches: { id: string; label: string; color: string }[];
-  bag: { label: string; n: number; value: number; color: string }[];
+  bag: { id: string; label: string; n: number; value: number; color: string }[];
+  /** Where ores sell: a sell zone, or anywhere back home. */
+  sellZone: boolean;
   cap: number;
   home: boolean;
   surface: boolean;
@@ -81,6 +87,9 @@ export class MineSystem {
   private statCache: Map<Stat, number> | null = null;
   private saidAt = new Map<string, number>();
   inBase = false;
+  /** The sell zone's middle (world), from a scene object called “Sell”; null: selling happens on getting home. */
+  sellAt: [number, number, number] | null = null;
+  atSell = false;
 
   constructor(
     over: unknown,
@@ -111,7 +120,7 @@ export class MineSystem {
   }
 
   distance(x: number, y: number, z: number): number {
-    return Math.hypot(x, y, z);
+    return this.blocks.depth(x, y, z);
   }
 
   // ── Stats ──
@@ -166,9 +175,10 @@ export class MineSystem {
     if (!pl) return;
     const [px, py, pz] = this.toBlock(pl.feet);
     this.loadAround(px, py, pz);
-    const wasBase = this.inBase;
     this.inBase = this.blocks.inBase(Math.floor(px), Math.floor(py + 0.1), Math.floor(pz));
-    if (this.inBase && !wasBase) this.sell();
+    const wasSell = this.atSell, s = this.sellAt, f = pl.feet;
+    this.atSell = s ? Math.hypot(f[0] - s[0], f[1] - s[1], f[2] - s[2]) < this.config.sellRadius * this.B : this.inBase;
+    if (this.atSell && !wasSell) this.sell();
     const regen = this.stat('regen');
     if (regen > 0) this.host.heal(regen * dt);
 
@@ -452,6 +462,8 @@ export class MineSystem {
       regen: Math.max(0, Math.ceil((this.nextRegen - this.host.now()) / 1000)),
       home: this.inBase,
       surface: this.config.surface,
+      atSell: this.atSell,
+      items: [...this.bag].map(([i, b]) => ({ id: this.config.ores[i]!.id, label: this.config.ores[i]!.label, n: b.n })),
       aim,
     };
   }
@@ -464,7 +476,8 @@ export class MineSystem {
       pickaxe: { label: this.level ? `${p.label} +${this.level}` : p.label, power: Math.round(this.power()), color: p.color, level: this.level, next: this.nextPickaxe() },
       skills: this.config.skills.map((d) => ({ id: d.id, branch: d.branch, label: d.label, text: d.text, level: this.skills.get(d.id) ?? 0, max: d.max, cost: this.skillCost(d.id), at: d.at, needs: d.needs, open: this.skillOpen(d.id) })),
       branches: this.config.branches,
-      bag: [...this.bag].map(([i, b]) => ({ label: this.config.ores[i]!.label, n: b.n, value: Math.round(b.value), color: this.config.ores[i]!.color })),
+      sellZone: !!this.sellAt,
+      bag: [...this.bag].map(([i, b]) => ({ id: this.config.ores[i]!.id, label: this.config.ores[i]!.label, n: b.n, value: Math.round(b.value), color: this.config.ores[i]!.color })),
       cap: this.capacity,
       home: this.inBase,
       surface: this.config.surface,

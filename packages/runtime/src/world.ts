@@ -5212,6 +5212,8 @@ export class GameWorld {
     // (The mine is where an object called “Mine” is, or else at the Player start.)
     const at = scene.entities.find((e) => e.name.toLowerCase() === 'mine' && !e.parent)?.transform.position;
     if (at) this.mine.origin = [at[0], at[1], at[2]];
+    const sell = scene.entities.find((e) => e.name.toLowerCase() === 'sell' && !e.parent)?.transform.position;
+    if (sell) this.mine.sellAt = [sell[0], sell[1], sell[2]];
     if (p) {
       if (!at) this.mine.origin = [p.spawn.feet.x, p.spawn.feet.y, p.spawn.feet.z];
       // (Jumps clear a block, whatever its size.)

@@ -72,6 +72,11 @@ export class MineBlocks {
     return i;
   }
 
+  /** How far into the mine a block is: its depth (surface mines) or its distance from the base. */
+  depth(x: number, y: number, z: number): number {
+    return this.cfg.surface ? Math.max(0, -1 - y) : Math.hypot(x, y, z);
+  }
+
   /** The block the seed makes here. */
   gen(x: number, y: number, z: number): number {
     if (this.inBase(x, y, z)) return AIR;
@@ -83,10 +88,10 @@ export class MineBlocks {
       const a = noise3(x * 0.045, y * 0.06, z * 0.045, s + 2), b = noise3(x * 0.045, y * 0.06, z * 0.045, s + 3);
       if (Math.abs(a - 0.5) < 0.045 * this.cfg.caves && Math.abs(b - 0.5) < 0.045 * this.cfg.caves) return AIR;
     }
-    const zone = this.zoneAt(d + (noise3(x * 0.05, y * 0.05, z * 0.05, s + 4) - 0.5) * 12);
+    const zone = this.zoneAt(this.depth(x, y, z) + (noise3(x * 0.05, y * 0.05, z * 0.05, s + 4) - 0.5) * 6);
     const cx = Math.floor(x / 3), cy = Math.floor(y / 3), cz = Math.floor(z / 3);
     const t = this.tables[zone]!;
-    if (t.ores.length && hash3(cx, cy, cz, s + 5) < 0.17 && hash3(x, y, z, s + 7) < 0.5) {
+    if (t.ores.length && hash3(cx, cy, cz, s + 5) < c.oreDensity && hash3(x, y, z, s + 7) < 0.6) {
       const r = hash3(cx, cy, cz, s + 6);
       let i = 0;
       while (i + 1 < t.cum.length && r > t.cum[i]!) i++;

@@ -18,10 +18,11 @@ Code: `packages/runtime/src/mining/` (`defs.ts` settings, `data/mine.json` the b
 - `surface` off: the Player start is the base, a room (`base`, half size in blocks) cut into rock all round. Blocks are 48 u (jumps are raised to clear one; the player fits a 1 × 2 tunnel). No fall damage, no falling out of the world.
 - Click (held) swings the pickaxe at the aimed block (reach 4.5 blocks); damage wears it down (cracks), then it
   breaks. Ores go in the backpack. A zone needs a pickaxe tier (“Too hard. Needs a … pickaxe.”).
-- Farther from the base: rock zones (stone, deepslate, basalt, azure rock, crimson rock, void rock, the last one
-  forever), harder rock (`hardGrowth` per block), richer ores (`valueGrowth`), tougher monsters (`mobGrowth`,
+- Deeper (surface mines; farther from the base otherwise): 12 rock zones, one for each pickaxe tier (stone, granite,
+  shale, deepslate, marble, basalt, azure rock, frost rock, crimson rock, obsidian, ember rock, void rock, the last
+  one forever), each with five or so of the 13 ores (`oreDensity` sets how many), harder rock (`hardGrowth` per block), richer ores (`valueGrowth`), tougher monsters (`mobGrowth`,
   `mobHitGrowth`).
-- Walking back into the base sells the backpack. **H** or the Home button (when the mouse is free) goes home.
+- A scene object called **Sell** makes a sell zone (a gold square and sign, `sellRadius` blocks): walking in sells the backpack. Without one, getting home sells it. The corner shows what the backpack holds (icon, name, count). **H** or the Home button (when the mouse is free) goes home.
 - **Tab** opens the menu: the next pickaxe (12 tiers, then endless +1, +2… levels) and the skill tree (Mining,
   Backpack, Combat, Vision; the last node of each branch levels forever). Esc or Tab shuts it.
 - Dying loses part of the backpack (`deathLoss`, less with Sturdy Straps).

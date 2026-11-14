@@ -1,6 +1,7 @@
 /** Mining: money, backpack, where you are and the reset timer in the corner; the Home button; the upgrade menu. */
 import type { MineHud, MineMenu } from '@cocoaworlds/runtime';
 import { useLayoutEffect, useRef, useState } from 'react';
+import { oreIcons } from '../viewport/mine-view';
 
 /** 1234 → "1,234"; big ones shortened (12.3K, 4.5M…). */
 export function money(n: number): string {
@@ -107,6 +108,19 @@ export function MineUi({ hud, menu, onAction }: { hud: MineHud; menu: MineMenu |
             <span style={{ width: `${Math.min(100, (100 * hud.bag) / Math.max(1, hud.cap))}%` }} />
           </span>
         </div>
+        {hud.items.length > 0 && (
+          <div className="cw-mine-items">
+            {hud.items.map((it) => (
+              <div key={it.id} className="cw-mine-item">
+                {oreIcons.get(it.id) ? <img src={oreIcons.get(it.id)} alt="" /> : <span className="cw-mine-noicon" />}
+                <span>{it.label}</span>
+                <span className="cw-mine-grow" />
+                <span className="cw-mine-n">{it.n}</span>
+              </div>
+            ))}
+          </div>
+        )}
+        {hud.atSell && <div className="cw-mine-sell">Sell zone</div>}
         <div className="cw-mine-dim">
           {hud.home ? (hud.surface ? 'Surface' : 'Base') : `${hud.zone} · ${hud.distance}`}
         </div>
@@ -163,8 +177,8 @@ export function MineUi({ hud, menu, onAction }: { hud: MineHud; menu: MineMenu |
                 </div>
                 {menu.bag.length ? (
                   menu.bag.map((b) => (
-                    <div key={b.label} className="cw-mine-row">
-                      <span className="cw-mine-dot" style={{ background: b.color }} />
+                    <div key={b.id} className="cw-mine-row">
+                      {oreIcons.get(b.id) ? <img className="cw-mine-icon" src={oreIcons.get(b.id)} alt="" /> : <span className="cw-mine-dot" style={{ background: b.color }} />}
                       <span>
                         {b.label} × {b.n}
                       </span>
@@ -175,7 +189,7 @@ export function MineUi({ hud, menu, onAction }: { hud: MineHud; menu: MineMenu |
                 ) : (
                   <div className="cw-mine-dim">Empty</div>
                 )}
-                <div className="cw-mine-dim cw-mine-note">Ores sell when you get back to the {menu.surface ? 'surface' : 'base'}.</div>
+                <div className="cw-mine-dim cw-mine-note">{menu.sellZone ? 'Ores sell in the sell zone.' : `Ores sell when you get back to the ${menu.surface ? 'surface' : 'base'}.`}</div>
               </div>
               <Tree menu={menu} onBuy={(id) => onAction('skill', id)} />
             </div>
