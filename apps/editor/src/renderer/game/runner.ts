@@ -53,6 +53,8 @@ export interface RunnerEvents {
   uiMouse(free: boolean): void;
   /** A level change brought the player into another scene (its screens replace the last one's). */
   scene?(scene: SceneFile): void;
+  /** The dev console was opened or shut. */
+  devConsole?(open: boolean): void;
 }
 
 export class GameRunner {
@@ -217,6 +219,7 @@ export class GameRunner {
 
   private lockPointer(): void {
     this.dropLock = false;
+    if (this.consoleOpen) return;
     const el = this.renderer.domElement;
     el.focus();
     try {
@@ -376,7 +379,31 @@ export class GameRunner {
     this.play?.setInput(inputFromKeys(this.keys));
   }
 
+  /** The dev console is open (the game rule lets exported games have it). */
+  private consoleOpen = false;
+
+  setConsole(open: boolean): void {
+    if (!this.play || !this.data.rules.devConsole || open === this.consoleOpen) return;
+    this.consoleOpen = open;
+    this.rotating = false;
+    this.keys.clear();
+    this.send();
+    this.cb.devConsole?.(open);
+    if (open) {
+      if (this.locked) document.exitPointerLock();
+    } else if (!this.uiFree) this.lockPointer();
+  }
+
+  devCommand(line: string): string[] {
+    return this.play?.devCommand(line) ?? [];
+  }
+
   private onKey = (e: KeyboardEvent, down: boolean): void => {
+    if (this.consoleOpen) return;
+    if (down && e.code === 'Backquote' && !e.repeat && this.play && this.data.rules.devConsole) {
+      e.preventDefault();
+      return this.setConsole(true);
+    }
     if (!this.play || !(this.locked || (this.uiFree && !this.uiPaused))) return;
     if (e.key === 'Escape') {
       // Captured: the browser frees the mouse itself. In a menu: pause, as that would.

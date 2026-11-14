@@ -10,3 +10,4 @@ export * from './vfx';
 export * from './acoustics';
 export * from './power';
 export * from './mining';
+export * from './dev';

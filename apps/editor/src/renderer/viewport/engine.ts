@@ -122,6 +122,8 @@ export interface ViewportCallbacks {
   livePivot(id: string, world: V3): void;
   /** Play mode: the player left for another scene (a level change). */
   travel(t: Travel): void;
+  /** Play mode: the dev console was opened (true) or shut. */
+  devConsole?(open: boolean): void;
 }
 
 /** A live gizmo result: a brush in world space, or an entity's new world placement. */
@@ -622,6 +624,10 @@ export class ViewportEngine {
     this.queueNav(0);
     this.hudKey = '';
     this.cb.hud(null);
+    if (this.consoleOpen) {
+      this.consoleOpen = false;
+      this.cb.devConsole?.(false);
+    }
     this.gameKeys.clear();
     if (this.uiFree) {
       this.uiFree = false;
@@ -752,6 +758,7 @@ export class ViewportEngine {
 
   private lockPointer(): void {
     this.dropLock = false;
+    if (this.consoleOpen) return;
     const el = this.renderer.domElement;
     el.focus();
     try {
@@ -2714,7 +2721,37 @@ export class ViewportEngine {
     this.invalidate();
   };
 
+  /** The dev console is open: keys are its, not the game's or the editor's. */
+  private consoleOpen = false;
+
+  /** Open or shut the dev console (` while playing). */
+  setConsole(open: boolean): void {
+    if (!this.play || open === this.consoleOpen) return;
+    this.consoleOpen = open;
+    this.rotating = false;
+    this.gameKeys.clear();
+    this.sendInput();
+    this.cb.devConsole?.(open);
+    if (open) {
+      if (this.locked) document.exitPointerLock();
+    } else if (this.asPlayer && !this.uiFree) this.lockPointer();
+  }
+
+  /** Run a line typed in the dev console; what to print back. */
+  devCommand(line: string): string[] {
+    const out = this.play?.devCommand(line) ?? ['Not playing.'];
+    this.invalidate();
+    return out;
+  }
+
   private onKeyDown = (e: KeyboardEvent): void => {
+    if (this.consoleOpen) return;
+    if (this.play && e.code === 'Backquote' && !e.repeat && !e.ctrlKey && !e.metaKey && !this.isTyping(e)) {
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      this.setConsole(true);
+      return;
+    }
     if (this.gameKey(e, true)) return;
     // Another workspace (Screens) fills the window: the 3D view is hidden and takes no keys.
     if (this.host.offsetParent === null) return;
@@ -2776,6 +2813,7 @@ export class ViewportEngine {
   };
 
   private onKeyUp = (e: KeyboardEvent): void => {
+    if (this.consoleOpen) return;
     if (this.gameKey(e, false)) return;
     if (this.bevel && (e.key === 'Shift' || e.key === 'Control')) this.updateBevel(e.shiftKey, e.ctrlKey);
     if (e.code === 'Space') this.spaceHeld = false;

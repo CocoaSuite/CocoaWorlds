@@ -285,9 +285,13 @@ export class Player {
     if (this.stamina <= 0) this.outOfBreath = true;
   }
 
+  /** Dev console: fly through everything (look to aim, Space up, Ctrl down, Shift faster). */
+  noclip = false;
+
   /** One fixed physics step. */
   step(dt: number): void {
     const inp = this.input;
+    if (this.noclip) return this.fly(dt);
     this.setCrouch(inp.crouch);
     const sprint = this.sprinting;
     if (this.tires) {
@@ -317,6 +321,26 @@ export class Player {
 
     const desired = { x: (this.velocity.x + this.belt.x) * dt, y: this.velocity.y * dt, z: (this.velocity.z + this.belt.z) * dt };
     this.moveBy(desired, dt);
+  }
+
+  private fly(dt: number): void {
+    const inp = this.input;
+    this.setCrouch(false);
+    const d = this.lookDirection();
+    const rx = Math.cos(inp.yaw), rz = -Math.sin(inp.yaw);
+    const up = (inp.jump ? 1 : 0) - (inp.crouch ? 1 : 0);
+    let x = d[0] * inp.forward + rx * inp.right, y = d[1] * inp.forward + up, z = d[2] * inp.forward + rz * inp.right;
+    const len = Math.hypot(x, y, z);
+    const speed = len > 1e-6 ? (PLAYER.runSpeed * 2 * (inp.walk ? 3 : 1) * this.speedScale * dt) / len : 0;
+    x *= speed; y *= speed; z *= speed;
+    this.velocity = { x: 0, y: 0, z: 0 };
+    this.onGround = false;
+    this.landingSpeed = 0;
+    this.prevFeet = this.feet;
+    this.feet = { x: this.feet.x + x, y: this.feet.y + y, z: this.feet.z + z };
+    this.body.setNextKinematicTranslation({ x: this.feet.x, y: this.feet.y + this.height / 2, z: this.feet.z });
+    this.prevView = { ...this.view };
+    this.view = { y: this.feet.y, eye: PLAYER.eye };
   }
 
   /** Where the player is: how deep in water, and whether on a ladder. */

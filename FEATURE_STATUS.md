@@ -80,6 +80,7 @@ Last updated: 2026-11-01 (Phase 2, first slice).
 | Groups: Ctrl+G / Ctrl+Shift+G; click selects the group, double-click picks inside, Enter/Esc step in/out; hide/lock cascade | **Done** | Groups have a transform (position, rotation, scale) shown in the Inspector. |
 | Copy / cut / paste (Ctrl+C / X / V), including groups and across projects in one session | **Done** | Each paste lands one grid step further; a cut pastes back in place. |
 | Box selection: drag on empty space; everything the box touches is selected (Ctrl/Shift adds); groups are picked whole | **Done** | |
+| Dev console (` while playing): god, noclip, speed, timescale, heal/hurt/kill/armour, give/items, tp/pos/find, spawn/remove, hour/day/skip, values/set, score, say, scene, save; history (↑/↓), Tab completion | **Done** | Always in editor Play; exported games only with the “Dev console” game rule. Commands live in `packages/runtime/src/dev.ts`. |
 
 ## Brushes (Phase 3)
 

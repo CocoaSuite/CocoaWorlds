@@ -2830,7 +2830,7 @@ export class GameWorld {
   step(dt: number): number {
     // (Once a level change has begun, this scene is over.)
     if (this.disposed || this.travel) return 0;
-    this.accumulator = Math.min(this.accumulator + Math.max(0, dt), STEP * MAX_STEPS_PER_FRAME);
+    this.accumulator = Math.min(this.accumulator + Math.max(0, dt) * this.dev.timeScale, STEP * MAX_STEPS_PER_FRAME);
     let n = 0;
     if (!this.startedScripts) {
       // “When the game starts” runs on the first frame, and sounds that play from the start begin.
@@ -2850,7 +2850,7 @@ export class GameWorld {
         if (this.useQueued) this.doUse();
       } else if (this.player) {
         if (this.frozen) Object.assign(this.player.input, { forward: 0, right: 0, jump: false, crouch: false, fire: false, use: false });
-        this.player.speedScale = (1 - WEAK.slow * this.weakness()) * (1 + (this.mine?.stat('moveSpeed') ?? 0));
+        this.player.speedScale = (1 - WEAK.slow * this.weakness()) * (1 + (this.mine?.stat('moveSpeed') ?? 0)) * this.dev.speed;
         this.player.step(STEP);
         this.playerNoise();
         if (this.player.landingSpeed) {
@@ -2859,7 +2859,7 @@ export class GameWorld {
           this.player.landingSpeed = 0;
           if (damage > 0) this.hurt(damage, 'a fall', true);
         }
-        if (this.player.feetPosition.y < this.killY) {
+        if (this.player.feetPosition.y < this.killY && !this.player.noclip) {
           if (this.rules.health) this.die('falling out of the world');
           else this.player.respawn();
         }
@@ -3729,6 +3729,7 @@ export class GameWorld {
   hurt(amount: number, cause = 'something', pastArmour = false): void {
     if (!this.player || !this.rules.health || !Number.isFinite(amount)) return;
     if (amount < 0) return this.heal(-amount);
+    if (this.dev.god) return;
     if (amount === 0) return;
     let toHealth = amount;
     if (this.armour > 0 && !pastArmour) {
@@ -3745,6 +3746,36 @@ export class GameWorld {
     this.hurtAt = this.time;
     this.bus.emit({ type: 'player.hurt', amount, health: this.health, cause, time: this.time });
     if (this.health <= 0) this.die(cause);
+  }
+
+  // ── Dev console (see dev.ts) ──
+
+  /** Cheats and switches set from the dev console. */
+  readonly dev = { god: false, timeScale: 1, speed: 1 };
+
+  /** Set a game value (as a script's “Set” would). */
+  setValue(name: string, value: Value): void {
+    this.globals.set(name, value);
+  }
+
+  /** Objects whose name contains `q` (case ignored), placed and copied. */
+  objectsNamed(q: string): { id: string; name: string }[] {
+    const k = q.toLowerCase();
+    const out: { id: string; name: string }[] = [];
+    for (const [id, name] of this.names) if (name.toLowerCase().includes(k) && this.doc.get(id)) out.push({ id, name });
+    return out;
+  }
+
+  /** The player dies at once (even in god mode). */
+  killPlayer(cause = 'the console'): void {
+    if (!this.player) return;
+    if (this.rules.health) this.die(cause);
+    else this.player.respawn();
+  }
+
+  /** Every item the player has, with how many. */
+  items(): [string, number][] {
+    return [...this.inventory];
   }
 
   /** Give the player armour, up to 100. */

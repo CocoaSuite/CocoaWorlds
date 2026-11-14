@@ -13,6 +13,7 @@ import { MineUi } from '../ui/MineUi';
 import { HudView, type Hud } from '../ui/Hud';
 import { UiLayer } from '../ui/UiLayer';
 import { SaveMenu } from '../ui/SaveMenu';
+import { DevConsole } from '../ui/DevConsole';
 import { GameRunner, type GameData } from './runner';
 
 const BASE = 'game/';
@@ -31,6 +32,7 @@ function Player() {
   const [hud, setHud] = useState<Hud | null>(null);
   const [locked, setLocked] = useState(false);
   const [uiMouse, setUiMouse] = useState(false);
+  const [devOpen, setDevOpen] = useState(false);
   /** The scene being played (it changes with level changes). */
   const [scene, setScene] = useState<SceneFile | null>(null);
 
@@ -52,7 +54,7 @@ function Player() {
     if (!data || !host.current) return;
     if (!data.scene.entities.some((e) => e.components.playerSpawn)) return setError('This game has no Player start.');
     setScene(data.scene);
-    const r = new GameRunner(host.current, data, { hud: setHud, lock: setLocked, uiMouse: setUiMouse, scene: setScene });
+    const r = new GameRunner(host.current, data, { hud: setHud, lock: setLocked, uiMouse: setUiMouse, scene: setScene, devConsole: setDevOpen });
     runner.current = r;
     (window as unknown as { __cwGame?: GameRunner }).__cwGame = r;
     r.start().catch((e: Error) => setError(e.message));
@@ -66,10 +68,11 @@ function Player() {
       {hud?.blueprints && <BlueprintMenu menu={hud.blueprints} onPick={(id) => runner.current?.pickBlueprint(id)} onClose={() => runner.current?.closeBlueprints()} />}
       {hud?.mine && <MineUi hud={hud.mine} menu={hud.mineMenu} onAction={(a, arg) => runner.current?.mineAction(a, arg)} />}
       {locked && <div className="cw-crosshair" aria-hidden="true" />}
-      {data && hud && !locked && !uiMouse && data.rules.saveMenu && (
+      {devOpen && <DevConsole onRun={(l) => runner.current?.devCommand(l) ?? []} onClose={() => runner.current?.setConsole(false)} />}
+      {data && hud && !locked && !uiMouse && !devOpen && data.rules.saveMenu && (
         <SaveMenu onResume={() => runner.current?.capture()} onSave={() => runner.current?.saveGame() ?? false} onLoad={() => runner.current?.loadGame() ?? false} savedAt={runner.current?.savedAt ?? null} />
       )}
-      {data && hud && !locked && !uiMouse && !data.rules.saveMenu && (
+      {data && hud && !locked && !uiMouse && !devOpen && !data.rules.saveMenu && (
         <button type="button" className="cw-ov cw-click-play" data-testid="click-to-play" onClick={() => runner.current?.capture()}>
           <strong>{data.name}</strong>
           <span>Click to play&nbsp;&nbsp; WASD move&nbsp;&nbsp; Space jump&nbsp;&nbsp; E use&nbsp;&nbsp; Esc pause</span>

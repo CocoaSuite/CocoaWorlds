@@ -848,3 +848,9 @@ button.cw-sec.cw-fold { width: 100%; border: 0; border-top: 1px solid var(--line
 .cw-mine-noicon { width: 20px; height: 20px; border-radius: 3px; background: rgba(255, 255, 255, 0.15); }
 .cw-mine-n { font-variant-numeric: tabular-nums; font-weight: 600; }
 .cw-mine-sell { color: #f2c14e; font-weight: 600; }
+
+/* Dev console (` while playing). */
+.cw-dev-console { left: 0; right: 0; top: 0; height: 42%; min-height: 180px; z-index: 20; display: flex; flex-direction: column; background: rgba(12, 12, 12, 0.92); border-bottom: 1px solid var(--line); font: 12px/1.45 var(--mono, monospace); color: #d8d8d8; }
+.cw-dev-log { flex: 1; overflow-y: auto; padding: 8px 12px; white-space: pre-wrap; user-select: text; }
+.cw-dev-in { color: var(--cw-brand-hi); }
+.cw-dev-line { all: unset; border-top: 1px solid var(--line); padding: 6px 12px; color: #fff; font: inherit; }

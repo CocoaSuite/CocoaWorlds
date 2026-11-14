@@ -8,7 +8,7 @@
 import { navInWorkers } from './nav-pool';
 import { SceneDoc, expandRepeats, parkAssets, posterOf, readComponent, type ParticlesData, type VfxData, type ColliderData, type GameRules, type GameValue, type EntityData, type GooglyEyesData, type ModelData, type PrinterData, type SceneFile, type SignData, type TerrainData } from '@cocoaworlds/core';
 import { buildMesh, isInvisibleMaterial, type Brush, type VoxelField, type WorldBrush } from '@cocoaworlds/geometry';
-import { GameWorld, initPhysics, POSE, AT, NPC, type AcousticVoice, type BuildPrompt, type FrameSnapshot, type Hearing, type NavGrid, type BodyInfo, type ModelMesh, type SavedProgress, type Travel, type UiState, type PlayerInput, type PlayerStatus, type ScriptLog, type TriggerEvent } from '@cocoaworlds/runtime';
+import { GameWorld, initPhysics, runDevCommand, POSE, AT, NPC, type AcousticVoice, type BuildPrompt, type FrameSnapshot, type Hearing, type NavGrid, type BodyInfo, type ModelMesh, type SavedProgress, type Travel, type UiState, type PlayerInput, type PlayerStatus, type ScriptLog, type TriggerEvent } from '@cocoaworlds/runtime';
 
 /** Field-of-view effects, degrees added to the camera's own; ease rates per second. */
 const FOV = { sprint: 8, fall: 10, weak: -14, easeIn: 6, easeOut: 4 };
@@ -1248,6 +1248,11 @@ export class PlaySession {
   /** The player pressed a key the game doesn't use itself. */
   pressKey(code: string): void {
     this.world.pressKey(code);
+  }
+
+  /** Run a dev console line; what to print back. */
+  devCommand(line: string): string[] {
+    return runDevCommand(this.world, line);
   }
 
   /** The player clicked with the item in their hand. */

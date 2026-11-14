@@ -19,6 +19,7 @@ import { ClipPanel } from './ClipPanel';
 import { VertexPanel } from './VertexPanel';
 import { LoopCutPanel } from './LoopCutPanel';
 import { BevelPanel } from './BevelPanel';
+import { DevConsole } from '../ui/DevConsole';
 import type { BevelInfo } from './engine';
 import type { ClipKeep, ClipState } from './clip-tool';
 import { ViewportEngine, type Hud, type ViewportStats } from './engine';
@@ -36,6 +37,7 @@ export function Viewport() {
   /** Playing as the player: null = not, false = waiting for a click, true = mouse captured. */
   const [lock, setLock] = useState<boolean | null>(null);
   const [uiMouse, setUiMouse] = useState(false);
+  const [devOpen, setDevOpen] = useState(false);
   const [hud, setHud] = useState<Hud | null>(null);
   const [loop, setLoop] = useState<{ cuts: number; fits: boolean | null }>({ cuts: 1, fits: null });
   const [bevel, setBevel] = useState<BevelInfo | null>(null);
@@ -129,6 +131,7 @@ export function Viewport() {
         activeBlocks: (blocks) => useEditor.setState({ activeBlocks: blocks }),
         playerLock: setLock,
         uiMouse: setUiMouse,
+        devConsole: setDevOpen,
         hud: setHud,
         livePivot: (id, world) => useEditor.getState().setPivot(id, world, `pivot-${id}`),
         loopCutState: (cuts, fits) => setLoop({ cuts, fits }),
@@ -410,10 +413,11 @@ export function Viewport() {
       {playing && hud && <HudView hud={hud} />}
       {hud?.blueprints && <BlueprintMenu menu={hud.blueprints} onPick={(id) => engine.current?.pickBlueprint(id)} onClose={() => engine.current?.closeBlueprints()} />}
       {hud?.mine && <MineUi hud={hud.mine} menu={hud.mineMenu} onAction={(a, arg) => engine.current?.mineAction(a, arg)} />}
-      {playing && lock === false && !uiMouse && hud && playing.rules.saveMenu && (
+      {playing && devOpen && <DevConsole onRun={(l) => engine.current?.devCommand(l) ?? []} onClose={() => engine.current?.setConsole(false)} />}
+      {playing && lock === false && !uiMouse && !devOpen && hud && playing.rules.saveMenu && (
         <SaveMenu onResume={() => engine.current?.capturePlayer()} onSave={() => engine.current?.saveGame() ?? false} onLoad={() => engine.current?.loadGame() ?? false} savedAt={engine.current?.savedAt ?? null} />
       )}
-      {playing && lock === false && !uiMouse && !(hud && playing.rules.saveMenu) && (
+      {playing && lock === false && !uiMouse && !devOpen && !(hud && playing.rules.saveMenu) && (
         <button type="button" className="cw-ov cw-click-play" data-testid="click-to-play" onClick={() => engine.current?.capturePlayer()}>
           <strong>{t('play.click')}</strong>
           <span>{t('play.keys')}</span>
