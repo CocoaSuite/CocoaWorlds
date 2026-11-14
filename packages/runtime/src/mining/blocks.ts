@@ -3,6 +3,8 @@ import type { MineConfig } from './defs';
 import { fbm3, hash3, noise3 } from './noise';
 
 export const AIR = 0;
+/** The mine's edge (surface mines: around the patch, down to the crust): solid, never dug. */
+export const EDGE = 0xffff;
 export const blockId = (zone: number, ore: number) => 1 + zone * 64 + (ore + 1);
 export const zoneOf = (id: number) => (id - 1) >> 6;
 export const oreOf = (id: number) => ((id - 1) & 63) - 1;
@@ -55,7 +57,9 @@ export class MineBlocks {
     });
   }
 
+  /** Where the player is safe and sells: above ground (surface mines) or the base room. */
   inBase(x: number, y: number, z: number): boolean {
+    if (this.cfg.surface) return y >= 0;
     const [bx, by, bz] = this.cfg.base;
     return Math.abs(x) <= bx && y >= 0 && y <= by && Math.abs(z) <= bz;
   }
@@ -71,9 +75,10 @@ export class MineBlocks {
   /** The block the seed makes here. */
   gen(x: number, y: number, z: number): number {
     if (this.inBase(x, y, z)) return AIR;
-    const s = this.seed, [bx, , bz] = this.cfg.base;
+    const s = this.seed, [bx, , bz] = this.cfg.base, c = this.cfg;
+    if (c.surface && y >= -c.crust && (Math.abs(x) > c.patch || Math.abs(z) > c.patch)) return EDGE;
     const d = Math.hypot(x, y, z);
-    if (this.cfg.caves > 0 && d > Math.max(bx, bz) + 6) {
+    if (c.caves > 0 && (c.surface ? y < -c.crust - 3 : d > Math.max(bx, bz) + 6)) {
       if (fbm3(x * 0.07, y * 0.09, z * 0.07, s + 1) > 1 - 0.31 * this.cfg.caves) return AIR;
       const a = noise3(x * 0.045, y * 0.06, z * 0.045, s + 2), b = noise3(x * 0.045, y * 0.06, z * 0.045, s + 3);
       if (Math.abs(a - 0.5) < 0.045 * this.cfg.caves && Math.abs(b - 0.5) < 0.045 * this.cfg.caves) return AIR;

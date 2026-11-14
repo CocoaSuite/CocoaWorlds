@@ -4,6 +4,9 @@
  "view": 2,
  "seed": 0,
  "regenMinutes": 40,
+ "surface": true,
+ "patch": 8,
+ "crust": 10,
  "base": [
   7,
   5,

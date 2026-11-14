@@ -553,7 +553,7 @@ export class GameWorld {
     if (options.surfaces) w.surfaces = options.surfaces;
     w.sceneName = scene.name;
     if (w.rules.building) w.initBase(options.building ?? (scene.settings as { building?: { pieces?: unknown[]; base?: unknown } }).building);
-    if (w.rules.mining) w.initMine((scene.settings as { mining?: unknown }).mining);
+    if (w.rules.mining) w.initMine((scene.settings as { mining?: unknown }).mining, scene);
     if (options.saved || options.arrive?.worlds) w.loadProgress(options.saved ?? { values: {} }, options.arrive ?? null);
     if (w.savesWhenAsked) w.checkpoint = options.saved ?? null;
     if (options.arrive) w.arrive(options.arrive);
@@ -5185,7 +5185,7 @@ export class GameWorld {
   private mineBody: RAPIER.RigidBody | null = null;
   private mineColliders = new Map<string, { version: number; colliders: RAPIER.Collider[] }>();
 
-  private initMine(settings: unknown): void {
+  private initMine(settings: unknown, scene: SceneFile): void {
     const self = this;
     this.mine = new MineSystem(settings, {
       time: () => this.time,
@@ -5209,8 +5209,11 @@ export class GameWorld {
       random: () => this.random(),
     });
     const p = this.player;
+    // (The mine is where an object called “Mine” is, or else at the Player start.)
+    const at = scene.entities.find((e) => e.name.toLowerCase() === 'mine' && !e.parent)?.transform.position;
+    if (at) this.mine.origin = [at[0], at[1], at[2]];
     if (p) {
-      this.mine.origin = [p.spawn.feet.x, p.spawn.feet.y, p.spawn.feet.z];
+      if (!at) this.mine.origin = [p.spawn.feet.x, p.spawn.feet.y, p.spawn.feet.z];
       // (Jumps clear a block, whatever its size.)
       p.jumpScale = Math.max(1, Math.sqrt((1.25 * this.mine.B) / (PLAYER.jumpSpeed ** 2 / (2 * 800))));
     }

@@ -10,8 +10,12 @@ Code: `packages/runtime/src/mining/` (`defs.ts` settings, `data/mine.json` the b
 
 ## Playing
 
-- The Player start is the base: a room (`base`, half size in blocks) cut into the rock. Rock fills everything else,
-  in every direction, with caves and tunnels. Blocks are 48 u (jumps are raised to clear one; the player fits a 1 × 2 tunnel). No fall damage, no falling out of the world.
+- `surface` (on by default): the mine is a flat patch of rock at ground level (`patch`: half size in blocks) where
+  an object called **Mine** is (or else at the Player start), with a darker stone border. Its sides are the mine's
+  edge (never dug) down to `crust` blocks; below that rock goes on forever in every direction, with caves. Above
+  ground is yours: terrain, trees, buildings (keep the ground around the patch at its height). Daylight reaches a
+  few blocks down. Coming back up sells the backpack; Home (H) goes to the Player start.
+- `surface` off: the Player start is the base, a room (`base`, half size in blocks) cut into rock all round. Blocks are 48 u (jumps are raised to clear one; the player fits a 1 × 2 tunnel). No fall damage, no falling out of the world.
 - Click (held) swings the pickaxe at the aimed block (reach 4.5 blocks); damage wears it down (cracks), then it
   breaks. Ores go in the backpack. A zone needs a pickaxe tier (“Too hard. Needs a … pickaxe.”).
 - Farther from the base: rock zones (stone, deepslate, basalt, azure rock, crimson rock, void rock, the last one

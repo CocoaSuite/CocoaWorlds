@@ -1,14 +1,14 @@
 // Mining: the block mine (made from a seed), colliders, monsters' paths, the pickaxe, selling, buying and saving.
 import { beforeAll, describe, expect, it } from 'vitest';
 import { newEntity, newScene } from '@cocoaworlds/core';
-import { AIR, findPath, GameWorld, initPhysics, mineConfig, MineBlocks, MineSystem, Mob, oreOf, zoneOf, type MineHost } from '../src';
+import { AIR, EDGE, findPath, GameWorld, initPhysics, mineConfig, MineBlocks, MineSystem, Mob, oreOf, zoneOf, type MineHost } from '../src';
 
 beforeAll(async () => {
   await initPhysics();
 });
 
 describe('the mine', () => {
-  const blocks = () => new MineBlocks(mineConfig({ seed: 7 }), 7);
+  const blocks = () => new MineBlocks(mineConfig({ seed: 7, surface: false }), 7);
 
   it('built-in settings: 6 rock zones, 10 ores, 12 pickaxes, 4 skill branches', () => {
     const c = mineConfig();
@@ -31,6 +31,19 @@ describe('the mine', () => {
     expect(b.zoneAt(0)).toBe(0);
     expect(b.zoneAt(45)).toBe(1);
     expect(b.zoneAt(10000)).toBe(5);
+  });
+
+  it('on the surface: a flat patch of rock, its sides the mine edge down to the crust, rock all round below', () => {
+    const b = new MineBlocks(mineConfig({ seed: 7 }), 7);
+    expect(b.get(0, 0, 0)).toBe(AIR);
+    expect(b.get(20, 5, 0)).toBe(AIR);
+    expect(b.solid(8, -1, -8)).toBe(true);
+    expect(b.get(8, -1, -8)).not.toBe(EDGE);
+    expect(b.get(9, -1, 0)).toBe(EDGE);
+    expect(b.get(0, -5, -30)).toBe(EDGE);
+    expect(b.get(0, -12, -30)).not.toBe(EDGE);
+    expect(b.inBase(3, 0, 3)).toBe(true);
+    expect(b.inBase(3, -1, 3)).toBe(false);
   });
 
   it('caves and ores in sensible amounts', () => {
@@ -106,7 +119,7 @@ describe('the pickaxe, the backpack and buying', () => {
     };
     return h;
   }
-  const make = (h: MineHost, over: unknown = {}) => new MineSystem({ seed: 3, maxMobs: 0, block: 40, ...(over as object) }, h);
+  const make = (h: MineHost, over: unknown = {}) => new MineSystem({ seed: 3, maxMobs: 0, block: 40, surface: false, ...(over as object) }, h);
 
   it('swings break blocks; ores go in the backpack and sell at the base', () => {
     const h = host([6 * 40, 0, 0]);

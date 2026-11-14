@@ -4,7 +4,7 @@
  */
 import * as THREE from 'three';
 import { readComponent, type ModelData } from '@cocoaworlds/core';
-import { AIR, oreOf, zoneOf, type Chunk, type MineSystem, type Mob } from '@cocoaworlds/runtime';
+import { AIR, EDGE, oreOf, zoneOf, type Chunk, type MineSystem, type Mob } from '@cocoaworlds/runtime';
 import { assetUrl } from '../assets';
 import { modelInstance, type ModelInstance } from './models';
 
@@ -64,6 +64,9 @@ uniform sampler2D map;
 uniform vec3 lamp;
 uniform float radius;
 uniform float ambient;
+uniform float skyY;
+uniform float skyFade;
+uniform float sky;
 varying vec3 vC;
 varying vec2 vUv;
 varying vec3 vW;
@@ -71,6 +74,8 @@ void main() {
   vec4 t = texture2D(map, vUv);
   float l = clamp(1.0 - distance(vW, lamp) / radius, 0.0, 1.0);
   l = l * l * (3.0 - 2.0 * l);
+  // (Daylight near the surface, fading out a few blocks down.)
+  l = max(l, sky * smoothstep(skyY - skyFade, skyY, vW.y));
   float glow = 1.0 - t.a;
   gl_FragColor = vec4(t.rgb * vC * (ambient + l * (1.0 - ambient)) + t.rgb * glow * 0.85, 1.0);
   #include <tonemapping_fragment>
@@ -129,7 +134,7 @@ export class MineView {
     for (let i = 0; i < this.tiles * this.rows; i++) this.colors.push(new THREE.Color(0x777777));
     void this.loadAtlas();
     this.mat = new THREE.ShaderMaterial({
-      uniforms: { map: { value: this.atlas }, lamp: { value: new THREE.Vector3() }, radius: { value: 400 }, ambient: { value: c.ambient } },
+      uniforms: { map: { value: this.atlas }, lamp: { value: new THREE.Vector3() }, radius: { value: 400 }, ambient: { value: c.ambient }, skyY: { value: mine.origin[1] }, skyFade: { value: 5 * mine.B }, sky: { value: c.surface ? 0.9 : 0 } },
       vertexShader: VERT,
       fragmentShader: FRAG,
     });
@@ -219,13 +224,18 @@ export class MineView {
           const id = d[lx + S * (lz + S * ly)]!;
           if (id === AIR) continue;
           const x = x0 + lx, y = y0 + ly, z = z0 + lz;
-          const tile = oreOf(id) + 1, row = Math.min(this.rows - 1, zoneOf(id));
+          // (The mine's edge looks like darker stone, seen only from inside the mine.)
+          const edge = id === EDGE;
+          const P = m.config.patch + 1, rim = edge && m.config.surface && y === -1 && Math.max(Math.abs(x), Math.abs(z)) === P;
+          const tile = edge ? 0 : oreOf(id) + 1, row = edge ? 0 : Math.min(this.rows - 1, zoneOf(id));
           const u0 = (tile * T + 0.02) / W, u1 = ((tile + 1) * T - 0.02) / W, v0 = (row * T + 0.02) / H, v1 = ((row + 1) * T - 0.02) / H;
           for (let axis = 0; axis < 3; axis++)
             for (const sign of [1, -1]) {
               n[0] = n[1] = n[2] = 0;
               n[axis] = sign;
               if (solid(x + n[0]!, y + n[1]!, z + n[2]!)) continue;
+              // (Edge faces show only from inside the mine, and on top of the ring just round the patch: its border.)
+              if (edge && y + n[1]! >= 0 && !(rim && n[1] === 1)) continue;
               const ua = (axis + 1) % 3, va = (axis + 2) % 3;
               const base = pos.length / 3;
               const corners = sign > 0 ? [[0, 0], [1, 0], [1, 1], [0, 1]] : [[0, 0], [0, 1], [1, 1], [1, 0]];
@@ -250,7 +260,7 @@ export class MineView {
                 // (Sides keep the tile upright.)
                 const tu = axis === 0 ? j! : axis === 2 ? i! : j!, tv = axis === 0 ? i! : axis === 2 ? j! : i!;
                 uv.push(tu ? u1 : u0, tv ? v1 : v0);
-                const sh = (axis === 1 ? (sign > 0 ? 1 : 0.55) : SHADE[axis]!) * AO[level]!;
+                const sh = (axis === 1 ? (sign > 0 ? 1 : 0.55) : SHADE[axis]!) * AO[level]! * (edge ? 0.6 : 1);
                 col.push(sh, sh, sh);
                 nrm.push(n[0]!, n[1]!, n[2]!);
               }
@@ -274,6 +284,7 @@ export class MineView {
     const m = this.mine, b = m.blocks, B = m.B;
     this.mat.uniforms.lamp!.value.set(...eye);
     this.dark.position.set(...eye);
+    this.mat.uniforms.skyY!.value = m.origin[1];
     this.mat.uniforms.radius!.value = m.lightRadius() * B;
     this.mat.uniforms.ambient!.value = m.config.ambient + m.stat('nightEyes');
     // Chunks: let go of unloaded ones; mesh new and changed ones, nearest first, a few a frame.
@@ -287,6 +298,7 @@ export class MineView {
       }
     }
     const at = m.toBlock(eye), S = b.size;
+    this.dark.visible = !m.config.surface || at[1] < -m.config.crust;
     const pc = [Math.floor(at[0] / S), Math.floor(at[1] / S), Math.floor(at[2] / S)];
     const todo: [number, Chunk][] = [];
     for (const ch of m.chunks()) {
@@ -308,6 +320,8 @@ export class MineView {
       } else {
         const mesh = new THREE.Mesh(g, this.mat);
         mesh.matrixAutoUpdate = false;
+        // (Blocks shade their own corners; screen occlusion would blacken every tunnel.)
+        mesh.userData.noAo = true;
         this.group.add(mesh);
         this.meshes.set(k, { mesh, version: ch.version, chunk: ch });
       }
@@ -428,7 +442,7 @@ export class MineView {
           for (let x = -r; x <= r && n < 400; x++) {
             if (x * x + y * y + z * z > r * r) continue;
             const id = m.blocks.get(cx + x, cy + y, cz + z);
-            const o = id === AIR ? -1 : oreOf(id);
+            const o = id === AIR || id === EDGE ? -1 : oreOf(id);
             if (o < 0) continue;
             const bx = cx + x, by = cy + y, bz = cz + z, b = m.blocks;
             // (Ores in plain sight need no sensing.)

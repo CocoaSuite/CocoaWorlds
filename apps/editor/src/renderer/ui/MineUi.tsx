@@ -108,7 +108,7 @@ export function MineUi({ hud, menu, onAction }: { hud: MineHud; menu: MineMenu |
           </span>
         </div>
         <div className="cw-mine-dim">
-          {hud.home ? 'Base' : `${hud.zone} · ${hud.distance}`}
+          {hud.home ? (hud.surface ? 'Surface' : 'Base') : `${hud.zone} · ${hud.distance}`}
         </div>
         <div className="cw-mine-dim">{hud.pickaxe}</div>
         <div className="cw-mine-dim">Mine resets in {clock(hud.regen)}</div>
@@ -175,7 +175,7 @@ export function MineUi({ hud, menu, onAction }: { hud: MineHud; menu: MineMenu |
                 ) : (
                   <div className="cw-mine-dim">Empty</div>
                 )}
-                <div className="cw-mine-dim cw-mine-note">Ores sell when you get back to the base.</div>
+                <div className="cw-mine-dim cw-mine-note">Ores sell when you get back to the {menu.surface ? 'surface' : 'base'}.</div>
               </div>
               <Tree menu={menu} onBuy={(id) => onAction('skill', id)} />
             </div>

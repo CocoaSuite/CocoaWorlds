@@ -90,7 +90,13 @@ export interface MineConfig {
   /** 0: a new random mine each time it regenerates. */
   seed: number;
   regenMinutes: number;
-  /** The base room around the Player start: half size in blocks (x, height, z). */
+  /** On the surface: the mine is a flat patch of rock at ground level (below it, rock forever). Off: a room in
+   * endless rock all round. */
+  surface: boolean;
+  /** Surface: the patch's half size in blocks; its sides are the mine's edge down to `crust` blocks deep. */
+  patch: number;
+  crust: number;
+  /** No surface: the base room around the Player start, half size in blocks (x, height, z). */
   base: [number, number, number];
   /** Pickaxe reach in blocks. */
   reach: number;

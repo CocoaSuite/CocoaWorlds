@@ -2,7 +2,7 @@
  * Mining: an endless block mine around the base. Pickaxe swings break blocks, ores fill the backpack, the base
  * buys them, money buys pickaxes and skills. Monsters live in the caves. The mine regenerates on a timer.
  */
-import { AIR, blockId, MineBlocks, oreOf, zoneOf, type Chunk, type RayHit } from './blocks';
+import { AIR, blockId, EDGE, MineBlocks, oreOf, zoneOf, type Chunk, type RayHit } from './blocks';
 import { mineConfig, type MineConfig, type MobDef, type Stat } from './defs';
 import { Mob, stepArrow, type Arrow, type MobWorld } from './mobs';
 
@@ -36,6 +36,8 @@ export interface MineHud {
   /** Seconds until the mine regenerates. */
   regen: number;
   home: boolean;
+  /** A surface mine (home is above ground). */
+  surface: boolean;
   /** The block aimed at: how broken (0…1), or why it can't be (needs a better pickaxe). */
   aim: { label: string; broken: number; needs: string } | null;
 }
@@ -48,6 +50,7 @@ export interface MineMenu {
   bag: { label: string; n: number; value: number; color: string }[];
   cap: number;
   home: boolean;
+  surface: boolean;
 }
 
 const fmtCost = (n: number) => Math.round(n);
@@ -149,6 +152,7 @@ export class MineSystem {
   }
 
   private label(id: number): string {
+    if (id === EDGE) return 'Mine edge';
     const o = oreOf(id);
     return o >= 0 ? this.config.ores[o]!.label : this.config.zones[zoneOf(id)]!.label;
   }
@@ -225,6 +229,7 @@ export class MineSystem {
     const a = this.aim;
     if (!a) return;
     const id = this.blocks.get(a.x, a.y, a.z);
+    if (id === EDGE) return this.once('edge', 'That is the edge of the mine.');
     const zone = this.config.zones[zoneOf(id)]!;
     if (zone.tier > this.tier) {
       this.once(`tier${zone.tier}`, `Too hard. Needs a ${this.config.pickaxes[zone.tier]!.label}.`);
@@ -242,7 +247,7 @@ export class MineSystem {
     this.breakBlock(a.x, a.y, a.z, id);
     if (this.host.random() < this.stat('multiBreak')) {
       const bx = a.x - a.n[0], by = a.y - a.n[1], bz = a.z - a.n[2], back = this.blocks.get(bx, by, bz);
-      if (back !== AIR && !this.blocks.inBase(bx, by, bz) && this.config.zones[zoneOf(back)]!.tier <= this.tier) this.breakBlock(bx, by, bz, back);
+      if (back !== AIR && back !== EDGE && !this.blocks.inBase(bx, by, bz) && this.config.zones[zoneOf(back)]!.tier <= this.tier) this.breakBlock(bx, by, bz, back);
     }
   }
 
@@ -315,12 +320,12 @@ export class MineSystem {
 
   private spawn(px: number, py: number, pz: number): void {
     const rnd = () => this.host.random();
-    const [bx, , bz] = this.config.base;
+    const [bx, , bz] = this.config.base, c0 = this.config;
     for (let tries = 0; tries < 12; tries++) {
       const a = rnd() * Math.PI * 2, e = (rnd() - 0.5) * 1.2, r = 12 + rnd() * 14;
       const x = Math.floor(px + Math.cos(a) * Math.cos(e) * r), z = Math.floor(pz + Math.sin(a) * Math.cos(e) * r);
       let y = Math.floor(py + Math.sin(e) * r);
-      if (Math.max(Math.abs(x) - bx, Math.abs(z) - bz) < 6 && Math.abs(y) < 12) continue;
+      if (c0.surface ? y > -c0.crust - 2 : Math.max(Math.abs(x) - bx, Math.abs(z) - bz) < 6 && Math.abs(y) < 12) continue;
       if (this.blocks.solid(x, y, z)) continue;
       let k = 0;
       while (k++ < 8 && !this.blocks.solid(x, y - 1, z)) y--;
@@ -431,9 +436,10 @@ export class MineSystem {
     let aim: MineHud['aim'] = null;
     if (this.aim) {
       const id = this.blocks.get(this.aim.x, this.aim.y, this.aim.z);
-      const z = this.config.zones[zoneOf(id)]!;
+      const z = this.config.zones[Math.min(this.config.zones.length - 1, zoneOf(id))]!;
       const dug = this.dug && this.dug.x === this.aim.x && this.dug.y === this.aim.y && this.dug.z === this.aim.z ? this.dug.damage : 0;
-      aim = { label: this.label(id), broken: Math.min(1, dug / this.hardness(id, this.distance(this.aim.x, this.aim.y, this.aim.z))), needs: z.tier > this.tier ? this.config.pickaxes[z.tier]!.label : '' };
+      if (id === EDGE) aim = { label: this.label(id), broken: 0, needs: '' };
+      else aim = { label: this.label(id), broken: Math.min(1, dug / this.hardness(id, this.distance(this.aim.x, this.aim.y, this.aim.z))), needs: z.tier > this.tier ? this.config.pickaxes[z.tier]!.label : '' };
     }
     const p = this.config.pickaxes[this.tier]!;
     return {
@@ -445,6 +451,7 @@ export class MineSystem {
       pickaxe: this.level ? `${p.label} +${this.level}` : p.label,
       regen: Math.max(0, Math.ceil((this.nextRegen - this.host.now()) / 1000)),
       home: this.inBase,
+      surface: this.config.surface,
       aim,
     };
   }
@@ -460,6 +467,7 @@ export class MineSystem {
       bag: [...this.bag].map(([i, b]) => ({ label: this.config.ores[i]!.label, n: b.n, value: Math.round(b.value), color: this.config.ores[i]!.color })),
       cap: this.capacity,
       home: this.inBase,
+      surface: this.config.surface,
     };
   }
 
@@ -475,7 +483,7 @@ export class MineSystem {
     const a = this.aim, d = this.dug;
     if (!a || !d || d.x !== a.x || d.y !== a.y || d.z !== a.z) return 0;
     const id = this.blocks.get(a.x, a.y, a.z);
-    return id === AIR ? 0 : Math.min(1, d.damage / this.hardness(id, this.distance(a.x, a.y, a.z)));
+    return id === AIR || id === EDGE ? 0 : Math.min(1, d.damage / this.hardness(id, this.distance(a.x, a.y, a.z)));
   }
 
   private play(kind: keyof MineConfig['sounds'], at: { x: number; y: number; z: number } | null): void {
@@ -565,4 +573,4 @@ function rayBox(o: number[], d: number[], lo: number[], hi: number[]): number | 
   return t0;
 }
 
-export { AIR, blockId, oreOf, zoneOf };
+export { AIR, blockId, EDGE, oreOf, zoneOf };
