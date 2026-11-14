@@ -152,6 +152,8 @@ export class MineView {
     // (Past the loaded chunks there is only dark: no sky through the rock.)
     this.dark = new THREE.Mesh(new THREE.SphereGeometry((mine.config.view + 2) * mine.config.chunk * B * 1.8, 16, 12), new THREE.MeshBasicMaterial({ color: 0x050506, side: THREE.BackSide, depthWrite: false, fog: false }));
     this.dark.frustumCulled = false;
+    // (Screen occlusion leaves out what isn't rock.)
+    for (const o of [this.dark, this.cracks, this.sense, this.chips, this.arrows]) o.userData.noAo = true;
     this.hand.matrixAutoUpdate = false;
     this.group.add(this.outline, this.cracks, this.chips, this.arrows, this.sense, this.dark, this.hand);
   }
@@ -207,7 +209,7 @@ export class MineView {
       if (lx >= 0 && ly >= 0 && lz >= 0 && lx < S && ly < S && lz < S) return d[lx + S * (lz + S * ly)] !== AIR;
       return b.solid(x, y, z);
     };
-    const pos: number[] = [], uv: number[] = [], col: number[] = [], idx: number[] = [];
+    const pos: number[] = [], uv: number[] = [], col: number[] = [], nrm: number[] = [], idx: number[] = [];
     const [ox, oy, oz] = m.origin;
     const W = this.tiles * T, H = this.rows * T;
     const p = [0, 0, 0], n = [0, 0, 0];
@@ -250,6 +252,7 @@ export class MineView {
                 uv.push(tu ? u1 : u0, tv ? v1 : v0);
                 const sh = (axis === 1 ? (sign > 0 ? 1 : 0.55) : SHADE[axis]!) * AO[level]!;
                 col.push(sh, sh, sh);
+                nrm.push(n[0]!, n[1]!, n[2]!);
               }
               // (Split along the brighter diagonal so corner shading doesn't streak.)
               if (ao[0]! + ao[2]! >= ao[1]! + ao[3]!) idx.push(base, base + 1, base + 2, base, base + 2, base + 3);
@@ -260,6 +263,7 @@ export class MineView {
     g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
     g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
     g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+    g.setAttribute('normal', new THREE.Float32BufferAttribute(nrm, 3));
     g.setIndex(idx);
     g.computeBoundingSphere();
     return g;

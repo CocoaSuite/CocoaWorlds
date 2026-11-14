@@ -20,6 +20,9 @@ test('mining', async () => {
     await page.getByTestId('play-banner').waitFor();
     if (await page.getByTestId('click-to-play').count()) await page.getByTestId('click-to-play').click({ timeout: 2000 }).catch(() => {});
     await page.getByTestId('mine-hud').waitFor();
+    // (Screen occlusion is off on the software renderer tests use; on, it once blanked the whole view.)
+    await until(() => world(() => !!window.__cwViewport.ao), true);
+    await world(() => Object.defineProperty(window.__cwViewport.ao, 'software', { value: false }));
     // The chunks around load and are drawn.
     await until(() => world(() => window.__cwViewport.play.world.mine.blocks.chunks.size >= 27), true, 20000);
     await until(() => world(() => (window.__cwViewport.play.group.getObjectByName('mine')?.children.filter((c) => c.isMesh && c.geometry.index?.count > 0).length ?? 0) >= 4), true, 20000);
