@@ -21,8 +21,8 @@
  "mobHitGrowth": 1.004,
  "light": 9,
  "ambient": 0.03,
- "maxMobs": 8,
- "spawnEvery": 4,
+ "maxMobs": 12,
+ "spawnEvery": 1.2,
  "caves": 1,
  "pickaxeLevels": {
   "price": 1000000,
@@ -1206,5 +1206,10 @@
    "weight": 1,
    "mobs": 0
   }
- ]
+ ],
+ "caveMobs": {
+  "size": 8,
+  "per": 45,
+  "max": 3
+ }
 }

@@ -146,6 +146,8 @@ export interface MineConfig {
   light: number;
   ambient: number;
   maxMobs: number;
+  /** Caves are peopled by sector (`size` blocks a side): one monster per `per` open blocks, up to `max`. Killed ones stay dead until the mine regenerates. */
+  caveMobs: { size: number; per: number; max: number };
   spawnEvery: number;
   caves: number;
   /** Share of 3 × 3 × 3 cells that hold an ore vein. */

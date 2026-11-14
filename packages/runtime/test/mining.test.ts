@@ -240,17 +240,34 @@ describe('the pickaxe, the backpack and buying', () => {
     expect(back.twist.id).not.toBe('soft_rock');
   });
 
-  it('monsters never appear in the cave the player is in', () => {
+  it('caves hold monsters; a cave cleared stays clear until the mine regenerates', () => {
     const h = host([20.5 * 40, -30 * 40, 0.5 * 40]);
+    let seed = 7;
+    h.random = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
     const m = make(h, { maxMobs: 50, spawnEvery: 0.01 });
-    // (A big closed room round the player, and an open cave elsewhere.)
-    for (let x = 12; x < 30; x++) for (let y = -32; y < -26; y++) for (let z = -8; z < 9; z++) m.blocks.set(x, y, z, AIR);
-    for (let x = 12; x < 30; x++) for (let z = -8; z < 9; z++) m.blocks.set(x, -33, z, 1);
-    for (let i = 0; i < 400; i++) {
+    // (A closed room out of the player's sight, its sector holding two monsters.)
+    for (let x = 33; x < 39; x++) for (let y = -32; y < -29; y++) for (let z = 0; z < 6; z++) m.blocks.set(x, y, z, AIR);
+    const sector = '4,-4,0';
+    m.sectors.set(sector, 2);
+    const inRoom = () => m.mobs.filter((x) => x.sector === sector && !x.dead);
+    for (let i = 0; i < 3000 && inRoom().length < 2; i++) {
       h.advance(0.05);
       m.tick(1 / 60, false);
     }
-    expect(m.mobs.every((x) => !(x.pos[0] > 12 && x.pos[0] < 30 && x.pos[1] >= -32 && x.pos[1] < -26 && Math.abs(x.pos[2]) < 9))).toBe(true);
+    expect(inRoom()).toHaveLength(2);
+    for (const mob of inRoom()) m.explode([mob.pos[0], mob.pos[1] + 0.5, mob.pos[2]]);
+    expect(m.sectors.get(sector)).toBe(0);
+    expect(h.said).toContain('Cave cleared.');
+    for (let i = 0; i < 300; i++) {
+      h.advance(0.05);
+      m.tick(1 / 60, false);
+    }
+    expect(inRoom()).toHaveLength(0);
+    const back = make(h);
+    back.load(JSON.parse(JSON.stringify(m.save())));
+    expect(back.sectors.get(sector)).toBe(0);
+    back.regenerate(false);
+    expect(back.sectors.size).toBe(0);
   });
 
   it('dying loses part of the backpack; saving keeps it all; the mine regenerates on time', () => {

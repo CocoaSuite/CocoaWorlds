@@ -100,6 +100,8 @@ export class MineSystem {
   twist!: TwistDef;
   dynamite = 0;
   bombs: Bomb[] = [];
+  /** Monsters still living in each cave sector (only sectors seen so far). */
+  readonly sectors = new Map<string, number>();
   private fx: MineFx[] = [];
   private statCache: Map<Stat, number> | null = null;
   private saidAt = new Map<string, number>();
@@ -412,6 +414,12 @@ export class MineSystem {
   }
 
   private paid(m: Mob): void {
+    // (One fewer in its cave; a cave emptied stays empty.)
+    const left = this.sectors.get(m.sector);
+    if (left !== undefined && left > 0) {
+      this.sectors.set(m.sector, left - 1);
+      if (left === 1 && !this.mobs.some((o) => !o.dead && o.sector === m.sector)) this.once('cleared', 'Cave cleared.');
+    }
     const pay = Math.round(m.reward * (1 + this.stat('bounty')) * (this.twist.reward ?? 1));
     if (pay > 0) {
       this.money += pay;
@@ -449,8 +457,7 @@ export class MineSystem {
   private spawn(px: number, py: number, pz: number): void {
     const rnd = () => this.host.random();
     const [bx, , bz] = this.config.base, c0 = this.config;
-    // (Not in the cave the player is in: they come from elsewhere.)
-    const here = this.reach(Math.floor(px), Math.floor(py + 0.1), Math.floor(pz), 4000);
+    const eye = this.toBlock(this.host.player()?.eye ?? [0, 0, 0]);
     for (let tries = 0; tries < 12; tries++) {
       const a = rnd() * Math.PI * 2, e = (rnd() - 0.5) * 1.2, r = 12 + rnd() * 14;
       const x = Math.floor(px + Math.cos(a) * Math.cos(e) * r), z = Math.floor(pz + Math.sin(a) * Math.cos(e) * r);
@@ -460,28 +467,40 @@ export class MineSystem {
       let k = 0;
       while (k++ < 8 && !this.blocks.solid(x, y - 1, z)) y--;
       if (!this.blocks.solid(x, y - 1, z) || this.blocks.solid(x, y + 1, z)) continue;
-      if (here.has(`${x},${y},${z}`)) continue;
+      // (Its cave sector must still have monsters to spare, and the player mustn't see it appear.)
+      const sector = this.sectorOf(x, y, z);
+      if (this.mobs.filter((m) => !m.dead && m.sector === sector).length >= this.population(sector)) continue;
+      const dx = x + 0.5 - eye[0], dy = y + 1 - eye[1], dz = z + 0.5 - eye[2], l = Math.hypot(dx, dy, dz);
+      const seen = this.blocks.raycast(eye[0], eye[1], eye[2], dx, dy, dz, l);
+      if (!seen || seen.t >= l - 0.5) continue;
       const d = this.distance(x, y, z), zone = this.blocks.zoneAt(d);
       const kinds = this.config.mobs.filter((m) => m.zone <= zone && m.weight > 0);
       const def = pick(kinds, rnd());
       if (!def) return;
       if (def.size[1] / this.B > 1.05 && this.blocks.solid(x, y + 1, z)) continue;
       const c = this.config;
-      this.mobs.push(new Mob(def, [x + 0.5, y, z + 0.5], this.B, def.damage * Math.pow(c.mobHitGrowth, d), def.reward * Math.pow(c.valueGrowth, d), def.health * Math.pow(c.mobGrowth, d)));
+      const mob = new Mob(def, [x + 0.5, y, z + 0.5], this.B, def.damage * Math.pow(c.mobHitGrowth, d), def.reward * Math.pow(c.valueGrowth, d), def.health * Math.pow(c.mobGrowth, d));
+      mob.sector = sector;
+      this.mobs.push(mob);
       return;
     }
   }
 
-  /** The open space joined to a block (up to `limit` blocks of it). */
-  private reach(x: number, y: number, z: number, limit: number): Set<string> {
-    const seen = new Set<string>(), todo: [number, number, number][] = [[x, y, z]];
-    while (todo.length && seen.size < limit) {
-      const [a, b, c] = todo.pop()!, k = `${a},${b},${c}`;
-      if (seen.has(k) || this.blocks.solid(a, b, c)) continue;
-      seen.add(k);
-      todo.push([a + 1, b, c], [a - 1, b, c], [a, b + 1, c], [a, b - 1, c], [a, b, c + 1], [a, b, c - 1]);
-    }
-    return seen;
+  private sectorOf(x: number, y: number, z: number): string {
+    const s = this.config.caveMobs.size;
+    return `${Math.floor(x / s)},${Math.floor(y / s)},${Math.floor(z / s)}`;
+  }
+
+  /** How many monsters a cave sector holds: from its natural open space the first time, then what's left. */
+  private population(sector: string): number {
+    const had = this.sectors.get(sector);
+    if (had !== undefined) return had;
+    const { size, per, max } = this.config.caveMobs, [sx, sy, sz] = sector.split(',').map(Number) as [number, number, number];
+    let air = 0;
+    for (let y = 0; y < size; y++) for (let z = 0; z < size; z++) for (let x = 0; x < size; x++) if (this.blocks.gen(sx * size + x, sy * size + y, sz * size + z) === AIR) air++;
+    const n = Math.round(Math.min(max, Math.floor(air / per)) * (this.twist.mobs ?? 1));
+    this.sectors.set(sector, n);
+    return n;
   }
 
   // ── Base, menus and buying ──
@@ -570,6 +589,7 @@ export class MineSystem {
     this.mobs = [];
     this.arrows = [];
     this.bombs = [];
+    this.sectors.clear();
     this.dug = null;
     this.nextRegen = this.host.now() + this.config.regenMinutes * 60000;
     if (!this.inBase) this.host.home();
@@ -667,6 +687,7 @@ export class MineSystem {
       seed: this.blocks.seed,
       twist: this.twist.id,
       dynamite: this.dynamite,
+      caves: Object.fromEntries(this.sectors),
       next: this.nextRegen,
       dug: this.blocks.save(),
     };
@@ -696,6 +717,8 @@ export class MineSystem {
       const t = this.config.twists.find((x) => x.id === o.twist);
       if (t) this.useTwist(t);
       this.blocks.reset(o.seed);
+      this.sectors.clear();
+      if (o.caves && typeof o.caves === 'object') for (const [k, v] of Object.entries(o.caves)) if (typeof v === 'number' && v >= 0) this.sectors.set(k, Math.floor(v));
       this.blocks.load(o.dug);
     } else {
       this.useTwist(this.rollTwist());

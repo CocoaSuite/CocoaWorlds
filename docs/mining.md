@@ -27,7 +27,7 @@ Code: `packages/runtime/src/mining/` (`defs.ts` settings, `data/mine.json` the b
   Backpack, Combat, Vision; the last node of each branch levels forever). Esc or Tab shuts it.
 - **G** throws dynamite (bought in the menu, dearer with each pickaxe tier): after the fuse it blows a sphere (`dynamite.radius`) of rock up to one tier past the pickaxe, ores into the backpack, and hurts monsters (a lot) and the player (a little).
 - Each regeneration rolls a **twist** (`twists`: Gold Rush, Crystal Bloom, Rich Veins, Soft Rock, Swarm, Pitch Dark, Hollow Earth, Lucky Day, Calm, or a quiet mine), shown in the corner and the menu.
-- Monsters never appear in the cave the player is in (the open space joined to the player).
+- Caves are peopled: each `caveMobs.size`-block sector holds monsters by how much natural cave it has (one per `per` open blocks, up to `max`; the twist scales it). They appear out of sight as the player nears. Killed ones stay dead: a cleared cave stays clear until the mine regenerates (saved).
 - Dying loses part of the backpack (`deathLoss`, less with Sturdy Straps).
 - The mine regenerates every `regenMinutes` (40) of real time: a new seed, the player sent home.
 - Dark: only the lamp around the player lights the rock (`light` blocks, Lantern adds). Gems glow a little.

@@ -19,6 +19,8 @@ let ids = 0;
 
 export class Mob {
   readonly id = `mob${++ids}`;
+  /** The patch of cave it lives in (its sector). */
+  sector = '';
   pos: [number, number, number];
   vel: [number, number, number] = [0, 0, 0];
   yaw = 0;
