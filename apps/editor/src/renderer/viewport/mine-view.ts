@@ -536,9 +536,9 @@ export class MineView {
       else this.hand.add(pickaxeMesh(p.color));
     }
     const s = (time - m.swungAt) / 0.25, a = s >= 0 && s < 1 ? Math.sin(s * Math.PI) : 0;
-    // (The pixel pickaxe is mirrored: head up to the left, handle down to the right, like a tool held in the right hand.)
+    // (Grip low on the right, head up to the right.)
     const k = p.model ? 1 : 0.48;
-    this.local.compose(this.v.set(11, -10 - a * 2, -15 - a * 3), this.q.setFromEuler(new THREE.Euler(0.15 - a * 1.2, 0.4 - a * 0.25, 0.1, 'YXZ')), new THREE.Vector3(p.model ? 1 : -k, k, k));
+    this.local.compose(this.v.set(p.model ? 11 : 3, -10 - a * 2, -15 - a * 3), this.q.setFromEuler(new THREE.Euler(0.15 - a * 1.2, -0.4 + a * 0.25, -0.1, 'YXZ')), new THREE.Vector3(k, k, k));
     this.hand.matrix.multiplyMatrices(cam.matrixWorld, this.local);
     this.hand.matrixWorldNeedsUpdate = true;
   }
