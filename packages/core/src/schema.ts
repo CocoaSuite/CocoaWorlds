@@ -77,20 +77,22 @@ export interface GameRules {
   showFps: boolean;
   /** Base building: plans place build sites, rooms seal, comfort, sleeping to save (missing: off). */
   building: boolean;
+  /** Mining: an endless block mine around the Player start, pickaxes, skills and cave monsters (missing: off). */
+  mining: boolean;
   /** The world is kept between sessions: where every object is, copies, what was taken away, creatures, the player (missing: off). */
   saveWorld: boolean;
   /** Esc shows a menu to save and load (one save); the game then saves only from there or by blocks (missing: off). */
   saveMenu: boolean;
 }
 
-export const defaultGameRules = (): GameRules => ({ health: true, hideHealth: false, score: true, thirdPerson: false, saveItems: false, stamina: false, showFps: false, building: false, saveWorld: false, saveMenu: false });
+export const defaultGameRules = (): GameRules => ({ health: true, hideHealth: false, score: true, thirdPerson: false, saveItems: false, stamina: false, showFps: false, building: false, mining: false, saveWorld: false, saveMenu: false });
 
 /** A project's game rules with defaults filled in. */
 export function gameRules(settings: Pick<ProjectSettings, 'game'> | undefined): GameRules {
   const g = settings?.game ?? {};
   const d = defaultGameRules();
   const pick = (k: keyof GameRules) => (typeof g[k] === 'boolean' ? (g[k] as boolean) : d[k]);
-  return { health: pick('health'), hideHealth: pick('hideHealth'), score: pick('score'), thirdPerson: pick('thirdPerson'), saveItems: pick('saveItems'), stamina: pick('stamina'), showFps: pick('showFps'), building: pick('building'), saveWorld: pick('saveWorld'), saveMenu: pick('saveMenu') };
+  return { health: pick('health'), hideHealth: pick('hideHealth'), score: pick('score'), thirdPerson: pick('thirdPerson'), saveItems: pick('saveItems'), stamina: pick('stamina'), showFps: pick('showFps'), building: pick('building'), mining: pick('mining'), saveWorld: pick('saveWorld'), saveMenu: pick('saveMenu') };
 }
 
 export interface ProjectFile {
@@ -159,6 +161,8 @@ export interface SceneSettings {
   acoustics?: boolean;
   /** Base building: the game's own build pieces (JSON, as building/data/*.json), base settings merged over base.json, and the project material each menu section's pieces are drawn with when finished (`looks`: section → material). */
   building?: { pieces?: unknown[]; base?: unknown; looks?: Record<string, string> };
+  /** Mining: settings merged over the built-in mine (runtime mining/data/mine.json). */
+  mining?: unknown;
 }
 
 export interface BackgroundSound {

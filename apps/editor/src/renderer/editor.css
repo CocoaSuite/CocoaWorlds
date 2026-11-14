@@ -797,3 +797,48 @@ button.cw-sec.cw-fold { width: 100%; border: 0; border-top: 1px solid var(--line
 .cw-plants-list > .cw-lib-cats-h:first-child, .cw-plants-props > .cw-lib-cats-h:first-child, .cw-screens-side > .cw-screens-h:first-child {
   margin: -10px -12px 4px; padding: 0 10px; height: var(--bar); min-height: var(--bar); flex: none; border-bottom: 1px solid var(--line);
 }
+
+/* Mining */
+.cw-mine-corner { left: 14px; top: 14px; display: flex; flex-direction: column; gap: 3px; pointer-events: none; color: #fff; background: rgba(0, 0, 0, 0.45); border-radius: 8px; padding: 8px 12px; min-width: 170px; font-size: 12px; }
+.cw-mine-money { font-size: 22px; font-weight: 600; font-variant-numeric: tabular-nums; color: #f2d16b; }
+.cw-mine-bag { display: flex; flex-direction: column; gap: 3px; }
+.cw-mine-bag.full { color: #ff8a7a; }
+.cw-mine-bar { display: block; height: 4px; border-radius: 2px; background: rgba(255, 255, 255, 0.18); overflow: hidden; min-width: 120px; }
+.cw-mine-bar > span { display: block; height: 100%; background: currentColor; }
+.cw-mine-dim { opacity: 0.7; }
+.cw-mine-home { right: 14px; top: 14px; border: 0; border-radius: 8px; padding: 8px 16px; background: rgba(0, 0, 0, 0.45); color: #fff; font: inherit; font-weight: 600; cursor: pointer; }
+.cw-mine-home:hover { background: rgba(0, 0, 0, 0.65); }
+.cw-mine-aim { left: 50%; top: calc(50% + 22px); transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; gap: 3px; color: #fff; font-size: 12px; pointer-events: none; text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8); }
+.cw-mine-aim .cw-mine-bar { min-width: 60px; }
+.cw-mine-needs { color: #ff8a7a; }
+.cw-mine-menu { position: absolute; inset: 0; z-index: 5; display: flex; align-items: center; justify-content: center; background: rgba(0, 0, 0, 0.35); }
+.cw-mine-panel { width: min(1100px, 94%); height: min(780px, 92%); display: flex; flex-direction: column; background: #16181c; color: #e8e8ea; border-radius: 10px; overflow: hidden; }
+.cw-mine-head { display: flex; align-items: center; gap: 8px; padding: 10px 14px; background: #1e2026; }
+.cw-mine-grow { flex: 1; }
+.cw-mine-btn { border: 0; border-radius: 6px; background: #2c2f37; color: #fff; font: inherit; padding: 6px 12px; cursor: pointer; }
+.cw-mine-btn:hover { background: #3a3e48; }
+.cw-mine-body { flex: 1; display: flex; min-height: 0; }
+.cw-mine-side { width: 270px; padding: 14px; display: flex; flex-direction: column; gap: 8px; overflow-y: auto; background: #1a1c21; font-size: 13px; }
+.cw-mine-card { display: flex; gap: 10px; align-items: center; }
+.cw-mine-swatch { width: 26px; height: 26px; border-radius: 5px; flex: none; }
+.cw-mine-buy { display: flex; align-items: center; gap: 8px; border: 0; border-radius: 6px; padding: 8px; background: #2c2f37; color: #fff; font: inherit; text-align: left; cursor: pointer; }
+.cw-mine-buy:hover:not(:disabled) { background: #3a3e48; }
+.cw-mine-buy:disabled { opacity: 0.5; cursor: default; }
+.cw-mine-buy .cw-mine-swatch { width: 16px; height: 16px; }
+.cw-mine-cost { margin-left: auto; color: #f2d16b; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.cw-mine-sub { margin-top: 10px; font-weight: 600; }
+.cw-mine-row { display: flex; align-items: center; gap: 6px; }
+.cw-mine-dot { width: 10px; height: 10px; border-radius: 2px; }
+.cw-mine-note { margin-top: auto; font-size: 12px; }
+.cw-mine-tree { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+.cw-mine-tree-fit { flex: 1; min-height: 0; overflow: hidden; display: flex; align-items: center; justify-content: center; }
+.cw-mine-links { position: absolute; inset: 0; }
+.cw-mine-core { position: absolute; width: 18px; height: 18px; margin: -9px 0 0 -9px; border-radius: 50%; background: #e8e8ea; }
+.cw-mine-node { position: absolute; width: 62px; height: 62px; margin: -31px 0 0 -31px; border: 2px solid #3a3d44; border-radius: 8px; background: #22252b; color: #9a9ca3; font: inherit; font-size: 10px; line-height: 1.1; padding: 3px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; cursor: pointer; }
+.cw-mine-node.owned { border-color: var(--c); color: #fff; }
+.cw-mine-node.can { background: #2c3038; color: #fff; }
+.cw-mine-node.can:hover { background: #363b45; }
+.cw-mine-node.locked { opacity: 0.45; }
+.cw-mine-node.maxed { background: var(--c); color: #111; }
+.cw-mine-node-level { font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.cw-mine-info { display: flex; gap: 10px; align-items: baseline; padding: 10px 14px; background: #1e2026; font-size: 13px; min-height: 20px; }

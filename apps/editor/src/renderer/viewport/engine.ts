@@ -740,6 +740,11 @@ export class ViewportEngine {
     this.play?.closeBlueprints();
   }
 
+  /** Mining: a menu or Home button. */
+  mineAction(name: string, arg = ''): void {
+    this.play?.mineAction(name, arg);
+  }
+
   /** The player picked a row of a list on screen. */
   pickRow(list: string, row: string): void {
     this.play?.pickRow(list, row);
@@ -796,6 +801,8 @@ export class ViewportEngine {
       if (!down) return true;
       e.preventDefault();
       e.stopImmediatePropagation();
+      // (Esc shuts the mine menu first.)
+      if (this.play?.baseKey('Escape')) return true;
       this.uiPaused = true;
       this.gameKeys.clear();
       this.sendInput();

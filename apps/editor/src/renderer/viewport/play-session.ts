@@ -39,6 +39,7 @@ import { LeanPositionalAudio } from './lean-audio';
 import { allSurfaceFiles, materialSurfaces, surfaceFiles } from './surface-sounds';
 import { projectMaterials } from './project-materials';
 import { BaseView } from './base-view';
+import { MineView } from './mine-view';
 import type { SceneLighting } from './scene-lighting';
 
 export interface PlayInfo {
@@ -193,6 +194,15 @@ export class PlaySession {
     if (this.world.base) {
       this.baseView = new BaseView(material, this.world.base);
       this.group.add(this.baseView.group);
+    }
+    // Mining: the mine's blocks, monsters and arrows.
+    if (this.world.mine) {
+      this.mineView = new MineView(this.world.mine, (name) => {
+        const e = doc.entities.find((x) => x.name === name && x.components.model);
+        const m = e ? readComponent<ModelData>('model', e.components.model) : null;
+        return m?.model ? m : null;
+      });
+      this.group.add(this.mineView.group);
     }
     for (const b of this.world.movingBodies()) if (doc.get(b.id)) this.addMover(b);
 
@@ -688,6 +698,7 @@ export class PlaySession {
 
   private ears = new THREE.Vector3();
   private baseView: BaseView | null = null;
+  private mineView: MineView | null = null;
   private soundAt = new THREE.Vector3();
   private silentNow = false;
   /** Footsteps and hits playing now (no more than 8 at once). */
@@ -1180,6 +1191,7 @@ export class PlaySession {
       }
     }
     if (this.baseView) this.baseView.sync(this.world.base!);
+    if (this.mineView && this.world.player) this.mineView.sync(dt, this.world.player.eye(), this.world.time);
     for (const m of this.mixers) m.update(dt);
     for (const [id, inst] of this.carried) for (const p of inst.movedParts()) this.world.movePart(id, p.part, p.d);
     // Googly eyes' pupils roll about as their objects moved this frame.
@@ -1266,6 +1278,19 @@ export class PlaySession {
   /** Base building: the blueprint menu key, and R / T / Q while placing (true: the base took the key). */
   baseKey(code: string): boolean {
     return this.world.baseKey(code);
+  }
+
+  /** Mining: the corner display and the menu (null: none or shut). */
+  mineHud(): ReturnType<GameWorld['mineHud']> {
+    return this.world.mineHud();
+  }
+
+  mineMenu(): ReturnType<GameWorld['mineMenu']> {
+    return this.world.mineMenu();
+  }
+
+  mineAction(name: string, arg = ''): void {
+    this.world.mineAction(name, arg);
   }
 
   /** The blueprint menu as shown now (null: shut). */
@@ -1501,6 +1526,7 @@ export class PlaySession {
     cam.rotation.set(v[4]!, v[3]!, 0, 'YXZ');
     cam.updateMatrixWorld();
     this.easeFov(cam, f);
+    this.mineView?.placeHand(cam, this.world.time);
     // Third person: the player is seen, as a simple body turned the way they look.
     if (f.thirdPerson) {
       this.body ??= this.makeBody();
@@ -1524,6 +1550,7 @@ export class PlaySession {
     this.disposed = true;
     this.restoreFov();
     this.baseView?.dispose();
+    this.mineView?.dispose();
     this.power?.dispose();
     for (const s of this.standIns) s.dispose();
     this.effects.dispose();

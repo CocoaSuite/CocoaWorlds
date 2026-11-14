@@ -5,6 +5,7 @@ import { uiOf, type SceneFile, type Vec3 } from '@cocoaworlds/core';
 import { SaveMenu } from '../ui/SaveMenu';
 import { UiLayer } from '../ui/UiLayer';
 import { BlueprintMenu } from '../ui/BlueprintMenu';
+import { MineUi } from '../ui/MineUi';
 import { HudView } from '../ui/Hud';
 import { ContextMenu, Segmented, type MenuEntry } from '@cocoaworlds/ui';
 import { useEffect, useRef, useState } from 'react';
@@ -408,6 +409,7 @@ export function Viewport() {
       {playing && hud && playScene && <UiLayer ui={uiOf(playScene.settings)} live={hud.ui} values={hud.allValues} onClick={(id) => engine.current?.clickUi(id)} onRow={(list, row) => engine.current?.pickRow(list, row)} />}
       {playing && hud && <HudView hud={hud} />}
       {hud?.blueprints && <BlueprintMenu menu={hud.blueprints} onPick={(id) => engine.current?.pickBlueprint(id)} onClose={() => engine.current?.closeBlueprints()} />}
+      {hud?.mine && <MineUi hud={hud.mine} menu={hud.mineMenu} onAction={(a, arg) => engine.current?.mineAction(a, arg)} />}
       {playing && lock === false && !uiMouse && hud && playing.rules.saveMenu && (
         <SaveMenu onResume={() => engine.current?.capturePlayer()} onSave={() => engine.current?.saveGame() ?? false} onLoad={() => engine.current?.loadGame() ?? false} savedAt={engine.current?.savedAt ?? null} />
       )}

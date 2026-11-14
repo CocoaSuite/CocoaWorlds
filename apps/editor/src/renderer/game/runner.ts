@@ -206,6 +206,11 @@ export class GameRunner {
     this.play?.closeBlueprints();
   }
 
+  /** Mining: a menu or Home button. */
+  mineAction(name: string, arg = ''): void {
+    this.play?.mineAction(name, arg);
+  }
+
   pickRow(list: string, row: string): void {
     this.play?.pickRow(list, row);
   }
@@ -375,6 +380,7 @@ export class GameRunner {
     if (!this.play || !(this.locked || (this.uiFree && !this.uiPaused))) return;
     if (e.key === 'Escape') {
       // Captured: the browser frees the mouse itself. In a menu: pause, as that would.
+      if (!this.locked && down && this.play.baseKey('Escape')) return;
       if (!this.locked && down) {
         this.uiPaused = true;
         this.keys.clear();

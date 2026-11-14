@@ -73,6 +73,7 @@ import { NavGrid, openNavJob, type NavBuilder, type NavJob } from './navgrid';
 import { Acoustics } from './acoustics';
 import { FrameSnapshot } from './snapshot';
 import { PowerGrid, bulbPoints, dist3, dropOf, rayNearLine, wirePoints, type P3 } from './power';
+import { MineSystem, type MineHud, type MineMenu } from './mining/mine';
 import { BaseSystem, type BaseAim, type BlockerBox, type BlueprintCard, type BlueprintTag, type BuildPrompt } from './building/base';
 import type { BaseConfig } from './building/defs';
 import { buildingCatalog } from './building/catalog';
@@ -107,6 +108,8 @@ export interface Hearing {
 
 /** Owner ids of build pieces' colliders: this, then the site's id. */
 const BASE_OWNER = '@base:';
+/** Owner id of the mine's colliders. */
+const MINE_OWNER = '@mine';
 
 /** Units per metre (an inch-based world). */
 export const UNITS_PER_METRE = 39.37;
@@ -120,6 +123,8 @@ export interface SavedProgress {
   items?: [string, number][];
   /** Base building (when the game has it): each scene's build sites, by scene name. */
   base?: Record<string, unknown>;
+  /** Mining (when the game has it): money, pickaxe, skills, backpack and the mine as dug. */
+  mine?: unknown;
   /** The world (when the game keeps it, `saveWorld`): where everything is in each scene played, by scene name. */
   world?: Record<string, SavedScene>;
   /** The scene the player was in (a game starts there again). */
@@ -548,6 +553,7 @@ export class GameWorld {
     if (options.surfaces) w.surfaces = options.surfaces;
     w.sceneName = scene.name;
     if (w.rules.building) w.initBase(options.building ?? (scene.settings as { building?: { pieces?: unknown[]; base?: unknown } }).building);
+    if (w.rules.mining) w.initMine((scene.settings as { mining?: unknown }).mining);
     if (options.saved || options.arrive?.worlds) w.loadProgress(options.saved ?? { values: {} }, options.arrive ?? null);
     if (w.savesWhenAsked) w.checkpoint = options.saved ?? null;
     if (options.arrive) w.arrive(options.arrive);
@@ -656,6 +662,10 @@ export class GameWorld {
       this.day = Math.max(0, Math.round(saved.day));
       this.dayFresh = false;
     }
+    if (this.mine && saved.mine) {
+      this.mine.load(saved.mine);
+      this.syncMineColliders(true);
+    }
     if (saved.base && typeof saved.base === 'object') {
       this.otherBases = { ...saved.base };
       if (this.base && this.sceneName in saved.base) this.base.load(saved.base[this.sceneName]);
@@ -672,11 +682,12 @@ export class GameWorld {
   /** What would be kept if it were saved right now. */
   private liveProgress(): SavedProgress | null {
     const kept = this.valueDefs.filter((d) => d.saved);
-    if (!kept.length && !this.rules.saveItems && !this.base && !this.rules.saveWorld) return null;
+    if (!kept.length && !this.rules.saveItems && !this.base && !this.mine && !this.rules.saveWorld) return null;
     const out: SavedProgress = { values: Object.fromEntries(kept.map((d) => [d.name, this.globals.get(d.name) ?? d.initial])) };
     if (this.dayOn || this.day !== this.firstDay) out.day = this.day;
     if (this.rules.saveItems) out.items = [...this.inventory];
     if (this.base) out.base = { ...this.otherBases, [this.sceneName]: this.base.save() };
+    if (this.mine) out.mine = this.mine.save();
     if (this.keepsWorld) {
       out.world = { ...this.otherWorlds, [this.sceneName]: this.saveScene(true) };
       out.scene = this.sceneName;
@@ -2839,7 +2850,7 @@ export class GameWorld {
         if (this.useQueued) this.doUse();
       } else if (this.player) {
         if (this.frozen) Object.assign(this.player.input, { forward: 0, right: 0, jump: false, crouch: false, fire: false, use: false });
-        this.player.speedScale = 1 - WEAK.slow * this.weakness();
+        this.player.speedScale = (1 - WEAK.slow * this.weakness()) * (1 + (this.mine?.stat('moveSpeed') ?? 0));
         this.player.step(STEP);
         this.playerNoise();
         if (this.player.landingSpeed) {
@@ -2853,6 +2864,7 @@ export class GameWorld {
         }
         if (this.useQueued) this.doUse();
         if (this.base) this.stepBase();
+        if (this.mine) this.stepMine();
         this.carryHeld();
         if (this.equipped) this.carryEquipped();
         this.watchSeats();
@@ -3413,6 +3425,7 @@ export class GameWorld {
     if (target === 'player') return this.hurt(amount, by === 'player' ? `your own ${cause}` : cause);
     // (A finished build piece: crowbars, bullets and blasts knock it down.)
     if (target.startsWith(BASE_OWNER)) return this.base?.damage(target.slice(BASE_OWNER.length), amount);
+    if (target === MINE_OWNER) return;
     const npc = this.npcs.get(target);
     if (npc) {
       if (!npc.alive) return;
@@ -3508,7 +3521,7 @@ export class GameWorld {
     for (; id && id !== 'player' && !c; id = this.parentOf.get(id) ?? undefined) c = this.chargers.get(id);
     if (!c || c.left <= 0 || !this.rules.health) return;
     const armour = c.data.gives === 'armour';
-    const room = armour ? MAX_ARMOUR - this.armour : PLAYER.maxHealth - this.health;
+    const room = armour ? MAX_ARMOUR - this.armour : this.maxHealth - this.health;
     const give = Math.min(c.data.rate * STEP, c.left, room);
     if (give <= 0) return;
     c.left -= give;
@@ -3743,7 +3756,12 @@ export class GameWorld {
   heal(amount: number): void {
     if (!this.player || !this.rules.health || !Number.isFinite(amount)) return;
     if (amount < 0) return this.hurt(-amount);
-    this.health = Math.min(PLAYER.maxHealth, this.health + amount);
+    this.health = Math.min(this.maxHealth, this.health + amount);
+  }
+
+  /** Most health the player can have (mining skills add to it). */
+  get maxHealth(): number {
+    return PLAYER.maxHealth + (this.mine?.stat('maxHealth') ?? 0);
   }
 
   addScore(by: number): void {
@@ -3758,7 +3776,8 @@ export class GameWorld {
     this.dropHeld();
     if (!this.player) return;
     this.deaths++;
-    this.health = PLAYER.maxHealth;
+    this.mine?.died();
+    this.health = this.maxHealth;
     this.armour = 0;
     this.stopHiding();
     this.player.respawn();
@@ -3792,7 +3811,7 @@ export class GameWorld {
 
   playerStatus(): PlayerStatus | null {
     if (!this.player) return null;
-    return { showHealth: this.rules.health && !this.rules.hideHealth, hasHealth: this.rules.health, health: this.health, maxHealth: PLAYER.maxHealth, armour: this.armour, weapon: this.weaponStatus(), score: this.score, showScore: this.usesScore, day: this.showDay ? this.day : null, clock: this.showClock ? this.dayHour : null, sinceHurt: this.time - this.hurtAt, deaths: this.deaths, stamina: this.rules.stamina ? this.player!.stamina : null, showFps: this.rules.showFps, weak: this.weakness() };
+    return { showHealth: this.rules.health && !this.rules.hideHealth, hasHealth: this.rules.health, health: this.health, maxHealth: this.maxHealth, armour: this.armour, weapon: this.weaponStatus(), score: this.score, showScore: this.usesScore, day: this.showDay ? this.day : null, clock: this.showClock ? this.dayHour : null, sinceHurt: this.time - this.hurtAt, deaths: this.deaths, stamina: this.rules.stamina ? this.player!.stamina : null, showFps: this.rules.showFps, weak: this.weakness() };
   }
 
   /**
@@ -5024,7 +5043,7 @@ export class GameWorld {
       lists,
       inventory: this.slotItems().map((item) => ({ item, count: this.inventory.get(item) ?? 0 })),
       slot: this.slot,
-      freesMouse: !!this.base?.menuOpen || this.ui.screens.some((sc) => sc.freesMouse && this.uiShown.has(sc.id)),
+      freesMouse: !!this.base?.menuOpen || !!this.mine?.menuOpen || this.ui.screens.some((sc) => sc.freesMouse && this.uiShown.has(sc.id)),
     };
   }
 
@@ -5157,6 +5176,117 @@ export class GameWorld {
     if (b?.info.motion === 'kinematic') b.body.setNextKinematicTranslation({ x: to[0], y: to[1], z: to[2] });
   }
 
+
+  // ── Mining (an endless block mine; see mining/) ──
+
+  /** Mining, when the game has it. */
+  mine: MineSystem | null = null;
+  private mineBody: RAPIER.RigidBody | null = null;
+  private mineColliders = new Map<string, { version: number; colliders: RAPIER.Collider[] }>();
+
+  private initMine(settings: unknown): void {
+    const self = this;
+    this.mine = new MineSystem(settings, {
+      time: () => this.time,
+      now: () => this.clock() * 1000,
+      player: () => {
+        const p = self.player;
+        if (!p) return null;
+        const f = p.feetPosition, d = p.lookDirection();
+        return { feet: [f.x, f.y, f.z], eye: p.eye(), dir: [d[0], d[1], d[2]] };
+      },
+      hurt: (n, cause) => this.hurt(n, cause),
+      heal: (n) => {
+        if (this.health > 0 && this.health < this.maxHealth) this.heal(n);
+      },
+      say: (text, secs) => this.say(text, secs),
+      sound: (file, at) => this.bus.emit({ type: 'sound', sound: file, at, follow: null, volume: 1, loop: false, range: 1024, source: '@mine', time: this.time }),
+      home: () => {
+        const p = this.player;
+        if (p) p.teleport(p.spawn.feet, p.spawn.yaw);
+      },
+      random: () => this.random(),
+    });
+    const p = this.player;
+    if (p) this.mine.origin = [p.spawn.feet.x, p.spawn.feet.y, p.spawn.feet.z];
+    this.mineBody = this.world.createRigidBody(RAPIER.RigidBodyDesc.fixed());
+    this.syncMineColliders(true);
+  }
+
+  private stepMine(): void {
+    const m = this.mine!, p = this.player!;
+    const free = !this.held && !this.equipped && !this.plugHand && !this.weaponInHand() && !this.hiding && !this.frozen;
+    m.tick(STEP, free && !!p.input.fire);
+    this.syncMineColliders(false);
+  }
+
+  /** The chunks around the player collide (as few boxes as their rock makes); far ones stop. */
+  private syncMineColliders(all: boolean): void {
+    const m = this.mine, p = this.player, body = this.mineBody;
+    if (!m || !p || !body) return;
+    if (all) {
+      for (const c of this.mineColliders.values()) for (const col of c.colliders) this.dropMineCollider(col);
+      this.mineColliders.clear();
+    }
+    const f = p.feetPosition;
+    const b = m.toBlock([f.x, f.y, f.z]);
+    const [cx, cy, cz] = m.blocks.chunkOf(Math.floor(b[0]), Math.floor(b[1]), Math.floor(b[2]));
+    const near = new Set<string>();
+    for (let y = -1; y <= 1; y++)
+      for (let z = -1; z <= 1; z++)
+        for (let x = -1; x <= 1; x++) {
+          const c = m.blocks.chunk(cx + x, cy + y, cz + z);
+          const k = `${c.cx},${c.cy},${c.cz}`;
+          near.add(k);
+          const had = this.mineColliders.get(k);
+          if (had && had.version === c.version) continue;
+          if (had) for (const col of had.colliders) this.dropMineCollider(col);
+          const B = m.B, colliders: RAPIER.Collider[] = [];
+          for (const [x0, y0, z0, x1, y1, z1] of m.blocks.boxes(c)) {
+            const lo = m.toWorld(x0!, y0!, z0!), hi = m.toWorld(x1!, y1!, z1!);
+            const desc = RAPIER.ColliderDesc.cuboid(((x1! - x0!) * B) / 2, ((y1! - y0!) * B) / 2, ((z1! - z0!) * B) / 2).setTranslation((lo[0] + hi[0]) / 2, (lo[1] + hi[1]) / 2, (lo[2] + hi[2]) / 2);
+            const col = this.world.createCollider(desc, body);
+            this.owner.set(col.handle, MINE_OWNER);
+            colliders.push(col);
+          }
+          this.mineColliders.set(k, { version: c.version, colliders });
+        }
+    for (const [k, c] of this.mineColliders) {
+      if (near.has(k)) continue;
+      for (const col of c.colliders) this.dropMineCollider(col);
+      this.mineColliders.delete(k);
+    }
+  }
+
+  private dropMineCollider(col: RAPIER.Collider): void {
+    this.owner.delete(col.handle);
+    this.world.removeCollider(col, false);
+  }
+
+  /** Tab opens the mine menu, H goes home. True: the mine took the key. */
+  private mineKey(code: string): boolean {
+    const m = this.mine!;
+    if (code === m.config.menuKey) m.action('menu');
+    else if (code === m.config.homeKey) m.action('home');
+    else if (code === 'Escape' && m.menuOpen) m.action('menu', 'close');
+    else return false;
+    return true;
+  }
+
+  /** The mine's corner display (null: no mine). */
+  mineHud(): MineHud | null {
+    return this.mine?.hud() ?? null;
+  }
+
+  /** The mine menu (null: shut). */
+  mineMenu(): MineMenu | null {
+    return this.mine?.menu() ?? null;
+  }
+
+  /** A mine menu button: `menu` (open/close), `home`, `pickaxe`, `skill` (id). */
+  mineAction(name: string, arg = ''): void {
+    this.mine?.action(name, arg);
+  }
 
   // ── Base building (blueprints filled with props; see building/) ──
 
@@ -5310,6 +5440,7 @@ export class GameWorld {
 
   /** Keys while placing: R turns, T tips, Q (or a right click) stops placing. True: the base took the key. */
   baseKey(code: string): boolean {
+    if (this.mine && this.mineKey(code)) return true;
     const b = this.base;
     if (!b) return false;
     if (code === b.config.menuKey) {

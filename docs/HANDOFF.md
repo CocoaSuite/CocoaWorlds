@@ -475,3 +475,14 @@ takes the nozzle as the head's lowest point, so a model's rest pose can be anyth
 Next, if wanted: the shop screen bundled with the computer UI (catalogue, prices, Buy → Print); a custom printer
 model sample; an e2e test of a print in Play.
 
+
+### 28. Mining (Azure Mines style)
+
+Status: first playable version. Game rule `mining`; see `docs/mining.md`. Endless cube-block mine (40 u blocks,
+16³ chunks made from a seed, edits saved), six rock zones by distance, ten ores (pixel tiles drawn for it in
+`renderer/assets/mine/`), 12 pickaxes then endless levels, a 25-node skill tree in four branches with endless last
+nodes, backpack sold on entering the base, Home (H), death loses part of the backpack, regenerates every 40 minutes.
+Monsters (zombie, skeleton with arrows, spider climbing) walk the blocks themselves (`mining/mobs.ts`, A* over the
+blocks), drawn with the model of the scene object named after them.
+
+Next, if wanted: the user's monster models and a pickaxe model; sounds; tuning prices after playing.

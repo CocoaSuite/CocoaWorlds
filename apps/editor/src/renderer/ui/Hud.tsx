@@ -1,5 +1,5 @@
 /** The in-game display (health, score, game values, messages, the use prompt), for Play and exported games. */
-import type { BuildPrompt, UiState } from '@cocoaworlds/runtime';
+import type { BuildPrompt, MineHud, MineMenu, UiState } from '@cocoaworlds/runtime';
 import { useEffect, useState } from 'react';
 import { t } from '../i18n';
 import type { PlaySession } from '../viewport/play-session';
@@ -42,6 +42,9 @@ export interface Hud {
   placing: boolean;
   /** The blueprint menu (null: shut). */
   blueprints: BlueprintMenuState | null;
+  /** Mining: the corner display and the menu (null: no mine, or shut). */
+  mine: MineHud | null;
+  mineMenu: MineMenu | null;
   /** Other keys that do something at what's looked at or held, with their prompt words. */
   keys: { key: string; prompt: string }[];
   /** The screen UI now, and every value texts and bars can show ({Cash}, health, score). */
@@ -112,6 +115,8 @@ export function hudOf(play: PlaySession, locked: boolean): Hud {
     build: locked ? play.buildPrompt() : null,
     placing: locked && play.placing,
     blueprints: play.blueprintMenu(),
+    mine: play.mineHud(),
+    mineMenu: play.mineMenu(),
     keys: locked ? play.keyPrompts() : [],
     ui: play.uiState(),
     allValues: { ...Object.fromEntries(screen.values.map((v) => [v.name, v.value])), health: Math.ceil(status?.health ?? 0), armour: Math.floor(status?.armour ?? 0), score: status?.score ?? 0, day: play.day },

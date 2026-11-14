@@ -409,6 +409,10 @@ function GameRulesSection() {
       </Field>
       <p className="cw-hint">{t('insp.buildingHint')}</p>
       {rules.building && <BuildingLooks />}
+      <Field label={t('insp.mining')}>
+        <Switch checked={rules.mining} label={t('insp.mining')} onChange={(on) => !playing && void set('mining', on)} />
+      </Field>
+      <p className="cw-hint">{t('insp.miningHint')}</p>
       <p className="cw-hint">{t('insp.progressHint')}</p>
       <Button
         size="sm"

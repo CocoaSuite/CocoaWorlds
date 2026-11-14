@@ -9,3 +9,4 @@ export * from './building';
 export * from './vfx';
 export * from './acoustics';
 export * from './power';
+export * from './mining';
