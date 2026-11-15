@@ -27,7 +27,7 @@ export interface Palette {
   ore(name: string): number;
 }
 
-class Vol {
+export class Vol {
   readonly data: Uint16Array;
   constructor(
     readonly sx: number,
@@ -74,7 +74,7 @@ class Vol {
   }
 }
 
-const rand = (seed: number) => {
+export const rand = (seed: number) => {
   let s = seed >>> 0 || 1;
   return () => ((s = Math.imul(s ^ (s >>> 15), 0x2c1b3c6d) + 0x6d2b79f5) >>> 0) / 4294967296;
 };

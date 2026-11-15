@@ -49,20 +49,20 @@ const key = (x: number, y: number, z: number) => `${x},${y},${z}`;
 export class MineBlocks {
   readonly size: number;
   readonly chunks = new Map<string, Chunk>();
-  private edits = new Map<string, Map<number, number>>();
+  protected edits = new Map<string, Map<number, number>>();
   /** Bumps whenever a block changes or a chunk loads. */
   version = 0;
-  private tables: { ores: number[]; cum: number[] }[] = [];
+  protected tables: { ores: number[]; cum: number[] }[] = [];
   /** The current twist's effect on what the seed makes. */
-  private boost: Record<string, number> = {};
-  private densityMul = 1;
-  private caveMul = 1;
+  protected boost: Record<string, number> = {};
+  protected densityMul = 1;
+  protected caveMul = 1;
   /** Per block id: walked through, seen through, can't be aimed at. */
-  private flags = new Uint8Array(65536);
-  private regions = new Map<number, Structure | null>();
-  private built: Structure[] = [];
-  private lastRegion = NaN;
-  private lastStructure: Structure | null = null;
+  protected flags = new Uint8Array(65536);
+  protected regions = new Map<number, Structure | null>();
+  protected built: Structure[] = [];
+  protected lastRegion = NaN;
+  protected lastStructure: Structure | null = null;
 
   constructor(
     readonly cfg: MineConfig,
@@ -82,7 +82,7 @@ export class MineBlocks {
     this.makeTables();
   }
 
-  private makeTables(): void {
+  protected makeTables(): void {
     const ids = this.cfg.ores.map((o) => o.id);
     this.tables = this.cfg.zones.map((z) => {
       const ores: number[] = [], cum: number[] = [];
@@ -147,7 +147,7 @@ export class MineBlocks {
     return blockId(zone, -1);
   }
 
-  private cKey(cx: number, cy: number, cz: number) {
+  protected cKey(cx: number, cy: number, cz: number) {
     return key(cx, cy, cz);
   }
 
@@ -165,16 +165,22 @@ export class MineBlocks {
     const k = this.cKey(cx, cy, cz);
     let c = this.chunks.get(k);
     if (c) return c;
-    const S = this.size, data = new Uint16Array(S * S * S);
-    const x0 = cx * S, y0 = cy * S, z0 = cz * S;
-    let i = 0;
-    for (let y = 0; y < S; y++) for (let z = 0; z < S; z++) for (let x = 0; x < S; x++) data[i++] = this.gen(x0 + x, y0 + y, z0 + z);
+    const data = this.fill(cx, cy, cz);
     const ed = this.edits.get(k);
     if (ed) for (const [idx, id] of ed) data[idx] = id;
     c = { cx, cy, cz, data, version: 1 };
     this.chunks.set(k, c);
     this.version++;
     return c;
+  }
+
+  /** A chunk's blocks as the seed makes them. */
+  protected fill(cx: number, cy: number, cz: number): Uint16Array {
+    const S = this.size, data = new Uint16Array(S * S * S);
+    const x0 = cx * S, y0 = cy * S, z0 = cz * S;
+    let i = 0;
+    for (let y = 0; y < S; y++) for (let z = 0; z < S; z++) for (let x = 0; x < S; x++) data[i++] = this.gen(x0 + x, y0 + y, z0 + z);
+    return data;
   }
 
   unload(c: Chunk): void {
@@ -227,7 +233,7 @@ export class MineBlocks {
   }
 
   /** Where a region's structure stands (from the seed), or null. Kinds come by depth; the deepest allowed most often. */
-  private place(rx: number, ry: number, rz: number): Structure | null {
+  protected place(rx: number, ry: number, rz: number): Structure | null {
     const c = this.cfg, st = c.structures, s = this.seed + 101;
     if (hash3(rx, ry, rz, s) >= st.chance) return null;
     const [RW, RH] = st.region, ox = rx * RW - RW / 2, oy = ry * RH, oz = rz * RW - RW / 2;
@@ -258,7 +264,7 @@ export class MineBlocks {
     return { key: `${rx},${ry},${rz}`, def, at: [ax, ay, az], size: [...size], boss: [ax + b[0], ay + b[1], az + b[2]], data: null };
   }
 
-  private cell(st: Structure, x: number, y: number, z: number): number {
+  protected cell(st: Structure, x: number, y: number, z: number): number {
     if (!st.data) {
       const zone = this.zoneAt(this.depth(st.at[0] + st.size[0] / 2, st.at[1] + st.size[1] / 2, st.at[2] + st.size[2] / 2));
       const mats = this.cfg.materials, ores = this.cfg.ores;

@@ -490,4 +490,9 @@ from the seed into a block volume per region, with built blocks (`materials`, id
 nearby light blocks in the rock shader. Bosses (`mining/bosses.ts`) guard them: telegraphed attacks, block (right
 mouse, `PlayerInput.block`) and timed parry, stagger, phase 2, shots that reflect; strongboxes open once beaten.
 
+The twilit forest (`world: "forest"`): `ForestBlocks` (rings of regions, trees, lairs and ruins made a chunk at a
+time) and `ForestSystem` (inventory and building, swords/armor/charms, curses, trophies) extend the mine's classes;
+pixel-block bosses and monsters in `renderer/viewport/forest-models.ts`; the view adds sky light per face, haze and
+a dusk sky.
+
 Next, if wanted: the user's monster models and a pickaxe model; sounds; tuning prices after playing.

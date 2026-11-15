@@ -4,7 +4,7 @@
  */
 import { AIR, blockId, EDGE, isMat, MAT, MineBlocks, oreOf, zoneOf, type Chunk, type RayHit } from './blocks';
 import { Boss, type BossWorld, type Shot } from './bosses';
-import { mineConfig, type BossAttack, type MaterialDef, type MineConfig, type MobDef, type Stat, type TwistDef } from './defs';
+import { mineConfig, type BossAttack, type BossDef, type MaterialDef, type MineConfig, type MobDef, type Stat, type TwistDef } from './defs';
 import { Mob, stepArrow, type Arrow, type MobWorld } from './mobs';
 
 export interface MineHost {
@@ -99,20 +99,20 @@ export class MineSystem {
   arrows: Arrow[] = [];
   /** Aimed block and how much damage it has taken. */
   aim: RayHit | null = null;
-  private dug: { x: number; y: number; z: number; damage: number } | null = null;
-  private nextSwing = 0;
+  protected dug: { x: number; y: number; z: number; damage: number } | null = null;
+  protected nextSwing = 0;
   /** When the pickaxe last swung (game time), for drawing. */
   swungAt = -1;
-  private spawnAt = 0;
+  protected spawnAt = 0;
   /** This mine's twist (rolled each time it regenerates). */
   twist!: TwistDef;
   dynamite = 0;
   bombs: Bomb[] = [];
   /** Monsters still living in each cave sector (only sectors seen so far). */
   readonly sectors = new Map<string, number>();
-  private fx: MineFx[] = [];
-  private statCache: Map<Stat, number> | null = null;
-  private saidAt = new Map<string, number>();
+  protected fx: MineFx[] = [];
+  protected statCache: Map<Stat, number> | null = null;
+  protected saidAt = new Map<string, number>();
   inBase = false;
   /** Nothing else in the player's hands (set by the world): the pickaxe is out. */
   handFree = true;
@@ -125,27 +125,31 @@ export class MineSystem {
   readonly beaten = new Set<string>();
   /** Holding block; a fresh press parries for a moment. */
   blocking = false;
-  private parryUntil = -1;
-  private pressAt = -99;
-  private guardAt = -99;
-  private guardKind: MineHud['guard'] = '';
-  private hurtAt = 0;
-  private slow = 1;
-  private bossAt = 0;
+  protected parryUntil = -1;
+  protected pressAt = -99;
+  protected guardAt = -99;
+  protected guardKind: MineHud['guard'] = '';
+  protected hurtAt = 0;
+  protected slow = 1;
+  protected bossAt = 0;
 
   constructor(
     over: unknown,
-    private host: MineHost,
+    protected host: MineHost,
   ) {
     this.config = mineConfig(over);
     this.B = this.config.block;
-    this.blocks = new MineBlocks(this.config, this.newSeed());
+    this.blocks = this.makeBlocks(this.newSeed());
     this.useTwist(this.rollTwist());
     this.blocks.reset(this.blocks.seed);
     this.nextRegen = host.now() + this.config.regenMinutes * 60000;
   }
 
-  private rollTwist(): TwistDef {
+  protected makeBlocks(seed: number): MineBlocks {
+    return new MineBlocks(this.config, seed);
+  }
+
+  protected rollTwist(): TwistDef {
     const list = this.config.twists.filter((t) => t.weight > 0 && t.id !== this.twist?.id);
     const total = list.reduce((s, t) => s + t.weight, 0);
     let r = this.host.random() * total;
@@ -153,12 +157,12 @@ export class MineSystem {
     return list[list.length - 1] ?? { id: 'normal', label: '', text: '', weight: 1 };
   }
 
-  private useTwist(t: TwistDef): void {
+  protected useTwist(t: TwistDef): void {
     this.twist = t;
     this.blocks.setTwist(t);
   }
 
-  private newSeed(): number {
+  protected newSeed(): number {
     return this.config.seed || Math.floor(this.host.random() * 2 ** 31) || 1;
   }
 
@@ -218,23 +222,24 @@ export class MineSystem {
   }
 
   /** The zone a block belongs to (built blocks: the rock round them). */
-  private zone(id: number, x: number, y: number, z: number): number {
+  protected zone(id: number, x: number, y: number, z: number): number {
     return isMat(id) ? this.blocks.zoneAt(this.distance(x, y, z)) : Math.min(this.config.zones.length - 1, zoneOf(id));
   }
 
   /** Pickaxe tier a block needs (soft built blocks: none). */
-  private needs(id: number, x: number, y: number, z: number): number {
+  protected needs(id: number, x: number, y: number, z: number): number {
     const m = this.material(id);
+    if (m?.tier !== undefined) return m.tier;
     return m && m.hardness <= 0.5 ? 0 : this.config.zones[this.zone(id, x, y, z)]!.tier;
   }
 
-  private hardness(id: number, x: number, y: number, z: number): number {
+  protected hardness(id: number, x: number, y: number, z: number): number {
     const z0 = this.config.zones[this.zone(id, x, y, z)]!, m = this.material(id), o = m ? -1 : oreOf(id);
     const k = m ? m.hardness : o >= 0 ? this.config.ores[o]!.hardness : 1;
     return z0.hardness * k * Math.pow(this.config.hardGrowth, this.distance(x, y, z)) * (this.twist.hardness ?? 1);
   }
 
-  private label(id: number): string {
+  protected label(id: number): string {
     if (id === EDGE) return 'Mine edge';
     const m = this.material(id);
     if (m) return m.label;
@@ -243,13 +248,13 @@ export class MineSystem {
   }
 
   /** What the next pickaxe costs where this block lies (rewards are shares of it). */
-  private worth(x: number, y: number, z: number): number {
+  protected worth(x: number, y: number, z: number): number {
     const t = this.config.zones[this.blocks.zoneAt(this.distance(x, y, z))]!.tier, ps = this.config.pickaxes;
     return t + 1 < ps.length ? ps[t + 1]!.price : this.config.pickaxeLevels.price;
   }
 
   /** Can't be dug yet: a strongbox whose guardian lives. */
-  private sealed(id: number, x: number, y: number, z: number): boolean {
+  protected sealed(id: number, x: number, y: number, z: number): boolean {
     if (!this.material(id)?.locked) return false;
     const st = this.blocks.structureAt(x, y, z);
     return !!st && !this.beaten.has(st.key);
@@ -264,7 +269,7 @@ export class MineSystem {
 
   tick(dt: number, fire: boolean, block = false): void {
     const time = this.host.time();
-    if (this.host.now() >= this.nextRegen) this.regenerate(true);
+    if (this.config.regenMinutes > 0 && this.host.now() >= this.nextRegen) this.regenerate(true);
     const pl = this.host.player();
     if (!pl) return;
     const [px, py, pz] = this.toBlock(pl.feet);
@@ -284,9 +289,9 @@ export class MineSystem {
       if (m?.slow) this.slow = Math.min(this.slow, m.slow);
       if (m?.hurt && m.hurt > burn) [burn, cause] = [m.hurt, m.label.toLowerCase()];
     }
-    if (burn && time >= this.hurtAt) {
+    if (burn && time >= this.hurtAt && this.burns()) {
       this.hurtAt = time + 0.5;
-      this.host.hurt(burn * 0.5, cause);
+      this.hurt(burn * 0.5, cause);
     }
 
     const eye = this.toBlock(pl.eye), d = pl.dir;
@@ -294,7 +299,7 @@ export class MineSystem {
     this.aim = this.menuOpen ? null : this.blocks.raycast(eye[0], eye[1], eye[2], d[0], d[1], d[2], reach, true);
     if (this.aim && this.blocks.inBase(this.aim.x, this.aim.y, this.aim.z)) this.aim = null;
     if (fire && !this.menuOpen && !this.blocking && time >= this.nextSwing) {
-      const speed = this.config.pickaxes[this.tier]!.speed * (1 + this.stat('swingSpeed'));
+      const speed = this.swingSpeed();
       this.nextSwing = time + 1 / speed;
       this.swungAt = time;
       this.swing(eye, d, time);
@@ -339,7 +344,7 @@ export class MineSystem {
     return true;
   }
 
-  private stepBomb(b: Bomb, dt: number, time: number): boolean {
+  protected stepBomb(b: Bomb, dt: number, time: number): boolean {
     if (time >= b.at) {
       this.explode(b.pos);
       return false;
@@ -395,9 +400,9 @@ export class MineSystem {
     this.play('boom', { x: cx - 0.5, y: cy - 0.5, z: cz - 0.5 });
   }
 
-  private loaded = 0;
+  protected loaded = 0;
   /** Chunks near the player are made a few at a time; far ones let go. */
-  private loadAround(px: number, py: number, pz: number): void {
+  protected loadAround(px: number, py: number, pz: number): void {
     const v = this.config.view;
     const [cx, cy, cz] = this.blocks.chunkOf(Math.floor(px), Math.floor(py), Math.floor(pz));
     let budget = 1;
@@ -416,7 +421,7 @@ export class MineSystem {
 
   // ── Swinging ──
 
-  private swing(eye: [number, number, number], dir: [number, number, number], time: number): void {
+  protected swing(eye: [number, number, number], dir: [number, number, number], time: number): void {
     const reach = this.config.reach;
     const blockT = this.aim?.t ?? Infinity;
     let best: Mob | null = null, bestT = Math.min(reach, blockT);
@@ -440,6 +445,7 @@ export class MineSystem {
     if (boss) return this.hitBoss(boss, dir, time);
     if (best) return this.hitMob(best, dir, time);
     const a = this.aim;
+    if (!this.canDig()) return;
     if (!a) return;
     const id = this.blocks.get(a.x, a.y, a.z);
     if (id === EDGE) return this.once('edge', 'That is the edge of the mine.');
@@ -464,7 +470,7 @@ export class MineSystem {
     }
   }
 
-  private breakBlock(x: number, y: number, z: number, id: number, quiet = false): void {
+  protected breakBlock(x: number, y: number, z: number, id: number, quiet = false): void {
     this.blocks.set(x, y, z, AIR);
     this.fx.push({ kind: 'break', x, y, z, block: id });
     const mat = this.material(id);
@@ -496,10 +502,10 @@ export class MineSystem {
     this.bag.set(ore, b);
   }
 
-  private hitMob(m: Mob, dir: [number, number, number], time: number): void {
+  protected hitMob(m: Mob, dir: [number, number, number], time: number): void {
     const push = 3 * (1 + this.stat('knockback'));
     const l = Math.hypot(dir[0], dir[2]) || 1;
-    m.hit(this.power() * (1 + this.stat('mobDamage')), [(dir[0] / l) * push, (dir[2] / l) * push], time);
+    m.hit(this.attack(), [(dir[0] / l) * push, (dir[2] / l) * push], time);
     this.fx.push({ kind: 'mob', id: m.id });
     const at = { x: m.pos[0] - 0.5, y: m.pos[1], z: m.pos[2] - 0.5 };
     if (!m.dead) return this.play('mobHit', at);
@@ -507,7 +513,7 @@ export class MineSystem {
     this.paid(m);
   }
 
-  private paid(m: Mob): void {
+  protected paid(m: Mob): void {
     // (One fewer in its cave; a cave emptied stays empty.)
     const left = this.sectors.get(m.sector);
     if (left !== undefined && left > 0) {
@@ -523,16 +529,16 @@ export class MineSystem {
 
   // ── Blocking and parrying ──
 
-  private setBlock(held: boolean, time: number): void {
+  protected setBlock(held: boolean, time: number): void {
     if (held && !this.blocking && time - this.pressAt >= this.config.guard.cooldown) {
-      this.parryUntil = time + this.config.guard.window;
+      this.parryUntil = time + this.config.guard.window * this.parryScale();
       this.pressAt = time;
     }
     this.blocking = held;
   }
 
   /** Damage coming at the player: parried (none), blocked (less) or taken. Blocking works facing it (`from`, block space). */
-  private guard(amount: number, cause: string, from: [number, number, number] | null, parryable: boolean): 'parry' | 'block' | 'hit' {
+  protected guard(amount: number, cause: string, from: [number, number, number] | null, parryable: boolean): 'parry' | 'block' | 'hit' {
     const time = this.host.time(), pl = this.host.player();
     let front = true;
     if (from && pl) {
@@ -548,16 +554,16 @@ export class MineSystem {
       }
       this.guardKind = 'block';
       this.play('block', null);
-      this.host.hurt(amount * this.config.guard.block * (parryable ? 1 : 1.7), cause);
+      this.hurt(amount * this.config.guard.block * (parryable ? 1 : 1.7), cause);
       return 'block';
     }
-    this.host.hurt(amount, cause);
+    this.hurt(amount, cause);
     return 'hit';
   }
 
   // ── Bosses ──
 
-  private bossWorld(): BossWorld {
+  protected bossWorld(): BossWorld {
     const w = this.mobWorld() as BossWorld, self = this;
     w.strike = (b: Boss, kind: BossAttack, damage: number, reach: number) => {
       const pl = self.host.player();
@@ -592,15 +598,14 @@ export class MineSystem {
   }
 
   /** Bosses wake in their structures; a boss the player walks away from goes (it'll be back, whole). */
-  private stepBosses(dt: number, time: number, px: number, py: number, pz: number): void {
+  protected stepBosses(dt: number, time: number, px: number, py: number, pz: number): void {
     if (time >= this.bossAt) {
       this.bossAt = time + 0.5;
       const st = this.blocks.structureAt(Math.floor(px), Math.floor(py), Math.floor(pz));
       const def = st && this.config.bosses.find((b) => b.id === st.def.boss);
       if (st && def && !this.beaten.has(st.key) && !this.bosses.some((b) => b.key === st.key)) {
-        const d = this.distance(...st.boss), tier = this.config.zones[this.blocks.zoneAt(d)]!.tier;
-        const power = this.config.pickaxes[Math.min(tier, this.config.pickaxes.length - 1)]!.power;
-        this.bosses.push(new Boss(def, st.key, st.boss, def.health * power, def.damage * Math.pow(this.config.mobHitGrowth, d), Math.round(def.reward * this.worth(...st.boss))));
+        const [hp, dmg, pay] = this.bossStats(def, st.boss);
+        this.bosses.push(new Boss(def, st.key, st.boss, hp, dmg, pay));
       }
       this.bosses = this.bosses.filter((b) => !(b.dead && time - b.diedAt > 3) && (b.dead || Math.hypot(b.home[0] - px, b.home[1] - py, b.home[2] - pz) < 72));
     }
@@ -631,9 +636,40 @@ export class MineSystem {
     });
   }
 
-  private hitBoss(b: Boss, dir: [number, number, number], time: number): void {
+  /** A boss's health, damage and pay where it lives. */
+  protected bossStats(def: BossDef, at: [number, number, number]): [number, number, number] {
+    const d = this.distance(...at), tier = this.config.zones[this.blocks.zoneAt(d)]!.tier;
+    const power = this.config.pickaxes[Math.min(tier, this.config.pickaxes.length - 1)]!.power;
+    return [def.health * power, def.damage * Math.pow(this.config.mobHitGrowth, d), Math.round(def.reward * this.worth(...at))];
+  }
+
+  // (Hooks a world can change.)
+  protected hurt(n: number, cause: string): void {
+    this.host.hurt(n, cause);
+  }
+  protected burns(): boolean {
+    return true;
+  }
+  protected swingSpeed(): number {
+    return this.config.pickaxes[this.tier]!.speed * (1 + this.stat('swingSpeed'));
+  }
+  protected canDig(): boolean {
+    return true;
+  }
+  protected attack(): number {
+    return this.power() * (1 + this.stat('mobDamage'));
+  }
+  protected parryScale(): number {
+    return 1;
+  }
+  /** Jumps the player may take in the air. */
+  airJumps(): number {
+    return 0;
+  }
+
+  protected hitBoss(b: Boss, dir: [number, number, number], time: number): void {
     const l = Math.hypot(dir[0], dir[2]) || 1;
-    b.hit(this.power() * (1 + this.stat('mobDamage')), [(dir[0] / l) * 3, (dir[2] / l) * 3], time, this.bossWorld());
+    b.hit(this.attack(), [(dir[0] / l) * 3, (dir[2] / l) * 3], time, this.bossWorld());
     this.fx.push({ kind: 'mob', id: b.id });
     const at = { x: b.pos[0] - 0.5, y: b.pos[1], z: b.pos[2] - 0.5 };
     if (!b.dead) return this.play('mobHit', at);
@@ -641,7 +677,7 @@ export class MineSystem {
     this.bossDown(b);
   }
 
-  private bossDown(b: Boss): void {
+  protected bossDown(b: Boss): void {
     this.beaten.add(b.key);
     this.shots = this.shots.filter((s) => s.boss !== b);
     for (const m of this.mobs) if (m.sector === b.key && !m.dead) m.hit(m.hp, [0, 0], this.host.time());
@@ -651,10 +687,10 @@ export class MineSystem {
 
   // ── Monsters ──
 
-  private mobWorld(): MobWorld {
+  protected mobWorld(): MobWorld {
     const self = this;
     return {
-      solid: (x, y, z) => this.blocks.solid(x, y, z) || this.blocks.inBase(x, y, z),
+      solid: (x, y, z) => this.blocks.solid(x, y, z) || this.blocks.inBase(x, y, z) || this.offLimits(x, z),
       player: () => {
         const p = self.host.player();
         if (!p) return null;
@@ -676,7 +712,12 @@ export class MineSystem {
     };
   }
 
-  private spawn(px: number, py: number, pz: number): void {
+  /** Where monsters can't go (besides the base). */
+  protected offLimits(_x: number, _z: number): boolean {
+    return false;
+  }
+
+  protected spawn(px: number, py: number, pz: number): void {
     const rnd = () => this.host.random();
     const [bx, , bz] = this.config.base, c0 = this.config;
     const eye = this.toBlock(this.host.player()?.eye ?? [0, 0, 0]);
@@ -708,13 +749,13 @@ export class MineSystem {
     }
   }
 
-  private sectorOf(x: number, y: number, z: number): string {
+  protected sectorOf(x: number, y: number, z: number): string {
     const s = this.config.caveMobs.size;
     return `${Math.floor(x / s)},${Math.floor(y / s)},${Math.floor(z / s)}`;
   }
 
   /** How many monsters a cave sector holds: from its natural open space the first time, then what's left. */
-  private population(sector: string): number {
+  protected population(sector: string): number {
     const had = this.sectors.get(sector);
     if (had !== undefined) return had;
     const { size, per, max } = this.config.caveMobs, [sx, sy, sz] = sector.split(',').map(Number) as [number, number, number];
@@ -894,12 +935,12 @@ export class MineSystem {
     return id === AIR || id === EDGE ? 0 : Math.min(1, d.damage / this.hardness(id, a.x, a.y, a.z));
   }
 
-  private play(kind: keyof MineConfig['sounds'], at: { x: number; y: number; z: number } | null): void {
+  protected play(kind: keyof MineConfig['sounds'], at: { x: number; y: number; z: number } | null): void {
     const f = this.config.sounds[kind];
     if (f) this.host.sound(f, at ? this.toWorld(at.x + 0.5, at.y + 0.5, at.z + 0.5) : null);
   }
 
-  private once(key: string, text: string): void {
+  protected once(key: string, text: string): void {
     const t = this.host.time();
     if ((this.saidAt.get(key) ?? -99) > t - 3) return;
     this.saidAt.set(key, t);

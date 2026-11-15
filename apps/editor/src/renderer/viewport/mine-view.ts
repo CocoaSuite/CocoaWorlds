@@ -4,7 +4,7 @@
  */
 import * as THREE from 'three';
 import { readComponent, type ModelData } from '@cocoaworlds/core';
-import { AIR, EDGE, isMat, MAT, oreOf, zoneOf, type Chunk, type MineSystem, type Mob } from '@cocoaworlds/runtime';
+import { AIR, EDGE, isMat, MAT, oreOf, zoneOf, type Chunk, type ForestBlocks, type MineSystem, type Mob } from '@cocoaworlds/runtime';
 import { assetUrl } from '../assets';
 import { modelInstance, type ModelInstance } from './models';
 
@@ -61,14 +61,54 @@ import stonebricksPng from '../assets/mine/stone_bricks.png';
 import templebricksPng from '../assets/mine/temple_bricks.png';
 import vaultPng from '../assets/mine/vault.png';
 import webPng from '../assets/mine/web.png';
-import { BossModel } from './boss-models';
+import ashPng from '../assets/mine/ash.png';
+import canopyleavesPng from '../assets/mine/canopy_leaves.png';
+import charlogPng from '../assets/mine/char_log.png';
+import deepstonePng from '../assets/mine/deepstone.png';
+import dirtPng from '../assets/mine/dirt.png';
+import drownedbricksPng from '../assets/mine/drowned_bricks.png';
+import duskgrassPng from '../assets/mine/dusk_grass.png';
+import duskgrasstopPng from '../assets/mine/dusk_grass_top.png';
+import duskleavesPng from '../assets/mine/dusk_leaves.png';
+import dusklogPng from '../assets/mine/dusk_log.png';
+import fireflybushPng from '../assets/mine/firefly_bush.png';
+import forgebricksPng from '../assets/mine/forge_bricks.png';
+import giantbarkPng from '../assets/mine/giant_bark.png';
+import glowcapPng from '../assets/mine/glow_cap.png';
+import icePng from '../assets/mine/ice.png';
+import moonbricksPng from '../assets/mine/moon_bricks.png';
+import moonStonePng from '../assets/mine/moon_stone.png';
+import mossPng from '../assets/mine/moss.png';
+import mosstopPng from '../assets/mine/moss_top.png';
+import mudPng from '../assets/mine/mud.png';
+import mushroomstemPng from '../assets/mine/mushroom_stem.png';
+import mycelPng from '../assets/mine/mycel.png';
+import myceltopPng from '../assets/mine/mycel_top.png';
+import peatPng from '../assets/mine/peat.png';
+import pedestalPng from '../assets/mine/pedestal.png';
+import pedestallitPng from '../assets/mine/pedestal_lit.png';
+import pinelogPng from '../assets/mine/pine_log.png';
+import pineneedlesPng from '../assets/mine/pine_needles.png';
+import redcapPng from '../assets/mine/red_cap.png';
+import rimebricksPng from '../assets/mine/rime_bricks.png';
+import rootbricksPng from '../assets/mine/root_bricks.png';
+import snowPng from '../assets/mine/snow.png';
+import snowtopPng from '../assets/mine/snow_top.png';
+import sporebricksPng from '../assets/mine/spore_bricks.png';
+import starblockPng from '../assets/mine/star_block.png';
+import waterPng from '../assets/mine/water.png';
+import willowleavesPng from '../assets/mine/willow_leaves.png';
+import willowlogPng from '../assets/mine/willow_log.png';
+import { BossModel, MobModel } from './boss-models';
 
-const builtIn: Record<string, string> = { amethyst: amethystPng, azure_rock: azurerockPng, azurite: azuritePng, basalt: basaltPng, coal: coalPng, copper: copperPng, crimson_rock: crimsonrockPng, deepslate: deepslatePng, diamond: diamondPng, ember_rock: emberrockPng, emerald: emeraldPng, fossil: fossilPng, frost_rock: frostrockPng, gold: goldPng, granite: granitePng, iron: ironPng, jade: jadePng, malachite: malachitePng, marble: marblePng, mithril: mithrilPng, moonstone: moonstonePng, obsidian: obsidianPng, opal: opalPng, platinum: platinumPng, prismite: prismitePng, quartz: quartzPng, ruby: rubyPng, sapphire: sapphirePng, shale: shalePng, silver: silverPng, starmetal: starmetalPng, stone: stonePng, sulfur: sulfurPng, sunstone: sunstonePng, topaz: topazPng, void_rock: voidrockPng, voidstone: voidstonePng, beam: beamPng, calcite: calcitePng, carved_stone: carvedstonePng, carved_temple: carvedtemplePng, chest: chestPng, cracked_bricks: crackedbricksPng, crystal_block: crystalblockPng, gold_block: goldblockPng, lantern: lanternPng, lava: lavaPng, planks: planksPng, rail: railPng, stone_bricks: stonebricksPng, temple_bricks: templebricksPng, vault: vaultPng, web: webPng };
+const builtIn: Record<string, string> = { amethyst: amethystPng, azure_rock: azurerockPng, azurite: azuritePng, basalt: basaltPng, coal: coalPng, copper: copperPng, crimson_rock: crimsonrockPng, deepslate: deepslatePng, diamond: diamondPng, ember_rock: emberrockPng, emerald: emeraldPng, fossil: fossilPng, frost_rock: frostrockPng, gold: goldPng, granite: granitePng, iron: ironPng, jade: jadePng, malachite: malachitePng, marble: marblePng, mithril: mithrilPng, moonstone: moonstonePng, obsidian: obsidianPng, opal: opalPng, platinum: platinumPng, prismite: prismitePng, quartz: quartzPng, ruby: rubyPng, sapphire: sapphirePng, shale: shalePng, silver: silverPng, starmetal: starmetalPng, stone: stonePng, sulfur: sulfurPng, sunstone: sunstonePng, topaz: topazPng, void_rock: voidrockPng, voidstone: voidstonePng, beam: beamPng, calcite: calcitePng, carved_stone: carvedstonePng, carved_temple: carvedtemplePng, chest: chestPng, cracked_bricks: crackedbricksPng, crystal_block: crystalblockPng, gold_block: goldblockPng, lantern: lanternPng, lava: lavaPng, planks: planksPng, rail: railPng, stone_bricks: stonebricksPng, temple_bricks: templebricksPng, vault: vaultPng, web: webPng, ash: ashPng, canopy_leaves: canopyleavesPng, char_log: charlogPng, deepstone: deepstonePng, dirt: dirtPng, drowned_bricks: drownedbricksPng, dusk_grass: duskgrassPng, dusk_grass_top: duskgrasstopPng, dusk_leaves: duskleavesPng, dusk_log: dusklogPng, firefly_bush: fireflybushPng, forge_bricks: forgebricksPng, giant_bark: giantbarkPng, glow_cap: glowcapPng, ice: icePng, moon_bricks: moonbricksPng, moon_stone: moonStonePng, moss: mossPng, moss_top: mosstopPng, mud: mudPng, mushroom_stem: mushroomstemPng, mycel: mycelPng, mycel_top: myceltopPng, peat: peatPng, pedestal: pedestalPng, pedestal_lit: pedestallitPng, pine_log: pinelogPng, pine_needles: pineneedlesPng, red_cap: redcapPng, rime_bricks: rimebricksPng, root_bricks: rootbricksPng, snow: snowPng, snow_top: snowtopPng, spore_bricks: sporebricksPng, star_block: starblockPng, water: waterPng, willow_leaves: willowleavesPng, willow_log: willowlogPng };
 const builtInUrl = (id: string) => builtIn[id] ?? '';
 const T = 16;
 
 /** Ore icons (picture URLs by ore id) for the backpack, made once the tiles load. */
 export const oreIcons = new Map<string, string>();
+/** Block icons (by material id), top face where there is one. */
+export const blockIcons = new Map<string, string>();
 
 async function pixels(url: string): Promise<Uint8ClampedArray | null> {
   if (!url) return null;
@@ -89,11 +129,14 @@ async function pixels(url: string): Promise<Uint8ClampedArray | null> {
 
 const VERT = /* glsl */ `
 attribute vec3 color;
+attribute float sk;
+varying float vS;
 varying vec3 vC;
 varying vec2 vUv;
 varying vec3 vW;
 void main() {
   vC = color;
+  vS = sk;
   vUv = uv;
   vec4 w = modelMatrix * vec4(position, 1.0);
   vW = w.xyz;
@@ -112,9 +155,14 @@ uniform float ambient;
 uniform float skyY;
 uniform float skyFade;
 uniform float sky;
+uniform float skyMode;
+uniform vec3 skyCol;
+uniform vec3 fogCol;
+uniform vec2 fog;
 uniform vec3 lp[NL];
 uniform vec4 lc[NL];
 varying vec3 vC;
+varying float vS;
 varying vec2 vUv;
 varying vec3 vW;
 void main() {
@@ -127,10 +175,11 @@ void main() {
   }
   float l = clamp(1.0 - distance(vW, lamp) / radius, 0.0, 1.0);
   l = l * l * (3.0 - 2.0 * l);
-  // (Daylight near the surface, fading out a few blocks down.)
-  l = max(l, sky * smoothstep(skyY - skyFade, skyY, vW.y));
+  // (Daylight near the surface, fading out a few blocks down; in the open world, where the sky reaches.)
+  float s = sky * (skyMode > 0.5 ? vS : smoothstep(skyY - skyFade, skyY, vW.y));
   float glow = 1.0 - t.a;
-  gl_FragColor = vec4(t.rgb * vC * (ambient + l * (1.0 - ambient) + lit) + t.rgb * glow * 0.85, 1.0);
+  vec3 c = t.rgb * vC * (ambient + max(vec3(l), skyCol * s) * (1.0 - ambient) + lit) + t.rgb * glow * 0.85;
+  gl_FragColor = vec4(mix(c, fogCol, smoothstep(fog.x, fog.y, distance(vW, cameraPosition))), 1.0);
   #include <tonemapping_fragment>
   #include <colorspace_fragment>
 }`;
@@ -147,6 +196,9 @@ export class MineView {
   private rows: number;
   /** Rows of rock (the rest of the atlas holds built blocks). */
   private zrows: number;
+  private forest: boolean;
+  /** Material index → its top face's tile (after the materials), or -1. */
+  private tops: number[];
   private mat: THREE.ShaderMaterial;
   private meshes = new Map<string, { mesh: THREE.Mesh; version: number; chunk: Chunk; lights: number[] }>();
   /** Average colours of each tile (zone × ore), for chips. */
@@ -167,7 +219,7 @@ export class MineView {
   private handAt = 0;
   private guardK = 0;
   private senseAt = -1;
-  private mobs = new Map<string, { holder: THREE.Group; inst: ModelInstance | null; anim: string }>();
+  private mobs = new Map<string, { holder: THREE.Group; inst: ModelInstance | null; anim: string; pix?: MobModel }>();
   private seen = 0;
   private m4 = new THREE.Matrix4();
   private q = new THREE.Quaternion();
@@ -180,9 +232,13 @@ export class MineView {
   ) {
     const c = mine.config;
     this.group.name = 'mine';
-    this.tiles = c.ores.length + 1;
+    this.forest = c.world === 'forest';
+    this.tiles = Math.max(16, c.ores.length + 1);
     this.zrows = c.zones.length;
-    this.rows = this.zrows + Math.ceil(c.materials.length / this.tiles);
+    // (Built blocks, then the top faces of those that have one: grass, snow.)
+    let k = c.materials.length;
+    this.tops = c.materials.map((m) => (m.top || builtIn[`${m.id}_top`] ? k++ : -1));
+    this.rows = this.zrows + Math.ceil(k / this.tiles);
     const data = new Uint8Array(this.tiles * T * this.rows * T * 4).fill(255);
     this.atlas = new THREE.DataTexture(data, this.tiles * T, this.rows * T, THREE.RGBAFormat);
     this.atlas.magFilter = this.atlas.minFilter = THREE.NearestFilter;
@@ -192,7 +248,7 @@ export class MineView {
     for (let i = 0; i < this.tiles * this.rows; i++) this.colors.push(new THREE.Color(0x777777));
     void this.loadAtlas();
     this.mat = new THREE.ShaderMaterial({
-      uniforms: { map: { value: this.atlas }, lamp: { value: new THREE.Vector3() }, radius: { value: 400 }, ambient: { value: c.ambient }, skyY: { value: mine.origin[1] }, skyFade: { value: 5 * mine.B }, sky: { value: c.surface ? 0.9 : 0 }, lp: { value: Array.from({ length: NL }, () => new THREE.Vector3()) }, lc: { value: Array.from({ length: NL }, () => new THREE.Vector4(0, 0, 0, 1)) } },
+      uniforms: { map: { value: this.atlas }, lamp: { value: new THREE.Vector3() }, radius: { value: 400 }, ambient: { value: c.ambient }, skyY: { value: mine.origin[1] }, skyFade: { value: 5 * mine.B }, sky: { value: c.surface || this.forest ? 0.9 : 0 }, skyMode: { value: this.forest ? 1 : 0 }, skyCol: { value: this.forest ? new THREE.Color(0.62, 0.58, 0.9) : new THREE.Color(1, 1, 1) }, fogCol: { value: new THREE.Color(0, 0, 0) }, fog: { value: new THREE.Vector2(1e9, 2e9) }, lp: { value: Array.from({ length: NL }, () => new THREE.Vector3()) }, lc: { value: Array.from({ length: NL }, () => new THREE.Vector4(0, 0, 0, 1)) } },
       vertexShader: VERT,
       fragmentShader: FRAG,
     });
@@ -215,6 +271,23 @@ export class MineView {
     // (Past the loaded chunks there is only dark: no sky through the rock.)
     this.dark = new THREE.Mesh(new THREE.SphereGeometry((mine.config.view + 2) * mine.config.chunk * B * 1.8, 16, 12), new THREE.MeshBasicMaterial({ color: 0x050506, side: THREE.BackSide, depthWrite: false, fog: false }));
     this.dark.frustumCulled = false;
+    if (this.forest)
+      this.dark.material = new THREE.ShaderMaterial({
+        uniforms: { horizon: { value: new THREE.Color(0x333355) } },
+        side: THREE.BackSide,
+        depthWrite: false,
+        vertexShader: `varying vec3 vD; void main() { vD = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+        fragmentShader: `uniform vec3 horizon; varying vec3 vD;
+          float h(vec3 p) { return fract(sin(dot(p, vec3(12.9898, 78.233, 45.164))) * 43758.5453); }
+          void main() {
+            float up = clamp(vD.y, 0.0, 1.0);
+            vec3 c = mix(horizon, vec3(0.05, 0.04, 0.12), pow(up, 0.6));
+            vec3 q = floor(vD * 180.0);
+            float st = step(0.9975, h(q)) * smoothstep(0.1, 0.5, up);
+            gl_FragColor = vec4(c + st * vec3(0.8, 0.78, 1.0), 1.0);
+            #include <colorspace_fragment>
+          }`,
+      });
     // (Screen occlusion leaves out what isn't rock.)
     for (const o of [this.dark, this.cracks, this.sense, this.chips, this.arrows]) o.userData.noAo = true;
     this.hand.matrixAutoUpdate = false;
@@ -245,7 +318,7 @@ export class MineView {
     const ores = await Promise.all(c.ores.map(async (o) => pixels(await url(o.texture, o.id))));
     const W = this.tiles * T, data = this.atlas.image.data as Uint8Array;
     rocks.forEach((rock, row) => {
-      for (let col = 0; col < this.tiles; col++) {
+      for (let col = 0; col <= c.ores.length; col++) {
         const ore = col ? ores[col - 1] : null, glow = col ? c.ores[col - 1]!.glow : 0;
         const fallback = new THREE.Color(col ? c.ores[col - 1]!.color : '#6e7078');
         let r = 0, g = 0, b = 0, n = 0;
@@ -279,8 +352,11 @@ export class MineView {
     });
     // Built blocks: their own tiles. Clear pixels show through; bright ones of glowing blocks glow.
     const mats = await Promise.all(c.materials.map(async (m) => pixels(await url(m.texture, m.id))));
-    mats.forEach((px, i) => {
-      const row = this.zrows + Math.floor(i / this.tiles), col = i % this.tiles, md = c.materials[i]!, fb = new THREE.Color(0x8a7a66);
+    const tops = await Promise.all(c.materials.map(async (m, i) => (this.tops[i]! >= 0 ? pixels(await url(m.top ?? '', `${m.id}_top`)) : null)));
+    [...mats, ...tops].forEach((px, j) => {
+      const i = j % c.materials.length, slot = j < c.materials.length ? i : this.tops[i]!;
+      if (slot < 0) return;
+      const row = this.zrows + Math.floor(slot / this.tiles), col = slot % this.tiles, md = c.materials[i]!, fb = new THREE.Color(0x8a7a66);
       let r = 0, g = 0, b = 0, n = 0;
       for (let py = 0; py < T; py++)
         for (let x = 0; x < T; x++) {
@@ -313,6 +389,17 @@ export class MineView {
       g.putImageData(img, 0, 0);
       oreIcons.set(o.id, icon.toDataURL());
     });
+    c.materials.forEach((m, i) => {
+      const slot = this.tops[i]! >= 0 ? this.tops[i]! : i, col = slot % this.tiles, row = this.zrows + Math.floor(slot / this.tiles);
+      const img = g.createImageData(T, T);
+      for (let py = 0; py < T; py++)
+        for (let px = 0; px < T; px++) {
+          const d = ((row * T + T - 1 - py) * W + col * T + px) * 4;
+          img.data.set([data[d]!, data[d + 1]!, data[d + 2]!, data[d + 3] ? 255 : 0], (py * T + px) * 4);
+        }
+      g.putImageData(img, 0, 0);
+      blockIcons.set(m.id, icon.toDataURL());
+    });
   }
 
   /** Mesh one chunk: faces next to air (or webs) only. Lit blocks are gathered as lights (a few per chunk). */
@@ -325,7 +412,16 @@ export class MineView {
     };
     const solid = (x: number, y: number, z: number) => !b.clear(at(x, y, z));
     const glow = new Map<number, number[]>();
-    const pos: number[] = [], uv: number[] = [], col: number[] = [], nrm: number[] = [], idx: number[] = [];
+    const pos: number[] = [], uv: number[] = [], col: number[] = [], nrm: number[] = [], idx: number[] = [], sky: number[] = [];
+    // (Open world: how much sky reaches a face, from the ground's height over its column.)
+    const fb = this.forest ? (b as ForestBlocks) : null, heights = new Map<number, number>();
+    const skyAt = (x: number, y: number, z: number) => {
+      if (!fb) return 0;
+      const k = (x - x0 + 2) * 64 + (z - z0 + 2);
+      let h = heights.get(k);
+      if (h === undefined) heights.set(k, (h = fb.height(x, z)));
+      return Math.max(0, Math.min(1, 1 - (h + 1 - y) / 5));
+    };
     const [ox, oy, oz] = m.origin;
     const W = this.tiles * T, H = this.rows * T;
     const p = [0, 0, 0], n = [0, 0, 0];
@@ -338,9 +434,10 @@ export class MineView {
           // (The mine's edge looks like darker stone, seen only from inside the mine.)
           const edge = id === EDGE;
           const P = m.config.patch + 1, rim = edge && m.config.surface && y === -1 && Math.max(Math.abs(x), Math.abs(z)) === P;
-          const mi = isMat(id) ? id - MAT : -1;
-          const tile = edge ? 0 : mi >= 0 ? mi % this.tiles : oreOf(id) + 1, row = edge ? 0 : mi >= 0 ? this.zrows + Math.floor(mi / this.tiles) : Math.min(this.zrows - 1, zoneOf(id));
-          const light = mi >= 0 ? mats[mi]!.light : undefined;
+          const mi = isMat(id) ? id - MAT : edge && fb ? fb.m('deepstone') - MAT : -1;
+          let tile = edge && !fb ? 0 : mi >= 0 ? mi % this.tiles : oreOf(id) + 1, row = edge && !fb ? 0 : mi >= 0 ? this.zrows + Math.floor(mi / this.tiles) : Math.min(this.zrows - 1, zoneOf(id));
+          const top = mi >= 0 && !edge ? this.tops[mi]! : -1, sideTile = tile, sideRow = row;
+          const light = mi >= 0 && !edge ? mats[mi]!.light : undefined;
           if (light) {
             const k = mi * 4096 + ((x >> 2) & 15) * 256 + ((y >> 2) & 15) * 16 + ((z >> 2) & 15), e = glow.get(k) ?? [0, 0, 0, 0];
             e[0]! += x + 0.5;
@@ -349,7 +446,6 @@ export class MineView {
             e[3]!++;
             glow.set(k, e);
           }
-          const u0 = (tile * T + 0.02) / W, u1 = ((tile + 1) * T - 0.02) / W, v0 = (row * T + 0.02) / H, v1 = ((row + 1) * T - 0.02) / H;
           for (let axis = 0; axis < 3; axis++)
             for (const sign of [1, -1]) {
               n[0] = n[1] = n[2] = 0;
@@ -357,7 +453,16 @@ export class MineView {
               const nb = at(x + n[0]!, y + n[1]!, z + n[2]!);
               if (!b.clear(nb) || nb === id) continue;
               // (Edge faces show only from inside the mine, and on top of the ring just round the patch: its border.)
-              if (edge && y + n[1]! >= 0 && !(rim && n[1] === 1)) continue;
+              if (edge && !fb && y + n[1]! >= 0 && !(rim && n[1] === 1)) continue;
+              if (top >= 0 && axis === 1 && sign > 0) {
+                tile = top % this.tiles;
+                row = this.zrows + Math.floor(top / this.tiles);
+              } else {
+                tile = sideTile;
+                row = sideRow;
+              }
+              const u0 = (tile * T + 0.02) / W, u1 = ((tile + 1) * T - 0.02) / W, v0 = (row * T + 0.02) / H, v1 = ((row + 1) * T - 0.02) / H;
+              const sk = skyAt(x + n[0]!, y + n[1]!, z + n[2]!);
               const ua = (axis + 1) % 3, va = (axis + 2) % 3;
               const base = pos.length / 3;
               const corners = sign > 0 ? [[0, 0], [1, 0], [1, 1], [0, 1]] : [[0, 0], [0, 1], [1, 1], [1, 0]];
@@ -382,8 +487,9 @@ export class MineView {
                 // (Sides keep the tile upright.)
                 const tu = axis === 0 ? j! : axis === 2 ? i! : j!, tv = axis === 0 ? i! : axis === 2 ? j! : i!;
                 uv.push(tu ? u1 : u0, tv ? v1 : v0);
-                const sh = (axis === 1 ? (sign > 0 ? 1 : 0.55) : SHADE[axis]!) * AO[level]! * (edge ? 0.6 : 1);
+                const sh = (axis === 1 ? (sign > 0 ? 1 : 0.55) : SHADE[axis]!) * AO[level]! * (edge ? (fb ? 0.12 : 0.6) : 1);
                 col.push(sh, sh, sh);
+                sky.push(sk);
                 nrm.push(n[0]!, n[1]!, n[2]!);
               }
               // (Split along the brighter diagonal so corner shading doesn't streak.)
@@ -396,6 +502,7 @@ export class MineView {
     g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
     g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
     g.setAttribute('normal', new THREE.Float32BufferAttribute(nrm, 3));
+    g.setAttribute('sk', new THREE.Float32BufferAttribute(sky, 1));
     g.setIndex(idx);
     g.computeBoundingSphere();
     const lights: number[] = [];
@@ -425,7 +532,8 @@ export class MineView {
       }
     }
     const at = m.toBlock(eye), S = b.size;
-    this.dark.visible = !m.config.surface || at[1] < -m.config.crust;
+    this.dark.visible = this.forest || !m.config.surface || at[1] < -m.config.crust;
+    if (this.forest) this.dusk(dt, at);
     const pc = [Math.floor(at[0] / S), Math.floor(at[1] / S), Math.floor(at[2] / S)];
     const todo: [number, Chunk][] = [];
     for (const ch of m.chunks()) {
@@ -480,7 +588,7 @@ export class MineView {
       for (let i = 0; i < (f.kind === 'break' ? 14 : 3); i++) this.chip(w, colour, B);
     }
     this.stepChips(dt);
-    this.drawMobs(time);
+    this.drawMobs(time, dt, eye);
     this.drawArrows();
     this.drawBombs(dt, time);
     this.drawBosses(dt, time, eye);
@@ -516,13 +624,17 @@ export class MineView {
     if (this.chips.instanceColor) this.chips.instanceColor.needsUpdate = true;
   }
 
-  private drawMobs(time: number): void {
+  private drawMobs(time: number, dt = 0, eye: [number, number, number] = [0, 0, 0]): void {
     const m = this.mine, live = new Set<string>();
     for (const mob of m.mobs) {
       live.add(mob.id);
       let v = this.mobs.get(mob.id);
       if (!v) v = this.addMob(mob);
       const w = m.toWorld(mob.pos[0], mob.pos[1], mob.pos[2]);
+      if (v.pix) {
+        v.pix.animate(w, time, dt, this.lightAt([w[0], w[1] + mob.h * m.B * 0.5, w[2]], eye));
+        continue;
+      }
       v.holder.position.set(...w);
       v.holder.rotation.y = mob.yaw;
       const want = mob.def.anims[mob.state];
@@ -536,16 +648,23 @@ export class MineView {
       if (live.has(id)) continue;
       this.group.remove(v.holder);
       v.inst?.dispose();
+      v.pix?.dispose();
       this.mobs.delete(id);
     }
   }
 
-  private addMob(mob: Mob): { holder: THREE.Group; inst: ModelInstance | null; anim: string } {
+  private addMob(mob: Mob): { holder: THREE.Group; inst: ModelInstance | null; anim: string; pix?: MobModel } {
     const holder = new THREE.Group();
-    const v: { holder: THREE.Group; inst: ModelInstance | null; anim: string } = { holder, inst: null, anim: '' };
+    const v: { holder: THREE.Group; inst: ModelInstance | null; anim: string; pix?: MobModel } = { holder, inst: null, anim: '' };
     this.group.add(holder);
     this.mobs.set(mob.id, v);
     const data = this.template(mob.def.template);
+    if (!data && MobModel.has(mob.def.id)) {
+      v.pix = new MobModel(mob, this.mine.B);
+      holder.add(v.pix.root);
+      v.pix.root.matrixAutoUpdate = true;
+      return v;
+    }
     if (data) {
       void modelInstance(data)
         .then((inst) => {
@@ -556,6 +675,22 @@ export class MineView {
         .catch(() => holder.add(figure(mob)));
     } else holder.add(figure(mob));
     return v;
+  }
+
+  private fogTo = new THREE.Color();
+
+  /** The open world's air: its region's haze (thicker under a curse) and a dusk sky with stars. */
+  private dusk(dt: number, at: [number, number, number]): void {
+    const m = this.mine as MineSystem & { trophies?: Set<string> }, fb = m.blocks as ForestBlocks, f = m.config.forest!;
+    const z = m.config.zones[fb.region(Math.floor(at[0]), Math.floor(at[2]))]!, reg = f.regions.find((r) => r.id === z.id);
+    const cursed = !!reg?.curse && !m.trophies?.has(reg.curse.lift);
+    this.fogTo.set(reg?.fog ?? '#333355');
+    const u = this.mat.uniforms, fc = u.fogCol!.value as THREE.Color, fog = u.fog!.value as THREE.Vector2, k = Math.min(1, dt * 1.5);
+    fc.lerp(this.fogTo, k);
+    const far = m.config.view * m.config.chunk * m.B * (cursed ? 0.5 : 0.95);
+    fog.set(fog.x + (far * 0.35 - fog.x) * k, fog.y + (far - fog.y) * k);
+    const sm = this.dark.material as THREE.ShaderMaterial;
+    if (sm.uniforms) sm.uniforms.horizon!.value.copy(fc);
   }
 
   private lightsAt = -1;
@@ -724,7 +859,9 @@ export class MineView {
   /** The pickaxe in hand (Minecraft style: its pixels as little blocks, or the pickaxe's own model), swinging, placed by
    * the camera after it moved. Hidden in third person and while something else is in hand. */
   placeHand(cam: THREE.Camera, time: number, thirdPerson: boolean): void {
-    const m = this.mine, p = m.config.pickaxes[m.tier]!, want = p.model ? `model:${p.model}` : `pixels:${p.color}`;
+    const m = this.mine, p = m.config.pickaxes[m.tier]!, fs = m as MineSystem & { hand?: number; hot?: number[]; sword?: number };
+    const sword = this.forest && fs.hand === 0 ? m.config.forest!.swords[fs.sword ?? 0] : null, held = this.forest && fs.hand! >= 2 ? (fs.hot![fs.hand! - 2] ?? 0) : 0;
+    const want = sword ? `sword:${sword.color}` : held ? `block:${held}` : this.forest && fs.hand! >= 2 ? 'none' : p.model ? `model:${p.model}` : `pixels:${p.color}`;
     this.mat.uniforms.lamp!.value.setFromMatrixPosition(cam.matrixWorld);
     this.hand.visible = !thirdPerson && m.handFree && !m.menuOpen;
     if (want !== this.handModel) {
@@ -733,7 +870,9 @@ export class MineView {
       this.handInst = null;
       for (const c of this.hand.children) if ((c as THREE.Mesh).geometry) (c as THREE.Mesh).geometry.dispose();
       this.hand.clear();
-      if (p.model)
+      if (sword) this.hand.add(pickaxeMesh(sword.color, SWORD));
+      else if (held) this.hand.add(this.blockMesh(held));
+      else if (want !== 'none' && p.model)
         void modelInstance({ ...HAND, model: p.model })
           .then((inst) => {
             if (this.handModel !== want) return inst.dispose();
@@ -741,7 +880,7 @@ export class MineView {
             this.hand.add(inst.object);
           })
           .catch(() => {});
-      else this.hand.add(pickaxeMesh(p.color));
+      else if (want !== 'none') this.hand.add(pickaxeMesh(p.color));
     }
     const s = (time - m.swungAt) / 0.25, a = s >= 0 && s < 1 ? Math.sin(s * Math.PI) : 0;
     // (Guarding: brought up across the view; a parry knocks it back a little.)
@@ -750,14 +889,32 @@ export class MineView {
     this.guardK += ((m.blocking ? 1 : 0) - this.guardK) * Math.min(1, dt * 14);
     const g = this.guardK, kick = m.hud().guard === 'parry' ? 1 : 0;
     // (Handle up from the bottom right corner, leaning in a little; the head arches over the top.)
-    const k = p.model ? 1 : 0.5;
-    this.local.compose(
-      this.v.set((p.model ? 11 : 9.5) - g * 5, -12 - a * 2 + g * 1.5, -15 - a * 3 + kick * 2),
-      this.q.setFromEuler(new THREE.Euler(0.1 - a * 1.2 + g * 0.1, -0.3 + a * 0.2 + g * 0.2, (p.model ? -0.1 : 1.08) + g * 0.75 + kick * 0.15, 'YXZ')),
-      new THREE.Vector3(k, k, k),
-    );
+    const k = p.model && !sword && !held ? 1 : 0.5;
+    if (held)
+      this.local.compose(this.v.set(8, -9 - a * 2, -14 - a * 3), this.q.setFromEuler(new THREE.Euler(-0.3 - a * 0.6, 0.6, 0.15, 'YXZ')), new THREE.Vector3(1, 1, 1));
+    else
+      this.local.compose(
+        this.v.set((p.model && !sword ? 11 : 9.5) - g * 5, -12 - a * 2 + g * 1.5, -15 - a * 3 + kick * 2),
+        this.q.setFromEuler(new THREE.Euler(0.1 - a * 1.2 + g * 0.1, -0.3 + a * 0.2 + g * 0.2, (p.model && !sword ? -0.1 : 1.08) + g * 0.75 + kick * 0.15, 'YXZ')),
+        new THREE.Vector3(k, k, k),
+      );
     this.hand.matrix.multiplyMatrices(cam.matrixWorld, this.local);
     this.hand.matrixWorldNeedsUpdate = true;
+  }
+
+  /** A small cube of a block, to hold. */
+  private blockMesh(id: number): THREE.Mesh {
+    const mi = id - MAT, top = this.tops[mi] ?? -1, W = this.tiles * T, H = this.rows * T;
+    const uvOf = (slot: number) => {
+      const col = slot % this.tiles, row = this.zrows + Math.floor(slot / this.tiles);
+      return [(col * T + 0.02) / W, ((col + 1) * T - 0.02) / W, (row * T + 0.02) / H, ((row + 1) * T - 0.02) / H] as const;
+    };
+    const g = new THREE.BoxGeometry(6, 6, 6), uv = g.getAttribute('uv') as THREE.BufferAttribute;
+    for (let f = 0; f < 6; f++) {
+      const [u0, u1, v0, v1] = uvOf(f === 2 && top >= 0 ? top : mi);
+      for (let i = 0; i < 4; i++) uv.setXY(f * 4 + i, uv.getX(f * 4 + i) ? u1 : u0, uv.getY(f * 4 + i) ? v1 : v0);
+    }
+    return new THREE.Mesh(g, new THREE.MeshBasicMaterial({ map: this.atlas, alphaTest: 0.002 }));
   }
 
   dispose(): void {
@@ -791,7 +948,27 @@ const PICKAXE = [
 ];
 
 /** A pickaxe from its pixels: each one a little block, the head in the pickaxe's colour. Grip at the origin. */
-function pickaxeMesh(colour: string): THREE.Mesh {
+const SWORD = [
+  '................',
+  '.............oo.',
+  '............ohho',
+  '...........ohlmo',
+  '..........ohlmo.',
+  '.........ohlmo..',
+  '........ohlmo...',
+  '.......ohlmo....',
+  '..oo..ohlmo.....',
+  '..odoohlmo......',
+  '...odolmo.......',
+  '....odmo........',
+  '...o32odo.......',
+  '..o32o.oo.......',
+  '.o32o...........',
+  '.oo.............',
+];
+
+function pickaxeMesh(colour: string, PICKAXE_: string[] = PICKAXE): THREE.Mesh {
+  const PICKAXE = PICKAXE_;
   const c = new THREE.Color(colour), dark = new THREE.Color(0x0a080e), light = new THREE.Color(0xfffaeb);
   const col: Record<string, THREE.Color> = {
     o: c.clone().lerp(dark, 0.75),

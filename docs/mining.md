@@ -58,6 +58,18 @@ taking double damage. Parried shots fly back at the boss. At half health it gets
 strongbox opens until the mine regenerates. Bosses are figures of pixel blocks animated in code
 (`renderer/viewport/boss-models.ts`). `bosses` and `guard` in the settings tune them.
 
+## The twilit forest
+
+`"world": "forest"` in `settings.mining` makes a different world on the same blocks (`data/forest.json`,
+`mining/forest*.ts`): regions in rings round a glade (Lantern Glade, Hollowroot Woods, Mirefen, Sporelands,
+Frostpine Reach, Ember Highlands, Mooncrown), each with its own ground, trees, ruins, monsters and a lair with a
+boss (Root Hall, Drowned Temple, Spore Spire, Rime Keep, Cinder Forge, Moon Court). Past the glade every region
+but the first is cursed (fog, spores, cold, heat, dark): the curse hurts until the boss before it is beaten; its
+trophy lights a pedestal in the glade. Gear comes from chests, strongboxes and bosses: swords, armor, pickaxes,
+health shards and charms (double jump, swiftness, mending, warding, fireproof). The hotbar holds the sword, the
+pickaxe and the blocks dug, which can be placed (right mouse with a block in hand). Tab shows gear, trophies and a
+map. Monsters return to a cleared spot after `respawnMinutes`. The world is `radius` blocks from the glade.
+
 ## Settings are JSON
 
 `settings.mining` in the scene file is laid over `data/mine.json`. Lists merge by `id` (an entry replaces the

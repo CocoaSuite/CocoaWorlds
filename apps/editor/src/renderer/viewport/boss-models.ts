@@ -3,7 +3,8 @@
  * code. Their weapons glow while an attack winds up: gold for one that can be parried, red for one that can't.
  */
 import * as THREE from 'three';
-import type { Boss } from '@cocoaworlds/runtime';
+import type { Boss, Mob } from '@cocoaworlds/runtime';
+import { FOREST_MODELS, type Style } from './forest-models';
 
 type Kind = 'lit' | 'glow' | 'eye';
 /** [group, w, h, d, x, y, z (centre, in the group), colour, kind]. */
@@ -36,7 +37,7 @@ function tile(colour: string, w: number, h: number): THREE.DataTexture {
 }
 
 /** `h`: height in pixels (it's scaled to the boss's height). */
-const MODELS: Record<string, { h: number; joints: Joints; parts: Part[]; spider?: boolean }> = {
+const MODELS: Record<string, { h: number; joints: Joints; parts: Part[]; spider?: boolean; style?: Style }> = {
   foreman: {
     h: 40,
     joints: { legL: ['root', -4, 14, 0], legR: ['root', 4, 14, 0], body: ['root', 0, 14, 0], head: ['body', 0, 14, 0], armL: ['body', -11.5, 13, 0], armR: ['body', 11.5, 13, 0], tool: ['armR', 0, -14, 0] },
@@ -90,25 +91,21 @@ const MODELS: Record<string, { h: number; joints: Joints; parts: Part[]; spider?
     ],
   },
 };
+Object.assign(MODELS, FOREST_MODELS);
 
-export class BossModel {
+/** A figure of pixel blocks from its model: joints, parts, and what lights and glows. */
+class Figure {
   readonly root = new THREE.Group();
-  private joints = new Map<string, THREE.Group>();
-  private lit: THREE.MeshBasicMaterial[] = [];
-  private glow: { m: THREE.MeshBasicMaterial; base: THREE.Color }[] = [];
-  private eyes: THREE.MeshBasicMaterial[] = [];
-  private legs: { g: THREE.Group; s: number; i: number }[] = [];
-  private spider: boolean;
-  private walk = 0;
-  private last = new THREE.Vector3();
+  readonly joints = new Map<string, THREE.Group>();
+  readonly lit: THREE.MeshBasicMaterial[] = [];
+  readonly glow: THREE.MeshBasicMaterial[] = [];
+  readonly eyes: THREE.MeshBasicMaterial[] = [];
+  readonly style: Style;
+  private spare = new THREE.Group();
 
-  constructor(
-    readonly boss: Boss,
-    B: number,
-  ) {
-    const def = MODELS[boss.def.id] ?? MODELS.foreman!;
-    this.spider = !!def.spider;
-    this.joints.set('root', this.root);
+  constructor(id: string, height: number) {
+    const def = MODELS[id] ?? MODELS.foreman!;
+    this.style = def.style ?? 'biped';
     const inner = new THREE.Group();
     this.root.add(inner);
     this.joints.set('root', inner);
@@ -118,7 +115,109 @@ export class BossModel {
       this.joints.get(parent)!.add(g);
       this.joints.set(name, g);
     }
-    if (this.spider)
+    const tool = this.joints.get('tool');
+    if (tool) tool.rotation.x = 1.4;
+    for (const [j, w, h, d, x, y, z, rz, colour, kind] of def.parts) {
+      const m = new THREE.MeshBasicMaterial({ map: tile(colour, Math.max(w, d), h) });
+      const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m);
+      mesh.position.set(x, y, z);
+      mesh.rotation.z = rz;
+      this.joints.get(j)!.add(mesh);
+      (kind === 'eye' ? this.eyes : kind === 'glow' ? this.glow : this.lit).push(m);
+    }
+    inner.scale.setScalar(height / def.h);
+    this.root.traverse((o) => (o.userData.noAo = true));
+  }
+
+  /** A joint (a spare one if the model hasn't it). */
+  j(name: string): THREE.Group {
+    return this.joints.get(name) ?? this.spare;
+  }
+
+  /** Back to standing, legs stepping by `sw`. */
+  rest(sw: number): void {
+    for (const g of this.joints.values()) if (g !== this.joints.get('root') && g !== this.joints.get('tool')) g.rotation.set(0, 0, 0);
+    const inner = this.joints.get('root')!;
+    inner.rotation.set(0, 0, 0);
+    inner.position.y = 0;
+    this.j('legL').rotation.x = sw * 0.6;
+    this.j('legR').rotation.x = -sw * 0.6;
+    this.j('legFL').rotation.x = this.j('legBR').rotation.x = sw * 0.7;
+    this.j('legFR').rotation.x = this.j('legBL').rotation.x = -sw * 0.7;
+    if (this.style === 'biped') {
+      this.j('armL').rotation.x = -sw * 0.4;
+      this.j('armR').rotation.x = sw * 0.4 + 0.2;
+    }
+  }
+
+  dispose(): void {
+    this.root.traverse((o) => {
+      const m = o as THREE.Mesh;
+      if (m.geometry) m.geometry.dispose();
+      (m.material as THREE.Material | undefined)?.dispose();
+    });
+  }
+}
+
+/** A forest monster drawn in pixel blocks, when it has a model of its own. */
+export class MobModel {
+  readonly fig: Figure;
+  private walk = 0;
+  private last = new THREE.Vector3();
+
+  static has(id: string): boolean {
+    return id in FOREST_MODELS;
+  }
+
+  constructor(
+    readonly mob: Mob,
+    B: number,
+  ) {
+    this.fig = new Figure(mob.def.id, mob.h * B);
+  }
+
+  get root(): THREE.Group {
+    return this.fig.root;
+  }
+
+  animate(world: [number, number, number], time: number, dt: number, light: number): void {
+    const m = this.mob, f = this.fig;
+    f.root.position.set(...world);
+    f.root.rotation.y = m.yaw;
+    const moved = this.last.distanceTo(f.root.position) / Math.max(dt, 1e-3);
+    this.last.copy(f.root.position);
+    this.walk += dt * Math.min(16, moved / 6);
+    f.rest(Math.sin(this.walk) * Math.min(1, moved / 40));
+    if (m.state === 'attack') {
+      f.j('armL').rotation.x = f.j('armR').rotation.x = 1.3;
+      f.j('head').rotation.x = 0.3;
+      f.j('body').rotation.x = f.style === 'quad' ? 0.15 : 0.2;
+    }
+    if (m.dead) f.root.rotation.z = Math.min(1, (time - m.diedAt) * 5) * (Math.PI / 2);
+    const k = Math.max(0.3, light);
+    for (const x of f.lit) x.color.setScalar(k);
+    for (const x of f.glow) x.color.setScalar(Math.max(k, 0.8));
+    for (const x of f.eyes) x.color.setScalar(m.dead ? 0.2 : 1);
+  }
+
+  dispose(): void {
+    this.fig.dispose();
+  }
+}
+
+export class BossModel {
+  private fig: Figure;
+  private legs: { g: THREE.Group; s: number; i: number }[] = [];
+  private walk = 0;
+  private last = new THREE.Vector3();
+
+  constructor(
+    readonly boss: Boss,
+    B: number,
+  ) {
+    this.fig = new Figure(boss.def.id, boss.h * B);
+    if (MODELS[boss.def.id]?.spider) {
+      const body = this.fig.j('body'), lit = this.fig.lit;
       for (let i = 0; i < 4; i++)
         for (const s of [-1, 1]) {
           const g = new THREE.Group(), knee = new THREE.Group();
@@ -127,62 +226,51 @@ export class BossModel {
           knee.position.set(s * 18, 0, 0);
           knee.rotation.z = -s * 0.7;
           g.add(knee);
-          this.joints.get('body')!.add(g);
-          this.part(g, 18, 3, 3, s * 9, 0, 0, 0, '#4a3a58', 'lit');
-          this.part(knee, 3, 24, 3, 0, -11, 0, 0, '#5e4c6c', 'lit');
+          body.add(g);
+          for (const [par, w, h, x, y, c] of [[g, 18, 3, s * 9, 0, '#4a3a58'], [knee, 3, 24, 0, -11, '#5e4c6c']] as const) {
+            const m = new THREE.MeshBasicMaterial({ map: tile(c, w, h) }), mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, 3), m);
+            mesh.position.set(x, y, 0);
+            par.add(mesh);
+            lit.push(m);
+          }
           this.legs.push({ g, s, i });
         }
-    const tool = this.joints.get('tool');
-    if (tool) tool.rotation.x = 1.4;
-    for (const [j, w, h, d, x, y, z, rz, colour, kind] of def.parts) this.part(this.joints.get(j)!, w, h, d, x, y, z, rz, colour, kind ?? 'lit');
-    inner.scale.setScalar((boss.h * B) / def.h);
-    this.root.traverse((o) => (o.userData.noAo = true));
+      this.fig.root.traverse((o) => (o.userData.noAo = true));
+    }
   }
 
-  private part(parent: THREE.Object3D, w: number, h: number, d: number, x: number, y: number, z: number, rz: number, colour: string, kind: Kind): void {
-    const m = new THREE.MeshBasicMaterial({ map: tile(colour, Math.max(w, d), h) });
-    const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m);
-    mesh.position.set(x, y, z);
-    mesh.rotation.z = rz;
-    parent.add(mesh);
-    if (kind === 'eye') this.eyes.push(m);
-    else if (kind === 'glow') this.glow.push({ m, base: new THREE.Color(1, 1, 1) });
-    else this.lit.push(m);
-  }
-
-  private j(name: string): THREE.Group {
-    return this.joints.get(name) ?? this.root;
+  get root(): THREE.Group {
+    return this.fig.root;
   }
 
   /** Pose for this moment. `light`: how lit it is where it stands (0…1). */
   animate(world: [number, number, number], time: number, dt: number, light: number): void {
-    const b = this.boss, st = b.state, c = b.charge(time), ease = c * c * (3 - 2 * c);
-    this.root.position.set(...world);
-    this.root.rotation.y = b.yaw;
-    const moved = this.last.distanceTo(this.root.position) / Math.max(dt, 1e-3);
-    this.last.copy(this.root.position);
+    const b = this.boss, f = this.fig, st = b.state, a = b.attack, c = b.charge(time), ease = c * c * (3 - 2 * c);
+    f.root.position.set(...world);
+    f.root.rotation.y = b.yaw;
+    const moved = this.last.distanceTo(f.root.position) / Math.max(dt, 1e-3);
+    this.last.copy(f.root.position);
     this.walk += dt * Math.min(12, moved / 8);
-    const sw = Math.sin(this.walk) * Math.min(1, moved / 60);
-    const body = this.j('body'), head = this.j('head'), aL = this.j('armL'), aR = this.j('armR'), lL = this.j('legL'), lR = this.j('legR');
-    body.rotation.set(0, 0, 0);
-    head.rotation.set(0, 0, 0);
-    aL.rotation.set(0, 0, 0);
-    aR.rotation.set(0, 0, 0);
-    lL.rotation.set(sw * 0.6, 0, 0);
-    lR.rotation.set(-sw * 0.6, 0, 0);
-    if (!this.spider) {
-      aL.rotation.x = -sw * 0.4;
-      aR.rotation.x = sw * 0.4 + 0.2;
-    }
-    const inner = this.j('root');
-    inner.rotation.set(0, 0, 0);
-    inner.position.y = 0;
-    const a = b.attack;
+    f.rest(Math.sin(this.walk) * Math.min(1, moved / 60));
+    const body = f.j('body'), head = f.j('head'), aL = f.j('armL'), aR = f.j('armR'), inner = f.j('root');
+    const n1 = f.j('neck1'), n2 = f.j('neck2');
     if (st === 'sleep') {
-      body.rotation.x = 0.35;
+      body.rotation.x = f.style === 'serpent' ? 0.5 : 0.35;
       head.rotation.x = 0.3;
     } else if (st === 'windup') {
-      if (a === 'swing') aR.rotation.x = ease * 2.8;
+      if (f.style === 'serpent') {
+        // (Rears back, jaw opening.)
+        n1.rotation.x = n2.rotation.x = -0.35 * ease;
+        head.rotation.x = 0.3 * ease;
+        aL.rotation.x = 0.7 * ease;
+        if (a === 'slam' || a === 'charge') body.rotation.x = -0.15 * ease;
+      } else if (f.style === 'quad') {
+        if (a === 'slam') {
+          body.rotation.x = -0.55 * ease;
+          f.j('legFL').rotation.x = f.j('legFR').rotation.x = -0.8 * ease;
+        } else if (a === 'charge') head.rotation.x = 0.7 * ease;
+        else head.rotation.x = -0.4 * ease;
+      } else if (a === 'swing') aR.rotation.x = ease * 2.8;
       else if (a === 'slam') {
         aL.rotation.x = aR.rotation.x = ease * 2.9;
         body.rotation.x = -ease * 0.2;
@@ -198,7 +286,13 @@ export class BossModel {
         head.rotation.x = -ease * 0.4;
       }
     } else if (st === 'strike') {
-      if (a === 'swing') aR.rotation.x = 0.9;
+      if (f.style === 'serpent') {
+        n1.rotation.x = n2.rotation.x = 0.45;
+        head.rotation.x = -0.2;
+      } else if (f.style === 'quad') {
+        if (a === 'charge') head.rotation.x = 0.7;
+        else if (a === 'slam') body.rotation.x = 0.15;
+      } else if (a === 'swing') aR.rotation.x = 0.9;
       else if (a === 'slam') {
         aL.rotation.x = aR.rotation.x = 0.6;
         body.rotation.x = 0.35;
@@ -224,21 +318,17 @@ export class BossModel {
       if (st === 'dead') up = -0.2;
       l.g.rotation.z = l.s * up;
     }
-    if (this.spider && st === 'windup') body.rotation.x = -ease * 0.25;
+    if (this.legs.length && st === 'windup') body.rotation.x = -ease * 0.25;
     // Light: rock-lit like the blocks; a hit flashes; the weapon glows through the windup.
     const flash = time - b.hitAt < 0.1 ? 1.8 : 0, k = Math.max(0.35, light) + flash;
-    for (const m of this.lit) m.color.setScalar(k);
+    for (const m of f.lit) m.color.setScalar(k);
     const tele = a === 'slam' ? HEAVY : PARRY, hot = st === 'windup' ? 0.25 + ease * 0.75 : st === 'strike' ? 0.7 : 0;
-    for (const g of this.glow) g.m.color.setScalar(k).lerp(tele, hot).multiplyScalar(1 + hot);
+    for (const m of f.glow) m.color.setScalar(k).lerp(tele, hot).multiplyScalar(1 + hot);
     const eye = st === 'dead' ? 0.15 : st === 'sleep' ? 0.35 : 1;
-    for (const m of this.eyes) m.color.setScalar(eye);
+    for (const m of f.eyes) m.color.setScalar(eye);
   }
 
   dispose(): void {
-    this.root.traverse((o) => {
-      const m = o as THREE.Mesh;
-      if (m.geometry) m.geometry.dispose();
-      (m.material as THREE.Material | undefined)?.dispose();
-    });
+    this.fig.dispose();
   }
 }

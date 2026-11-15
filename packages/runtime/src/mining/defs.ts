@@ -1,5 +1,6 @@
 /** The mine's settings: rock zones, ores, pickaxes, skills and mobs (data/mine.json, merged with `settings.mining`). */
 import defaults from './data/mine.json';
+import forestDefaults from './data/forest.json';
 
 export interface ZoneDef {
   id: string;
@@ -121,6 +122,10 @@ export interface MaterialDef {
   hurt?: number;
   /** Movement inside it (× speed). */
   slow?: number;
+  /** Pickaxe tier it needs (else the zone's). */
+  tier?: number;
+  /** Texture of its top face (grass, snow). */
+  top?: string;
   /** Breaking it gives ore, money (share of the next pickaxe's price where it lies) or dynamite. */
   drops?: { ore?: string; n?: number; money?: number; dynamite?: number };
   /** Opens only once the structure's boss is beaten. */
@@ -156,6 +161,69 @@ export interface BossDef {
   minion: string;
   /** Its shots' colour. */
   color: string;
+}
+
+/** Forest gear. Items are named `kind:id` (sword:fang, armor:bark, charm:leap, pickaxe:rootbound, trophy:<boss>,
+ * shard: +max health, dynamite). */
+export interface SwordDef {
+  id: string;
+  label: string;
+  damage: number;
+  /** Swings a second. */
+  speed: number;
+  color: string;
+}
+
+export interface ArmorDef {
+  id: string;
+  label: string;
+  /** Share of damage it stops. */
+  defense: number;
+  health: number;
+}
+
+/** leap: a jump in the air; swift: faster, mud and webs don't slow; mend: heals; ward: longer parry; fireproof: lava
+ * doesn't burn; crown: all of them. */
+export interface CharmDef {
+  id: string;
+  label: string;
+  text: string;
+}
+
+/** A forest region (by zone id): its ground, trees, curse and lair. */
+export interface RegionDef {
+  id: string;
+  /** Ground: top block, soil, stone (material ids); surface height and how much it rolls. */
+  top: string;
+  soil: string;
+  stone: string;
+  height: [number, number];
+  /** Tree kinds and how many (per 100 columns). */
+  trees: Record<string, number>;
+  /** Hurts each second until the boss named in `lift` is beaten; `fog` colours the air. */
+  curse?: { label: string; hurt: number; lift: string };
+  fog: string;
+  lair?: string;
+  /** What its chests hold (item ids, weighted). */
+  loot: Record<string, number>;
+  /** Small ruins scattered about (per 10000 columns). */
+  ruins: number;
+}
+
+export interface ForestConfig {
+  /** World radius in blocks. */
+  radius: number;
+  water: number;
+  swords: SwordDef[];
+  armors: ArmorDef[];
+  charms: CharmDef[];
+  regions: RegionDef[];
+  /** Boss id → items it drops. */
+  drops: Record<string, string[]>;
+  /** Cleared monster spots fill again after this long. */
+  respawnMinutes: number;
+  /** Health a shard adds. */
+  shard: number;
 }
 
 export interface DynamiteDef {
@@ -217,6 +285,9 @@ export interface MineConfig {
   dynamite: DynamiteDef;
   homeKey: string;
   sounds: { hit: string; break: string; ore: string; sell: string; buy: string; mobHit: string; mobDie: string; arrow: string; fuse: string; boom: string; parry: string; block: string; roar: string };
+  /** mine: dig down and sell; forest: a twilit world of regions to explore (see `forest`). */
+  world: 'mine' | 'forest';
+  forest?: ForestConfig;
   materials: MaterialDef[];
   /** Structures: one may stand in each region (`region` blocks across and high), by `chance`. */
   structures: { region: [number, number]; chance: number; kinds: StructureDef[] };
@@ -256,7 +327,8 @@ function merge(base: unknown, over: unknown): unknown {
 }
 
 export function mineConfig(over?: unknown): MineConfig {
-  const c = merge(structuredClone(defaults), over ?? {}) as MineConfig;
+  const forest = !!over && typeof over === 'object' && (over as { world?: string }).world === 'forest';
+  const c = merge(structuredClone(forest ? { ...defaults, ...forestDefaults } : defaults), over ?? {}) as MineConfig;
   c.zones = [...c.zones].sort((a, b) => a.from - b.from);
   c.structures.kinds = [...c.structures.kinds].sort((a, b) => a.from - b.from);
   return c;

@@ -267,6 +267,9 @@ export class Player {
   speedScale = 1;
   /** Jump height factor (mining raises it so a block can be climbed). */
   jumpScale = 1;
+  /** Jumps allowed in the air (a double-jump charm); used ones come back on landing. */
+  airJumps = 0;
+  private airJumped = 0;
 
   /** Stamina on (a game rule): Shift sprints rather than walks, and sprinting and jumping tire the player. */
   tires = false;
@@ -432,6 +435,11 @@ export class Player {
 
   /** On the ground or in the air. */
   private walkMove(inp: PlayerInput, wx: number, wz: number, wishSpeed: number, dt: number): void {
+    if (this.onGround) this.airJumped = 0;
+    else if (inp.jump && !this.jumpHeld && this.airJumped < this.airJumps) {
+      this.airJumped++;
+      this.velocity.y = PLAYER.jumpSpeed * this.jumpScale;
+    }
     if (this.onGround) {
       // Jump (pressing again each time; holding doesn't repeat).
       if (inp.jump && !this.jumpHeld && !this.riding && (!this.tires || this.stamina >= PLAYER.jumpCost)) {

@@ -1,0 +1,1194 @@
+{
+ "world": "forest",
+ "block": 48,
+ "chunk": 16,
+ "view": 3,
+ "seed": 0,
+ "regenMinutes": 0,
+ "surface": false,
+ "reach": 4.5,
+ "backpack": 0,
+ "deathLoss": 0.25,
+ "hardGrowth": 1,
+ "valueGrowth": 1,
+ "mobGrowth": 1,
+ "mobHitGrowth": 1,
+ "light": 11,
+ "ambient": 0.16,
+ "maxMobs": 10,
+ "spawnEvery": 1.5,
+ "caves": 0,
+ "oreDensity": 0,
+ "caveMobs": {
+  "size": 8,
+  "per": 40,
+  "max": 2
+ },
+ "twists": [
+  {
+   "id": "normal",
+   "label": "",
+   "text": "",
+   "weight": 1
+  }
+ ],
+ "skills": [],
+ "branches": [],
+ "ores": [],
+ "zones": [
+  {
+   "id": "glade",
+   "label": "Lantern Glade",
+   "from": 0,
+   "texture": "",
+   "hardness": 1,
+   "tier": 0,
+   "ores": {}
+  },
+  {
+   "id": "hollowroot",
+   "label": "Hollowroot Woods",
+   "from": 40,
+   "texture": "",
+   "hardness": 1,
+   "tier": 0,
+   "ores": {}
+  },
+  {
+   "id": "mirefen",
+   "label": "Mirefen",
+   "from": 180,
+   "texture": "",
+   "hardness": 1,
+   "tier": 0,
+   "ores": {}
+  },
+  {
+   "id": "sporelands",
+   "label": "Sporelands",
+   "from": 300,
+   "texture": "",
+   "hardness": 1,
+   "tier": 0,
+   "ores": {}
+  },
+  {
+   "id": "frostpine",
+   "label": "Frostpine Reach",
+   "from": 420,
+   "texture": "",
+   "hardness": 1,
+   "tier": 0,
+   "ores": {}
+  },
+  {
+   "id": "ember",
+   "label": "Ember Highlands",
+   "from": 540,
+   "texture": "",
+   "hardness": 1,
+   "tier": 0,
+   "ores": {}
+  },
+  {
+   "id": "mooncrown",
+   "label": "Mooncrown",
+   "from": 660,
+   "texture": "",
+   "hardness": 1,
+   "tier": 0,
+   "ores": {}
+  }
+ ],
+ "materials": [
+  {
+   "id": "dusk_grass",
+   "label": "Dusk grass",
+   "texture": "",
+   "hardness": 1,
+   "glow": 0
+  },
+  {
+   "id": "dirt",
+   "label": "Dirt",
+   "texture": "",
+   "hardness": 1,
+   "glow": 0
+  },
+  {
+   "id": "stone",
+   "label": "Stone",
+   "texture": "",
+   "hardness": 3,
+   "glow": 0
+  },
+  {
+   "id": "deepstone",
+   "label": "Deepstone",
+   "texture": "",
+   "hardness": 5,
+   "glow": 0
+  },
+  {
+   "id": "moss",
+   "label": "Moss",
+   "texture": "",
+   "hardness": 1,
+   "glow": 0
+  },
+  {
+   "id": "mud",
+   "label": "Mud",
+   "texture": "",
+   "hardness": 0.8,
+   "glow": 0
+  },
+  {
+   "id": "peat",
+   "label": "Peat",
+   "texture": "",
+   "hardness": 1,
+   "glow": 0
+  },
+  {
+   "id": "water",
+   "label": "Water",
+   "texture": "",
+   "hardness": 1,
+   "glow": 0,
+   "solid": false,
+   "clear": true,
+   "fluid": true,
+   "slow": 0.6
+  },
+  {
+   "id": "mycel",
+   "label": "Mycelium",
+   "texture": "",
+   "hardness": 1,
+   "glow": 0
+  },
+  {
+   "id": "snow",
+   "label": "Snow",
+   "texture": "",
+   "hardness": 0.8,
+   "glow": 0
+  },
+  {
+   "id": "ice",
+   "label": "Ice",
+   "texture": "",
+   "hardness": 1.5,
+   "glow": 0
+  },
+  {
+   "id": "ash",
+   "label": "Ash",
+   "texture": "",
+   "hardness": 1,
+   "glow": 0
+  },
+  {
+   "id": "basalt",
+   "label": "Basalt",
+   "texture": "",
+   "hardness": 4,
+   "glow": 0
+  },
+  {
+   "id": "lava",
+   "label": "Lava",
+   "texture": "",
+   "hardness": 1,
+   "glow": 1,
+   "solid": false,
+   "fluid": true,
+   "light": [
+    "#ff6a20",
+    6
+   ],
+   "hurt": 30
+  },
+  {
+   "id": "dusk_log",
+   "label": "Dusk log",
+   "texture": "",
+   "hardness": 2,
+   "glow": 0
+  },
+  {
+   "id": "dusk_leaves",
+   "label": "Dusk leaves",
+   "texture": "",
+   "hardness": 0.3,
+   "glow": 0,
+   "clear": true
+  },
+  {
+   "id": "giant_bark",
+   "label": "Giant bark",
+   "texture": "",
+   "hardness": 3,
+   "glow": 0
+  },
+  {
+   "id": "canopy_leaves",
+   "label": "Canopy leaves",
+   "texture": "",
+   "hardness": 0.3,
+   "glow": 0.15,
+   "clear": true
+  },
+  {
+   "id": "willow_log",
+   "label": "Willow log",
+   "texture": "",
+   "hardness": 2,
+   "glow": 0
+  },
+  {
+   "id": "willow_leaves",
+   "label": "Willow leaves",
+   "texture": "",
+   "hardness": 0.3,
+   "glow": 0,
+   "clear": true
+  },
+  {
+   "id": "mushroom_stem",
+   "label": "Mushroom stem",
+   "texture": "",
+   "hardness": 1.5,
+   "glow": 0
+  },
+  {
+   "id": "red_cap",
+   "label": "Mushroom cap",
+   "texture": "",
+   "hardness": 1,
+   "glow": 0
+  },
+  {
+   "id": "glow_cap",
+   "label": "Glowing cap",
+   "texture": "",
+   "hardness": 1,
+   "glow": 0.8,
+   "light": [
+    "#7fd0ff",
+    7
+   ]
+  },
+  {
+   "id": "pine_log",
+   "label": "Pine log",
+   "texture": "",
+   "hardness": 2,
+   "glow": 0
+  },
+  {
+   "id": "pine_needles",
+   "label": "Pine needles",
+   "texture": "",
+   "hardness": 0.3,
+   "glow": 0,
+   "clear": true
+  },
+  {
+   "id": "char_log",
+   "label": "Charred log",
+   "texture": "",
+   "hardness": 2,
+   "glow": 0
+  },
+  {
+   "id": "moon_stone",
+   "label": "Moonstone",
+   "texture": "",
+   "hardness": 6,
+   "glow": 0.1,
+   "tier": 3
+  },
+  {
+   "id": "star_block",
+   "label": "Star block",
+   "texture": "",
+   "hardness": 2,
+   "glow": 1,
+   "light": [
+    "#d8c8ff",
+    8
+   ]
+  },
+  {
+   "id": "firefly_bush",
+   "label": "Firefly bush",
+   "texture": "",
+   "hardness": 0.2,
+   "glow": 0.7,
+   "clear": true,
+   "light": [
+    "#e8ff8a",
+    4
+   ]
+  },
+  {
+   "id": "root_bricks",
+   "label": "Root bricks",
+   "texture": "",
+   "hardness": 5,
+   "glow": 0
+  },
+  {
+   "id": "drowned_bricks",
+   "label": "Drowned bricks",
+   "texture": "",
+   "hardness": 6,
+   "glow": 0,
+   "tier": 1
+  },
+  {
+   "id": "spore_bricks",
+   "label": "Spore bricks",
+   "texture": "",
+   "hardness": 6,
+   "glow": 0,
+   "tier": 1
+  },
+  {
+   "id": "rime_bricks",
+   "label": "Rime bricks",
+   "texture": "",
+   "hardness": 8,
+   "glow": 0,
+   "tier": 2
+  },
+  {
+   "id": "forge_bricks",
+   "label": "Forge bricks",
+   "texture": "",
+   "hardness": 8,
+   "glow": 0,
+   "tier": 2
+  },
+  {
+   "id": "moon_bricks",
+   "label": "Moon bricks",
+   "texture": "",
+   "hardness": 10,
+   "glow": 0,
+   "tier": 3
+  },
+  {
+   "id": "planks",
+   "label": "Planks",
+   "texture": "",
+   "hardness": 0.4,
+   "glow": 0
+  },
+  {
+   "id": "lantern",
+   "label": "Lantern",
+   "texture": "",
+   "hardness": 0.2,
+   "glow": 1,
+   "light": [
+    "#ffb35a",
+    8
+   ]
+  },
+  {
+   "id": "chest",
+   "label": "Chest",
+   "texture": "",
+   "hardness": 0.3,
+   "glow": 0
+  },
+  {
+   "id": "vault",
+   "label": "Strongbox",
+   "texture": "",
+   "hardness": 0.5,
+   "glow": 0.3,
+   "locked": true
+  },
+  {
+   "id": "web",
+   "label": "Web",
+   "texture": "",
+   "hardness": 0.1,
+   "glow": 0,
+   "solid": false,
+   "clear": true,
+   "slow": 0.3
+  },
+  {
+   "id": "pedestal",
+   "label": "Pedestal",
+   "texture": "",
+   "hardness": 99,
+   "glow": 0,
+   "tier": 9
+  },
+  {
+   "id": "pedestal_lit",
+   "label": "Lit pedestal",
+   "texture": "",
+   "hardness": 99,
+   "glow": 0.8,
+   "tier": 9,
+   "light": [
+    "#ffe7a0",
+    6
+   ]
+  }
+ ],
+ "pickaxes": [
+  {
+   "id": "flint",
+   "label": "Flint pickaxe",
+   "price": 0,
+   "power": 1,
+   "speed": 3,
+   "color": "#8a8a80"
+  },
+  {
+   "id": "rootbound",
+   "label": "Rootbound pickaxe",
+   "price": 0,
+   "power": 2.2,
+   "speed": 3,
+   "color": "#9a7a4a"
+  },
+  {
+   "id": "sporesteel",
+   "label": "Sporesteel pickaxe",
+   "price": 0,
+   "power": 4,
+   "speed": 3,
+   "color": "#b08aff"
+  },
+  {
+   "id": "cinder",
+   "label": "Cinder pickaxe",
+   "price": 0,
+   "power": 7,
+   "speed": 3,
+   "color": "#ff8a3a"
+  }
+ ],
+ "structures": {
+  "region": [
+   176,
+   80
+  ],
+  "chance": 0,
+  "kinds": []
+ },
+ "mobs": [
+  {
+   "id": "thornling",
+   "label": "Thornling",
+   "template": "",
+   "kind": "walker",
+   "zone": 1,
+   "weight": 3,
+   "health": 20,
+   "damage": 6,
+   "speed": 100,
+   "reward": 0,
+   "size": [
+    26,
+    40
+   ],
+   "range": 0,
+   "anims": {
+    "idle": "Idle",
+    "walk": "Walk",
+    "attack": "Attack",
+    "die": "Die"
+   }
+  },
+  {
+   "id": "barkback",
+   "label": "Barkback",
+   "template": "",
+   "kind": "climber",
+   "zone": 1,
+   "weight": 2,
+   "health": 26,
+   "damage": 7,
+   "speed": 110,
+   "reward": 0,
+   "size": [
+    40,
+    26
+   ],
+   "range": 0,
+   "anims": {
+    "idle": "Idle",
+    "walk": "Walk",
+    "attack": "Attack",
+    "die": "Die"
+   }
+  },
+  {
+   "id": "bog_lurker",
+   "label": "Bog lurker",
+   "template": "",
+   "kind": "walker",
+   "zone": 2,
+   "weight": 3,
+   "health": 40,
+   "damage": 10,
+   "speed": 90,
+   "reward": 0,
+   "size": [
+    30,
+    64
+   ],
+   "range": 0,
+   "anims": {
+    "idle": "Idle",
+    "walk": "Walk",
+    "attack": "Attack",
+    "die": "Die"
+   }
+  },
+  {
+   "id": "spitter_toad",
+   "label": "Spitter toad",
+   "template": "",
+   "kind": "archer",
+   "zone": 2,
+   "weight": 2,
+   "health": 28,
+   "damage": 8,
+   "speed": 70,
+   "reward": 0,
+   "size": [
+    34,
+    30
+   ],
+   "range": 10,
+   "anims": {
+    "idle": "Idle",
+    "walk": "Walk",
+    "attack": "Attack",
+    "die": "Die"
+   }
+  },
+  {
+   "id": "shroomling",
+   "label": "Shroomling",
+   "template": "",
+   "kind": "walker",
+   "zone": 3,
+   "weight": 3,
+   "health": 50,
+   "damage": 12,
+   "speed": 100,
+   "reward": 0,
+   "size": [
+    28,
+    46
+   ],
+   "range": 0,
+   "anims": {
+    "idle": "Idle",
+    "walk": "Walk",
+    "attack": "Attack",
+    "die": "Die"
+   }
+  },
+  {
+   "id": "sporecap",
+   "label": "Sporecap",
+   "template": "",
+   "kind": "archer",
+   "zone": 3,
+   "weight": 2,
+   "health": 44,
+   "damage": 11,
+   "speed": 80,
+   "reward": 0,
+   "size": [
+    30,
+    62
+   ],
+   "range": 11,
+   "anims": {
+    "idle": "Idle",
+    "walk": "Walk",
+    "attack": "Attack",
+    "die": "Die"
+   }
+  },
+  {
+   "id": "frost_wolf",
+   "label": "Frost wolf",
+   "template": "",
+   "kind": "walker",
+   "zone": 4,
+   "weight": 3,
+   "health": 70,
+   "damage": 15,
+   "speed": 150,
+   "reward": 0,
+   "size": [
+    32,
+    36
+   ],
+   "range": 0,
+   "anims": {
+    "idle": "Idle",
+    "walk": "Walk",
+    "attack": "Attack",
+    "die": "Die"
+   }
+  },
+  {
+   "id": "ice_imp",
+   "label": "Ice imp",
+   "template": "",
+   "kind": "archer",
+   "zone": 4,
+   "weight": 2,
+   "health": 60,
+   "damage": 14,
+   "speed": 100,
+   "reward": 0,
+   "size": [
+    26,
+    48
+   ],
+   "range": 12,
+   "anims": {
+    "idle": "Idle",
+    "walk": "Walk",
+    "attack": "Attack",
+    "die": "Die"
+   }
+  },
+  {
+   "id": "cinder_hound",
+   "label": "Cinder hound",
+   "template": "",
+   "kind": "walker",
+   "zone": 5,
+   "weight": 3,
+   "health": 95,
+   "damage": 19,
+   "speed": 160,
+   "reward": 0,
+   "size": [
+    34,
+    38
+   ],
+   "range": 0,
+   "anims": {
+    "idle": "Idle",
+    "walk": "Walk",
+    "attack": "Attack",
+    "die": "Die"
+   }
+  },
+  {
+   "id": "magma_crawler",
+   "label": "Magma crawler",
+   "template": "",
+   "kind": "climber",
+   "zone": 5,
+   "weight": 2,
+   "health": 110,
+   "damage": 20,
+   "speed": 110,
+   "reward": 0,
+   "size": [
+    44,
+    28
+   ],
+   "range": 0,
+   "anims": {
+    "idle": "Idle",
+    "walk": "Walk",
+    "attack": "Attack",
+    "die": "Die"
+   }
+  },
+  {
+   "id": "duskguard",
+   "label": "Duskguard",
+   "template": "",
+   "kind": "walker",
+   "zone": 6,
+   "weight": 3,
+   "health": 140,
+   "damage": 24,
+   "speed": 110,
+   "reward": 0,
+   "size": [
+    30,
+    74
+   ],
+   "range": 0,
+   "anims": {
+    "idle": "Idle",
+    "walk": "Walk",
+    "attack": "Attack",
+    "die": "Die"
+   }
+  },
+  {
+   "id": "star_archer",
+   "label": "Star archer",
+   "template": "",
+   "kind": "archer",
+   "zone": 6,
+   "weight": 2,
+   "health": 120,
+   "damage": 22,
+   "speed": 90,
+   "reward": 0,
+   "size": [
+    28,
+    70
+   ],
+   "range": 14,
+   "anims": {
+    "idle": "Idle",
+    "walk": "Walk",
+    "attack": "Attack",
+    "die": "Die"
+   }
+  }
+ ],
+ "bosses": [
+  {
+   "id": "rootwarden",
+   "label": "The Rootwarden",
+   "health": 360,
+   "damage": 15,
+   "speed": 2.4,
+   "reward": 0,
+   "size": [
+    3,
+    5
+   ],
+   "attacks": [
+    "swing",
+    "slam",
+    "summon"
+   ],
+   "minion": "thornling",
+   "color": "#9be06a"
+  },
+  {
+   "id": "fenwyrm",
+   "label": "The Fenwyrm",
+   "health": 600,
+   "damage": 20,
+   "speed": 3.6,
+   "reward": 0,
+   "size": [
+    2.6,
+    4.4
+   ],
+   "attacks": [
+    "charge",
+    "volley",
+    "swing"
+   ],
+   "minion": "bog_lurker",
+   "color": "#6fe0c8"
+  },
+  {
+   "id": "mycelord",
+   "label": "The Mycelord",
+   "health": 900,
+   "damage": 24,
+   "speed": 2.6,
+   "reward": 0,
+   "size": [
+    3.2,
+    4.8
+   ],
+   "attacks": [
+    "slam",
+    "volley",
+    "summon",
+    "swing"
+   ],
+   "minion": "shroomling",
+   "color": "#d08aff"
+  },
+  {
+   "id": "rime_stag",
+   "label": "The Rime Stag",
+   "health": 1300,
+   "damage": 30,
+   "speed": 4.4,
+   "reward": 0,
+   "size": [
+    3.4,
+    4.2
+   ],
+   "attacks": [
+    "charge",
+    "slam",
+    "volley"
+   ],
+   "minion": "frost_wolf",
+   "color": "#bfe8ff"
+  },
+  {
+   "id": "cinder_colossus",
+   "label": "The Cinder Colossus",
+   "health": 1700,
+   "damage": 36,
+   "speed": 2.4,
+   "reward": 0,
+   "size": [
+    4,
+    6
+   ],
+   "attacks": [
+    "slam",
+    "volley",
+    "swing"
+   ],
+   "minion": "cinder_hound",
+   "color": "#ff8a3a"
+  },
+  {
+   "id": "dusk_sovereign",
+   "label": "The Dusk Sovereign",
+   "health": 2600,
+   "damage": 44,
+   "speed": 3.8,
+   "reward": 0,
+   "size": [
+    2.4,
+    4.6
+   ],
+   "attacks": [
+    "swing",
+    "charge",
+    "volley",
+    "slam",
+    "summon"
+   ],
+   "minion": "duskguard",
+   "color": "#c8a0ff"
+  }
+ ],
+ "forest": {
+  "radius": 800,
+  "water": 0,
+  "respawnMinutes": 12,
+  "shard": 10,
+  "swords": [
+   {
+    "id": "hunter",
+    "label": "Hunter's blade",
+    "damage": 6,
+    "speed": 2.4,
+    "color": "#b8b8c0"
+   },
+   {
+    "id": "thornsteel",
+    "label": "Thornsteel sword",
+    "damage": 10,
+    "speed": 2.4,
+    "color": "#7aa860"
+   },
+   {
+    "id": "fang",
+    "label": "Fang blade",
+    "damage": 16,
+    "speed": 2.6,
+    "color": "#6fe0c8"
+   },
+   {
+    "id": "frostsilver",
+    "label": "Frostsilver sword",
+    "damage": 24,
+    "speed": 2.6,
+    "color": "#bfe8ff"
+   },
+   {
+    "id": "cinderbrand",
+    "label": "Cinderbrand",
+    "damage": 36,
+    "speed": 2.4,
+    "color": "#ff8a3a"
+   },
+   {
+    "id": "duskreaver",
+    "label": "Duskreaver",
+    "damage": 52,
+    "speed": 2.8,
+    "color": "#c8a0ff"
+   }
+  ],
+  "armors": [
+   {
+    "id": "bark",
+    "label": "Bark vest",
+    "defense": 0.1,
+    "health": 10
+   },
+   {
+    "id": "scale",
+    "label": "Scale coat",
+    "defense": 0.2,
+    "health": 20
+   },
+   {
+    "id": "antler",
+    "label": "Antler mail",
+    "defense": 0.32,
+    "health": 35
+   },
+   {
+    "id": "ember",
+    "label": "Ember plate",
+    "defense": 0.42,
+    "health": 50
+   }
+  ],
+  "charms": [
+   {
+    "id": "leap",
+    "label": "Leaping charm",
+    "text": "A second jump in the air."
+   },
+   {
+    "id": "swift",
+    "label": "Swiftwater charm",
+    "text": "Faster; water and webs no longer slow you."
+   },
+   {
+    "id": "mend",
+    "label": "Mending charm",
+    "text": "Wounds close by themselves."
+   },
+   {
+    "id": "ward",
+    "label": "Warding charm",
+    "text": "Parry more easily."
+   },
+   {
+    "id": "fireproof",
+    "label": "Fireproof charm",
+    "text": "Lava no longer burns."
+   },
+   {
+    "id": "crown",
+    "label": "Crown of Dusk",
+    "text": "Every charm at once."
+   }
+  ],
+  "regions": [
+   {
+    "id": "glade",
+    "top": "dusk_grass",
+    "soil": "dirt",
+    "stone": "stone",
+    "height": [
+     2,
+     2
+    ],
+    "trees": {
+     "dusk": 1.2,
+     "firefly": 3
+    },
+    "fog": "#3a3a6a",
+    "loot": {},
+    "ruins": 0
+   },
+   {
+    "id": "hollowroot",
+    "top": "moss",
+    "soil": "dirt",
+    "stone": "stone",
+    "height": [
+     3,
+     6
+    ],
+    "trees": {
+     "dusk": 2.2,
+     "giant": 0.22
+    },
+    "fog": "#2e3a4a",
+    "loot": {
+     "sword:thornsteel": 2,
+     "armor:bark": 2,
+     "shard": 3,
+     "dynamite": 3
+    },
+    "ruins": 1.2,
+    "lair": "root_hall"
+   },
+   {
+    "id": "mirefen",
+    "top": "mud",
+    "soil": "peat",
+    "stone": "stone",
+    "height": [
+     -2,
+     4
+    ],
+    "trees": {
+     "willow": 1.6
+    },
+    "fog": "#4a5a44",
+    "loot": {
+     "sword:thornsteel": 1,
+     "armor:scale": 2,
+     "shard": 3,
+     "dynamite": 3
+    },
+    "ruins": 1.2,
+    "curse": {
+     "label": "Choking fog",
+     "hurt": 6,
+     "lift": "rootwarden"
+    },
+    "lair": "drowned_temple"
+   },
+   {
+    "id": "sporelands",
+    "top": "mycel",
+    "soil": "dirt",
+    "stone": "stone",
+    "height": [
+     4,
+     7
+    ],
+    "trees": {
+     "mushroom": 1.3,
+     "glowcap": 0.6
+    },
+    "fog": "#5a4466",
+    "loot": {
+     "armor:scale": 2,
+     "sword:frostsilver": 1,
+     "shard": 3,
+     "dynamite": 3
+    },
+    "ruins": 1.2,
+    "curse": {
+     "label": "Spore sickness",
+     "hurt": 8,
+     "lift": "fenwyrm"
+    },
+    "lair": "spore_spire"
+   },
+   {
+    "id": "frostpine",
+    "top": "snow",
+    "soil": "dirt",
+    "stone": "stone",
+    "height": [
+     8,
+     16
+    ],
+    "trees": {
+     "pine": 2.2
+    },
+    "fog": "#8aa0b8",
+    "loot": {
+     "sword:frostsilver": 2,
+     "armor:ember": 0.5,
+     "shard": 3,
+     "dynamite": 3
+    },
+    "ruins": 1.2,
+    "curse": {
+     "label": "Bitter cold",
+     "hurt": 10,
+     "lift": "mycelord"
+    },
+    "lair": "rime_keep"
+   },
+   {
+    "id": "ember",
+    "top": "ash",
+    "soil": "basalt",
+    "stone": "basalt",
+    "height": [
+     10,
+     24
+    ],
+    "trees": {
+     "charred": 0.6
+    },
+    "fog": "#7a3a24",
+    "loot": {
+     "armor:ember": 2,
+     "shard": 3,
+     "dynamite": 4
+    },
+    "ruins": 1.2,
+    "curse": {
+     "label": "Searing heat",
+     "hurt": 12,
+     "lift": "rime_stag"
+    },
+    "lair": "cinder_forge"
+   },
+   {
+    "id": "mooncrown",
+    "top": "moon_stone",
+    "soil": "moon_stone",
+    "stone": "deepstone",
+    "height": [
+     4,
+     4
+    ],
+    "trees": {},
+    "fog": "#1c1630",
+    "loot": {
+     "shard": 4,
+     "dynamite": 4
+    },
+    "ruins": 0.6,
+    "curse": {
+     "label": "The dark",
+     "hurt": 16,
+     "lift": "cinder_colossus"
+    },
+    "lair": "moon_court"
+   }
+  ],
+  "drops": {
+   "rootwarden": [
+    "pickaxe:rootbound",
+    "charm:leap"
+   ],
+   "fenwyrm": [
+    "sword:fang",
+    "charm:swift"
+   ],
+   "mycelord": [
+    "pickaxe:sporesteel",
+    "charm:mend"
+   ],
+   "rime_stag": [
+    "armor:antler",
+    "charm:ward"
+   ],
+   "cinder_colossus": [
+    "sword:cinderbrand",
+    "pickaxe:cinder",
+    "charm:fireproof"
+   ],
+   "dusk_sovereign": [
+    "sword:duskreaver",
+    "charm:crown"
+   ]
+  }
+ }
+}

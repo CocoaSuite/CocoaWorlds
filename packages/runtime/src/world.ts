@@ -74,6 +74,7 @@ import { Acoustics } from './acoustics';
 import { FrameSnapshot } from './snapshot';
 import { PowerGrid, bulbPoints, dist3, dropOf, rayNearLine, wirePoints, type P3 } from './power';
 import { MineSystem, type MineHud, type MineMenu } from './mining/mine';
+import { ForestSystem } from './mining/forest';
 import { BaseSystem, type BaseAim, type BlockerBox, type BlueprintCard, type BlueprintTag, type BuildPrompt } from './building/base';
 import type { BaseConfig } from './building/defs';
 import { buildingCatalog } from './building/catalog';
@@ -4959,6 +4960,11 @@ export class GameWorld {
 
   /** Pick a hotbar slot (0-based; wraps around the hotbar's slots, or the items carried when there is no hotbar). */
   selectSlot(slot: number): void {
+    if (this.mine instanceof ForestSystem) {
+      this.mine.select(slot);
+      this.slot = this.mine.hand;
+      return;
+    }
     const bars = this.ui.screens.flatMap((s) => s.elements.filter((e) => e.kind === 'hotbar').map((e) => e.slots));
     const n = Math.max(1, ...(bars.length ? bars : [this.slotItems().length]));
     this.slot = ((Math.round(slot) % n) + n) % n;
@@ -5218,7 +5224,8 @@ export class GameWorld {
 
   private initMine(settings: unknown, scene: SceneFile): void {
     const self = this;
-    this.mine = new MineSystem(settings, {
+    const forest = !!settings && typeof settings === 'object' && (settings as { world?: string }).world === 'forest';
+    this.mine = new (forest ? ForestSystem : MineSystem)(settings, {
       time: () => this.time,
       now: () => this.clock() * 1000,
       player: () => {
@@ -5247,6 +5254,8 @@ export class GameWorld {
     if (sell) this.mine.sellAt = [sell[0], sell[1], sell[2]];
     if (p) {
       if (!at) this.mine.origin = [p.spawn.feet.x, p.spawn.feet.y, p.spawn.feet.z];
+      // (The forest's ground is under the Player start.)
+      if (this.mine instanceof ForestSystem) this.mine.origin[1] -= (this.mine.forestBlocks.height(0, 0) + 1) * this.mine.B;
       // (Jumps clear a block, whatever its size.)
       p.jumpScale = Math.max(1, Math.sqrt((1.25 * this.mine.B) / (PLAYER.jumpSpeed ** 2 / (2 * 800))));
     }
@@ -5260,6 +5269,7 @@ export class GameWorld {
     const m = this.mine!, p = this.player!;
     const free = !this.held && !this.equipped && !this.plugHand && !this.weaponInHand() && !this.hiding && !this.frozen;
     m.handFree = free;
+    p.airJumps = m.airJumps();
     m.tick(STEP, free && !!p.input.fire, free && !!p.input.block);
     this.syncMineColliders(false);
   }

@@ -1,7 +1,7 @@
 /** Mining: money, backpack, where you are and the reset timer in the corner; the Home button; the upgrade menu. */
-import type { MineHud, MineMenu } from '@cocoaworlds/runtime';
+import type { ForestHud, ForestMenu, MineHud, MineMenu } from '@cocoaworlds/runtime';
 import { useLayoutEffect, useRef, useState } from 'react';
-import { oreIcons } from '../viewport/mine-view';
+import { blockIcons, oreIcons } from '../viewport/mine-view';
 
 /** 1234 → "1,234"; big ones shortened (12.3K, 4.5M…). */
 export function money(n: number): string {
@@ -95,7 +95,100 @@ function Tree({ menu, onBuy }: { menu: MineMenu; onBuy: (id: string) => void }) 
   );
 }
 
+/** The forest map: rings by region (hazed while cursed), lairs, and where the player is. */
+function ForestMap({ map }: { map: ForestMenu['map'] }) {
+  const S = 300, k = S / 2 / map.radius;
+  return (
+    <svg width={S} height={S} className="cw-forest-map">
+      {[...map.rings].reverse().map((r, i) => {
+        const next = map.rings[map.rings.length - i];
+        return <circle key={r.label} cx={S / 2} cy={S / 2} r={(next ? next.from : map.radius) * k} fill={r.color} opacity={r.cursed ? 0.45 : 1} />;
+      })}
+      {map.rings.map((r) => r.from > 0 && <circle key={`e${r.label}`} cx={S / 2} cy={S / 2} r={r.from * k} fill="none" stroke="rgba(0,0,0,0.35)" />)}
+      {map.lairs.map((l) => (
+        <g key={l.label} transform={`translate(${S / 2 + l.x * k},${S / 2 + l.z * k})`}>
+          <rect x={-4} y={-4} width={8} height={8} fill={l.done ? '#f2c14e' : '#1a1622'} stroke="#f2e8d0" strokeWidth={1.5} />
+        </g>
+      ))}
+      <circle cx={S / 2 + map.at[0] * k} cy={S / 2 + map.at[1] * k} r={4} fill="#fff" stroke="#000" />
+    </svg>
+  );
+}
+
+function ForestUi({ hud, f, menu, onAction }: { hud: MineHud; f: ForestHud; menu: (MineMenu & { forest?: ForestMenu }) | null; onAction: (name: string, arg?: string) => void }) {
+  const fm = menu?.forest;
+  return (
+    <>
+      <div className="cw-ov cw-mine-corner" data-testid="mine-hud">
+        <div className="cw-forest-region">{f.region}</div>
+        {f.curse && <div className="cw-forest-curse">{f.curse}</div>}
+        {hud.place && <div className="cw-mine-place">{hud.place}</div>}
+        {hud.dynamite > 0 && <div>Dynamite × {hud.dynamite}</div>}
+        {f.trophies > 0 && <div className="cw-mine-dim">Trophies {f.trophies}/6</div>}
+      </div>
+      <div className="cw-ov cw-forest-bar" data-testid="forest-bar">
+        {f.slots.map((s, i) => {
+          return (
+            <button key={i} type="button" className={`cw-forest-slot${f.hand === i ? ' on' : ''}`} title={s.label} onClick={() => onAction('slot', String(i))}>
+              {s.kind === 'block' ? s.n > 0 && <img src={blockIcons.get(s.mat)} alt="" /> : <span className={`cw-forest-tool ${s.kind}`} style={{ ['--c' as string]: s.color }} />}
+              {s.n > 0 && <span className="cw-forest-n">{s.n}</span>}
+            </button>
+          );
+        })}
+      </div>
+      {hud.boss && (
+        <div className={`cw-ov cw-mine-boss${hud.boss.phase > 1 ? ' angry' : ''}`} data-testid="mine-boss">
+          <span>{hud.boss.label}</span>
+          <span className="cw-mine-bar">
+            <span style={{ width: `${Math.max(0, hud.boss.hp * 100)}%` }} />
+          </span>
+        </div>
+      )}
+      {hud.guard && <div key={hud.guard} className={`cw-ov cw-mine-flash ${hud.guard}`} />}
+      {hud.aim && !menu && (
+        <div className="cw-ov cw-mine-aim">
+          <span>{hud.aim.label}</span>
+          {hud.aim.needs ? <span className="cw-mine-needs">Needs {hud.aim.needs}</span> : hud.aim.broken > 0 && <span className="cw-mine-bar"><span style={{ width: `${Math.round(hud.aim.broken * 100)}%` }} /></span>}
+        </div>
+      )}
+      {fm && (
+        <div className="cw-mine-menu cw-forest-menu" data-testid="mine-menu" onMouseDown={(e) => e.stopPropagation()}>
+          <div className="cw-forest-col">
+            <h3>Gear</h3>
+            <div className="cw-forest-row"><span className="cw-mine-dim">Sword</span><span>{fm.sword}</span></div>
+            <div className="cw-forest-row"><span className="cw-mine-dim">Pickaxe</span><span>{fm.pickaxe}</span></div>
+            <div className="cw-forest-row"><span className="cw-mine-dim">Armor</span><span>{fm.armor || 'None'}</span></div>
+            <div className="cw-forest-row"><span className="cw-mine-dim">Health shards</span><span>{fm.shards}</span></div>
+            <h3>Charms</h3>
+            {fm.charms.map((c) => (
+              <div key={c.label} className={`cw-forest-charm${c.owned ? '' : ' off'}`}>
+                <strong>{c.owned ? c.label : '?'}</strong>
+                {c.owned && <span>{c.text}</span>}
+              </div>
+            ))}
+          </div>
+          <div className="cw-forest-col">
+            <h3>Trophies</h3>
+            {fm.trophies.map((t) => (
+              <div key={t.boss} className={`cw-forest-row${t.done ? '' : ' off'}`}>
+                <span>{t.done ? t.boss : '?'}</span>
+                <span className="cw-mine-dim">{t.region}</span>
+              </div>
+            ))}
+            <ForestMap map={fm.map} />
+          </div>
+          <button type="button" className="cw-mine-close" onClick={() => onAction('menu', 'close')} data-testid="mine-close">
+            Close
+          </button>
+        </div>
+      )}
+    </>
+  );
+}
+
 export function MineUi({ hud, menu, onAction }: { hud: MineHud; menu: MineMenu | null; onAction: (name: string, arg?: string) => void }) {
+  const f = (hud as MineHud & { forest?: ForestHud }).forest;
+  if (f) return <ForestUi hud={hud} f={f} menu={menu} onAction={onAction} />;
   return (
     <>
       <div className="cw-ov cw-mine-corner" data-testid="mine-hud">

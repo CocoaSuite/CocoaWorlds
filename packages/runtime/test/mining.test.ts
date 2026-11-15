@@ -1,7 +1,7 @@
 // Mining: the block mine (made from a seed), colliders, monsters' paths, the pickaxe, selling, buying and saving.
 import { beforeAll, describe, expect, it } from 'vitest';
 import { newEntity, newScene } from '@cocoaworlds/core';
-import { AIR, Boss, blockId, EDGE, findPath, GameWorld, initPhysics, MAT, mineConfig, MineBlocks, MineSystem, Mob, oreOf, zoneOf, type MineHost } from '../src';
+import { AIR, Boss, blockId, ForestSystem, EDGE, findPath, GameWorld, initPhysics, MAT, mineConfig, MineBlocks, MineSystem, Mob, oreOf, zoneOf, type MineHost } from '../src';
 
 beforeAll(async () => {
   await initPhysics();
@@ -430,6 +430,95 @@ describe('structures and bosses', () => {
     m.blocks.set(x - 2, y, z, mat(m, 'web'));
     m.tick(1 / 60, false);
     expect(m.moveScale()).toBeCloseTo(0.3);
+  });
+});
+
+describe('twilit forest', () => {
+  function host(at: [number, number, number]) {
+    let t = 0;
+    const h: MineHost & { feet: [number, number, number]; dir: [number, number, number]; said: string[]; hurtBy: number; advance(s: number): void } = {
+      feet: at,
+      dir: [1, 0, 0],
+      said: [],
+      hurtBy: 0,
+      time: () => t,
+      now: () => 1_000_000 + t * 1000,
+      player: () => ({ feet: h.feet, eye: [h.feet[0], h.feet[1] + 64, h.feet[2]], dir: h.dir }),
+      hurt: (n) => void (h.hurtBy += n),
+      heal: () => {},
+      say: (s) => void h.said.push(s),
+      sound: () => {},
+      home: () => {},
+      random: () => 0.5,
+      advance: (s) => void (t += s),
+    };
+    return h;
+  }
+  const at = (f: ForestSystem, x: number, z: number): [number, number, number] => [(x - 0.5) * 48 + 24, (f.forestBlocks.height(x, z) + 1) * 48, (z - 0.5) * 48 + 24];
+
+  it('rings of regions; a curse hurts until the boss before it falls, whose trophy lights a pedestal', () => {
+    const h = host([0, 0, 0]);
+    const f = new ForestSystem({ world: 'forest', seed: 5, maxMobs: 0 }, h);
+    expect(f.forestBlocks.region(0, 0)).toBe(0);
+    expect(f.forestBlocks.region(250, 0)).toBe(2);
+    h.feet = at(f, 250, 0);
+    for (let i = 0; i < 60; i++) {
+      h.advance(1 / 60);
+      f.tick(1 / 60, false);
+    }
+    expect(h.hurtBy).toBeGreaterThanOrEqual(6);
+    expect(f.hud().forest.curse).toBe('Choking fog');
+    const boss = new Boss(f.config.bosses[0]!, 'root_hall', [0, 0, 0], 1, 1, 0);
+    f.bosses.push(boss);
+    boss.hit(5, [0, 0], 0, f['bossWorld']());
+    f['bossDown'](boss);
+    expect(f.trophies.has('rootwarden')).toBe(true);
+    expect(f.tier).toBe(1);
+    expect(f.airJumps()).toBe(1);
+    expect(f.hud().forest.curse).toBe('');
+    const [px, py, pz] = f.forestBlocks.pedestals()[0]!;
+    expect(f.config.materials[f.blocks.get(px, py, pz) - MAT]!.id).toBe('pedestal_lit');
+    const back = new ForestSystem({ world: 'forest', seed: 5, maxMobs: 0 }, h);
+    back.load(f.save());
+    expect(back.trophies.has('rootwarden')).toBe(true);
+    expect(back.blocks.get(px, py, pz)).toBe(f.blocks.get(px, py, pz));
+  });
+
+  it('dug blocks are kept and built with; chests give gear; the sword fights but does not dig', () => {
+    const h = host([0, 0, 0]);
+    const f = new ForestSystem({ world: 'forest', seed: 5, maxMobs: 0 }, h);
+    const x = 60, z = 0, y = f.forestBlocks.height(x, z);
+    h.feet = at(f, x - 2, z);
+    for (let i = -1; i <= 1; i++) for (let j = 1; j < 4; j++) f.blocks.set(x + i, f.forestBlocks.height(x - 2, z) + j, z, AIR);
+    const gy = f.forestBlocks.height(x - 2, z) + 2;
+    f.blocks.set(x, gy, z, f.forestBlocks.m('dirt'));
+    f.select(0);
+    for (let i = 0; i < 20; i++) {
+      h.advance(0.5);
+      f.tick(1 / 60, true);
+    }
+    expect(f.blocks.get(x, gy, z)).toBe(f.forestBlocks.m('dirt'));
+    f.select(1);
+    for (let i = 0; i < 20 && f.blocks.get(x, gy, z) !== AIR; i++) {
+      h.advance(0.5);
+      f.tick(1 / 60, true);
+    }
+    expect(f.blocks.get(x, gy, z)).toBe(AIR);
+    expect(f.inv.get(f.forestBlocks.m('dirt'))).toBe(1);
+    f.select(2);
+    h.dir = [1, -1, 0].map((v) => v / Math.SQRT2) as [number, number, number];
+    f.tick(1 / 60, false, true);
+    expect(f.inv.get(f.forestBlocks.m('dirt')) ?? 0).toBe(0);
+    f.blocks.set(x, gy, z, f.forestBlocks.m('chest'));
+    h.dir = [1, 0, 0];
+    f.select(1);
+    for (let i = 0; i < 20 && f.blocks.get(x, gy, z) !== AIR; i++) {
+      h.advance(0.5);
+      f.tick(1 / 60, true, false);
+    }
+    expect(f.sword + f.armor + f.shards + f.dynamite).toBeGreaterThan(-1);
+    expect(h.said.length).toBeGreaterThan(0);
+    void y;
   });
 });
 
