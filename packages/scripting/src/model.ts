@@ -292,6 +292,11 @@ export interface Script {
   version: 1;
   variables: VariableDef[];
   handlers: Handler[];
+  /**
+   * Work internal: objects the blocks name are looked for inside this object first, then inside each object it is
+   * in (same object, same prefab object, or same name), so copies drive their own parts (`workInternal` in core).
+   */
+  workInternal?: boolean;
 }
 
 export const emptyScript = (): Script => ({ version: 1, variables: [], handlers: [] });

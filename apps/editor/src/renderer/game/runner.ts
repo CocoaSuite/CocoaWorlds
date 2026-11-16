@@ -5,7 +5,7 @@
 import { prepareToDraw, prepareToDrawNow, whenCompiled } from '../viewport/poster';
 import { SceneReflections, sceneProbes } from '../viewport/reflections';
 import { GroundBlend } from '../viewport/ground-blend';
-import { SceneDoc, expandRepeats, parkAssets, type GameRules, type GameValue, type MaterialDef, type PlantDef, type SceneFile, type SurfaceSounds, type VfxEffect } from '@cocoaworlds/core';
+import { SceneDoc, expandRepeats, workInternal, parkAssets, type GameRules, type GameValue, type MaterialDef, type PlantDef, type SceneFile, type SurfaceSounds, type VfxEffect } from '@cocoaworlds/core';
 import { isInvisibleMaterial } from '@cocoaworlds/geometry';
 import * as THREE from 'three';
 import { brushBounds } from '../brush/brushes';
@@ -86,7 +86,7 @@ export class GameRunner {
     private data: GameData,
     private cb: RunnerEvents,
   ) {
-    this.doc = new SceneDoc(parkAssets(expandRepeats(structuredClone(data.scene), brushBounds), brushBounds));
+    this.doc = new SceneDoc(parkAssets(expandRepeats(workInternal(structuredClone(data.scene)), brushBounds), brushBounds));
     this.current = data.scene;
     const r = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
     r.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -135,7 +135,7 @@ export class GameRunner {
     const scene = resume ?? this.current;
     if (scene !== this.current) {
       this.current = scene;
-      this.doc = new SceneDoc(parkAssets(expandRepeats(structuredClone(scene), brushBounds), brushBounds));
+      this.doc = new SceneDoc(parkAssets(expandRepeats(workInternal(structuredClone(scene)), brushBounds), brushBounds));
       this.cb.scene?.(scene);
     }
     const play = await PlaySession.start(scene, this.materialFor, this.data.rules, this.data.values, saved);
@@ -355,7 +355,7 @@ export class GameRunner {
     this.scene.remove(old.group);
     old.dispose();
     this.play = null;
-    this.doc = new SceneDoc(parkAssets(expandRepeats(structuredClone(next), brushBounds), brushBounds));
+    this.doc = new SceneDoc(parkAssets(expandRepeats(workInternal(structuredClone(next)), brushBounds), brushBounds));
     this.current = next;
     this.cb.scene?.(next);
     const play = await PlaySession.start(next, this.materialFor, this.data.rules, this.data.values, loadProgress(this.data.id), t);

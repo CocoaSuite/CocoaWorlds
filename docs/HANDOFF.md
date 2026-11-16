@@ -527,3 +527,16 @@ its own renderer (cached per item in `PlaySession.shopPreview`); a Shop item Pic
 
 Next, if wanted: the user's own app icons (placeholders in `AppIcon`), the Pictures app, a Computer entry in the Add menu, an e2e test in Play.
 
+### 31. Work internal: copies that work their own parts
+
+Status: done (2026-11-16). Script setting `workInternal` (Inspector › Script › Work internal; field on the `script`
+component def, `Script.workInternal`). Play rewrites that script's object references (`{ entity }` anywhere in its
+blocks) to the nearest match inside the owner, then each ancestor going out: same id, same prefab part, same name,
+same name without `_N`. Applied to the scene before `expandRepeats` wherever a game is built (`world.ts`
+constructor, `play-session.ts`, `game/runner.ts`), so units, drawing and the checker all agree. Code:
+`packages/core/src/work-internal.ts`. Docs: `docs/scripting.md` (Work internal). Tests:
+`packages/runtime/test/work-internal.test.ts` (three work lights: each copy's own light, brightness and glow; a
+message to one object and a move). Not checked by eye in the app; no e2e test.
+
+Next, if wanted: show in the block editor which object a Work internal block will reach; a project default.
+

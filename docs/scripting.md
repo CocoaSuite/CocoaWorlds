@@ -219,6 +219,22 @@ A Light's **On at start** setting makes it start switched off. Point objects ins
 models, sounds, particles) ride with it in Play, so a model with Physics and a Light inside it is a floodlight
 the player can carry with E.
 
+## Work internal: copies that work their own parts
+
+Blocks point at objects by the object picked, so a work light copied in the editor (or placed from a prefab) still
+switches the *first* work light's bulb. Tick **Work internal** on the Script component (Inspector) and every block
+of that script that names an object (actions, values, events, messages sent to one object, Make a copy) looks for
+it inside this object first, then inside each object it is in, going out; the nearest match wins:
+
+1. the object picked itself, if it is in there;
+2. a part copied from the same prefab part (even renamed);
+3. an object with the same name;
+4. the same name apart from a copy number (`Lamp_2` for `Lamp`).
+
+Nothing found: the block keeps the object picked. So one script, written once on a work light (turn on *Bulb*, set
+its brightness, set the glow of this object), works on each copy by itself. It is resolved once when Play starts
+(`workInternal` in `packages/core/src/work-internal.ts`); the editor still shows the object picked.
+
 ## 3D printers and a shop
 
 | Block | What it does |

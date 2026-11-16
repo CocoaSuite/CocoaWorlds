@@ -1249,7 +1249,18 @@ export const COMPONENTS: ComponentDef[] = [
     label: e('Script', 'Скрипт'),
     description: e('Blocks that make this object do things: “When the player enters… open the door”.', 'Блоки, которые заставляют объект действовать: «Когда игрок входит… открыть дверь».'),
     appliesTo: 'any',
-    fields: [],
+    fields: [
+      {
+        key: 'workInternal',
+        label: e('Work internal', 'Работать внутри'),
+        hint: e(
+          'Objects the blocks name are looked for inside this object first, then inside what it is in (same name or same prefab part). Copies then work their own parts: each work light drives its own light and glow.',
+          'Объекты из блоков ищутся сначала внутри этого объекта, затем внутри того, в чём он лежит (то же имя или та же часть префаба). Тогда копии управляют своими частями: каждая лампа включает свой свет и своё свечение.',
+        ),
+        type: { kind: 'boolean' },
+        default: false,
+      },
+    ],
   },
   { name: 'brush', label: e('Brush', 'Кисть'), description: e('Level geometry.', 'Геометрия уровня.'), appliesTo: 'brush', fields: [], internal: true },
   {
