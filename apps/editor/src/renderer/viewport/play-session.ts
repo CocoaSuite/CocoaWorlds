@@ -11,6 +11,8 @@ import { buildMesh, isInvisibleMaterial, type Brush, type VoxelField, type World
 import { GameWorld, initPhysics, runDevCommand, POSE, AT, NPC, type AcousticVoice, type BuildPrompt, type FrameSnapshot, type Hearing, type NavGrid, type BodyInfo, type ModelMesh, type SavedProgress, type Travel, type UiState, type PlayerInput, type PlayerStatus, type ScriptLog, type TriggerEvent } from '@cocoaworlds/runtime';
 
 /** Field-of-view effects, degrees added to the camera's own; ease rates per second. */
+/** The most spot and point lights casting shadows that lights made ahead for copies may bring the scene to. */
+const SPARE_SHADOWS = 3;
 const FOV = { sprint: 8, fall: 10, weak: -14, easeIn: 6, easeOut: 4 };
 import type { Problem, ScriptError } from '@cocoaworlds/scripting';
 import * as THREE from 'three';
@@ -443,6 +445,14 @@ export class PlaySession {
     walk(doc.settings.ui);
     // (The computer's shop prints its items too.)
     for (const e of doc.entities) if (e.components.shopItem) templates.add(e.id);
+    // Shadows cost a texture each in every lit material: past a few, materials with many textures (walls) stop
+    // compiling and vanish. So spare lights cast shadows only while the scene's own shadow lights leave room.
+    const casts = (l: unknown) => readComponent<{ castShadows: boolean; kind: string }>('light', l as never).castShadows;
+    const isShown = (e: EntityData) => {
+      for (let x: EntityData | undefined = e; x; x = x.parent ? doc.get(x.parent) : undefined) if (!x.visible) return false;
+      return true;
+    };
+    let shadows = doc.entities.filter((e) => e.components.light && (e.components.light as { kind?: string }).kind !== 'directional' && isShown(e) && casts(e.components.light)).length;
     for (const t of templates) {
       if (!doc.get(t)) continue;
       for (const e of doc.subtree(t)) {
@@ -450,7 +460,11 @@ export class PlaySession {
         for (let x: EntityData | undefined = e; x && x.id !== t; x = x.parent ? doc.get(x.parent) : undefined) if (!x.visible) shownIn = false;
         // (Suns are left out: a copied sun would be taken for the scene's sun.)
         if (!e.components.light || !shownIn || (e.components.light as { kind?: string }).kind === 'directional') continue;
-        for (let k = 0; k < 2 && this.spareLights.length < 8; k++) this.spareLights.push({ id: `spare:${e.id}:${k}`, light: e.components.light, matrix: doc.worldMatrix(e.id), source: e.id });
+        for (let k = 0; k < 2 && this.spareLights.length < 8; k++) {
+          const shadow = casts(e.components.light) && shadows < SPARE_SHADOWS;
+          if (shadow) shadows++;
+          this.spareLights.push({ id: `spare:${e.id}:${k}`, light: shadow ? e.components.light : { ...(e.components.light as object), castShadows: false }, matrix: doc.worldMatrix(e.id), source: e.id });
+        }
       }
     }
   }

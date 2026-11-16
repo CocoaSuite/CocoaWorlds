@@ -253,7 +253,9 @@ A copied or printed prop with Physics keeps what is inside it: brushes become pa
 and move with it) and models ride it. Lights inside copies come along as set up on the original (a light off at
 start stays off, same colour, brightness, reach and cone) and ride what they are in; a light in a print stays dark
 until the print is done. Each light inside an object that a Make a copy or Print block names (or a Shop item) gets two lights made
-ahead (eight at most in all), so lit copies don't stall the game; more lit copies than that stay dark.
+ahead (eight at most in all), so lit copies don't stall the game; more lit copies than that stay dark. These lights cast shadows only
+while the scene has at most three spot or point lights casting them (more would stop materials with many textures
+from drawing).
 
 A shop: keep the things for sale hidden somewhere as originals, show a list on a screen (Screens workspace), and
 on **When the player picks a row** check the cash, change it, and print the picked thing. With **Keep the world**
