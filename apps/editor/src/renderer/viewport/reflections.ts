@@ -84,6 +84,33 @@ function atlasPass(): { scene: THREE.Scene; cam: THREE.Camera; mat: THREE.Shader
   return { scene, cam: new THREE.Camera(), mat };
 }
 
+/**
+ * Copies the drawn cube with every pixel made a plain, bounded colour. One pixel that isn't a number (or is too
+ * bright for the picture's format) would otherwise spread through the blur over the whole probe, and everything
+ * reflecting it would turn black, for good: later captures see those black surfaces and blend over the bad row.
+ */
+function cleanPass(): { scene: THREE.Scene; mat: THREE.ShaderMaterial } {
+  const mat = new THREE.ShaderMaterial({
+    uniforms: { src: { value: null } },
+    vertexShader: 'varying vec3 cwDir; void main() { cwDir = position; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+    fragmentShader: /* glsl */ `
+      uniform samplerCube src;
+      varying vec3 cwDir;
+      void main() {
+        vec3 c = textureCube(src, cwDir).rgb;
+        if (isnan(c.r) || isnan(c.g) || isnan(c.b)) c = vec3(0.0);
+        gl_FragColor = vec4(clamp(c, 0.0, 1024.0), 1.0);
+      }`,
+    side: THREE.BackSide,
+    depthTest: false,
+    depthWrite: false,
+    toneMapped: false,
+  });
+  const scene = new THREE.Scene();
+  scene.add(new THREE.Mesh(new THREE.BoxGeometry(2, 2, 2), mat));
+  return { scene, mat };
+}
+
 export class SceneReflections {
   private cube = new THREE.WebGLCubeRenderTarget(256, { type: THREE.HalfFloatType });
   private cam = new THREE.CubeCamera(1, 40000, this.cube);
@@ -91,6 +118,9 @@ export class SceneReflections {
   private env: THREE.WebGLCubeRenderTarget | null = null;
   private atlas = new THREE.WebGLRenderTarget(PROBE_LEVELS * PROBE_TILE, PROBE_SLOTS * PROBE_TILE, { type: THREE.HalfFloatType, depthBuffer: false, generateMipmaps: false, minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter });
   private pass = atlasPass();
+  private cleanCube = new THREE.WebGLCubeRenderTarget(256, { type: THREE.HalfFloatType });
+  private cleanCam = new THREE.CubeCamera(0.1, 10, this.cleanCube);
+  private cleaner = cleanPass();
   private at = new THREE.Vector3(Infinity, Infinity, Infinity);
   private last = 0;
   private on = false;
@@ -301,8 +331,11 @@ export class SceneReflections {
   /** Blur the drawn cube and write it into the atlas row `slot`. */
   private store(slot: number, share = 1): void {
     const r = this.r;
-    this.env = this.pmrem.fromCubemap(this.cube.texture, this.env ?? undefined);
-    // Into the atlas row.
+    this.cleaner.mat.uniforms.src!.value = this.cube.texture;
+    this.cleanCam.update(r, this.cleaner.scene);
+    this.env = this.pmrem.fromCubemap(this.cleanCube.texture, this.env ?? undefined);
+    // Into the atlas row (a whole new capture replaces the row outright, whatever it held).
+    this.pass.mat.blending = share >= 1 ? THREE.NoBlending : THREE.NormalBlending;
     const prev = r.getRenderTarget();
     const u = this.pass.mat.uniforms;
     u.env!.value = this.env.texture;
@@ -324,6 +357,9 @@ export class SceneReflections {
     }
     this.env?.dispose();
     this.cube.dispose();
+    this.cleanCube.dispose();
+    this.cleaner.mat.dispose();
+    (this.cleaner.scene.children[0] as THREE.Mesh).geometry.dispose();
     this.pmrem.dispose();
     this.atlas.dispose();
     this.pass.mat.dispose();
