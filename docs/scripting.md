@@ -243,8 +243,8 @@ fill at its own pace, slower for bigger prints, gliding to the next layer withou
 (**Look from** / **Eyes at**, like a hiding spot; the player stays where they stand and can still be seen) and a
 desktop opens over the game: a changeable desktop picture (three built in, or the player's own image), Notes,
 Pictures (not available yet), Display (picture, dark/light, CRT filter) and a Shop. Esc or Exit gets up. The shop
-lists every object with a **Shop item** component (name, price, optional picture; keep the originals in the asset
-park): Buy prints a copy on the computer's **3D printer** (empty: the scene's first) and takes the price from its
+lists every object with a **Shop item** component (name, price; keep the originals in the asset park). Each card
+shows the object itself, drawn once as the game shows it (brushes and models inside it); a **Picture** replaces that. Buy prints a copy on the computer's **3D printer** (empty: the scene's first) and takes the price from its
 **Money value** (the name of a number game value; empty: everything is free). Buy is off while the printer prints,
 something is on it, or the money is short. Notes, the picture and the settings are kept per computer and saved with
 the world (Save the world rule).
@@ -252,7 +252,7 @@ the world (Save the world rule).
 A copied or printed prop with Physics keeps what is inside it: brushes become part of its body (they collide
 and move with it) and models ride it. Lights inside copies come along as set up on the original (a light off at
 start stays off, same colour, brightness, reach and cone) and ride what they are in; a light in a print stays dark
-until the print is done. Each light inside an object that a Make a copy or Print block names gets two lights made
+until the print is done. Each light inside an object that a Make a copy or Print block names (or a Shop item) gets two lights made
 ahead (eight at most in all), so lit copies don't stall the game; more lit copies than that stay dark.
 
 A shop: keep the things for sale hidden somewhere as originals, show a list on a screen (Screens workspace), and

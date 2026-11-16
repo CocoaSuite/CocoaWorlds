@@ -836,7 +836,7 @@ export const COMPONENTS: ComponentDef[] = [
     fields: [
       { key: 'name', label: e('Name', 'Название'), hint: e('Empty: the object’s name.', 'Пусто — имя объекта.'), type: { kind: 'text' }, default: '' },
       { key: 'price', label: e('Price', 'Цена'), type: { kind: 'number', min: 0, step: 5 }, default: 10 },
-      { key: 'picture', label: e('Picture', 'Картинка'), hint: e('The preview in the shop. Empty: a plain box.', 'Превью в магазине. Пусто — простая коробка.'), type: { kind: 'asset', asset: 'textures' }, default: '' },
+      { key: 'picture', label: e('Picture', 'Картинка'), hint: e('Replaces the preview in the shop. Empty: the object itself, drawn.', 'Заменяет превью в магазине. Пусто — сам объект, отрисованный.'), type: { kind: 'asset', asset: 'textures' }, default: '' },
     ],
   },
   {

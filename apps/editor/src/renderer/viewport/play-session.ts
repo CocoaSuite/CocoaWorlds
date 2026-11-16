@@ -26,6 +26,7 @@ import { toGeometry } from './world-render';
 import { buildSign, type SignObject } from './sign';
 import { buildPoster, type PosterObject } from './poster';
 import { PrinterRig } from './printer';
+import { renderShopPreview } from './shop-preview';
 import { buildGooglyEyes, type GooglyEyes } from './googly-eyes';
 import { Effects } from './effects';
 import { VfxRenderer, effectById, type VfxHandle } from './vfx';
@@ -422,7 +423,7 @@ export class PlaySession {
 
   /**
    * Lights made ahead for lights in copies (made while playing: a printed lamp), switched off until one borrows
-   * them: two for each light inside an object that a script copies or prints, at most eight in all.
+   * them: two for each light inside an object that a script copies or prints (or a shop sells), at most eight in all.
    */
   readonly spareLights: { id: string; light: unknown; matrix: number[]; source: string }[] = [];
   /** Which copied light has borrowed each spare light. */
@@ -440,6 +441,8 @@ export class PlaySession {
     };
     for (const e of doc.entities) if (e.components.script) walk(e.components.script);
     walk(doc.settings.ui);
+    // (The computer's shop prints its items too.)
+    for (const e of doc.entities) if (e.components.shopItem) templates.add(e.id);
     for (const t of templates) {
       if (!doc.get(t)) continue;
       for (const e of doc.subtree(t)) {
@@ -1317,6 +1320,14 @@ export class PlaySession {
 
   setComputerState(id: string, state: Record<string, unknown>): void {
     this.world.setComputerState(id, state);
+  }
+
+  private previews = new Map<string, Promise<string>>();
+  /** A shop item drawn as the game shows it (a PNG data URL; '' : nothing to draw). Made once each. */
+  shopPreview(id: string): Promise<string> {
+    let p = this.previews.get(id);
+    if (!p) this.previews.set(id, (p = renderShopPreview(this.doc, id, this.material)));
+    return p;
   }
 
   /** The blueprint menu as shown now (null: shut). */

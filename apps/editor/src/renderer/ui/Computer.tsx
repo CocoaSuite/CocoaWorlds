@@ -15,6 +15,8 @@ export interface ComputerHost {
   computerAction(action: string, arg?: string): string;
   computerState(id: string): Record<string, unknown> | null;
   setComputerState(id: string, state: Record<string, unknown>): void;
+  /** A shop item drawn as the game shows it ('' : nothing to draw). */
+  shopPreview(id: string): Promise<string>;
 }
 
 type App = 'notes' | 'pictures' | 'shop' | 'display';
@@ -91,9 +93,18 @@ function AppIcon({ app }: { app: App }) {
   );
 }
 
-/** A shop card: the item's picture (a plain box without one), name, price and Buy. */
-function ShopCard({ item, view, onBuy }: { item: ComputerView['items'][number]; view: ComputerView; onBuy: () => void }) {
-  const url = useAsset(item.picture);
+/** A shop card: the item drawn as the game shows it (or its own picture, if it has one), name, price and Buy. */
+function ShopCard({ item, view, host, onBuy }: { item: ComputerView['items'][number]; view: ComputerView; host: ComputerHost; onBuy: () => void }) {
+  const picture = useAsset(item.picture);
+  const [render, setRender] = useState('');
+  useEffect(() => {
+    let live = true;
+    if (!item.picture) host.shopPreview(item.id).then((u) => live && setRender(u)).catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, [item.id, item.picture, host]);
+  const url = item.picture ? picture : render;
   const printing = view.printing === item.id;
   const poor = view.money !== null && view.money < item.price;
   return (
@@ -263,7 +274,7 @@ export function ComputerScreen({ view, host }: { view: ComputerView; host: Compu
           </span>
         </div>
         <div className="cw-pc-shop">
-          {view.items.map((item) => <ShopCard key={item.id} item={item} view={view} onBuy={() => buy(item.id)} />)}
+          {view.items.map((item) => <ShopCard key={item.id} item={item} view={view} host={host} onBuy={() => buy(item.id)} />)}
           {view.items.length === 0 && <span className="cw-pc-muted">Nothing for sale yet.</span>}
         </div>
       </>

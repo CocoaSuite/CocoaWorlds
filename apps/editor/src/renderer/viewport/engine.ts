@@ -759,6 +759,10 @@ export class ViewportEngine {
     this.play?.setComputerState(id, state);
   }
 
+  shopPreview(id: string): Promise<string> {
+    return this.play?.shopPreview(id) ?? Promise.resolve('');
+  }
+
   /** Mining: a menu or Home button. */
   mineAction(name: string, arg = ''): void {
     this.play?.mineAction(name, arg);

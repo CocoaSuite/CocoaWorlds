@@ -522,6 +522,8 @@ drawn by `Viewport.tsx` and `game/player.tsx` from `hud.computer`. At a computer
 notes), Esc gets up: `ViewportEngine.gameKey`, `GameRunner.onKey`. Built-in desktop pictures:
 `renderer/assets/computer/`. Tests: `packages/runtime/test/computer.test.ts`. Docs: `docs/scripting.md`.
 
-Next, if wanted: the user's own app icons (placeholders in `AppIcon`), the Pictures app, shop pictures drawn from
-the object itself, a Computer entry in the Add menu, an e2e test in Play.
+Shop previews: `viewport/shop-preview.ts` draws the item and everything under it (solid brushes, models) once on
+its own renderer (cached per item in `PlaySession.shopPreview`); a Shop item Picture replaces it.
+
+Next, if wanted: the user's own app icons (placeholders in `AppIcon`), the Pictures app, a Computer entry in the Add menu, an e2e test in Play.
 
