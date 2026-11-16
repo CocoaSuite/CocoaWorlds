@@ -746,6 +746,19 @@ export class ViewportEngine {
     this.play?.closeBlueprints();
   }
 
+  /** The computer's screen: its buttons, and what its desktop keeps. */
+  computerAction(action: string, arg = ''): string {
+    return this.play?.computerAction(action, arg) ?? '';
+  }
+
+  computerState(id: string): Record<string, unknown> | null {
+    return this.play?.computerState(id) ?? null;
+  }
+
+  setComputerState(id: string, state: Record<string, unknown>): void {
+    this.play?.setComputerState(id, state);
+  }
+
   /** Mining: a menu or Home button. */
   mineAction(name: string, arg = ''): void {
     this.play?.mineAction(name, arg);
@@ -802,6 +815,20 @@ export class ViewportEngine {
   /** Returns true when the key was the game's. */
   private gameKey(e: KeyboardEvent, down: boolean): boolean {
     if (!this.asPlayer || !(this.locked || (this.uiFree && !this.uiPaused && this.play))) return false;
+    // At a computer the keys are typed into its screen (notes): not the game's, nor the editor's. Esc gets up.
+    if (this.play?.atComputer) {
+      if (e.key === 'F5' || e.key === 'F6') return false;
+      e.stopImmediatePropagation();
+      if (this.gameKeys.size) {
+        this.gameKeys.clear();
+        this.sendInput();
+      }
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        if (down) this.play.computerAction('exit');
+      }
+      return true;
+    }
     // (With the mouse freed by a screen there is nothing else to type into, so the keys stay the game's.)
     if (e.key === 'Escape' && !this.locked) {
       // In a menu: the first Esc pauses (as it frees the mouse when it is captured); the next one stops.

@@ -1,5 +1,5 @@
 /** The in-game display (health, score, game values, messages, the use prompt), for Play and exported games. */
-import type { BuildPrompt, MineHud, MineMenu, UiState } from '@cocoaworlds/runtime';
+import type { BuildPrompt, ComputerView, MineHud, MineMenu, UiState } from '@cocoaworlds/runtime';
 import { useEffect, useState } from 'react';
 import { t } from '../i18n';
 import type { PlaySession } from '../viewport/play-session';
@@ -42,6 +42,8 @@ export interface Hud {
   placing: boolean;
   /** The blueprint menu (null: shut). */
   blueprints: BlueprintMenuState | null;
+  /** The computer the player is at (null: none). */
+  computer: ComputerView | null;
   /** Mining: the corner display and the menu (null: no mine, or shut). */
   mine: MineHud | null;
   mineMenu: MineMenu | null;
@@ -115,6 +117,7 @@ export function hudOf(play: PlaySession, locked: boolean): Hud {
     build: locked ? play.buildPrompt() : null,
     placing: locked && play.placing,
     blueprints: play.blueprintMenu(),
+    computer: play.computer(),
     mine: play.mineHud(),
     mineMenu: play.mineMenu(),
     keys: locked ? play.keyPrompts() : [],

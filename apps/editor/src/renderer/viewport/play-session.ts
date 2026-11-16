@@ -1298,6 +1298,27 @@ export class PlaySession {
     this.world.mineAction(name, arg);
   }
 
+  /** The computer the player is at: what its screen shows of the game (null: none), its buttons, what it keeps. */
+  get atComputer(): string | null {
+    return this.world.atComputer;
+  }
+
+  computer(): ReturnType<GameWorld['computer']> {
+    return this.world.computer();
+  }
+
+  computerAction(action: string, arg = ''): string {
+    return this.world.computerAction(action, arg);
+  }
+
+  computerState(id: string): Record<string, unknown> | null {
+    return this.world.computerState(id);
+  }
+
+  setComputerState(id: string, state: Record<string, unknown>): void {
+    this.world.setComputerState(id, state);
+  }
+
   /** The blueprint menu as shown now (null: shut). */
   blueprintMenu(): ReturnType<GameWorld['blueprintMenu']> {
     return this.world.blueprintMenu();

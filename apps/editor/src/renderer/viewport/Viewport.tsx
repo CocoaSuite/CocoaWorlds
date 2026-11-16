@@ -5,6 +5,7 @@ import { uiOf, type SceneFile, type Vec3 } from '@cocoaworlds/core';
 import { SaveMenu } from '../ui/SaveMenu';
 import { UiLayer } from '../ui/UiLayer';
 import { BlueprintMenu } from '../ui/BlueprintMenu';
+import { ComputerScreen } from '../ui/Computer';
 import { MineUi } from '../ui/MineUi';
 import { HudView } from '../ui/Hud';
 import { ContextMenu, Segmented, type MenuEntry } from '@cocoaworlds/ui';
@@ -416,6 +417,7 @@ export function Viewport() {
       {playing && hud && playScene && <UiLayer ui={uiOf(playScene.settings)} live={hud.ui} values={hud.allValues} onClick={(id) => engine.current?.clickUi(id)} onRow={(list, row) => engine.current?.pickRow(list, row)} />}
       {playing && hud && <HudView hud={hud} />}
       {hud?.blueprints && <BlueprintMenu menu={hud.blueprints} onPick={(id) => engine.current?.pickBlueprint(id)} onClose={() => engine.current?.closeBlueprints()} />}
+      {playing && hud?.computer && engine.current && <ComputerScreen view={hud.computer} host={engine.current} />}
       {hud?.mine && <MineUi hud={hud.mine} menu={hud.mineMenu} onAction={(a, arg) => engine.current?.mineAction(a, arg)} />}
       {playing && devOpen && <DevConsole onRun={(l) => engine.current?.devCommand(l) ?? []} onClose={() => engine.current?.setConsole(false)} />}
       {playing && lock === false && !uiMouse && !devOpen && hud && playing.rules.saveMenu && (

@@ -9,6 +9,7 @@ import { useEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { setAssetReader } from '../assets';
 import { BlueprintMenu } from '../ui/BlueprintMenu';
+import { ComputerScreen } from '../ui/Computer';
 import { MineUi } from '../ui/MineUi';
 import { HudView, type Hud } from '../ui/Hud';
 import { UiLayer } from '../ui/UiLayer';
@@ -66,6 +67,7 @@ function Player() {
       {scene && hud && <UiLayer ui={uiOf(scene.settings)} live={hud.ui} values={hud.allValues} onClick={(id) => runner.current?.clickUi(id)} onRow={(l, row) => runner.current?.pickRow(l, row)} />}
       {hud && <HudView hud={hud} />}
       {hud?.blueprints && <BlueprintMenu menu={hud.blueprints} onPick={(id) => runner.current?.pickBlueprint(id)} onClose={() => runner.current?.closeBlueprints()} />}
+      {hud?.computer && runner.current && <ComputerScreen view={hud.computer} host={runner.current} />}
       {hud?.mine && <MineUi hud={hud.mine} menu={hud.mineMenu} onAction={(a, arg) => runner.current?.mineAction(a, arg)} />}
       {locked && <div className="cw-crosshair" aria-hidden="true" />}
       {devOpen && <DevConsole onRun={(l) => runner.current?.devCommand(l) ?? []} onClose={() => runner.current?.setConsole(false)} />}

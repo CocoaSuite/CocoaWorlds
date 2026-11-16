@@ -208,6 +208,19 @@ export class GameRunner {
     this.play?.closeBlueprints();
   }
 
+  /** The computer's screen: its buttons, and what its desktop keeps. */
+  computerAction(action: string, arg = ''): string {
+    return this.play?.computerAction(action, arg) ?? '';
+  }
+
+  computerState(id: string): Record<string, unknown> | null {
+    return this.play?.computerState(id) ?? null;
+  }
+
+  setComputerState(id: string, state: Record<string, unknown>): void {
+    this.play?.setComputerState(id, state);
+  }
+
   /** Mining: a menu or Home button. */
   mineAction(name: string, arg = ''): void {
     this.play?.mineAction(name, arg);
@@ -405,6 +418,18 @@ export class GameRunner {
       return this.setConsole(true);
     }
     if (!this.play || !(this.locked || (this.uiFree && !this.uiPaused))) return;
+    // At a computer the keys are typed into its screen (notes). Esc gets up.
+    if (this.play.atComputer) {
+      if (this.keys.size) {
+        this.keys.clear();
+        this.send();
+      }
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        if (down) this.play.computerAction('exit');
+      }
+      return;
+    }
     if (e.key === 'Escape') {
       // Captured: the browser frees the mouse itself. In a menu: pause, as that would.
       if (!this.locked && down && this.play.baseKey('Escape')) return;

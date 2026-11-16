@@ -800,6 +800,46 @@ export const COMPONENTS: ComponentDef[] = [
     ],
   },
   {
+    name: 'computer',
+    label: e('Computer', 'Компьютер'),
+    description: e(
+      'A computer the player sits at with E: the view moves to its screen and a desktop opens (notes, a changeable desktop picture, a shop). The shop lists every object with a Shop item component; buying one prints a copy on the 3D printer. Esc or Exit gets up.',
+      'Компьютер, за который игрок садится по E: взгляд переходит к экрану и открывается рабочий стол (заметки, сменная картинка, магазин). В магазине — все объекты с компонентом «Товар»; покупка печатает копию на 3D-принтере. Esc или «Выход» — встать.',
+    ),
+    appliesTo: 'any',
+    conflicts: ['hidingSpot', 'seat', 'trigger', 'soundArea', 'water', 'ladder', 'npc'],
+    fields: [
+      { key: 'prompt', label: e('Prompt', 'Подсказка'), type: { kind: 'text' }, default: 'Use computer' },
+      { key: 'reach', label: e('Reach', 'Дотянуться'), hint: e('How close the player must be to use it with E.', 'Как близко нужно подойти, чтобы сесть по E.'), type: { kind: 'number', min: 16, step: 8, unit: 'u' }, default: 96 },
+      {
+        key: 'view',
+        label: e('Look from', 'Смотреть из'),
+        hint: e('An object placed and turned where the eyes go (looking along its −Z, at the screen). Empty: this object.', 'Объект, поставленный и повёрнутый туда, где глаза (смотрит по −Z, на экран). Пусто — этот объект.'),
+        type: { kind: 'object' },
+        default: '',
+      },
+      { key: 'offset', label: e('Eyes at', 'Глаза в'), hint: e('From that object, in its own axes.', 'От этого объекта, в его осях.'), type: { kind: 'vec3', step: 4 }, default: [0, 0, 24] },
+      { key: 'time', label: e('Zooming in takes', 'Приближение за'), type: { kind: 'number', min: 0, max: 2, step: 0.05, unit: 's' }, default: 0.4 },
+      { key: 'printer', label: e('3D printer', '3D-принтер'), hint: e('What the shop prints on. Empty: the scene’s first 3D printer.', 'На чём печатает магазин. Пусто — первый 3D-принтер сцены.'), type: { kind: 'object', component: 'printer' }, default: '' },
+      { key: 'money', label: e('Money value', 'Значение денег'), hint: e('The name of a number game value the shop spends. Empty: everything is free.', 'Имя числового игрового значения, которое тратит магазин. Пусто — всё бесплатно.'), type: { kind: 'text' }, default: '' },
+    ],
+  },
+  {
+    name: 'shopItem',
+    label: e('Shop item', 'Товар'),
+    description: e(
+      'Lists this object in the shop of every Computer: buying it prints a copy on the 3D printer. Put the original in the asset park.',
+      'Добавляет объект в магазин каждого Компьютера: покупка печатает копию на 3D-принтере. Оригинал держите в парке ассетов.',
+    ),
+    appliesTo: 'any',
+    conflicts: ['npc', 'printer', 'computer'],
+    fields: [
+      { key: 'name', label: e('Name', 'Название'), hint: e('Empty: the object’s name.', 'Пусто — имя объекта.'), type: { kind: 'text' }, default: '' },
+      { key: 'price', label: e('Price', 'Цена'), type: { kind: 'number', min: 0, step: 5 }, default: 10 },
+      { key: 'picture', label: e('Picture', 'Картинка'), hint: e('The preview in the shop. Empty: a plain box.', 'Превью в магазине. Пусто — простая коробка.'), type: { kind: 'asset', asset: 'textures' }, default: '' },
+    ],
+  },
+  {
     name: 'stake',
     label: e('Sticks in the ground', 'Втыкается в землю'),
     description: e(
@@ -1473,5 +1513,25 @@ export interface HidingSpotData {
   upDown: number;
   time: number;
   reach: number;
+  [k: string]: unknown;
+}
+
+export interface ComputerData {
+  prompt: string;
+  reach: number;
+  view: string;
+  offset: [number, number, number];
+  time: number;
+  /** The 3D printer its shop prints on ('' : the scene's first). */
+  printer: string;
+  /** The number game value its shop spends ('' : everything is free). */
+  money: string;
+  [k: string]: unknown;
+}
+
+export interface ShopItemData {
+  name: string;
+  price: number;
+  picture: string;
   [k: string]: unknown;
 }

@@ -883,3 +883,45 @@ button.cw-sec.cw-fold { width: 100%; border: 0; border-top: 1px solid var(--line
 .cw-forest-charm { display: flex; flex-direction: column; }
 .cw-forest-charm span { color: #a8a0c8; font-size: 12px; }
 .cw-forest-map { margin-top: 10px; border-radius: 50%; }
+
+/* ── The in-game computer (ui/Computer.tsx): a glossy dark desktop over the game view ── */
+.cw-pc { --pc-accent: #9b9b9b; --pc-glass: rgba(20, 22, 26, 0.8); --pc-text: #f2f2f2; --pc-muted: #b8b8b8; --pc-line: rgba(255, 255, 255, 0.36); --pc-well: rgba(0, 0, 0, 0.45); --pc-soft: rgba(255, 255, 255, 0.1); --pc-hi: rgba(255, 255, 255, 0.3);
+  position: absolute; inset: 0; z-index: 40; overflow: hidden; pointer-events: auto; user-select: none; background: #14161a center / cover no-repeat; color: var(--pc-text); font: 15px/1.3 'Segoe UI', 'Frutiger', 'Istok Web', system-ui, sans-serif; animation: cw-pc-in 0.18s ease-out; }
+.cw-pc[data-theme='light'] { --pc-glass: rgba(236, 239, 243, 0.84); --pc-text: #16181c; --pc-muted: #4c5058; --pc-line: rgba(255, 255, 255, 0.95); --pc-well: rgba(255, 255, 255, 0.62); --pc-soft: rgba(0, 0, 0, 0.06); --pc-hi: rgba(255, 255, 255, 0.9); }
+@keyframes cw-pc-in { from { opacity: 0; transform: scale(1.04); } to { opacity: 1; transform: none; } }
+.cw-pc button { font: inherit; color: inherit; cursor: pointer; }
+.cw-pc-crt { border-radius: 18px; }
+.cw-pc-crt::after { content: ''; position: absolute; inset: 0; z-index: 90; pointer-events: none; border-radius: 18px; background: radial-gradient(ellipse at center, transparent 60%, rgba(0, 0, 0, 0.5) 100%), repeating-linear-gradient(transparent 0, transparent 2px, rgba(0, 0, 0, 0.2) 3px, rgba(0, 0, 0, 0.2) 4px); }
+.cw-pc-icons { position: absolute; left: 20px; top: 24px; display: flex; flex-direction: column; gap: 20px; }
+.cw-pc-icon { display: flex; flex-direction: column; align-items: center; gap: 5px; width: 84px; padding: 0; border: 0; background: none; color: #fff !important; font-size: 14px !important; text-shadow: 0 1px 3px #000, 0 0 2px #000; }
+.cw-pc-icon i { width: 56px; height: 56px; border-radius: 14px; display: flex; align-items: center; justify-content: center; border: 1px solid rgba(255, 255, 255, 0.5); background: linear-gradient(rgba(255, 255, 255, 0.45), rgba(30, 32, 36, 0.75) 50%, rgba(20, 22, 26, 0.85)); }
+.cw-pc-icon.off i { opacity: 0.6; }
+.cw-pc-win { position: absolute; display: flex; flex-direction: column; border-radius: 10px; overflow: hidden; background: var(--pc-glass); backdrop-filter: blur(14px); border: 1px solid var(--pc-line); box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5), inset 0 1px 0 var(--pc-hi); }
+.cw-pc-bar { flex: none; height: 32px; display: flex; align-items: center; justify-content: space-between; padding: 0 6px 0 12px; font-weight: 700; cursor: default; color: var(--pc-text); background: linear-gradient(var(--pc-hi), var(--pc-soft) 50%, transparent 51%, var(--pc-soft)); }
+.cw-pc-win.on > .cw-pc-bar { color: #111; background: linear-gradient(#d4d4d4, var(--pc-accent) 50%, #868686 51%, #a6a6a6); }
+.cw-pc-btn { border-radius: 6px; border: 1px solid var(--pc-line); padding: 6px 14px; line-height: 1.1; font-size: 14px; background: linear-gradient(var(--pc-hi), var(--pc-soft) 50%, transparent 51%, var(--pc-soft)); }
+.cw-pc-btn:hover:not(:disabled) { filter: brightness(1.2); }
+.cw-pc-btn:disabled { opacity: 0.45; cursor: default; }
+.cw-pc-btn.on { color: #111 !important; font-weight: 700; border-color: rgba(255, 255, 255, 0.6); background: linear-gradient(#d4d4d4, var(--pc-accent) 50%, #868686 51%, #a6a6a6); }
+.cw-pc-btn.flat { border-color: transparent; background: none; text-align: left; padding: 6px 8px; }
+.cw-pc-x { width: 28px; height: 20px; padding: 0; color: #fff !important; background: rgba(0, 0, 0, 0.45); border-color: rgba(255, 255, 255, 0.4); }
+.cw-pc-well { background: var(--pc-well); border: 1px solid var(--pc-soft); border-radius: 6px; box-sizing: border-box; }
+.cw-pc-muted { color: var(--pc-muted); }
+.cw-pc-notes { display: flex; gap: 8px; padding: 8px; flex: 1; min-height: 0; }
+.cw-pc-files { width: 120px; display: flex; flex-direction: column; gap: 2px; padding: 4px; overflow-y: auto; }
+.cw-pc-files button { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: none; }
+.cw-pc-notes textarea { flex: 1; resize: none; font: inherit; color: var(--pc-text); padding: 10px; line-height: 1.5; outline: none; user-select: text; }
+.cw-pc-row { display: flex; gap: 8px; align-items: center; }
+.cw-pc-pad { padding: 12px; display: flex; flex-direction: column; gap: 12px; }
+.cw-pc-papers { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.cw-pc-papers button { height: 74px; padding: 0; border-radius: 6px; border: 3px solid var(--pc-soft); background: #14161a center / cover no-repeat; }
+.cw-pc-papers button.on { border-color: var(--pc-accent); }
+.cw-pc-shop { flex: 1; min-height: 0; overflow-y: auto; display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; padding: 0 14px 14px; align-content: start; }
+.cw-pc-card { display: flex; flex-direction: column; gap: 6px; padding: 8px; border-radius: 8px; border: 1px solid var(--pc-soft); background: linear-gradient(var(--pc-soft), transparent); }
+.cw-pc-pic { height: 118px; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+.cw-pc-pic img { max-width: 100%; max-height: 100%; object-fit: contain; }
+.cw-pc-card .cw-pc-row { justify-content: space-between; min-height: 32px; }
+.cw-pc-task { position: absolute; left: 0; right: 0; bottom: 0; height: 46px; box-sizing: border-box; display: flex; align-items: center; gap: 6px; padding: 0 14px; border-top: 1px solid var(--pc-line); backdrop-filter: blur(14px); background: linear-gradient(var(--pc-hi), var(--pc-glass) 45%); }
+.cw-pc-task .cw-pc-btn { min-width: 104px; text-align: left; }
+.cw-pc-task .cw-pc-start { min-width: 0; border-radius: 16px; padding: 7px 18px; }
+.cw-pc-menu { position: absolute; left: 10px; bottom: 54px; width: 190px; padding: 6px; display: flex; flex-direction: column; gap: 2px; border-radius: 10px; background: var(--pc-glass); backdrop-filter: blur(14px); border: 1px solid var(--pc-line); box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5); }

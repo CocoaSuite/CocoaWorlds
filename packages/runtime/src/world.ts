@@ -51,6 +51,8 @@ import {
   type StringLightsData,
   type ShelfData,
   type PrinterData,
+  type ComputerData,
+  type ShopItemData,
   worldBoundsOf,
   posterScrollRadius,
   posterOf,
@@ -166,6 +168,8 @@ export interface SavedScene {
   power?: { on?: Record<string, boolean>; plugs?: Record<string, string>; hung?: Record<string, [P3, P3] | [P3, P3, P3]> };
   /** 3D printers: the print under way (what of, the copy's number, seconds printed) and the prints waiting. */
   printers?: Record<string, { job?: [template: string, n: number, t: number] }>;
+  /** Computers: what each desktop keeps (notes, the desktop picture, settings). */
+  computers?: Record<string, ComputerState>;
   /** The time of day (hours). */
   hour?: number;
   /** Scripts, by object: variables that changed, and limited stacks that have had their run. */
@@ -774,6 +778,7 @@ export class GameWorld {
       if (job) printers[id] = { job };
     }
     if (Object.keys(printers).length) out.printers = printers;
+    if (this.computerStates.size) out.computers = Object.fromEntries(this.computerStates);
     // (Parts of copies the start blocks make again count; other copies taken away are simply not made again.)
     const again = new Set<string>();
     for (const c of this.made.values()) if (c.atStart) for (const x of c.parts) again.add(x);
@@ -883,6 +888,8 @@ export class GameWorld {
         this.signVersion++;
       }
     for (const [id, hung] of Object.entries(save.posters ?? {})) if (typeof hung === 'boolean') this.setPosterHung(id, hung);
+    for (const [id, st] of Object.entries(save.computers && typeof save.computers === 'object' ? save.computers : {}))
+      if (st && typeof st === 'object' && !Array.isArray(st)) this.computerStates.set(id, st);
     for (const [id, s] of Object.entries(save.printers && typeof save.printers === 'object' ? save.printers : {})) {
       const p = this.printers.get(id);
       if (!p || !s || typeof s !== 'object') continue;
@@ -1257,6 +1264,15 @@ export class GameWorld {
         this.spots.set(e.id, { ...readComponent<HidingSpotData>('seat', e.components.seat), kind: 'other' });
         this.seats.add(e.id);
       }
+    // Computers are spots too: the view goes to the screen, the player stays where they stand.
+    for (const e of doc.entities) {
+      if (e.components.computer && !this.spots.has(e.id)) {
+        const c = readComponent<ComputerData>('computer', e.components.computer);
+        this.spots.set(e.id, { kind: 'other', prompt: c.prompt, view: c.view, offset: c.offset, side: 0, upDown: 0, time: c.time, reach: c.reach });
+        this.computers.set(e.id, c);
+      }
+      if (e.components.shopItem) this.shopItems.push({ id: e.id, data: readComponent<ShopItemData>('shopItem', e.components.shopItem) });
+    }
     for (const id of this.spots.keys()) this.spotReach = Math.max(this.spotReach, this.reachOf(id));
     // Measured now (while loading) rather than on the first creature's first walk.
     if (this.npcs.size) {
@@ -1363,7 +1379,7 @@ export class GameWorld {
       playAnimation: (target, name, loop) => this.bus.emit({ type: 'anim', target, name, loop, time: this.time }),
       spawn: (template, place) => this.spawn(template, place),
       held: () => this.held?.id ?? null,
-      hiding: () => this.hidingIn !== null && !this.seats.has(this.hidingIn),
+      hiding: () => this.hidingIn !== null && !this.seats.has(this.hidingIn) && !this.computers.has(this.hidingIn),
       holds: (what) => !!this.held && (what === null || this.heldIds().includes(what)),
       isInside: (zone, what) => this.isInside(zone, what),
       distance: (a, b) => {
@@ -3035,7 +3051,9 @@ export class GameWorld {
     const view = this.spotView(id, data);
     this.hiding = { id, data, feet: p.feetPosition, from: { eye: p.eye(), yaw: p.input.yaw, pitch: p.input.pitch }, view, at: this.time, out: null, heldUntil: 0 };
     Object.assign(p.input, { forward: 0, right: 0, jump: false, crouch: false, fire: false, use: false, yaw: view.yaw, pitch: view.pitch });
-    if (this.seats.has(id)) {
+    if (this.computers.has(id)) {
+      // (At a computer: only the view moves.)
+    } else if (this.seats.has(id)) {
       // (Sitting: the body goes under the eyes and can still be hit.)
       p.placeAt({ x: view.eye[0], y: view.eye[1] - PLAYER.eye, z: view.eye[2] });
       // (A physics seat holds still under the player.)
@@ -3079,6 +3097,7 @@ export class GameWorld {
     }
     p.teleport(feet, yaw);
     p.input.pitch = 0;
+    if (this.computers.has(h.id)) return;
     if (this.seats.has(h.id)) {
       this.unstill();
       return this.runner.dispatch({ type: 'stands', targets: [h.id, ...this.ancestorsOf(h.id)] });
@@ -3098,7 +3117,7 @@ export class GameWorld {
   private spotInfo(): SpotInfo[] {
     const out: SpotInfo[] = [];
     for (const [id, data] of this.spots) {
-      if (!this.doc.get(id) || !this.isVisible(id) || this.seats.has(id)) continue;
+      if (!this.doc.get(id) || !this.isVisible(id) || this.seats.has(id) || this.computers.has(id)) continue;
       let place = this.spotPlaces.get(id);
       if (!place) {
         const v = this.spotView(id, data);
@@ -3146,7 +3165,7 @@ export class GameWorld {
     if (!this.hiding) return;
     const out = this.hiding.out === null;
     this.unstill();
-    if (out) this.runner.dispatch({ type: this.seats.has(this.hiding.id) ? 'stands' : 'unhides', targets: [this.hiding.id, ...this.ancestorsOf(this.hiding.id)] });
+    if (out && !this.computers.has(this.hiding.id)) this.runner.dispatch({ type: this.seats.has(this.hiding.id) ? 'stands' : 'unhides', targets: [this.hiding.id, ...this.ancestorsOf(this.hiding.id)] });
     this.hiding = null;
     this.player?.collider.setEnabled(true);
   }
@@ -3353,7 +3372,7 @@ export class GameWorld {
         if (!p) return null;
         const [x, y, z] = p.eye();
         const h = this.hiding;
-        const hidden = h && h.out === null && !this.seats.has(h.id) ? h.id : null;
+        const hidden = h && h.out === null && !this.seats.has(h.id) && !this.computers.has(h.id) ? h.id : null;
         return { feet: hidden ? { ...h!.feet } : p.feetPosition, eye: { x, y, z }, collider: p.collider.handle, hidden, entering: !!hidden && this.time - h!.at <= Math.max(this.moveTime(), STEP) };
       },
       pullOut: (npc, spot) => {
@@ -4220,6 +4239,80 @@ export class GameWorld {
     return copyId;
   }
 
+  // ── Computers ──
+
+  private computers = new Map<string, ComputerData>();
+  /** What each computer's desktop keeps (the screen's own business: notes, picture, settings). */
+  private computerStates = new Map<string, ComputerState>();
+  /** Objects with a Shop item component, in scene order. */
+  private shopItems: { id: string; data: ShopItemData }[] = [];
+
+  /** The computer the player is at, once the view has reached its screen (null: none). */
+  get atComputer(): string | null {
+    const id = this.hidingIn;
+    return id && this.computers.has(id) && this.time - this.hiding!.at >= this.moveTime() ? id : null;
+  }
+
+  private computerPrinter(c: ComputerData): string | null {
+    return c.printer && this.printers.has(c.printer) ? c.printer : (this.printers.keys().next().value ?? null);
+  }
+
+  private computerMoney(c: ComputerData): number | null {
+    const v = c.money ? this.globals.get(c.money) : null;
+    return typeof v === 'number' ? v : null;
+  }
+
+  /** What the computer's screen shows of the game: money, the printer, the shop's items (null: not at one). */
+  computer(): ComputerView | null {
+    const id = this.atComputer;
+    if (!id) return null;
+    const c = this.computers.get(id)!;
+    const printer = this.computerPrinter(c);
+    const job = printer ? this.printers.get(printer)!.job : null;
+    return {
+      id,
+      money: this.computerMoney(c),
+      printer: !printer ? 'none' : job ? 'printing' : this.printerBusy(printer) ? 'blocked' : 'ready',
+      printing: job ? job.template : null,
+      done: job ? Math.floor(Math.min(1, job.t / job.seconds) * 100) : 0,
+      minute: this.dayOn ? Math.floor(this.dayHour * 60) : null,
+      items: this.shopItems.map(({ id: item, data }) => ({ id: item, name: String(data.name || this.names.get(item) || 'Item'), price: Math.max(0, Number(data.price) || 0), picture: String(data.picture || '') })),
+    };
+  }
+
+  /**
+   * The screen's buttons. 'exit': get up. 'buy' (an item's id): pay and print it; what happened comes back
+   * ('ok', 'poor': not enough money, 'busy': the printer is printing or something is on it, 'none': no printer).
+   */
+  computerAction(action: string, arg = ''): string {
+    const id = this.hidingIn;
+    const c = id ? this.computers.get(id) : undefined;
+    if (!c) return '';
+    if (action === 'exit') {
+      this.leaveHiding();
+      return 'ok';
+    }
+    if (action !== 'buy') return '';
+    const item = this.shopItems.find((i) => i.id === arg);
+    const printer = this.computerPrinter(c);
+    if (!item || !printer) return 'none';
+    const price = Math.max(0, Number(item.data.price) || 0);
+    const money = this.computerMoney(c);
+    if (money !== null && money < price) return 'poor';
+    if (!this.print(item.id, printer)) return 'busy';
+    if (money !== null) this.globals.set(c.money, money - price);
+    return 'ok';
+  }
+
+  /** What a computer's desktop keeps, and keeping it (saved with the game). */
+  computerState(id: string): ComputerState | null {
+    return this.computerStates.get(id) ?? null;
+  }
+
+  setComputerState(id: string, state: ComputerState): void {
+    if (this.computers.has(id)) this.computerStates.set(id, state);
+  }
+
   // ── 3D printers ──
 
   /** Printers: their settings and the print under way. */
@@ -5081,7 +5174,7 @@ export class GameWorld {
       lists,
       inventory: this.slotItems().map((item) => ({ item, count: this.inventory.get(item) ?? 0 })),
       slot: this.slot,
-      freesMouse: !!this.base?.menuOpen || !!this.mine?.menuOpen || this.ui.screens.some((sc) => sc.freesMouse && this.uiShown.has(sc.id)),
+      freesMouse: !!this.base?.menuOpen || !!this.mine?.menuOpen || this.atComputer !== null || this.ui.screens.some((sc) => sc.freesMouse && this.uiShown.has(sc.id)),
     };
   }
 
@@ -5779,6 +5872,23 @@ function modelColliders(data: ModelData, mesh: ModelMesh, scale: Q3, moves: bool
 }
 
 /** A print under way: what of, its copy (and number), seconds printed of how many, made by the start blocks. */
+/** What a computer's desktop keeps: plain data, the screen's own business. */
+export type ComputerState = Record<string, unknown>;
+
+/** What a computer's screen shows of the game. */
+export interface ComputerView {
+  id: string;
+  /** Money to spend (null: the shop is free). */
+  money: number | null;
+  printer: 'none' | 'ready' | 'printing' | 'blocked';
+  /** The item being printed (its object id), and how far along (0–100). */
+  printing: string | null;
+  done: number;
+  /** The time of day in minutes (null: the scene has no day). */
+  minute: number | null;
+  items: { id: string; name: string; price: number; picture: string }[];
+}
+
 interface PrintJob {
   template: string;
   copy: string;

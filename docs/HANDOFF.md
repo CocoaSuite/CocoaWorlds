@@ -510,3 +510,18 @@ read-back with GLTFLoader, no extras), e2e `test-e2e/glb-export.test.mjs` (passe
 
 Next, if wanted: models and lights inside a selected group too; group transforms kept on nodes; baking triplanar
 and wear into textures; export from the Materials workspace's “what uses this”.
+
+### 30. In-game computer (desktop, notes, shop)
+
+Status: first version (2026-11-16). Components `computer` and `shopItem` (`packages/core/src/components.ts`). The
+world treats a computer as a spot whose view goes to the screen while the player stays put (`computers`,
+`atComputer`, `computer()`, `computerAction('exit' | 'buy')`, `computerState` / `setComputerState`, saved as
+`SavedScene.computers`); it frees the mouse (`uiState().freesMouse`). The screen is `ui/Computer.tsx` (styles at the
+end of `editor.css`, `.cw-pc-*`; look: dark glossy “Frutiger Aero”, accent #9B9B9B, optional CRT scanlines),
+drawn by `Viewport.tsx` and `game/player.tsx` from `hud.computer`. At a computer the keys go to the screen (typing
+notes), Esc gets up: `ViewportEngine.gameKey`, `GameRunner.onKey`. Built-in desktop pictures:
+`renderer/assets/computer/`. Tests: `packages/runtime/test/computer.test.ts`. Docs: `docs/scripting.md`.
+
+Next, if wanted: the user's own app icons (placeholders in `AppIcon`), the Pictures app, shop pictures drawn from
+the object itself, a Computer entry in the Add menu, an e2e test in Play.
+

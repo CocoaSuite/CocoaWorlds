@@ -239,6 +239,16 @@ rise. Prints are drawn cut at the layer being laid: layer lines on the sides, th
 filament colour (from the outlines of the cut, so open models look solid too), and the head goes round each layer's outline (the copy's triangles cut at that height) and a zig-zag
 fill at its own pace, slower for bigger prints, gliding to the next layer without jumps. Shadows and ambient occlusion leave a print out until it is done.
 
+**Computer** (component) and **Shop item** (component): a Computer is used with E; the view moves to its screen
+(**Look from** / **Eyes at**, like a hiding spot; the player stays where they stand and can still be seen) and a
+desktop opens over the game: a changeable desktop picture (three built in, or the player's own image), Notes,
+Pictures (not available yet), Display (picture, dark/light, CRT filter) and a Shop. Esc or Exit gets up. The shop
+lists every object with a **Shop item** component (name, price, optional picture; keep the originals in the asset
+park): Buy prints a copy on the computer's **3D printer** (empty: the scene's first) and takes the price from its
+**Money value** (the name of a number game value; empty: everything is free). Buy is off while the printer prints,
+something is on it, or the money is short. Notes, the picture and the settings are kept per computer and saved with
+the world (Save the world rule).
+
 A copied or printed prop with Physics keeps what is inside it: brushes become part of its body (they collide
 and move with it) and models ride it. Lights inside copies come along as set up on the original (a light off at
 start stays off, same colour, brightness, reach and cone) and ride what they are in; a light in a print stays dark
