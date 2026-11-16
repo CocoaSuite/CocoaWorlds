@@ -205,7 +205,7 @@ interface State {
   /** Where "place" puts new things: the point the view is looking at (set by the viewport). */
   placementPoint: () => [number, number, number] | null;
   /** An open editor dialog. */
-  dialog: 'makePrefab' | 'recipes' | null;
+  dialog: 'makePrefab' | 'recipes' | 'exportGlb' | null;
   /** The bottom workspace's open tab. */
   bottomTab: 'script' | 'assets' | 'console' | 'problems';
   /** Bottom panel size: just its tab strip, docked under the view, or covering the whole stage. */

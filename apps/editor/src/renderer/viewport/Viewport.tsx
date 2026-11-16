@@ -23,6 +23,7 @@ import { DevConsole } from '../ui/DevConsole';
 import type { BevelInfo } from './engine';
 import type { ClipKeep, ClipState } from './clip-tool';
 import { ViewportEngine, type Hud, type ViewportStats } from './engine';
+import { setExportMaterials } from './glb-export';
 
 const mod = navigator.platform.toLowerCase().includes('mac') ? '⌘' : 'Ctrl+';
 
@@ -173,8 +174,10 @@ export function Viewport() {
     }
     engine.current = e;
     useEditor.setState({ placementPoint: () => e.aimPoint() });
+    setExportMaterials((name, tint) => e.brushMaterial(name, tint));
     (window as unknown as { __cwViewport?: ViewportEngine }).__cwViewport = e;
     return () => {
+      setExportMaterials(null);
       e.dispose();
       engine.current = null;
     };
@@ -285,6 +288,7 @@ export function Viewport() {
         { label: t('edit.duplicate'), onSelect: s.duplicateSelection },
         { label: t('edit.group'), shortcut: `${mod}G`, onSelect: s.groupSelection },
         { label: t('prefab.make'), onSelect: () => s.openDialog('makePrefab') },
+        { label: t('glb.export'), onSelect: () => s.openDialog('exportGlb') },
         { label: t('edit.rename'), disabled: selection.length !== 1, onSelect: () => s.startRename(selection[0]!) },
         'separator',
         { label: t('edit.delete'), onSelect: s.deleteSelection },

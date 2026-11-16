@@ -496,3 +496,17 @@ pixel-block bosses and monsters in `renderer/viewport/forest-models.ts`; the vie
 a dusk sky.
 
 Next, if wanted: the user's monster models and a pickaxe model; sounds; tuning prices after playing.
+
+### 29. Export selected brushes and groups as GLB
+
+Status: done (2026-11-16). File › **Export as GLB…** (also right-click in the scene tree and the view): the
+selected brushes and the brushes inside selected groups, as the level shows them (live subtract; tool faces and
+zones out), to a `.glb` file or into the project's models. Options: metres or game units, bottom centre or scene
+origin, groups as nodes or one merged mesh. Materials come from the view (`ViewportEngine.brushMaterial`,
+registered with `setExportMaterials`), copied without their shader data and unloaded maps. Details:
+docs/export.md, “Brushes as a model”. Code: `viewport/glb-export.ts`, `editor/GlbExport.tsx`, `main/model-files.ts`
+(IPC `models:saveFile`). Tests: `apps/editor/test/glb-export.test.ts` (tree, subtract, units, origin, merge, a
+read-back with GLTFLoader, no extras), e2e `test-e2e/glb-export.test.mjs` (passed here with Electron under xvfb).
+
+Next, if wanted: models and lights inside a selected group too; group transforms kept on nodes; baking triplanar
+and wear into textures; export from the Materials workspace's “what uses this”.

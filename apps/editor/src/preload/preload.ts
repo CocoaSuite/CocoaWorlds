@@ -46,6 +46,9 @@ const api: CocoaApi = {
     writeFiles: (folder, files) => ipcRenderer.invoke(IPC.writeExportFiles, folder, files),
     openFiles: () => ipcRenderer.invoke(IPC.openMaterialFiles),
   },
+  models: {
+    saveFile: (name, bytes) => ipcRenderer.invoke(IPC.saveModelFile, name, bytes),
+  },
   game: {
     export: (dir, target) => ipcRenderer.invoke(IPC.exportGame, dir, target),
     reveal: (path) => ipcRenderer.invoke(IPC.revealGame, path),

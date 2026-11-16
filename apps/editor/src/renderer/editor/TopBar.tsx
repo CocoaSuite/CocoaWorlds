@@ -26,6 +26,8 @@ export function TopBar({ onShowKeys }: { onShowKeys: () => void }) {
             items: [
               { label: t('file.save'), shortcut: `${mod}S`, onSelect: () => void s.save() },
               'separator',
+              { label: t('glb.export'), disabled: !s.selection.length, onSelect: () => s.openDialog('exportGlb') },
+              'separator',
               { label: t('file.reveal'), onSelect: () => void window.cocoa.projects.reveal(session.dir) },
               'separator',
               { label: t('file.close'), onSelect: confirmClose },

@@ -33,3 +33,27 @@ that serves the web game from a private `game://` address, so it behaves exactly
 
 Progress is saved as it changes (at most twice a second) and when the game closes: in the browser's storage for
 web games (per web site), in the game's own folder for desktop games, and in the editor's for Play.
+
+## Brushes as a model (GLB)
+
+**Export as GLB…** (File menu, or right-click in the scene tree or the view) writes the selected brushes, and the
+brushes inside selected groups, as a glTF binary model:
+
+- What is written is what the level shows: solid brushes after live subtract (every shown subtract brush still cuts
+  them, so a doorway stays a doorway). Tool faces (COL, NOGRASS), subtract volumes, trigger and sound zones, water,
+  ladders and No Render zones are left out, and so are hidden brushes. Models, lights and other objects are skipped.
+- **Units**: metres (39.37 u to a metre, as models are imported) or game units as they are.
+- **Origin**: the bottom centre of what is exported (handy for placing it back as a model), or the scene's origin.
+- **One mesh**: everything as one mesh with the faces hidden where brushes touch dropped (as in the level).
+  Otherwise each brush is its own mesh, under a node for each group, named as in the scene tree; one object
+  selected is the file's root.
+- Materials: one glTF material per face material and tint, named for people (“Grey”, a project material's name),
+  with the maps the view has loaded (colour, normal, roughness, metalness, occlusion, glow, opacity) and their
+  texture repeats. Triplanar mapping, wear, bevels and ground blend are drawn by the editor's shaders and aren't in
+  the file.
+
+**Save file…** asks where (the file name starts as the one selected object's name, or the scene's); **Add to
+project models** writes it to `assets/models` (renamed if taken), ready for Add › Model. Code:
+`renderer/viewport/glb-export.ts` (`buildExportScene`, `exportGlb`), `editor/GlbExport.tsx`, main process
+`main/model-files.ts` (`CW_MODEL_EXPORT_DIR` skips the dialog in tests). Tests: `apps/editor/test/glb-export.test.ts`,
+e2e `test-e2e/glb-export.test.mjs`.

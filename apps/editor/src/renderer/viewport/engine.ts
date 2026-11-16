@@ -1207,6 +1207,11 @@ export class ViewportEngine {
   }
   private lightSeen = 0;
 
+  /** The view's material for a face material and tint (loaded already when the face is on screen); for exports. */
+  brushMaterial(name: string, tint?: string): THREE.Material {
+    return this.world.material(name, tint);
+  }
+
   frameSelection(): void {
     const box = new THREE.Box3();
     const addBrush = (id: string) => {

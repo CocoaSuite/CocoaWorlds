@@ -1,4 +1,5 @@
 /** The main editor window: top bar, workspace tabs, then tool rail, scene list, stage and inspector, with the status bar underneath. */
+import { GlbExportDialog } from './GlbExport';
 import { SkyPanel } from './SkyPanel';
 import { VfxPanel } from './VfxPanel';
 import { UvPane } from './UvPanel';
@@ -67,6 +68,7 @@ export function EditorScreen() {
 
       <MakePrefabDialog />
       <RecipesDialog />
+      <GlbExportDialog />
       {recovery && (
         <Dialog title={t('recover.title')} onClose={() => void recover(false)}>
           <p>{t('recover.body')}</p>

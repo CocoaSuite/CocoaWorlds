@@ -11,6 +11,7 @@ import { SettingsStore } from './settings';
 import { downloadRuntime, gameData, gameFileName, ownRuntime, writeDesktopGame, writeWebGame, type ExportTarget } from './export';
 import { spawn } from 'node:child_process';
 import { openMaterialFiles, pickExportFolder, saveMaterialFile, writeExportFiles } from './material-files';
+import { saveModelFile } from './model-files';
 
 if (process.env.CW_USER_DATA) app.setPath('userData', process.env.CW_USER_DATA);
 
@@ -230,6 +231,7 @@ function registerIpc(): void {
   handle(IPC.pickExportFolder, async (title) => pickExportFolder(win, title));
   handle(IPC.writeExportFiles, async (folder, files) => writeExportFiles(folder, files));
   handle(IPC.openMaterialFiles, async () => openMaterialFiles(win));
+  handle(IPC.saveModelFile, async (name, bytes) => saveModelFile(win, name, bytes));
   registerExport();
   handle(IPC.savePrefab, async (dir, prefab, rel) => savePrefab(str(dir), prefab, rel === undefined ? undefined : str(rel)));
   handleRaw(IPC.discardRecovery, async (dir, scenePath) => discardRecovery(str(dir), str(scenePath)));

@@ -108,6 +108,10 @@ export interface CocoaApi {
     /** Pick `.cocoamat` files to import (none when cancelled). */
     openFiles(): Promise<Result<{ name: string; bytes: Uint8Array }[]>>;
   };
+  models: {
+    /** Save a `.glb` through a save dialog. Returns where, or null when cancelled. */
+    saveFile(name: string, bytes: Uint8Array): Promise<Result<string | null>>;
+  };
   game: {
     /**
      * Export the project's game (saved files) for a target: asks where (unless a folder is given in tests),
@@ -161,6 +165,7 @@ export const IPC = {
   pickExportFolder: 'materials:pickFolder',
   writeExportFiles: 'materials:writeFiles',
   openMaterialFiles: 'materials:openFiles',
+  saveModelFile: 'models:saveFile',
   exportGame: 'game:export',
   exportProgress: 'game:exportProgress',
   revealGame: 'game:reveal',

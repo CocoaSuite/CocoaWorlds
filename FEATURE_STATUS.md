@@ -105,6 +105,7 @@ Last updated: 2026-11-01 (Phase 2, first slice).
 | Edited meshes: draw, collide, paint, texture, move/rotate/scale, save; turn back into normal brushes when convex | **Done** | Carve, clip, merge, hollow and Apply cut skip them with a message. |
 | Clip tool (C): drag a line across selected brushes in any view; keep both pieces, one side or the other (Tab); Enter clips | **Done** | New faces take the material of the brush face pointing the same way. Brushes the line misses are left alone. |
 | Polygon brush: click corners in any view, finish by clicking the first corner / double-click / Enter, then set the depth | **Done** | Dents are filled in (the outline is made convex) so the brush stays solid. Backspace removes the last corner. |
+| Export as GLB: selected brushes and groups (File menu, scene tree and view right-click) as a `.glb` file or straight into the project's models; as the level shows them (live subtract, tool faces and zones left out); metres or game units, bottom centre or scene origin, groups kept as nodes or one merged mesh; materials with their maps | **Done** | See docs/export.md, “Brushes as a model”. |
 
 ## Later phases
 
