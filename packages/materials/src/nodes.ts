@@ -70,7 +70,7 @@ function output(type: string, role: OutputRole, kind: Kind, en: string, ru: stri
 
 /**
  * A named noise: settings shared by all (scale, detail, roughness, contrast, seed); the body sets `float v`.
- * `sharp`: contrast sharpens inside the body instead. `spots`: black and white, with a balance between them.
+ * `sharp`: contrast sharpens inside the body instead. `spots`: a Brightness setting too.
  */
 function noise(
   type: string,
@@ -89,10 +89,10 @@ function noise(
     { id: 'roughness', label: l('Roughness', 'Грубость'), kind: 'number', min: 0, max: 1, default: d.roughness },
     { id: 'contrast', label: sharp && !spots ? l('Sharpness', 'Чёткость') : l('Contrast', 'Контраст'), kind: 'number', min: 0, max: 1, default: d.contrast },
   ];
-  if (spots) params.push({ id: 'balance', label: l('More white', 'Больше белого'), kind: 'number', min: 0, max: 1, default: 0.5 });
+  if (spots) params.push({ id: 'balance', label: l('Brightness', 'Яркость'), kind: 'number', min: 0, max: 1, default: 0.5 });
   params.push(seed);
   const end = spots
-    ? 'float e = (1. - p_contrast) * 0.5 + 0.005; v = smoothstep(0.5 - e, 0.5 + e, v + p_balance - 0.5);'
+    ? 'v = clamp((v - 0.5) * (1. + p_contrast * 3.) + p_balance, 0., 1.);'
     : sharp
       ? 'v = clamp(v, 0., 1.);'
       : 'v = clamp((v - 0.5) * (1. + p_contrast * 3.) + 0.5, 0., 1.);';
@@ -1946,45 +1946,37 @@ outColor = vec4(vec3(v), 1.);`,
   // ── More (2026-11): named noises (as in Substance Designer's noise library) ──
   noise('clouds1', 'Clouds 1', 'Облака 1', 'Soft, smooth clouds: many layers of Perlin noise.', 'Мягкие гладкие облака: много слоёв шума Перлина.', { scale: 4, octaves: 8, roughness: 0.5, contrast: 0.2 },
     `float v = fbm(uv, p_scale, p_octaves, p_roughness, 0., p_seed);`),
-  noise('clouds2', 'Clouds 2', 'Облака 2', 'Busier, more contrasty clouds, gently swirled: overcast skies, smoke, stains.', 'Более пёстрые и контрастные облака, слегка закрученные: пасмурное небо, дым, пятна.', { scale: 3, octaves: 8, roughness: 0.6, contrast: 0.5 },
-    `vec2 w = vec2(fbm(uv, p_scale, 4., 0.5, 0., p_seed + 3.), fbm(uv, p_scale, 4., 0.5, 0., p_seed + 8.)) - 0.5;
-float v = fbm(uv + w * 0.15, p_scale, p_octaves, p_roughness, 0., p_seed) * 0.7 + fbm(uv, p_scale * 2., p_octaves, p_roughness, 0., p_seed + 1.) * 0.3;`),
-  noise('perlin', 'Perlin noise', 'Шум Перлина', 'Plain Perlin noise: smooth round blobs, one size (add detail for more layers).', 'Простой шум Перлина: гладкие округлые пятна одного размера (детали добавляют слои).', { scale: 8, octaves: 1, roughness: 0.5, contrast: 0 },
-    `float v = fbm(uv, p_scale, p_octaves, p_roughness, 0., p_seed);`),
-  noise('plasma', 'Plasma', 'Плазма', 'Bright branching veins on dark, like electric plasma: energy, lightning glow, veined rock.', 'Яркие ветвящиеся прожилки на тёмном, как плазма: энергия, свечение молний, жилы в камне.', { scale: 3, octaves: 6, roughness: 0.55, contrast: 0.5 },
-    `vec2 w = vec2(fbm(uv, p_scale, 3., 0.5, 0., p_seed + 5.), fbm(uv, p_scale, 3., 0.5, 0., p_seed + 9.)) - 0.5;
-float n = fbm(uv + w * 0.2, p_scale, p_octaves, p_roughness, 0., p_seed);
-float v = pow(1. - abs(n * 2. - 1.), 1. + p_contrast * 6.);`, true),
-  noise('crystal1', 'Crystal 1', 'Кристалл 1', 'Layers of flat, tilted shards on top of each other: crystals, broken glass, rock faces.', 'Слои плоских наклонных осколков друг на друге: кристаллы, битое стекло, грани скал.', { scale: 4, octaves: 3, roughness: 0.6, contrast: 0.2 },
-    `float v = 0.;
+  noise('clouds2', 'Clouds 2', 'Облака 2', 'Large soft clouds with ragged, finely detailed edges: overcast skies, smoke, stains, broad breakup.', 'Крупные мягкие облака с рваными, мелко детализированными краями: пасмурное небо, дым, пятна, крупная неоднородность.', { scale: 2, octaves: 9, roughness: 0.68, contrast: 0.5 },
+    `float v = fbm(uv, p_scale, p_octaves, p_roughness, 0., p_seed);
+v = mix(v, fbm(uv, p_scale * 2., p_octaves, p_roughness, 1., p_seed + 1.), 0.2);`),
+  noise('perlin', 'Perlin noise', 'Шум Перлина', 'Plain Perlin noise: smooth round blobs, one size (add detail for more layers).', 'Простой шум Перлина: гладкие округлые пятна одного размера (детали добавляют слои).', { scale: 10, octaves: 1, roughness: 0.5, contrast: 0.15 },
+    `float v = 0.5 + (fbm(uv, p_scale, p_octaves, p_roughness, 0., p_seed) - 0.5) * 0.45;`),
+  noise('plasma', 'Plasma', 'Плазма', 'Rounded bright blobs split by thin, dark, winding lines: organic cells, lava crust, plasma (Sharpness thins the lines).', 'Округлые светлые пятна, разделённые тонкими тёмными извилистыми линиями: органика, корка лавы, плазма («Чёткость» делает линии тоньше).', { scale: 8, octaves: 2, roughness: 0.45, contrast: 0.85 },
+    `float n = fbm(uv, p_scale, p_octaves, p_roughness, 0., p_seed);
+float a = clamp(abs(n * 2. - 1.), 0., 1.);
+float v = smoothstep(0., mix(0.3, 0.03, p_contrast), a) * (0.3 + 0.9 * a);`, true),
+  noise('crystal1', 'Crystal 1', 'Кристалл 1', 'Polygon-shaped shards with dark cracks between them, in layers: crystals, cracked rock, crazed glaze.', 'Многоугольные осколки с тёмными трещинами между ними, слоями: кристаллы, треснувший камень, кракелюр.', { scale: 4, octaves: 2, roughness: 0.5, contrast: 0.1 },
+    `float v = 0., amp = 1., norm = 0.;
 for (int k = 0; k < 6; k++) {
   if (float(k) >= p_octaves) break;
-  float sc = p_scale * exp2(float(k)); vec2 p = uv * sc; vec2 i = floor(p), f = fract(p); vec2 o = seedv(p_seed + float(k) * 13.);
-  float f1 = 8.; vec2 best = vec2(0.); float id = 0.;
-  for (int y = -1; y <= 1; y++) for (int x = -1; x <= 1; x++) {
-    vec2 c = vec2(float(x), float(y)); vec2 w = mod(i + c, sc);
-    vec2 dv = c + hash22(w + o) - f; float d = length(dv);
-    if (d < f1) { f1 = d; best = dv; id = hash12(w + o + 7.7); }
-  }
-  float a = id * 6.2831853;
-  float face = clamp(0.5 + dot(-best, vec2(cos(a), sin(a))) * 0.8 + (id - 0.5) * 0.4, 0., 1.);
-  v = max(v, face * pow(p_roughness, float(k)));
-}`),
-  noise('crystal2', 'Crystal 2', 'Кристалл 2', 'Sharp facets with bright ridges where they meet: gems, quartz, ice, hammered metal.', 'Чёткие грани с яркими рёбрами на стыках: самоцветы, кварц, лёд, кованый металл.', { scale: 6, octaves: 2, roughness: 0.5, contrast: 0.3 },
-    `float v = 0., norm = 0., amp = 1.;
+  vec3 c = voronoi(uv, p_scale * exp2(float(k)), 1., p_seed + float(k) * 13.);
+  // Distance to the nearest crack: straight-sided rings inside each cell.
+  v += clamp((c.y - c.x) * 1.8, 0., 1.) * (0.45 + 0.55 * c.z) * amp; norm += amp; amp *= p_roughness;
+}
+v /= max(norm, 1e-5);`),
+  noise('crystal2', 'Crystal 2', 'Кристалл 2', 'Long pointed shards running down, each its own brightness, in layers: crystal clusters, ice, splintered wood, streaks.', 'Длинные заострённые осколки сверху вниз, каждый своей яркости, слоями: друзы кристаллов, лёд, щепа, потёки.', { scale: 3, octaves: 2, roughness: 0.5, contrast: 0.2 },
+    `float v = 0., amp = 1., norm = 0.;
 for (int k = 0; k < 6; k++) {
   if (float(k) >= p_octaves) break;
-  float sc = p_scale * exp2(float(k)); vec2 p = uv * sc; vec2 i = floor(p), f = fract(p); vec2 o = seedv(p_seed + float(k) * 17.);
-  float f1 = 8., f2 = 8.; vec2 best = vec2(0.); float id = 0.;
+  // Four times as many cells across as down: each cell is tall and thin.
+  vec2 P = vec2(p_scale * 4., p_scale) * exp2(float(k)); vec2 p = uv * P; vec2 i = floor(p), f = fract(p); vec2 o = seedv(p_seed + float(k) * 17.);
+  float f1 = 8., f2 = 8., id = 0.;
   for (int y = -1; y <= 1; y++) for (int x = -1; x <= 1; x++) {
-    vec2 c = vec2(float(x), float(y)); vec2 w = mod(i + c, sc);
-    vec2 dv = c + hash22(w + o) - f; float d = length(dv);
-    if (d < f1) { f2 = f1; f1 = d; best = dv; id = hash12(w + o + 3.3); } else if (d < f2) f2 = d;
+    vec2 c = vec2(float(x), float(y)); vec2 w = mod(i + c, P);
+    float d = length(c + hash22(w + o) - f);
+    if (d < f1) { f2 = f1; f1 = d; id = hash12(w + o + 3.3); } else if (d < f2) f2 = d;
   }
-  float a = id * 6.2831853;
-  float face = clamp(0.5 + dot(-best, vec2(cos(a), sin(a))) * 1.2, 0., 1.);
-  float ridge = 1. - smoothstep(0., 0.08, f2 - f1);
-  v += max(face, ridge) * amp; norm += amp; amp *= p_roughness;
+  v += (0.25 + 0.75 * id) * mix(0.55, 1., smoothstep(0., 0.3, f2 - f1)) * amp; norm += amp; amp *= p_roughness;
 }
 v /= max(norm, 1e-5);`),
   noise('fractalSum1', 'Fractal sum 1', 'Фрактальная сумма 1', 'Layers of blocky value noise added up: a rough, grainy base for dirt and stone.', 'Сумма слоёв пятнистого шума: грубая зернистая основа для грязи и камня.', { scale: 6, octaves: 7, roughness: 0.62, contrast: 0.3 },
@@ -2008,11 +2000,7 @@ for (int k = 0; k < 10; k++) {
   sum += abs(gradNoise(uv * per, per, p_seed + float(k) * 5.3) * 2. - 1.) * amp; norm += amp; amp *= p_roughness;
 }
 float v = 1. - clamp(sum / max(norm, 1e-5) * 1.2, 0., 1.);`),
-  noise('fractalSum4', 'Fractal sum 4', 'Фрактальная сумма 4', 'Ridged layers: sharp creases and crests, mountains, wrinkled leather, veins.', 'Слои с гребнями: острые складки и хребты, горы, морщинистая кожа, прожилки.', { scale: 3, octaves: 8, roughness: 0.6, contrast: 0.3 },
-    `float v = fbm(uv, p_scale, p_octaves, p_roughness, 2., p_seed);`),
-  noise('bnwSpots1', 'B&W spots 1', 'Ч/б пятна 1', 'Black and white blotches with soft edges: patches, camouflage, a mask to mix two materials.', 'Чёрно-белые пятна с мягкими краями: пятна, камуфляж, маска для смешивания двух материалов.', { scale: 5, octaves: 6, roughness: 0.5, contrast: 0.7 },
-    `float v = fbm(uv, p_scale, p_octaves, p_roughness, 0., p_seed);`, true, true),
-  noise('bnwSpots2', 'B&W spots 2', 'Ч/б пятна 2', 'Smaller, busier black and white spots with ragged edges: lichen, grime, mottled paint.', 'Мелкие частые чёрно-белые пятна с рваными краями: лишайник, грязь, пёстрая краска.', { scale: 12, octaves: 5, roughness: 0.65, contrast: 0.75 },
+  noise('fractalSum4', 'Fractal sum 4', 'Фрактальная сумма 4', 'Busy, even blotches with grainy edges at a medium size: a general breakup for any surface.', 'Частые ровные пятна с зернистыми краями среднего размера: общая неоднородность для любой поверхности.', { scale: 10, octaves: 6, roughness: 0.6, contrast: 0.5 },
     `float sum = 0., amp = 1., norm = 0.;
 for (int k = 0; k < 10; k++) {
   if (float(k) >= p_octaves) break;
@@ -2022,10 +2010,21 @@ for (int k = 0; k < 10; k++) {
   float c = hash12(mod(i + vec2(0., 1.), per) * 1.731 + o), d = hash12(mod(i + vec2(1., 1.), per) * 1.731 + o);
   sum += mix(mix(a, b, u.x), mix(c, d, u.x), u.y) * amp; norm += amp; amp *= p_roughness;
 }
-float v = sum / max(norm, 1e-5);`, true, true),
-  noise('bnwSpots3', 'B&W spots 3', 'Ч/б пятна 3', 'Big, rounded black and white areas: large patches of wear, puddle masks, cow spots.', 'Крупные округлые чёрно-белые области: большие пятна износа, маски луж, коровьи пятна.', { scale: 3, octaves: 4, roughness: 0.4, contrast: 0.8 },
-    `float v = sqrt(fbm(uv, p_scale, p_octaves, p_roughness, 0., p_seed) * fbm(uv, p_scale, p_octaves, p_roughness, 0., p_seed + 21.)) * 1.08;`, true, true),
-  noise('bnwSpots4', 'B&W spots 4', 'Ч/б пятна 4', 'Fine speckled spots clustered by a broad noise: rust pitting, dust, terrazzo, salt and pepper.', 'Мелкие крапинки, собранные в группы крупным шумом: ржавые раковины, пыль, терраццо.', { scale: 24, octaves: 3, roughness: 0.5, contrast: 0.8 },
+float v = sum / max(norm, 1e-5);`),
+  noise('bnwSpots1', 'B&W spots 1', 'Ч/б пятна 1', 'Broad soft light and dark areas, speckled with fine detail: dirt, stains, a mask to mix two materials.', 'Крупные мягкие светлые и тёмные области в мелких крапинках: грязь, пятна, маска для смешивания двух материалов.', { scale: 3, octaves: 9, roughness: 0.72, contrast: 0.6 },
+    `float v = fbm(uv, p_scale, p_octaves, p_roughness, 0., p_seed) * 0.75 + fbm(uv, p_scale * 8., 4., p_roughness, 1., p_seed + 2.) * 0.25;`, false, true),
+  noise('bnwSpots2', 'B&W spots 2', 'Ч/б пятна 2', 'Mottled spots of every size with ragged edges: lichen, grime, mottled paint.', 'Пёстрые пятна всех размеров с рваными краями: лишайник, грязь, пёстрая краска.', { scale: 6, octaves: 8, roughness: 0.7, contrast: 0.45 },
+    `float sum = 0., amp = 1., norm = 0.;
+for (int k = 0; k < 10; k++) {
+  if (float(k) >= p_octaves) break;
+  float per = p_scale * exp2(float(k)); vec2 q = uv * per; vec2 i = floor(q), f = fract(q); vec2 u = f * f * (3. - 2. * f);
+  vec2 o = seedv(p_seed + float(k) * 3.7) * 0.37 + float(k) * 19.19;
+  float a = hash12(mod(i, per) * 1.731 + o), b = hash12(mod(i + vec2(1., 0.), per) * 1.731 + o);
+  float c = hash12(mod(i + vec2(0., 1.), per) * 1.731 + o), d = hash12(mod(i + vec2(1., 1.), per) * 1.731 + o);
+  sum += mix(mix(a, b, u.x), mix(c, d, u.x), u.y) * amp; norm += amp; amp *= p_roughness;
+}
+float v = sum / max(norm, 1e-5);`, false, true),
+  noise('bnwSpots3', 'B&W spots 3', 'Ч/б пятна 3', 'Fine, even mottling with darker and lighter clumps: concrete, granite, worn plastic.', 'Мелкая ровная пестрота с тёмными и светлыми сгустками: бетон, гранит, потёртый пластик.', { scale: 8, octaves: 7, roughness: 0.72, contrast: 0.5 },
     `float sum = 0., amp = 1., norm = 0.;
 for (int k = 0; k < 10; k++) {
   if (float(k) >= p_octaves) break;
@@ -2036,7 +2035,19 @@ for (int k = 0; k < 10; k++) {
   sum += mix(mix(a, b, u.x), mix(c, d, u.x), u.y) * amp; norm += amp; amp *= p_roughness;
 }
 float v = sum / max(norm, 1e-5);
-v = v * 0.65 + fbm(uv, max(1., floor(p_scale / 6.)), 4., 0.5, 0., p_seed + 4.) * 0.35;`, true, true),
+v = v * 0.8 + fbm(uv, max(1., floor(p_scale / 3.)), 4., 0.5, 0., p_seed + 9.) * 0.2;`, false, true),
+  noise('bnwSpots4', 'B&W spots 4', 'Ч/б пятна 4', 'Fine speckles gathered in clusters by a broad noise: rust pitting, dust, terrazzo, salt and pepper.', 'Мелкие крапинки, собранные в группы крупным шумом: ржавые раковины, пыль, терраццо.', { scale: 16, octaves: 5, roughness: 0.65, contrast: 0.6 },
+    `float sum = 0., amp = 1., norm = 0.;
+for (int k = 0; k < 10; k++) {
+  if (float(k) >= p_octaves) break;
+  float per = p_scale * exp2(float(k)); vec2 q = uv * per; vec2 i = floor(q), f = fract(q); vec2 u = f * f * (3. - 2. * f);
+  vec2 o = seedv(p_seed + float(k) * 3.7) * 0.37 + float(k) * 19.19;
+  float a = hash12(mod(i, per) * 1.731 + o), b = hash12(mod(i + vec2(1., 0.), per) * 1.731 + o);
+  float c = hash12(mod(i + vec2(0., 1.), per) * 1.731 + o), d = hash12(mod(i + vec2(1., 1.), per) * 1.731 + o);
+  sum += mix(mix(a, b, u.x), mix(c, d, u.x), u.y) * amp; norm += amp; amp *= p_roughness;
+}
+float v = sum / max(norm, 1e-5);
+v = v * 0.6 + fbm(uv, max(1., floor(p_scale / 5.)), 4., 0.5, 0., p_seed + 4.) * 0.4;`, false, true),
 
   // ── More (2026-11): free transform ──
   {
