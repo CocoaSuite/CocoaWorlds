@@ -570,7 +570,7 @@ transform moved, sized, turned, undo). Passed here with Electron under xvfb, wit
 `cocoamat-samples`, `material-export`, `material-variants` and `materials`.
 
 Tuned after (same day) to the user's reference sheet (Substance-style thumbnails): Clouds 2 broad with ragged
-detail, Perlin mostly mid grey, Plasma bright blobs split by thin dark lines, Crystal 1 polygon bands from cell
+detail (Perlin was tuned too, then reverted at the user's request), Plasma bright blobs split by thin dark lines, Crystal 1 polygon bands from cell
 edge distance (F2 − F1) with a brightness per cell, Crystal 2 tall pointed shards (4 × as many cells across as
 down), Fractal sum 4 even grainy blotches (value noise), B&W spots 1–4 continuous grey (not thresholded; the
 `balance` setting is now **Brightness**).

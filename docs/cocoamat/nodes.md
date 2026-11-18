@@ -1005,18 +1005,18 @@ outColor = vec4(vec3(v), 1.);
 
 Plain Perlin noise: smooth round blobs, one size (add detail for more layers).
 
-Makes: grey · hash `e6da6a72`
+Makes: grey · hash `e379df04`
 
 | Setting | Kind | Range | Default |
 |---|---|---|---|
-| `scale` (Scale) | int | 1 – 64 | `10` |
+| `scale` (Scale) | int | 1 – 64 | `8` |
 | `octaves` (Detail) | int | 1 – 10 | `1` |
 | `roughness` (Roughness) | number | 0 – 1 | `0.5` |
-| `contrast` (Contrast) | number | 0 – 1 | `0.15` |
+| `contrast` (Contrast) | number | 0 – 1 | `0` |
 | `seed` (Seed) | seed | any whole number | `0` |
 
 ```glsl
-float v = 0.5 + (fbm(uv, p_scale, p_octaves, p_roughness, 0., p_seed) - 0.5) * 0.45;
+float v = fbm(uv, p_scale, p_octaves, p_roughness, 0., p_seed);
 v = clamp((v - 0.5) * (1. + p_contrast * 3.) + 0.5, 0., 1.);
 outColor = vec4(vec3(v), 1.);
 ```

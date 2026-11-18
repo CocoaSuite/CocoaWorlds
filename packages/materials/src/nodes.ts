@@ -1949,8 +1949,8 @@ outColor = vec4(vec3(v), 1.);`,
   noise('clouds2', 'Clouds 2', 'Облака 2', 'Large soft clouds with ragged, finely detailed edges: overcast skies, smoke, stains, broad breakup.', 'Крупные мягкие облака с рваными, мелко детализированными краями: пасмурное небо, дым, пятна, крупная неоднородность.', { scale: 2, octaves: 9, roughness: 0.68, contrast: 0.5 },
     `float v = fbm(uv, p_scale, p_octaves, p_roughness, 0., p_seed);
 v = mix(v, fbm(uv, p_scale * 2., p_octaves, p_roughness, 1., p_seed + 1.), 0.2);`),
-  noise('perlin', 'Perlin noise', 'Шум Перлина', 'Plain Perlin noise: smooth round blobs, one size (add detail for more layers).', 'Простой шум Перлина: гладкие округлые пятна одного размера (детали добавляют слои).', { scale: 10, octaves: 1, roughness: 0.5, contrast: 0.15 },
-    `float v = 0.5 + (fbm(uv, p_scale, p_octaves, p_roughness, 0., p_seed) - 0.5) * 0.45;`),
+  noise('perlin', 'Perlin noise', 'Шум Перлина', 'Plain Perlin noise: smooth round blobs, one size (add detail for more layers).', 'Простой шум Перлина: гладкие округлые пятна одного размера (детали добавляют слои).', { scale: 8, octaves: 1, roughness: 0.5, contrast: 0 },
+    `float v = fbm(uv, p_scale, p_octaves, p_roughness, 0., p_seed);`),
   noise('plasma', 'Plasma', 'Плазма', 'Rounded bright blobs split by thin, dark, winding lines: organic cells, lava crust, plasma (Sharpness thins the lines).', 'Округлые светлые пятна, разделённые тонкими тёмными извилистыми линиями: органика, корка лавы, плазма («Чёткость» делает линии тоньше).', { scale: 8, octaves: 2, roughness: 0.45, contrast: 0.85 },
     `float n = fbm(uv, p_scale, p_octaves, p_roughness, 0., p_seed);
 float a = clamp(abs(n * 2. - 1.), 0., 1.);
