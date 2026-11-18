@@ -14,7 +14,12 @@ import {
   nodeDef,
   outputNodes,
   paramsOf,
+  newSection,
   removeNodes,
+  removeSections,
+  sectionMembers,
+  setSection,
+  graphForExport,
   setParam,
   uniformsFor,
   validateGraph,
@@ -126,6 +131,24 @@ describe('graphs', () => {
     const lv = newNode('levels'), inv = newNode('invert');
     const cyc: MatGraph = { ...g, nodes: [...g.nodes, lv, inv], links: [...g.links, { from: lv.id, to: inv.id, input: 'in' }, { from: inv.id, to: lv.id, input: 'in' }] };
     expect(validateGraph(cyc)).toMatch(/loops back/);
+  });
+
+  it('sections: made around nodes, hold the nodes whose middle is inside, kept on export, checked when read', () => {
+    const g = newGraph();
+    const [a, b] = g.nodes;
+    const s = newSection('Base', { x: 0, y: 0, w: 10, h: 10 }, [a!, b!].map((n) => ({ x: n.x, y: n.y, w: 132, h: 160 })));
+    expect(s.w).toBeGreaterThan(132);
+    const withS: MatGraph = { ...g, sections: [s] };
+    expect(validateGraph(withS)).toBeNull();
+    expect(sectionMembers(withS, s)).toEqual(expect.arrayContaining([a!.id, b!.id]));
+    const moved = setSection(withS, s.id, { label: 'Moss', color: '#8fb04a' });
+    expect(moved.sections![0]).toMatchObject({ label: 'Moss', color: '#8fb04a', x: s.x });
+    expect(graphForExport(moved, new Map()).sections).toEqual(moved.sections);
+    expect(graphForExport(g, new Map()).sections).toBeUndefined();
+    expect(removeSections(moved, [s.id]).sections).toEqual([]);
+    expect(validateGraph({ ...g, sections: [{ ...s, w: 'wide' }] })).toMatch(/section is broken/);
+    expect(validateGraph({ ...g, sections: [{ ...s, color: 'green' }] })).toMatch(/section is broken/);
+    expect(validateGraph({ ...g, sections: {} })).toMatch(/sections are broken/);
   });
 });
 

@@ -37,6 +37,59 @@ export interface MatGraph {
    * so one graph makes a family of materials (variants). Missing: none.
    */
   exposed?: Exposed[];
+  /**
+   * Sections: labelled boxes behind nodes that group them in the graph editor (layout only: they change nothing
+   * the graph makes). Missing: none.
+   */
+  sections?: GraphSection[];
+}
+
+export interface GraphSection {
+  id: string;
+  label: string;
+  /** Top-left corner and size, in the graph editor's pixels. */
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  /** `#rrggbb`; missing: the editor's plain grey. */
+  color?: string;
+}
+
+/** The colours offered for sections (the first is the plain one). */
+export const SECTION_COLORS = ['#6d6d6d', '#4b9cff', '#8fb04a', '#f0a442', '#d46bc0', '#4ad0c4', '#e05a4f'];
+
+/** A new section. With `around`, it is made to hold those boxes (plus room for its title). */
+export function newSection(label: string, at: { x: number; y: number; w: number; h: number }, around?: { x: number; y: number; w: number; h: number }[]): GraphSection {
+  let box = at;
+  if (around?.length) {
+    const pad = 24, title = 36;
+    const x0 = Math.min(...around.map((b) => b.x)), y0 = Math.min(...around.map((b) => b.y));
+    const x1 = Math.max(...around.map((b) => b.x + b.w)), y1 = Math.max(...around.map((b) => b.y + b.h));
+    box = { x: x0 - pad, y: y0 - pad - title, w: x1 - x0 + pad * 2, h: y1 - y0 + pad * 2 + title };
+  }
+  return { id: nodeId(), label, x: Math.round(box.x), y: Math.round(box.y), w: Math.round(Math.max(120, box.w)), h: Math.round(Math.max(80, box.h)) };
+}
+
+/** The nodes inside a section: those whose middle is in its box (sizes from the editor, or a typical node). */
+export function sectionMembers(g: MatGraph, s: GraphSection, size: (id: string) => { w: number; h: number } = () => ({ w: 132, h: 160 })): string[] {
+  return g.nodes
+    .filter((n) => {
+      const z = size(n.id);
+      const cx = n.x + z.w / 2, cy = n.y + z.h / 2;
+      return cx >= s.x && cx <= s.x + s.w && cy >= s.y && cy <= s.y + s.h;
+    })
+    .map((n) => n.id);
+}
+
+export function setSection(g: MatGraph, id: string, patch: Partial<Omit<GraphSection, 'id'>>): MatGraph {
+  return { ...g, sections: (g.sections ?? []).map((s) => (s.id === id ? { ...s, ...patch } : s)) };
+}
+
+export function removeSections(g: MatGraph, ids: Iterable<string>): MatGraph {
+  const gone = new Set(ids);
+  if (!g.sections?.some((s) => gone.has(s.id))) return g;
+  return { ...g, sections: g.sections.filter((s) => !gone.has(s.id)) };
 }
 
 export interface Exposed {
@@ -299,6 +352,12 @@ export function validateGraph(g: unknown, opts: { nodes?: (type: string) => Node
   if (g.exposed !== undefined) {
     if (!Array.isArray(g.exposed)) return 'The exposed settings are broken.';
     for (const e of g.exposed) if (!isObj(e) || typeof e.id !== 'string' || typeof e.node !== 'string' || typeof e.param !== 'string' || typeof e.label !== 'string') return 'An exposed setting is broken.';
+  }
+  if (g.sections !== undefined) {
+    if (!Array.isArray(g.sections)) return 'The sections are broken.';
+    for (const s of g.sections)
+      if (!isObj(s) || typeof s.id !== 'string' || typeof s.label !== 'string' || ![s.x, s.y, s.w, s.h].every((v) => typeof v === 'number' && Number.isFinite(v)) || (s.color !== undefined && !(typeof s.color === 'string' && /^#[0-9a-f]{6}$/i.test(s.color))))
+        return 'A section is broken.';
   }
   const graph = g as unknown as MatGraph;
   for (const l of graph.links) if (wouldLoop({ ...graph, links: graph.links.filter((x) => x !== l) }, l.from, l.to)) return 'The graph loops back on itself.';

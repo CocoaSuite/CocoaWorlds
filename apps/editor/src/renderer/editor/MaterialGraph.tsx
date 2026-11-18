@@ -1,13 +1,17 @@
 /**
  * Cocoa Materials: the graph of a graph material (decision C2: React Flow, in CocoaCanvas styling). Nodes show
  * what they make; wires go from an output (right) to an input (left). Right-click, Space or “+ Node” adds a
- * node; Delete removes the picked nodes or wires. The right side shows the material on a shape (or the picked
- * node's picture flat) and the settings of the picked node, or of the material when no node is picked.
+ * node; Delete removes the picked nodes or wires. Dragging on empty graph draws a box that picks nodes (moved
+ * together); the middle or right button pans. Sections are labelled boxes behind nodes that carry the nodes
+ * inside them when moved. The right side shows the material on a shape (or the picked node's picture flat) and
+ * the settings of the picked node, or of the material when no node is picked; the preview can be kept on one
+ * node (its ◉ button, or double-click) while another node is picked and changed.
  */
 import { BAKE_SIZES, type MaterialDef } from '@cocoaworlds/core';
 import {
   GROUPS,
   NODES,
+  SECTION_COLORS,
   connect,
   disconnect,
   expose,
@@ -15,12 +19,17 @@ import {
   unexpose,
   withOverrides,
   newNode,
+  newSection,
   nodeDef,
   paramsOf,
   removeNodes,
+  removeSections,
+  sectionMembers,
   setParam,
+  setSection,
   wouldLoop,
   type GraphNode,
+  type GraphSection,
   type L,
   type MatGraph,
   type Param,
@@ -32,9 +41,11 @@ import {
   Background,
   Controls,
   Handle,
+  NodeResizer,
   Position,
   ReactFlow,
   ReactFlowProvider,
+  SelectionMode,
   applyNodeChanges,
   useReactFlow,
   type Connection,
@@ -61,10 +72,18 @@ interface Ctx {
   lift?: (to: string, input: string, e: React.PointerEvent) => void;
   /** Bumped when pictures are redrawn (nodes repaint their errors). */
   errors: ReadonlyMap<string, string>;
+  /** The node the preview is kept on (whatever is picked), or null when it follows the picked node. */
+  viewed?: string | null;
+  toggleView?: (id: string) => void;
+  editSection?: (id: string, patch: Partial<Omit<GraphSection, 'id'>>, label: string, key?: string) => void;
 }
 const GraphCtx = createContext<Ctx>({ live: null, errors: new Map() });
 
 type CmNode = Node<{ node: GraphNode; wired: string[] }, 'cm'>;
+type SecNode = Node<{ section: GraphSection }, 'section'>;
+type AnyNode = CmNode | SecNode;
+/** Sections lie under everything (even when picked, which lifts a node by 1000). */
+const SECTION_Z = -2000;
 
 const Thumb = memo(function Thumb({ id, size = 116 }: { id: string; size?: number }) {
   const { live } = useContext(GraphCtx);
@@ -78,11 +97,29 @@ const Thumb = memo(function Thumb({ id, size = 116 }: { id: string; size?: numbe
 
 function CmNodeView({ id, data, selected }: NodeProps<CmNode>) {
   const def = nodeDef(data.node.type)!;
-  const { errors, lift } = useContext(GraphCtx);
+  const { errors, lift, viewed, toggleView } = useContext(GraphCtx);
   const err = errors.get(id);
+  const shown = viewed === id;
   return (
-    <div className={`cm-node g-${def.group}${def.group === 'output' ? ' out' : ''}${selected ? ' on' : ''}${err ? ' bad' : ''}`} title={err ?? undefined} data-node-type={def.type} aria-label={say(def.label)}>
-      <div className="cm-node-h">{say(def.label)}</div>
+    <div className={`cm-node g-${def.group}${def.group === 'output' ? ' out' : ''}${selected ? ' on' : ''}${err ? ' bad' : ''}${shown ? ' viewed' : ''}`} title={err ?? undefined} data-node-type={def.type} aria-label={say(def.label)}>
+      <div className="cm-node-h">
+        <span>{say(def.label)}</span>
+        {/* (Keeps the preview on this node; doesn't pick it, so another node can be changed meanwhile.) */}
+        <button
+          type="button"
+          className={`cm-view nodrag${shown ? ' on' : ''}`}
+          aria-pressed={shown}
+          aria-label={shown ? t('cm.unlockView') : t('cm.lockView')}
+          title={shown ? t('cm.unlockView') : t('cm.lockView')}
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={(e) => {
+            e.stopPropagation();
+            toggleView?.(id);
+          }}
+        >
+          ◉
+        </button>
+      </div>
       <div className="cm-node-b">
         <div className="cm-ports">
           {def.inputs.map((p) => (
@@ -109,7 +146,61 @@ function CmNodeView({ id, data, selected }: NodeProps<CmNode>) {
     </div>
   );
 }
-const nodeTypes = { cm: CmNodeView };
+
+/** A section: a labelled, coloured box behind nodes (dragged by its title, resized by its edges when picked). */
+function SectionView({ id, data, selected }: NodeProps<SecNode>) {
+  const { editSection } = useContext(GraphCtx);
+  const s = data.section;
+  const [editing, setEditing] = useState(false);
+  const color = s.color ?? SECTION_COLORS[0]!;
+  return (
+    <>
+      <NodeResizer isVisible={!!selected} minWidth={120} minHeight={80} color={color} handleClassName="cm-sec-handle" lineClassName="cm-sec-line" onResizeEnd={() => endGraphGesture()} />
+      <div className={`cm-sec${selected ? ' on' : ''}`} style={{ '--sec': color } as React.CSSProperties} data-testid="graph-section" role="group" aria-label={s.label}>
+        <div className="cm-sec-h" title={t('cm.sectionHint')} onDoubleClick={() => setEditing(true)}>
+          {editing ? (
+            <input
+              className="cw-input nodrag"
+              autoFocus
+              defaultValue={s.label}
+              aria-label={t('cm.sectionName')}
+              onPointerDown={(e) => e.stopPropagation()}
+              onKeyDown={(e) => {
+                e.stopPropagation();
+                if (e.key === 'Enter') e.currentTarget.blur();
+                if (e.key === 'Escape') {
+                  e.currentTarget.value = s.label;
+                  e.currentTarget.blur();
+                }
+              }}
+              onBlur={(e) => {
+                const v = e.currentTarget.value.trim();
+                setEditing(false);
+                if (v && v !== s.label) editSection?.(id, { label: v }, 'Rename section');
+              }}
+            />
+          ) : (
+            <span className="cm-sec-name">{s.label}</span>
+          )}
+          <button
+            type="button"
+            className="cm-sec-col nodrag"
+            style={{ background: color }}
+            aria-label={t('cm.sectionColour')}
+            title={t('cm.sectionColour')}
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={(e) => {
+              e.stopPropagation();
+              const next = SECTION_COLORS[(SECTION_COLORS.indexOf(color) + 1) % SECTION_COLORS.length]!;
+              editSection?.(id, { color: next === SECTION_COLORS[0] ? undefined : next }, 'Section colour');
+            }}
+          />
+        </div>
+      </div>
+    </>
+  );
+}
+const nodeTypes = { cm: CmNodeView, section: SectionView };
 
 /** The add-node menu: search box and the nodes by group. */
 function AddMenu({ at, onPick, onClose }: { at: { x: number; y: number }; onPick: (type: string) => void; onClose: () => void }) {
@@ -265,7 +356,7 @@ function Flow({ path, graph, sel, onSelect, wideLibrary }: { path: string; graph
   const ctx = useContext(GraphCtx);
   const pointer = useRef({ x: 0, y: 0 });
   const [menu, setMenu] = useState<{ x: number; y: number; flow: { x: number; y: number } } | null>(null);
-  const [nodes, setNodes] = useState<CmNode[]>([]);
+  const [nodes, setNodes] = useState<AnyNode[]>([]);
   const [edgeSel, setEdgeSel] = useState<Set<string>>(new Set());
   /** A wire being lifted off an input (drawn from its output to the mouse, in the graph's own pixels). */
   const [lifted, setLifted] = useState<{ from: string; to: string; input: string; start: { x: number; y: number }; at: { x: number; y: number } } | null>(null);
@@ -279,14 +370,62 @@ function Flow({ path, graph, sel, onSelect, wideLibrary }: { path: string; graph
   useEffect(() => {
     setNodes((prev) => {
       const old = new Map(prev.map((n) => [n.id, n]));
-      return graph.nodes.map((n) => {
+      const sections: SecNode[] = (graph.sections ?? []).map((s) => {
+        const o = old.get(s.id);
+        const dragging = o?.dragging;
+        return {
+          id: s.id,
+          type: 'section',
+          position: dragging ? o!.position : { x: s.x, y: s.y },
+          width: s.w,
+          height: s.h,
+          data: { section: s },
+          selected: sel.includes(s.id),
+          dragging,
+          zIndex: SECTION_Z,
+          dragHandle: '.cm-sec-h',
+          className: 'cm-sec-node',
+          ...(o?.measured ? { measured: o.measured } : {}),
+        };
+      });
+      const cm: CmNode[] = graph.nodes.map((n) => {
         const o = old.get(n.id);
         const dragging = o?.dragging;
         const wired = graph.links.filter((l) => l.to === n.id).map((l) => l.input);
-        return { id: n.id, type: 'cm', position: dragging ? o!.position : { x: n.x, y: n.y }, data: { node: n, wired }, selected: sel.includes(n.id), dragging };
+        return { id: n.id, type: 'cm', position: dragging ? o!.position : { x: n.x, y: n.y }, data: { node: n, wired }, selected: sel.includes(n.id), dragging, ...(o?.measured ? { measured: o.measured } : {}) };
       });
+      return [...sections, ...cm];
     });
   }, [graph, sel]);
+
+  /** A node's size on the graph (as drawn, or a typical node's before it is). */
+  const sizeOf = useCallback(
+    (id: string) => {
+      const m = rf.getInternalNode(id)?.measured;
+      return { w: m?.width ?? 132, h: m?.height ?? 160 };
+    },
+    [rf],
+  );
+
+  /** While sections are dragged: the nodes (and smaller sections) each one carries, found when the drag began. */
+  const carried = useRef(new Map<string, { nodes: string[]; sections: string[] }>());
+  const startCarry = useCallback(
+    (dragged: AnyNode[]) => {
+      const g = graphRef.current;
+      carried.current = new Map();
+      for (const d of dragged) {
+        const s = g.sections?.find((x) => x.id === d.id);
+        if (!s) continue;
+        const inner = (g.sections ?? []).filter((o) => o.id !== s.id && o.x >= s.x && o.y >= s.y && o.x + o.w <= s.x + s.w && o.y + o.h <= s.y + s.h).map((o) => o.id);
+        carried.current.set(s.id, { nodes: sectionMembers(g, s, sizeOf), sections: inner });
+      }
+    },
+    [sizeOf],
+  );
+  const endCarry = useCallback(() => {
+    carried.current = new Map();
+    endGraphGesture();
+  }, []);
 
   const edges: Edge[] = useMemo(
     () =>
@@ -300,20 +439,55 @@ function Flow({ path, graph, sel, onSelect, wideLibrary }: { path: string; graph
   );
 
   const onNodesChange = useCallback(
-    (changes: NodeChange<CmNode>[]) => {
+    (changes: NodeChange<AnyNode>[]) => {
       setNodes((ns) => applyNodeChanges(changes, ns));
       const g = graphRef.current;
+      const secIds = new Set((g.sections ?? []).map((s) => s.id));
       const removed = changes.filter((c) => c.type === 'remove').map((c) => c.id);
       if (removed.length) {
-        setGraph(path, removeNodes(g, removed), removed.length === 1 ? 'Remove node' : 'Remove nodes');
+        const secs = removed.filter((id) => secIds.has(id)), ns = removed.filter((id) => !secIds.has(id));
+        const next = removeSections(removeNodes(g, ns), secs);
+        setGraph(path, next, ns.length ? (ns.length === 1 ? 'Remove node' : 'Remove nodes') : secs.length === 1 ? 'Remove section' : 'Remove sections');
         onSelect([]);
         return;
       }
       const moved = changes.flatMap((c) => (c.type === 'position' && c.position ? [[c.id, c.position] as const] : []));
-      if (moved.length) {
-        const pos = new Map(moved);
-        const next = { ...g, nodes: g.nodes.map((n) => (pos.has(n.id) ? { ...n, x: Math.round(pos.get(n.id)!.x), y: Math.round(pos.get(n.id)!.y) } : n)) };
-        setGraphLive(path, next, 'Move nodes', `move:${[...pos.keys()].sort().join(',')}`);
+      const sized = changes.flatMap((c) => (c.type === 'dimensions' && c.resizing !== undefined && c.dimensions && secIds.has(c.id) ? [[c.id, c.dimensions] as const] : []));
+      if (moved.length || sized.length) {
+        const pos = new Map(moved.map(([id, p]) => [id, { x: Math.round(p.x), y: Math.round(p.y) }]));
+        // A dragged section carries what was inside it (unless that is being dragged too).
+        const shift = new Map<string, { x: number; y: number }>();
+        for (const [id, p] of pos) {
+          const c = carried.current.get(id);
+          const s = g.sections?.find((x) => x.id === id);
+          if (!c || !s) continue;
+          const d = { x: p.x - s.x, y: p.y - s.y };
+          for (const m of [...c.nodes, ...c.sections]) if (!pos.has(m) && !shift.has(m)) shift.set(m, d);
+        }
+        const at = (id: string, x: number, y: number) => {
+          const p = pos.get(id);
+          if (p) return p;
+          const d = shift.get(id);
+          return d ? { x: x + d.x, y: y + d.y } : null;
+        };
+        const size = new Map(sized);
+        const next = {
+          ...g,
+          nodes: g.nodes.map((n) => {
+            const p = at(n.id, n.x, n.y);
+            return p ? { ...n, ...p } : n;
+          }),
+          ...(g.sections
+            ? {
+                sections: g.sections.map((s) => {
+                  const p = at(s.id, s.x, s.y), z = size.get(s.id);
+                  return p || z ? { ...s, ...(p ?? {}), ...(z ? { w: Math.round(z.width), h: Math.round(z.height) } : {}) } : s;
+                }),
+              }
+            : {}),
+        };
+        const keys = [...pos.keys(), ...size.keys()].sort().join(',');
+        setGraphLive(path, next, sized.length ? 'Resize section' : 'Move nodes', `${sized.length ? 'size' : 'move'}:${keys}`);
       }
       const selChanges = changes.filter((c) => c.type === 'select');
       if (selChanges.length) {
@@ -324,6 +498,30 @@ function Flow({ path, graph, sel, onSelect, wideLibrary }: { path: string; graph
     },
     [path, sel, onSelect],
   );
+
+  const editSection = useCallback(
+    (id: string, patch: Partial<Omit<GraphSection, 'id'>>, label: string, key?: string) => {
+      const next = setSection(graphRef.current, id, patch);
+      if (key) setGraphLive(path, next, label, key);
+      else setGraph(path, next, label);
+    },
+    [path],
+  );
+
+  /** A new section: around the picked nodes, or in the middle of the view. */
+  const addSection = () => {
+    const g = graphRef.current;
+    const picked = g.nodes.filter((n) => selRef.current.includes(n.id));
+    const box = host.current!.getBoundingClientRect();
+    const p = rf.screenToFlowPosition({ x: box.left + box.width / 2, y: box.top + box.height / 2 });
+    const s = newSection(
+      t('cm.sectionName'),
+      { x: p.x - 200, y: p.y - 130, w: 400, h: 260 },
+      picked.map((n) => ({ x: n.x, y: n.y, ...sizeOf(n.id) })),
+    );
+    setGraph(path, { ...g, sections: [...(g.sections ?? []), s] }, 'Add section');
+    onSelect([s.id]);
+  };
 
   const onEdgesChange = useCallback(
     (changes: EdgeChange[]) => {
@@ -471,13 +669,16 @@ function Flow({ path, graph, sel, onSelect, wideLibrary }: { path: string; graph
     [path],
   );
 
+  /** Right button: a click opens the add menu, a drag pans (so the menu waits for the button to come up). */
+  const rightDown = useRef<{ x: number; y: number } | null>(null);
+
   const openMenu = (clientX: number, clientY: number) => {
     const box = host.current!.getBoundingClientRect();
     setMenu({ x: Math.min(clientX - box.left, box.width - 250), y: Math.min(clientY - box.top, box.height - 340), flow: rf.screenToFlowPosition({ x: clientX, y: clientY }) });
   };
 
   return (
-    <GraphCtx.Provider value={{ ...ctx, lift }}>
+    <GraphCtx.Provider value={{ ...ctx, lift, editSection }}>
     <div className="cm-graph">
     {showLib ? <NodeLibrary onAdd={addInView} onHide={() => toggleLib(false)} wide={wideLibrary} /> : (
       <button type="button" className="cm-lib-show" aria-label={t('cm.showLibrary')} title={t('cm.showLibrary')} onClick={() => toggleLib(true)}>
@@ -493,6 +694,16 @@ function Flow({ path, graph, sel, onSelect, wideLibrary }: { path: string; graph
       // (Keys go to the graph once it has been clicked, even on the empty background.)
       onPointerDown={() => {
         if (!host.current!.contains(document.activeElement)) host.current!.focus({ preventScroll: true });
+      }}
+      onPointerDownCapture={(e) => {
+        if (e.button === 2) rightDown.current = { x: e.clientX, y: e.clientY };
+      }}
+      onPointerUpCapture={(e) => {
+        const start = rightDown.current;
+        if (e.button !== 2 || !start) return;
+        rightDown.current = null;
+        const still = Math.hypot(e.clientX - start.x, e.clientY - start.y) < 5;
+        if (still && (e.target as HTMLElement).closest('.react-flow__pane')) openMenu(e.clientX, e.clientY);
       }}
       onDragOver={(e) => {
         if (!e.dataTransfer.types.includes(NODE_DRAG)) return;
@@ -514,7 +725,7 @@ function Flow({ path, graph, sel, onSelect, wideLibrary }: { path: string; graph
         }
       }}
     >
-      <ReactFlow<CmNode, Edge>
+      <ReactFlow<AnyNode, Edge>
         nodes={nodes}
         edges={edges}
         nodeTypes={nodeTypes}
@@ -528,12 +739,14 @@ function Flow({ path, graph, sel, onSelect, wideLibrary }: { path: string; graph
           const [to, input] = edge.id.split(':') as [string, string];
           setGraph(path, disconnect(graphRef.current, to, input), 'Unplug wire');
         }}
-        onNodeDragStop={() => endGraphGesture()}
+        onNodeDragStart={(_, __, dragged) => startCarry(dragged)}
+        onNodeDragStop={endCarry}
+        onSelectionDragStart={(_, dragged) => startCarry(dragged)}
+        onSelectionDragStop={endCarry}
+        onNodeDoubleClick={(_, n) => n.type === 'cm' && ctx.toggleView?.(n.id)}
         isValidConnection={(c) => c.source !== c.target && !wouldLoop(graphRef.current, c.source, c.target)}
-        onPaneContextMenu={(e) => {
-          e.preventDefault();
-          openMenu(e.clientX, e.clientY);
-        }}
+        // (The menu opens when the right button comes up still: see onPointerUpCapture.)
+        onPaneContextMenu={(e) => e.preventDefault()}
         onPaneClick={() => {
           setMenu(null);
           onSelect([]);
@@ -541,6 +754,11 @@ function Flow({ path, graph, sel, onSelect, wideLibrary }: { path: string; graph
         deleteKeyCode={['Delete', 'Backspace']}
         multiSelectionKeyCode={['Shift', 'Control', 'Meta']}
         selectionKeyCode={null}
+        // Dragging on empty graph draws a box that picks the nodes wholly inside it; the middle or right button pans.
+        selectionOnDrag
+        selectionMode={SelectionMode.Full}
+        panOnDrag={[1, 2]}
+        zoomOnDoubleClick={false}
         colorMode="dark"
         minZoom={0.2}
         maxZoom={2.5}
@@ -554,6 +772,9 @@ function Flow({ path, graph, sel, onSelect, wideLibrary }: { path: string; graph
       <div className="cm-flow-tools">
         <Button size="sm" onClick={() => openMenu(host.current!.getBoundingClientRect().left + 24, host.current!.getBoundingClientRect().top + 40)}>
           {t('cm.addNode')}
+        </Button>
+        <Button size="sm" onClick={addSection} title={t('cm.addSectionHint')}>
+          {t('cm.addSection')}
         </Button>
         <span className="cw-muted">{t('cm.flowHint')}</span>
       </div>
@@ -663,6 +884,7 @@ function NodeProps({ path, graph, node, onSelect }: { path: string; graph: MatGr
         <strong>{say(def.label)}</strong>
       </div>
       <p className="cw-muted cw-screens-note">{say(def.hint)}</p>
+      {node.type === 'freeTransform' && <p className="cw-muted cw-screens-note">{t('cm.placeHint')}</p>}
       {errors.get(node.id) && <p className="cw-screens-note cm-bad">{errors.get(node.id)}</p>}
       {def.params.map((p) => {
         const shown = (graph.exposed ?? []).some((e) => e.node === node.id && e.param === p.id);
@@ -890,7 +1112,7 @@ function GraphMaterialProps({
 }
 
 /** The picked node's picture, flat (or the material's colour when nothing is picked). */
-function FlatPreview({ id }: { id: string | null }) {
+function FlatPreview({ id, path, graph }: { id: string | null; path?: string; graph?: MatGraph }) {
   const { live } = useContext(GraphCtx);
   const ref = useRef<HTMLCanvasElement>(null);
   useEffect(() => {
@@ -900,7 +1122,113 @@ function FlatPreview({ id }: { id: string | null }) {
     return live.onDrawn(() => live.paint(id, c));
   }, [live, id]);
   if (!id) return <div className="cw-muted cw-screens-empty">{t('cm.pickForFlat')}</div>;
-  return <canvas ref={ref} width={512} height={512} className="cm-flat" data-testid="node-preview" aria-label={t('cm.flat')} />;
+  const node = graph?.nodes.find((n) => n.id === id);
+  return (
+    <div className="cm-flat-box">
+      <canvas ref={ref} width={512} height={512} className="cm-flat" data-testid="node-preview" aria-label={t('cm.flat')} />
+      {node?.type === 'freeTransform' && path && <PlaceHandles path={path} node={node} />}
+    </div>
+  );
+}
+
+const clampTo = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
+const wrap01 = (v: number) => ((v % 1) + 1) % 1;
+const turnOf = (deg: number) => ((((deg + 180) % 360) + 360) % 360) - 180;
+
+/**
+ * Handles over a Free transform node's flat picture: drag the box to move it (it wraps around the edges), a
+ * corner to size it from its middle (Shift keeps its shape), the round handle to turn it (Shift: 15° steps),
+ * the wheel to size it.
+ */
+function PlaceHandles({ path, node }: { path: string; node: GraphNode }) {
+  const ref = useRef<SVGSVGElement>(null);
+  const p = paramsOf(node);
+  const cur = { x: Number(p.x), y: Number(p.y), a: Number(p.angle), w: Number(p.w), h: Number(p.h) };
+  const rad = (cur.a * Math.PI) / 180, c = Math.cos(rad), s = Math.sin(rad);
+  const at = (u: number, v: number) => [cur.x + c * u - s * v, cur.y + s * u + c * v] as const;
+  const corners = [
+    [-1, -1],
+    [1, -1],
+    [1, 1],
+    [-1, 1],
+  ].map(([i, j]) => at((i! * cur.w) / 2, (j! * cur.h) / 2));
+  const knob = at(0, -cur.h / 2 - 0.09);
+  const top = at(0, -cur.h / 2);
+
+  const put = (v: { x?: number; y?: number; a?: number; w?: number; h?: number }, key: string) => {
+    let g = useGraphs.getState().graphs[path];
+    if (!g) return;
+    if (v.x !== undefined) g = setParam(g, node.id, 'x', Math.round(wrap01(v.x) * 1000) / 1000);
+    if (v.y !== undefined) g = setParam(g, node.id, 'y', Math.round(wrap01(v.y) * 1000) / 1000);
+    if (v.a !== undefined) g = setParam(g, node.id, 'angle', Math.round(turnOf(v.a) * 10) / 10);
+    if (v.w !== undefined) g = setParam(g, node.id, 'w', Math.round(clampTo(v.w, 0.01, 4) * 1000) / 1000);
+    if (v.h !== undefined) g = setParam(g, node.id, 'h', Math.round(clampTo(v.h, 0.01, 4) * 1000) / 1000);
+    setGraphLive(path, g, 'Free transform: place', key);
+  };
+
+  const grab = (kind: 'move' | 'turn' | 'size') => (e: React.PointerEvent) => {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const box = ref.current!.getBoundingClientRect();
+    const uvOf = (ev: { clientX: number; clientY: number }) => [(ev.clientX - box.left) / box.width, (ev.clientY - box.top) / box.height] as const;
+    const [u0, v0] = uvOf(e);
+    const p0 = { ...cur };
+    const a0 = (Math.atan2(v0 - p0.y, u0 - p0.x) * 180) / Math.PI;
+    const key = `${node.id}:place-${kind}-${performance.now()}`;
+    const move = (ev: PointerEvent) => {
+      const [u, v] = uvOf(ev);
+      if (kind === 'move') put({ x: p0.x + u - u0, y: p0.y + v - v0 }, key);
+      else if (kind === 'turn') {
+        let a = p0.a + (Math.atan2(v - p0.y, u - p0.x) * 180) / Math.PI - a0;
+        if (ev.shiftKey) a = Math.round(a / 15) * 15;
+        put({ a }, key);
+      } else {
+        // The pointer, in the box's own turned frame: half the size each way from the middle.
+        const r = (-p0.a * Math.PI) / 180, du = u - p0.x, dv = v - p0.y;
+        let w = 2 * Math.abs(Math.cos(r) * du - Math.sin(r) * dv), h = 2 * Math.abs(Math.sin(r) * du + Math.cos(r) * dv);
+        if (ev.shiftKey) {
+          const k = Math.max(w / p0.w, h / p0.h);
+          [w, h] = [p0.w * k, p0.h * k];
+        }
+        put({ w, h }, key);
+      }
+    };
+    const up = () => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+      endGraphGesture();
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+  };
+
+  const wheelKey = useRef(`${node.id}:place-wheel`);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const wheel = (e: WheelEvent) => {
+      e.preventDefault();
+      const k = Math.exp(-e.deltaY * 0.0015);
+      const q = paramsOf(useGraphs.getState().graphs[path]?.nodes.find((n) => n.id === node.id) ?? node);
+      put({ w: Number(q.w) * k, h: Number(q.h) * k }, wheelKey.current);
+    };
+    el.addEventListener('wheel', wheel, { passive: false });
+    return () => el.removeEventListener('wheel', wheel);
+  });
+
+  const poly = corners.map(([u, v]) => `${u},${v}`).join(' ');
+  return (
+    <svg ref={ref} className="cm-place" viewBox="0 0 1 1" preserveAspectRatio="none" data-testid="place-handles" aria-label={t('cm.placeHandles')}>
+      <polygon points={poly} className="cm-place-box" onPointerDown={grab('move')} data-handle="move" />
+      <line x1={top[0]} y1={top[1]} x2={knob[0]} y2={knob[1]} className="cm-place-stem" />
+      <circle cx={knob[0]} cy={knob[1]} r={0.022} className="cm-place-turn" onPointerDown={grab('turn')} data-handle="turn" />
+      {corners.map(([u, v], i) => (
+        <rect key={i} x={u - 0.018} y={v - 0.018} width={0.036} height={0.036} className="cm-place-corner" onPointerDown={grab('size')} data-handle={`size-${i}`} />
+      ))}
+      <circle cx={cur.x} cy={cur.y} r={0.008} className="cm-place-mid" />
+    </svg>
+  );
 }
 
 /**
@@ -938,10 +1266,14 @@ export function GraphWorkspace({
   const [view, setView] = useState<'3d' | 'flat'>('3d');
   const [shape, setShape] = useState<Shape>('sphere');
   const [errors, setErrors] = useState<ReadonlyMap<string, string>>(new Map());
+  /** The node the preview is kept on, apart from the one picked for changing. */
+  const [viewed, setViewed] = useState<string | null>(null);
+  const toggleView = useCallback((id: string) => setViewed((v) => (v === id ? null : id)), []);
 
   useEffect(() => void loadGraph(path), [path]);
   useEffect(() => {
     setSel([]);
+    setViewed(null);
     const lg = new LiveGraph(m.id, () => setImagesIn((n) => n + 1));
     setLive(lg);
     return () => lg.dispose();
@@ -962,10 +1294,18 @@ export function GraphWorkspace({
   useEffect(() => endGraphGesture, []);
 
   const node = sel.length === 1 ? graph?.nodes.find((n) => n.id === sel[0]) : undefined;
+  // (A kept node that was removed lets go.)
+  const viewedNode = viewed ? graph?.nodes.find((n) => n.id === viewed) : undefined;
+  const viewedDef = viewedNode && nodeDef(viewedNode.type);
+  // Picking a Free transform shows its picture flat, where its handles are.
+  const pickedType = node?.type;
+  useEffect(() => {
+    if (pickedType === 'freeTransform') setView('flat');
+  }, [node?.id, pickedType]);
   const status = baking === 'baking' ? t('cm.baking') : baking === 'waiting' ? t('cm.waiting') : baking === 'failed' ? t('cm.bakeFailed') : t('cm.baked');
 
   return (
-    <GraphCtx.Provider value={{ live, errors }}>
+    <GraphCtx.Provider value={{ live, errors, viewed: viewedNode?.id ?? null, toggleView }}>
       <div className="cw-screens-main cm-main">
         <div className="cw-screens-tools">
           {tools}
@@ -989,6 +1329,17 @@ export function GraphWorkspace({
         )}
       </div>
       <aside className="cw-screens-side right cm-side" aria-label={t('mat.settings')}>
+        {viewedNode && viewedDef ? (
+          <div className="cm-preview-tools cm-viewing" data-testid="preview-kept">
+            <span>
+              <i className={`cm-dot g-${viewedDef.group}`} />
+              {t('cm.viewing')} <strong>{say(viewedDef.label)}</strong>
+            </span>
+            <Button size="sm" onClick={() => setViewed(null)}>
+              {t('cm.unlockView')}
+            </Button>
+          </div>
+        ) : (
         <div className="cm-preview-tools">
           <Segmented<'3d' | 'flat'>
             label={t('cm.previewKind')}
@@ -1012,7 +1363,16 @@ export function GraphWorkspace({
             />
           )}
         </div>
-        <div className="cm-preview">{view === '3d' ? <MaterialPreview id={m.id} shape={shape} /> : <FlatPreview id={node?.id ?? graph?.nodes.find((n) => n.type === 'outColor')?.id ?? null} />}</div>
+        )}
+        <div className="cm-preview">
+          {viewedNode ? (
+            <FlatPreview id={viewedNode.id} path={path} graph={graph} />
+          ) : view === '3d' ? (
+            <MaterialPreview id={m.id} shape={shape} />
+          ) : (
+            <FlatPreview id={node?.id ?? graph?.nodes.find((n) => n.type === 'outColor')?.id ?? null} path={path} graph={graph} />
+          )}
+        </div>
         {node && graph ? <NodeProps path={path} graph={graph} node={node} onSelect={setSel} /> : <GraphMaterialProps m={m} graph={graph} edit={edit} onDuplicate={onDuplicate} onVariant={onVariant} onRemove={onRemove} used={used} />}
       </aside>
     </GraphCtx.Provider>

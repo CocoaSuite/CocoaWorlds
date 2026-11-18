@@ -151,6 +151,7 @@ export function graphForExport(g: MatGraph, paths: Map<string, string>): MatGrap
     }),
     links: g.links.map((l) => ({ from: l.from, to: l.to, input: l.input })),
     ...(g.exposed ? { exposed: exposedOf(g).map((e) => ({ id: e.id, node: e.node, param: e.param, label: e.label })) } : {}),
+    ...(g.sections?.length ? { sections: g.sections.map((s) => ({ id: s.id, label: s.label, x: s.x, y: s.y, w: s.w, h: s.h, ...(s.color ? { color: s.color } : {}) })) } : {}),
   };
 }
 

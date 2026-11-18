@@ -3,7 +3,7 @@
 <!-- Written from packages/materials/src/catalog.ts. Do not edit by hand: run
      CW_WRITE_CATALOG=1 npx vitest run packages/materials/test/catalog.test.ts -->
 
-Catalog version 1, for graph format `cocoaworlds.material` version 1. 79 nodes.
+Catalog version 1, for graph format `cocoaworlds.material` version 1. 123 nodes.
 How a node is evaluated (uniforms, inputs, uv) is in [the format spec](../cocoamat-format.md), section 5;
 the same data as JSON, with the shared GLSL library, is in [nodes.json](nodes.json).
 
@@ -533,6 +533,782 @@ float s = 0.5 + 0.5 * sin(t * 6.2831853); float e = (1. - p_sharpness) * 0.5 + 0
 outColor = vec4(vec3(smoothstep(0.5 - e, 0.5 + e, s)), 1.);
 ```
 
+### Billows — `billows`
+
+Puffy, folded noise (each layer turned inside out): clouds, smoke, lumpy rock.
+
+Makes: grey · hash `a1b35b0e`
+
+| Setting | Kind | Range | Default |
+|---|---|---|---|
+| `scale` (Scale) | int | 1 – 64 | `4` |
+| `octaves` (Detail) | int | 1 – 10 | `5` |
+| `roughness` (Roughness) | number | 0 – 1 | `0.5` |
+| `invert` (Turn over (creases up)) | bool |  | `false` |
+| `seed` (Seed) | seed | any whole number | `0` |
+
+```glsl
+float sum = 0., amp = 1., norm = 0.;
+for (int k = 0; k < 10; k++) {
+  if (float(k) >= p_octaves) break;
+  float per = p_scale * exp2(float(k));
+  float n = gradNoise(uv * per, per, p_seed + float(k));
+  sum += abs(n * 2. - 1.) * amp; norm += amp; amp *= p_roughness;
+}
+float v = clamp(sum / max(norm, 1e-5) * 1.15, 0., 1.);
+if (p_invert > 0.5) v = 1. - v;
+outColor = vec4(vec3(v), 1.);
+```
+
+### Warped noise — `warpedNoise`
+
+Noise pushed around by noise, twice over: flowing marble-like swirls, lava, gas giants.
+
+Makes: grey · hash `1ed80d65`
+
+| Setting | Kind | Range | Default |
+|---|---|---|---|
+| `scale` (Scale) | int | 1 – 32 | `3` |
+| `octaves` (Detail) | int | 1 – 8 | `5` |
+| `warp` (Swirl) | number | 0 – 2 | `1` |
+| `contrast` (Contrast) | number | 0 – 1 | `0.4` |
+| `seed` (Seed) | seed | any whole number | `0` |
+
+```glsl
+float w = p_warp * 0.35;
+vec2 q = vec2(fbm(uv, p_scale, p_octaves, 0.5, 0., p_seed), fbm(uv, p_scale, p_octaves, 0.5, 0., p_seed + 5.2)) - 0.5;
+vec2 r = vec2(fbm(uv + w * q, p_scale, p_octaves, 0.5, 0., p_seed + 1.7), fbm(uv + w * q, p_scale, p_octaves, 0.5, 0., p_seed + 9.2)) - 0.5;
+float v = fbm(uv + w * r, p_scale, p_octaves, 0.5, 0., p_seed + 3.3);
+v = clamp((v - 0.5) * (1. + p_contrast * 3.) + 0.5, 0., 1.);
+outColor = vec4(vec3(v), 1.);
+```
+
+### Fibers — `fibers`
+
+Noise stretched one way: brushed metal, wood fibres, bark (ridged), hair, rain on glass.
+
+Makes: grey · hash `6a63d56f`
+
+| Setting | Kind | Range | Default |
+|---|---|---|---|
+| `kind` (Kind) | choice | 0 `soft`, 1 `ridged` | `soft` |
+| `direction` (Lines run) | choice | 0 `across`, 1 `down` | `across` |
+| `scale` (Scale) | int | 1 – 32 | `2` |
+| `stretch` (Stretch) | int | 1 – 32 | `12` |
+| `octaves` (Detail) | int | 1 – 6 | `4` |
+| `roughness` (Roughness) | number | 0 – 1 | `0.55` |
+| `seed` (Seed) | seed | any whole number | `0` |
+
+```glsl
+vec2 P0 = p_direction < 0.5 ? vec2(p_scale, p_scale * p_stretch) : vec2(p_scale * p_stretch, p_scale);
+float sum = 0., amp = 1., norm = 0.;
+for (int k = 0; k < 6; k++) {
+  if (float(k) >= p_octaves) break;
+  vec2 P = P0 * exp2(float(k)); vec2 p = uv * P; vec2 i = floor(p), f = fract(p); vec2 u = f * f * (3. - 2. * f);
+  vec2 o = seedv(p_seed + float(k) * 7.);
+  float a = hash12(mod(i, P) + o), b = hash12(mod(i + vec2(1., 0.), P) + o);
+  float c = hash12(mod(i + vec2(0., 1.), P) + o), d = hash12(mod(i + vec2(1., 1.), P) + o);
+  float n = mix(mix(a, b, u.x), mix(c, d, u.x), u.y);
+  if (p_kind > 0.5) n = 1. - abs(n * 2. - 1.);
+  sum += n * amp; norm += amp; amp *= p_roughness;
+}
+outColor = vec4(vec3(sum / max(norm, 1e-5)), 1.);
+```
+
+### Static — `whiteNoise`
+
+A random grey for every little square (white noise): grain, sand, pixel dither.
+
+Makes: grey · hash `2871f29d`
+
+| Setting | Kind | Range | Default |
+|---|---|---|---|
+| `grid` (Grid) | int | 2 – 1024 | `256` |
+| `contrast` (Contrast) | number | 0 – 1 | `0.5` |
+| `seed` (Seed) | seed | any whole number | `0` |
+
+```glsl
+float n = hash12(mod(floor(uv * p_grid), p_grid) + seedv(p_seed));
+outColor = vec4(vec3(clamp((n - 0.5) * (0.4 + p_contrast * 1.6) + 0.5, 0., 1.)), 1.);
+```
+
+### Crystals — `crystals`
+
+Cells, each a flat face tilted its own way: crystals, faceted gems, hammered metal, ice.
+
+Makes: grey · hash `9a70bc66`
+
+| Setting | Kind | Range | Default |
+|---|---|---|---|
+| `scale` (Scale) | int | 1 – 64 | `8` |
+| `jitter` (Randomness) | number | 0 – 1 | `1` |
+| `facet` (Tilt) | number | 0 – 1 | `0.7` |
+| `gap` (Gap) | number | 0 – 0.3 | `0.03` |
+| `seed` (Seed) | seed | any whole number | `0` |
+
+```glsl
+vec2 p = uv * p_scale; vec2 i = floor(p), f = fract(p); vec2 o = seedv(p_seed);
+float f1 = 8., f2 = 8., id = 0.; vec2 best = vec2(0.);
+for (int y = -1; y <= 1; y++) for (int x = -1; x <= 1; x++) {
+  vec2 c = vec2(float(x), float(y)); vec2 w = mod(i + c, p_scale);
+  vec2 dv = c + 0.5 + (hash22(w + o) - 0.5) * p_jitter - f; float d = length(dv);
+  if (d < f1) { f2 = f1; f1 = d; best = dv; id = hash12(w + o + 7.7); } else if (d < f2) f2 = d;
+}
+float a = id * 6.2831853;
+float face = clamp(0.5 + dot(-best, vec2(cos(a), sin(a))) * 0.9, 0., 1.);
+float v = mix(0.25 + 0.5 * id, face, p_facet);
+if (p_gap > 0.) v *= smoothstep(0., p_gap, f2 - f1);
+outColor = vec4(vec3(v), 1.);
+```
+
+### Rings and ripples — `rings`
+
+Rings around the middle of each tile, optionally wobbly: ripples, tree rings, targets, sliced agate.
+
+Makes: grey · hash `65088173`
+
+| Setting | Kind | Range | Default |
+|---|---|---|---|
+| `tiles` (Repeat) | int | 1 – 16 | `1` |
+| `count` (Rings) | number | 1 – 64 (step 1) | `10` |
+| `sharpness` (Sharpness) | number | 0 – 1 | `0.3` |
+| `fade` (Fade outwards) | number | 0 – 1 | `0` |
+| `wobble` (Wobble) | number | 0 – 1 | `0.2` |
+| `wobbleScale` (Wobble size) | int | 1 – 16 | `3` |
+| `seed` (Seed) | seed | any whole number | `0` |
+
+```glsl
+vec2 q = fract(uv * p_tiles) - 0.5; float r = length(q) * 2.;
+float rw = r + (fbm(uv, p_wobbleScale, 4., 0.5, 0., p_seed) - 0.5) * p_wobble * 0.5;
+float v = 0.5 + 0.5 * cos(fract(rw * p_count) * 6.2831853);
+float e = (1. - p_sharpness) * 0.5 + 0.01; v = mix(v, smoothstep(0.5 - e, 0.5 + e, v), p_sharpness);
+v *= mix(1., 1. - clamp(r, 0., 1.), p_fade);
+outColor = vec4(vec3(v), 1.);
+```
+
+### Truchet — `truchet`
+
+Tiles of quarter-circle arcs or diagonals turned at random, joining into endless paths and mazes.
+
+Makes: grey · hash `b12b41cd`
+
+| Setting | Kind | Range | Default |
+|---|---|---|---|
+| `style` (Style) | choice | 0 `arcs`, 1 `lines` | `arcs` |
+| `tiles` (Tiles across) | int | 1 – 64 | `8` |
+| `width` (Width) | number | 0.02 – 0.9 | `0.25` |
+| `rounded` (Rounded (as height)) | bool |  | `true` |
+| `seed` (Seed) | seed | any whole number | `0` |
+
+```glsl
+vec2 p = uv * p_tiles; vec2 c = floor(p); vec2 f = fract(p);
+if (hash12(mod(c, p_tiles) + seedv(p_seed)) > 0.5) f.x = 1. - f.x;
+float d = p_style < 0.5 ? min(abs(length(f) - 0.5), abs(length(f - 1.) - 0.5)) : abs(f.x - f.y) * 0.70711;
+float hw = p_width * 0.5; float t = clamp((hw - d) / hw, 0., 1.);
+float v = p_rounded > 0.5 ? sqrt(1. - (1. - t) * (1. - t)) : smoothstep(0., 0.08, t);
+outColor = vec4(vec3(v), 1.);
+```
+
+### Herringbone — `herringbone`
+
+Planks laid in a zigzag herringbone: parquet floors, paving (white plank, black gap).
+
+Makes: grey · hash `d053bc1d`
+
+| Setting | Kind | Range | Default |
+|---|---|---|---|
+| `repeats` (Repeats) | int | 1 – 16 | `2` |
+| `length` (Plank length) | int | 2 – 8 | `3` |
+| `gap` (Gap) | number | 0 – 0.4 | `0.06` |
+| `bevel` (Bevel) | number | 0 – 0.5 | `0.12` |
+| `random` (Random brightness) | number | 0 – 1 | `0.3` |
+| `seed` (Seed) | seed | any whole number | `0` |
+
+```glsl
+float L = p_length; float N = p_repeats * 2. * L;
+vec2 p = uv * N; vec2 cell = floor(p); vec2 f = fract(p);
+float d = mod(cell.x - cell.y, 2. * L);
+vec2 start; float e;
+if (d < L) { start = vec2(cell.x - d, cell.y); float lx = p.x - start.x; e = min(min(lx, L - lx), min(f.y, 1. - f.y)); }
+else { float j = 2. * L - 1. - d; start = vec2(cell.x, cell.y - j); float ly = p.y - start.y; e = min(min(ly, L - ly), min(f.x, 1. - f.x)); }
+e -= p_gap * 0.5;
+float r = hash12(mod(start, N) + vec2(d < L ? 0. : 0.5) + seedv(p_seed));
+float v = e <= 0. ? 0. : (p_bevel > 0. ? smoothstep(0., p_bevel, e) : 1.) * (1. - p_random * r);
+outColor = vec4(vec3(v), 1.);
+```
+
+### Scales — `scales`
+
+Overlapping round scales in staggered rows: fish, dragons, roof shingles, chain mail.
+
+Makes: grey · hash `c576c7dd`
+
+| Setting | Kind | Range | Default |
+|---|---|---|---|
+| `count` (Across) | int | 1 – 48 | `8` |
+| `size` (Size) | number | 0.55 – 1 | `0.75` |
+| `bevel` (Roundness) | number | 0 – 1 | `0.6` |
+| `random` (Random brightness) | number | 0 – 1 | `0.25` |
+| `seed` (Seed) | seed | any whole number | `0` |
+
+```glsl
+vec2 P = vec2(p_count, p_count * 2.); vec2 p = uv * P; float best = 99.; float v = 0.; vec2 o = seedv(p_seed);
+for (int dy = -2; dy <= 2; dy++) for (int dx = -1; dx <= 1; dx++) {
+  float row = floor(p.y) + float(dy); float off = mod(row, 2.) * 0.5;
+  float col = floor(p.x - off) + float(dx);
+  vec2 dd = vec2(p.x - (col + 0.5 + off), (p.y - row) * 0.5);
+  float t = 1. - length(dd) / p_size;
+  // Each row lies over the one below (as roof shingles), so a scale shows its lower edge.
+  if (t > 0. && row < best) {
+    best = row;
+    float rnd = hash12(vec2(mod(col, P.x), mod(row, P.y)) + o);
+    v = (p_bevel > 0. ? smoothstep(0., p_bevel * 0.6, t) : 1.) * (0.6 + 0.4 * clamp(1. - dd.y / p_size, 0., 1.)) * (1. - p_random * rnd);
+  }
+}
+outColor = vec4(vec3(v), 1.);
+```
+
+### Tread plate — `treadPlate`
+
+Raised bars crossing each other in a diamond pattern: metal floor plates, stairs (as height).
+
+Makes: grey · hash `46a2263e`
+
+| Setting | Kind | Range | Default |
+|---|---|---|---|
+| `count` (Across) | int | 2 – 48 | `8` |
+| `length` (Bar length) | number | 0.1 – 0.45 | `0.3` |
+| `width` (Bar width) | number | 0.03 – 0.3 | `0.14` |
+
+```glsl
+vec2 p = uv * p_count; vec2 c = floor(p); vec2 f = fract(p) - 0.5;
+float s = mod(c.x + c.y, 2.) < 0.5 ? 1. : -1.;
+vec2 dir = normalize(vec2(1., s));
+float t = clamp(dot(f, dir), -p_length, p_length);
+float d = length(f - dir * t);
+float k = clamp(1. - d / p_width, 0., 1.);
+outColor = vec4(vec3(sqrt(k * (2. - k))), 1.);
+```
+
+### Studs and rivets — `studs`
+
+Round bumps on a grid, domed or flat-topped: rivets, studs, rubber mats, perforated sheets.
+
+Makes: grey · hash `6b528d4e`
+
+| Setting | Kind | Range | Default |
+|---|---|---|---|
+| `count` (Across) | int | 1 – 64 | `8` |
+| `size` (Size) | number | 0.05 – 1 | `0.65` |
+| `profile` (Shape) | choice | 0 `dome`, 1 `flat`, 2 `cone` | `dome` |
+| `offset` (Offset rows) | bool |  | `false` |
+| `random` (Random height) | number | 0 – 1 | `0` |
+| `seed` (Seed) | seed | any whole number | `0` |
+
+```glsl
+vec2 p = uv * p_count; float row = floor(p.y);
+if (p_offset > 0.5) p.x += mod(row, 2.) * 0.5;
+vec2 c = floor(p); vec2 f = fract(p) - 0.5;
+float t = clamp(1. - length(f) / (p_size * 0.5), 0., 1.);
+float v = p_profile < 0.5 ? sqrt(t * (2. - t)) : p_profile < 1.5 ? smoothstep(0., 0.25, t) : t;
+v *= 1. - p_random * hash12(mod(c, p_count) + seedv(p_seed));
+outColor = vec4(vec3(v), 1.);
+```
+
+### Caustics — `caustics`
+
+Bright wavy light lines, as on the floor of a pool: water light, glints, energy shields.
+
+Makes: grey · hash `b5a5827c`
+
+| Setting | Kind | Range | Default |
+|---|---|---|---|
+| `scale` (Scale) | int | 1 – 32 | `5` |
+| `width` (Line width) | number | 0.01 – 0.4 | `0.12` |
+| `warp` (Wobble) | number | 0 – 1 | `0.5` |
+| `seed` (Seed) | seed | any whole number | `0` |
+
+```glsl
+vec2 q = uv + p_warp * 0.12 * (vec2(fbm(uv, 2., 3., 0.5, 0., p_seed), fbm(uv, 2., 3., 0.5, 0., p_seed + 4.)) - 0.5);
+vec3 a = voronoi(q, p_scale, 1., p_seed + 1.);
+vec3 b = voronoi(q, p_scale * 2., 1., p_seed + 2.);
+float la = 1. - smoothstep(0., p_width, a.y - a.x);
+float lb = 1. - smoothstep(0., p_width, b.y - b.x);
+outColor = vec4(vec3(clamp(pow(la, 1.5) + 0.5 * pow(lb, 2.), 0., 1.)), 1.);
+```
+
+### Sand ripples — `dunes`
+
+Lopsided ridges, gentle on one side and steep on the other, wandering a little: sand, dunes, snow drifts.
+
+Makes: grey · hash `fc5d8d1f`
+
+| Setting | Kind | Range | Default |
+|---|---|---|---|
+| `count` (Ridges) | int | 1 – 64 | `12` |
+| `direction` (Ridges run) | choice | 0 `across`, 1 `down` | `across` |
+| `lean` (Lean) | number | 0.05 – 0.95 | `0.75` |
+| `wobble` (Wander) | number | 0 – 1 | `0.5` |
+| `wobbleScale` (Wander size) | int | 1 – 16 | `3` |
+| `seed` (Seed) | seed | any whole number | `0` |
+
+```glsl
+float t = p_direction < 0.5 ? uv.y : uv.x;
+t += (fbm(uv, p_wobbleScale, 4., 0.5, 0., p_seed) - 0.5) * p_wobble * 3. / p_count;
+float x = fract(t * p_count);
+float v = x < p_lean ? x / p_lean : (1. - x) / (1. - p_lean);
+outColor = vec4(vec3(smoothstep(0., 1., v)), 1.);
+```
+
+### Triangles — `triangles`
+
+Triangle tiles pointing up and down in rows (white tile, black gap).
+
+Makes: grey · hash `02e7236c`
+
+| Setting | Kind | Range | Default |
+|---|---|---|---|
+| `count` (Across) | int | 1 – 48 | `6` |
+| `gap` (Gap) | number | 0 – 0.4 | `0.05` |
+| `bevel` (Bevel) | number | 0 – 1 | `0.3` |
+| `random` (Random brightness) | number | 0 – 1 | `0.3` |
+| `seed` (Seed) | seed | any whole number | `0` |
+
+```glsl
+float N = p_count; float M = max(2., 2. * floor(N / 1.7320508 + 0.5));
+vec2 p = uv * vec2(N, M); float row = floor(p.y); float fy = fract(p.y);
+float x = p.x + mod(row, 2.) * 0.5;
+float a = x + fy * 0.5 - 0.5, b = x - fy * 0.5 - 0.5;
+float fa = floor(a), fb = floor(b); bool up = fa > fb;
+float e = up ? min(min(fract(a), 1. - fract(b)), 1. - fy) : min(min(1. - fract(a), fract(b)), fy);
+e = e * 0.866 / 0.2887 - p_gap * 2.;
+float rnd = hash12(vec2(mod(fa + fb, 2. * N), mod(row, M)) + seedv(p_seed));
+float v = e <= 0. ? 0. : (p_bevel > 0. ? smoothstep(0., p_bevel, e) : 1.) * (1. - p_random * rnd);
+outColor = vec4(vec3(v), 1.);
+```
+
+### Interference — `interference`
+
+Several waves running different ways, added up: moiré, shimmering water, alien surfaces.
+
+Makes: grey · hash `30fbc5b3`
+
+| Setting | Kind | Range | Default |
+|---|---|---|---|
+| `waves` (Waves) | int | 1 – 8 | `4` |
+| `frequency` (Frequency) | int | 1 – 32 | `6` |
+| `sharpness` (Sharpness) | number | 0 – 1 | `0` |
+| `seed` (Seed) | seed | any whole number | `0` |
+
+```glsl
+float s = 0.; vec2 o = seedv(p_seed);
+for (int k = 0; k < 8; k++) {
+  if (float(k) >= p_waves) break;
+  vec2 h = hash22(vec2(float(k), 1.) + o);
+  // Whole numbers of waves across the square, so it tiles.
+  vec2 kv = floor((h - 0.5) * 2. * p_frequency + 0.5); if (kv.x == 0. && kv.y == 0.) kv.x = 1.;
+  s += cos(6.2831853 * dot(kv, uv) + hash12(vec2(float(k), 2.) + o) * 6.2831853);
+}
+float v = 0.5 + 0.5 * s / max(1., sqrt(p_waves));
+float e = (1. - p_sharpness) * 0.5 + 0.01; v = mix(clamp(v, 0., 1.), smoothstep(0.5 - e, 0.5 + e, v), p_sharpness);
+outColor = vec4(vec3(v), 1.);
+```
+
+### Spiral — `spiral`
+
+A spiral (or several arms) in each tile: shells, vortices, hypnotic swirls, ammonites.
+
+Makes: grey · hash `dc829510`
+
+| Setting | Kind | Range | Default |
+|---|---|---|---|
+| `tiles` (Repeat) | int | 1 – 16 | `1` |
+| `arms` (Arms) | int | 1 – 12 | `2` |
+| `twist` (Twist) | number | -20 – 20 (step 0.1) | `6` |
+| `sharpness` (Sharpness) | number | 0 – 1 | `0.3` |
+
+```glsl
+vec2 q = fract(uv * p_tiles) - 0.5; float r = length(q) * 2.; float a = atan(q.y, q.x) / 6.2831853;
+float v = 0.5 + 0.5 * cos((a * p_arms + r * p_twist) * 6.2831853);
+float e = (1. - p_sharpness) * 0.5 + 0.01; v = mix(v, smoothstep(0.5 - e, 0.5 + e, v), p_sharpness);
+outColor = vec4(vec3(v), 1.);
+```
+
+### Colour cells — `colorCells`
+
+Cells (Voronoi) or squares, each a random colour between two colours or of a random hue: mosaics, stained glass, terrazzo.
+
+Makes: color · hash `d5261809`
+
+| Setting | Kind | Range | Default |
+|---|---|---|---|
+| `shape` (Cells) | choice | 0 `voronoi`, 1 `squares` | `voronoi` |
+| `mode` (Colours) | choice | 0 `between`, 1 `hues` | `between` |
+| `a` (Colour A) | color |  | `#2f5d8a` |
+| `b` (Colour B) | color |  | `#d9a441` |
+| `saturation` (Saturation (any hue)) | number | 0 – 1 | `0.6` |
+| `scale` (Scale) | int | 1 – 64 | `8` |
+| `gap` (Gap) | number | 0 – 0.3 | `0.04` |
+| `seed` (Seed) | seed | any whole number | `0` |
+
+```glsl
+float id; float edge;
+if (p_shape < 0.5) { vec3 v = voronoi(uv, p_scale, 1., p_seed); id = v.z; edge = v.y - v.x; }
+else { vec2 c = floor(uv * p_scale); vec2 f = fract(uv * p_scale); id = hash12(mod(c, p_scale) + seedv(p_seed)); edge = 2. * min(min(f.x, 1. - f.x), min(f.y, 1. - f.y)); }
+vec3 col = p_mode < 0.5 ? mix(p_a, p_b, id) : hsv2rgb(vec3(id, p_saturation, 0.55 + 0.4 * hash12(vec2(id * 91.7, 3.))));
+if (p_gap > 0.) col *= smoothstep(p_gap * 0.5, p_gap, edge);
+outColor = vec4(col, 1.);
+```
+
+### Clouds 1 — `clouds1`
+
+Soft, smooth clouds: many layers of Perlin noise.
+
+Makes: grey · hash `e379df04`
+
+| Setting | Kind | Range | Default |
+|---|---|---|---|
+| `scale` (Scale) | int | 1 – 64 | `4` |
+| `octaves` (Detail) | int | 1 – 10 | `8` |
+| `roughness` (Roughness) | number | 0 – 1 | `0.5` |
+| `contrast` (Contrast) | number | 0 – 1 | `0.2` |
+| `seed` (Seed) | seed | any whole number | `0` |
+
+```glsl
+float v = fbm(uv, p_scale, p_octaves, p_roughness, 0., p_seed);
+v = clamp((v - 0.5) * (1. + p_contrast * 3.) + 0.5, 0., 1.);
+outColor = vec4(vec3(v), 1.);
+```
+
+### Clouds 2 — `clouds2`
+
+Busier, more contrasty clouds, gently swirled: overcast skies, smoke, stains.
+
+Makes: grey · hash `eba02fb9`
+
+| Setting | Kind | Range | Default |
+|---|---|---|---|
+| `scale` (Scale) | int | 1 – 64 | `3` |
+| `octaves` (Detail) | int | 1 – 10 | `8` |
+| `roughness` (Roughness) | number | 0 – 1 | `0.6` |
+| `contrast` (Contrast) | number | 0 – 1 | `0.5` |
+| `seed` (Seed) | seed | any whole number | `0` |
+
+```glsl
+vec2 w = vec2(fbm(uv, p_scale, 4., 0.5, 0., p_seed + 3.), fbm(uv, p_scale, 4., 0.5, 0., p_seed + 8.)) - 0.5;
+float v = fbm(uv + w * 0.15, p_scale, p_octaves, p_roughness, 0., p_seed) * 0.7 + fbm(uv, p_scale * 2., p_octaves, p_roughness, 0., p_seed + 1.) * 0.3;
+v = clamp((v - 0.5) * (1. + p_contrast * 3.) + 0.5, 0., 1.);
+outColor = vec4(vec3(v), 1.);
+```
+
+### Perlin noise — `perlin`
+
+Plain Perlin noise: smooth round blobs, one size (add detail for more layers).
+
+Makes: grey · hash `e379df04`
+
+| Setting | Kind | Range | Default |
+|---|---|---|---|
+| `scale` (Scale) | int | 1 – 64 | `8` |
+| `octaves` (Detail) | int | 1 – 10 | `1` |
+| `roughness` (Roughness) | number | 0 – 1 | `0.5` |
+| `contrast` (Contrast) | number | 0 – 1 | `0` |
+| `seed` (Seed) | seed | any whole number | `0` |
+
+```glsl
+float v = fbm(uv, p_scale, p_octaves, p_roughness, 0., p_seed);
+v = clamp((v - 0.5) * (1. + p_contrast * 3.) + 0.5, 0., 1.);
+outColor = vec4(vec3(v), 1.);
+```
+
+### Plasma — `plasma`
+
+Bright branching veins on dark, like electric plasma: energy, lightning glow, veined rock.
+
+Makes: grey · hash `09fb9193`
+
+| Setting | Kind | Range | Default |
+|---|---|---|---|
+| `scale` (Scale) | int | 1 – 64 | `3` |
+| `octaves` (Detail) | int | 1 – 10 | `6` |
+| `roughness` (Roughness) | number | 0 – 1 | `0.55` |
+| `contrast` (Sharpness) | number | 0 – 1 | `0.5` |
+| `seed` (Seed) | seed | any whole number | `0` |
+
+```glsl
+vec2 w = vec2(fbm(uv, p_scale, 3., 0.5, 0., p_seed + 5.), fbm(uv, p_scale, 3., 0.5, 0., p_seed + 9.)) - 0.5;
+float n = fbm(uv + w * 0.2, p_scale, p_octaves, p_roughness, 0., p_seed);
+float v = pow(1. - abs(n * 2. - 1.), 1. + p_contrast * 6.);
+v = clamp(v, 0., 1.);
+outColor = vec4(vec3(v), 1.);
+```
+
+### Crystal 1 — `crystal1`
+
+Layers of flat, tilted shards on top of each other: crystals, broken glass, rock faces.
+
+Makes: grey · hash `be190c70`
+
+| Setting | Kind | Range | Default |
+|---|---|---|---|
+| `scale` (Scale) | int | 1 – 64 | `4` |
+| `octaves` (Detail) | int | 1 – 10 | `3` |
+| `roughness` (Roughness) | number | 0 – 1 | `0.6` |
+| `contrast` (Contrast) | number | 0 – 1 | `0.2` |
+| `seed` (Seed) | seed | any whole number | `0` |
+
+```glsl
+float v = 0.;
+for (int k = 0; k < 6; k++) {
+  if (float(k) >= p_octaves) break;
+  float sc = p_scale * exp2(float(k)); vec2 p = uv * sc; vec2 i = floor(p), f = fract(p); vec2 o = seedv(p_seed + float(k) * 13.);
+  float f1 = 8.; vec2 best = vec2(0.); float id = 0.;
+  for (int y = -1; y <= 1; y++) for (int x = -1; x <= 1; x++) {
+    vec2 c = vec2(float(x), float(y)); vec2 w = mod(i + c, sc);
+    vec2 dv = c + hash22(w + o) - f; float d = length(dv);
+    if (d < f1) { f1 = d; best = dv; id = hash12(w + o + 7.7); }
+  }
+  float a = id * 6.2831853;
+  float face = clamp(0.5 + dot(-best, vec2(cos(a), sin(a))) * 0.8 + (id - 0.5) * 0.4, 0., 1.);
+  v = max(v, face * pow(p_roughness, float(k)));
+}
+v = clamp((v - 0.5) * (1. + p_contrast * 3.) + 0.5, 0., 1.);
+outColor = vec4(vec3(v), 1.);
+```
+
+### Crystal 2 — `crystal2`
+
+Sharp facets with bright ridges where they meet: gems, quartz, ice, hammered metal.
+
+Makes: grey · hash `18514714`
+
+| Setting | Kind | Range | Default |
+|---|---|---|---|
+| `scale` (Scale) | int | 1 – 64 | `6` |
+| `octaves` (Detail) | int | 1 – 10 | `2` |
+| `roughness` (Roughness) | number | 0 – 1 | `0.5` |
+| `contrast` (Contrast) | number | 0 – 1 | `0.3` |
+| `seed` (Seed) | seed | any whole number | `0` |
+
+```glsl
+float v = 0., norm = 0., amp = 1.;
+for (int k = 0; k < 6; k++) {
+  if (float(k) >= p_octaves) break;
+  float sc = p_scale * exp2(float(k)); vec2 p = uv * sc; vec2 i = floor(p), f = fract(p); vec2 o = seedv(p_seed + float(k) * 17.);
+  float f1 = 8., f2 = 8.; vec2 best = vec2(0.); float id = 0.;
+  for (int y = -1; y <= 1; y++) for (int x = -1; x <= 1; x++) {
+    vec2 c = vec2(float(x), float(y)); vec2 w = mod(i + c, sc);
+    vec2 dv = c + hash22(w + o) - f; float d = length(dv);
+    if (d < f1) { f2 = f1; f1 = d; best = dv; id = hash12(w + o + 3.3); } else if (d < f2) f2 = d;
+  }
+  float a = id * 6.2831853;
+  float face = clamp(0.5 + dot(-best, vec2(cos(a), sin(a))) * 1.2, 0., 1.);
+  float ridge = 1. - smoothstep(0., 0.08, f2 - f1);
+  v += max(face, ridge) * amp; norm += amp; amp *= p_roughness;
+}
+v /= max(norm, 1e-5);
+v = clamp((v - 0.5) * (1. + p_contrast * 3.) + 0.5, 0., 1.);
+outColor = vec4(vec3(v), 1.);
+```
+
+### Fractal sum 1 — `fractalSum1`
+
+Layers of blocky value noise added up: a rough, grainy base for dirt and stone.
+
+Makes: grey · hash `06f574f0`
+
+| Setting | Kind | Range | Default |
+|---|---|---|---|
+| `scale` (Scale) | int | 1 – 64 | `6` |
+| `octaves` (Detail) | int | 1 – 10 | `7` |
+| `roughness` (Roughness) | number | 0 – 1 | `0.62` |
+| `contrast` (Contrast) | number | 0 – 1 | `0.3` |
+| `seed` (Seed) | seed | any whole number | `0` |
+
+```glsl
+float sum = 0., amp = 1., norm = 0.;
+for (int k = 0; k < 10; k++) {
+  if (float(k) >= p_octaves) break;
+  float per = p_scale * exp2(float(k)); vec2 q = uv * per; vec2 i = floor(q), f = fract(q); vec2 u = f * f * (3. - 2. * f);
+  vec2 o = seedv(p_seed + float(k) * 3.7) * 0.37 + float(k) * 19.19;
+  float a = hash12(mod(i, per) * 1.731 + o), b = hash12(mod(i + vec2(1., 0.), per) * 1.731 + o);
+  float c = hash12(mod(i + vec2(0., 1.), per) * 1.731 + o), d = hash12(mod(i + vec2(1., 1.), per) * 1.731 + o);
+  sum += mix(mix(a, b, u.x), mix(c, d, u.x), u.y) * amp; norm += amp; amp *= p_roughness;
+}
+float v = sum / max(norm, 1e-5);
+v = clamp((v - 0.5) * (1. + p_contrast * 3.) + 0.5, 0., 1.);
+outColor = vec4(vec3(v), 1.);
+```
+
+### Fractal sum 2 — `fractalSum2`
+
+Smooth Perlin layers with strong fine detail: weathered surfaces, plaster, terrain.
+
+Makes: grey · hash `e379df04`
+
+| Setting | Kind | Range | Default |
+|---|---|---|---|
+| `scale` (Scale) | int | 1 – 64 | `2` |
+| `octaves` (Detail) | int | 1 – 10 | `9` |
+| `roughness` (Roughness) | number | 0 – 1 | `0.68` |
+| `contrast` (Contrast) | number | 0 – 1 | `0.4` |
+| `seed` (Seed) | seed | any whole number | `0` |
+
+```glsl
+float v = fbm(uv, p_scale, p_octaves, p_roughness, 0., p_seed);
+v = clamp((v - 0.5) * (1. + p_contrast * 3.) + 0.5, 0., 1.);
+outColor = vec4(vec3(v), 1.);
+```
+
+### Fractal sum 3 — `fractalSum3`
+
+Folded (billowy) noise layers, turned over: lumpy, cauliflower-like detail, moss, coral.
+
+Makes: grey · hash `d4bb3b25`
+
+| Setting | Kind | Range | Default |
+|---|---|---|---|
+| `scale` (Scale) | int | 1 – 64 | `3` |
+| `octaves` (Detail) | int | 1 – 10 | `7` |
+| `roughness` (Roughness) | number | 0 – 1 | `0.55` |
+| `contrast` (Contrast) | number | 0 – 1 | `0.3` |
+| `seed` (Seed) | seed | any whole number | `0` |
+
+```glsl
+float sum = 0., amp = 1., norm = 0.;
+for (int k = 0; k < 10; k++) {
+  if (float(k) >= p_octaves) break;
+  float per = p_scale * exp2(float(k));
+  sum += abs(gradNoise(uv * per, per, p_seed + float(k) * 5.3) * 2. - 1.) * amp; norm += amp; amp *= p_roughness;
+}
+float v = 1. - clamp(sum / max(norm, 1e-5) * 1.2, 0., 1.);
+v = clamp((v - 0.5) * (1. + p_contrast * 3.) + 0.5, 0., 1.);
+outColor = vec4(vec3(v), 1.);
+```
+
+### Fractal sum 4 — `fractalSum4`
+
+Ridged layers: sharp creases and crests, mountains, wrinkled leather, veins.
+
+Makes: grey · hash `158ecaca`
+
+| Setting | Kind | Range | Default |
+|---|---|---|---|
+| `scale` (Scale) | int | 1 – 64 | `3` |
+| `octaves` (Detail) | int | 1 – 10 | `8` |
+| `roughness` (Roughness) | number | 0 – 1 | `0.6` |
+| `contrast` (Contrast) | number | 0 – 1 | `0.3` |
+| `seed` (Seed) | seed | any whole number | `0` |
+
+```glsl
+float v = fbm(uv, p_scale, p_octaves, p_roughness, 2., p_seed);
+v = clamp((v - 0.5) * (1. + p_contrast * 3.) + 0.5, 0., 1.);
+outColor = vec4(vec3(v), 1.);
+```
+
+### B&W spots 1 — `bnwSpots1`
+
+Black and white blotches with soft edges: patches, camouflage, a mask to mix two materials.
+
+Makes: grey · hash `50f0d71c`
+
+| Setting | Kind | Range | Default |
+|---|---|---|---|
+| `scale` (Scale) | int | 1 – 64 | `5` |
+| `octaves` (Detail) | int | 1 – 10 | `6` |
+| `roughness` (Roughness) | number | 0 – 1 | `0.5` |
+| `contrast` (Contrast) | number | 0 – 1 | `0.7` |
+| `balance` (More white) | number | 0 – 1 | `0.5` |
+| `seed` (Seed) | seed | any whole number | `0` |
+
+```glsl
+float v = fbm(uv, p_scale, p_octaves, p_roughness, 0., p_seed);
+float e = (1. - p_contrast) * 0.5 + 0.005; v = smoothstep(0.5 - e, 0.5 + e, v + p_balance - 0.5);
+outColor = vec4(vec3(v), 1.);
+```
+
+### B&W spots 2 — `bnwSpots2`
+
+Smaller, busier black and white spots with ragged edges: lichen, grime, mottled paint.
+
+Makes: grey · hash `95a4e148`
+
+| Setting | Kind | Range | Default |
+|---|---|---|---|
+| `scale` (Scale) | int | 1 – 64 | `12` |
+| `octaves` (Detail) | int | 1 – 10 | `5` |
+| `roughness` (Roughness) | number | 0 – 1 | `0.65` |
+| `contrast` (Contrast) | number | 0 – 1 | `0.75` |
+| `balance` (More white) | number | 0 – 1 | `0.5` |
+| `seed` (Seed) | seed | any whole number | `0` |
+
+```glsl
+float sum = 0., amp = 1., norm = 0.;
+for (int k = 0; k < 10; k++) {
+  if (float(k) >= p_octaves) break;
+  float per = p_scale * exp2(float(k)); vec2 q = uv * per; vec2 i = floor(q), f = fract(q); vec2 u = f * f * (3. - 2. * f);
+  vec2 o = seedv(p_seed + float(k) * 3.7) * 0.37 + float(k) * 19.19;
+  float a = hash12(mod(i, per) * 1.731 + o), b = hash12(mod(i + vec2(1., 0.), per) * 1.731 + o);
+  float c = hash12(mod(i + vec2(0., 1.), per) * 1.731 + o), d = hash12(mod(i + vec2(1., 1.), per) * 1.731 + o);
+  sum += mix(mix(a, b, u.x), mix(c, d, u.x), u.y) * amp; norm += amp; amp *= p_roughness;
+}
+float v = sum / max(norm, 1e-5);
+float e = (1. - p_contrast) * 0.5 + 0.005; v = smoothstep(0.5 - e, 0.5 + e, v + p_balance - 0.5);
+outColor = vec4(vec3(v), 1.);
+```
+
+### B&W spots 3 — `bnwSpots3`
+
+Big, rounded black and white areas: large patches of wear, puddle masks, cow spots.
+
+Makes: grey · hash `1a429d9d`
+
+| Setting | Kind | Range | Default |
+|---|---|---|---|
+| `scale` (Scale) | int | 1 – 64 | `3` |
+| `octaves` (Detail) | int | 1 – 10 | `4` |
+| `roughness` (Roughness) | number | 0 – 1 | `0.4` |
+| `contrast` (Contrast) | number | 0 – 1 | `0.8` |
+| `balance` (More white) | number | 0 – 1 | `0.5` |
+| `seed` (Seed) | seed | any whole number | `0` |
+
+```glsl
+float v = sqrt(fbm(uv, p_scale, p_octaves, p_roughness, 0., p_seed) * fbm(uv, p_scale, p_octaves, p_roughness, 0., p_seed + 21.)) * 1.08;
+float e = (1. - p_contrast) * 0.5 + 0.005; v = smoothstep(0.5 - e, 0.5 + e, v + p_balance - 0.5);
+outColor = vec4(vec3(v), 1.);
+```
+
+### B&W spots 4 — `bnwSpots4`
+
+Fine speckled spots clustered by a broad noise: rust pitting, dust, terrazzo, salt and pepper.
+
+Makes: grey · hash `e440751c`
+
+| Setting | Kind | Range | Default |
+|---|---|---|---|
+| `scale` (Scale) | int | 1 – 64 | `24` |
+| `octaves` (Detail) | int | 1 – 10 | `3` |
+| `roughness` (Roughness) | number | 0 – 1 | `0.5` |
+| `contrast` (Contrast) | number | 0 – 1 | `0.8` |
+| `balance` (More white) | number | 0 – 1 | `0.5` |
+| `seed` (Seed) | seed | any whole number | `0` |
+
+```glsl
+float sum = 0., amp = 1., norm = 0.;
+for (int k = 0; k < 10; k++) {
+  if (float(k) >= p_octaves) break;
+  float per = p_scale * exp2(float(k)); vec2 q = uv * per; vec2 i = floor(q), f = fract(q); vec2 u = f * f * (3. - 2. * f);
+  vec2 o = seedv(p_seed + float(k) * 3.7) * 0.37 + float(k) * 19.19;
+  float a = hash12(mod(i, per) * 1.731 + o), b = hash12(mod(i + vec2(1., 0.), per) * 1.731 + o);
+  float c = hash12(mod(i + vec2(0., 1.), per) * 1.731 + o), d = hash12(mod(i + vec2(1., 1.), per) * 1.731 + o);
+  sum += mix(mix(a, b, u.x), mix(c, d, u.x), u.y) * amp; norm += amp; amp *= p_roughness;
+}
+float v = sum / max(norm, 1e-5);
+v = v * 0.65 + fbm(uv, max(1., floor(p_scale / 6.)), 4., 0.5, 0., p_seed + 4.) * 0.35;
+float e = (1. - p_contrast) * 0.5 + 0.005; v = smoothstep(0.5 - e, 0.5 + e, v + p_balance - 0.5);
+outColor = vec4(vec3(v), 1.);
+```
+
 ## Change
 
 ### Levels — `levels`
@@ -1041,6 +1817,192 @@ vec3 L = vec3(cos(az) * cos(el), sin(az) * cos(el), sin(el));
 outColor = vec4(vec3(clamp(dot(n, L), 0., 1.)), 1.);
 ```
 
+### Tile shuffle — `tileShuffle`
+
+Cut the picture into a grid and turn or flip each piece at random: breaks up visible repeats.
+
+Makes: color · hash `e5984ef7`
+
+| Input | Reads as | Unlinked |
+|---|---|---|
+| `in` (In) | color | 0, 0, 0 |
+
+| Setting | Kind | Range | Default |
+|---|---|---|---|
+| `tiles` (Pieces across) | int | 1 – 32 | `4` |
+| `turn` (Turn) | bool |  | `true` |
+| `flip` (Flip) | bool |  | `true` |
+| `bright` (Brightness varies) | number | 0 – 1 | `0` |
+| `seed` (Seed) | seed | any whole number | `0` |
+
+```glsl
+vec2 p = uv * p_tiles; vec2 c = floor(p); vec2 f = fract(p) - 0.5; vec2 o = seedv(p_seed); vec2 cm = mod(c, p_tiles);
+float r = hash12(cm + o);
+if (p_turn > 0.5) { float k = floor(r * 4.); if (k > 0.5 && k < 1.5) f = vec2(-f.y, f.x); else if (k > 1.5 && k < 2.5) f = -f; else if (k > 2.5) f = vec2(f.y, -f.x); }
+if (p_flip > 0.5 && hash12(cm + o + 3.3) > 0.5) f.x = -f.x;
+vec3 col = inC_in((c + f + 0.5) / p_tiles).rgb * (1. - p_bright * hash12(cm + o + 6.1));
+outColor = vec4(col, 1.);
+```
+
+### Halftone — `halftone`
+
+Turn a picture into a grid of dots, big where it is light: print looks, perforated metal, LED panels.
+
+Makes: grey · hash `ba5be986`
+
+| Input | Reads as | Unlinked |
+|---|---|---|
+| `in` (In) | grey | 0.5, 0.5, 0.5 |
+
+| Setting | Kind | Range | Default |
+|---|---|---|---|
+| `grid` (Dots across) | int | 2 – 128 | `24` |
+| `angle` (Grid) | choice | 0 `square`, 1 `diagonal` | `diagonal` |
+| `softness` (Softness) | number | 0 – 1 | `0.2` |
+| `invert` (Dark makes big dots) | bool |  | `false` |
+
+```glsl
+vec2 p = uv * p_grid; vec2 ctr;
+if (p_angle < 0.5) ctr = floor(p) + 0.5;
+else { vec2 r = vec2(p.x + p.y, p.x - p.y); vec2 rc = floor(r * 0.5) * 2. + 1.; ctr = vec2(rc.x + rc.y, rc.x - rc.y) * 0.5; }
+float dd = length(p - ctr) / (p_angle < 0.5 ? 0.70711 : 1.);
+float g = inG_in(ctr / p_grid); if (p_invert > 0.5) g = 1. - g;
+float rad = sqrt(clamp(g, 0., 1.)); float s = max(p_softness * 0.3, 0.02);
+outColor = vec4(vec3(1. - smoothstep(rad - s, rad, dd)), 1.);
+```
+
+### High pass — `highPass`
+
+Keep only the fine detail and drop the broad light and dark (mid grey where flat): evens out a photo, sharpens heights.
+
+Makes: color · hash `5acacc72`
+
+| Input | Reads as | Unlinked |
+|---|---|---|
+| `in` (In) | color | 0, 0, 0 |
+
+| Setting | Kind | Range | Default |
+|---|---|---|---|
+| `radius` (Radius) | number | 0.001 – 0.1 (step 0.001) | `0.02` |
+| `strength` (Strength) | number | 0 – 4 | `1` |
+
+```glsl
+vec3 s = vec3(0.); float w = 0.;
+for (int y = -3; y <= 3; y++) for (int x = -3; x <= 3; x++) {
+  vec2 o = vec2(x, y) / 3.; float k = exp(-dot(o, o) * 2.);
+  s += inC_in(uv + o * p_radius).rgb * k; w += k;
+}
+outColor = vec4(clamp((inC_in(uv).rgb - s / w) * p_strength + 0.5, 0., 1.), 1.);
+```
+
+### Grow or shrink — `growShrink`
+
+Make light shapes fatter (grow) or thinner (shrink): thicken lines, close gaps, eat into edges.
+
+Makes: color · hash `c566074b`
+
+| Input | Reads as | Unlinked |
+|---|---|---|
+| `in` (In) | color | 0, 0, 0 |
+
+| Setting | Kind | Range | Default |
+|---|---|---|---|
+| `mode` (Make shapes) | choice | 0 `grow`, 1 `shrink` | `grow` |
+| `radius` (Radius) | number | 0 – 0.05 (step 0.0005) | `0.006` |
+
+```glsl
+vec3 r = inC_in(uv).rgb; bool grow = p_mode < 0.5;
+for (int y = -3; y <= 3; y++) for (int x = -3; x <= 3; x++) {
+  vec2 o = vec2(x, y) / 3.; if (dot(o, o) > 1.) continue;
+  vec3 c = inC_in(uv + o * p_radius).rgb; r = grow ? max(r, c) : min(r, c);
+}
+outColor = vec4(r, 1.);
+```
+
+### Ripple — `rippleWarp`
+
+Wiggle the picture with even sine waves: wavy glass, heat haze, water, flags.
+
+Makes: color · hash `395894f9`
+
+| Input | Reads as | Unlinked |
+|---|---|---|
+| `in` (In) | color | 0, 0, 0 |
+
+| Setting | Kind | Range | Default |
+|---|---|---|---|
+| `count` (Waves) | int | 1 – 32 | `4` |
+| `amount` (Amount) | number | 0 – 0.1 (step 0.001) | `0.02` |
+| `mode` (Moves) | choice | 0 `both`, 1 `across`, 2 `down` | `both` |
+
+```glsl
+vec2 o = vec2(sin(uv.y * p_count * 6.2831853), sin(uv.x * p_count * 6.2831853)) * p_amount;
+if (p_mode > 0.5 && p_mode < 1.5) o.y = 0.; else if (p_mode > 1.5) o.x = 0.;
+outColor = vec4(inC_in(uv + o).rgb, 1.);
+```
+
+### Stagger rows — `stagger`
+
+Cut the picture into rows (or columns) and slide every other one: brick-like offsets of any pattern.
+
+Makes: color · hash `e0f77418`
+
+| Input | Reads as | Unlinked |
+|---|---|---|
+| `in` (In) | color | 0, 0, 0 |
+
+| Setting | Kind | Range | Default |
+|---|---|---|---|
+| `rows` (Rows) | int | 1 – 64 | `4` |
+| `offset` (Offset) | number | 0 – 1 | `0.5` |
+| `direction` (Rows run) | choice | 0 `across`, 1 `down` | `across` |
+| `random` (Random offsets) | bool |  | `false` |
+| `seed` (Seed) | seed | any whole number | `0` |
+
+```glsl
+vec2 q = p_direction < 0.5 ? uv : uv.yx; float row = floor(q.y * p_rows);
+float s = p_random > 0.5 ? hash12(vec2(mod(row, p_rows), 4.) + seedv(p_seed)) * p_offset : mod(row, 2.) * p_offset;
+q.x += s; if (p_direction > 0.5) q = q.yx;
+outColor = vec4(inC_in(q).rgb, 1.);
+```
+
+### Free transform — `freeTransform`
+
+Place a picture anywhere by hand: drag, turn and size it with the handles in the Flat preview (a bolt, a logo, a crack). One copy wraps around the edges so the square still tiles; or repeat it.
+
+Makes: color · hash `36b8fae1`
+
+| Input | Reads as | Unlinked |
+|---|---|---|
+| `in` (Picture) | color | 1, 1, 1 |
+| `bg` (Background) | color | 0, 0, 0 |
+
+| Setting | Kind | Range | Default |
+|---|---|---|---|
+| `x` (Across) | number | 0 – 1 (step 0.001) | `0.5` |
+| `y` (Down) | number | 0 – 1 (step 0.001) | `0.5` |
+| `angle` (Turn) | number | -180 – 180 (step 0.1) | `0` |
+| `w` (Width) | number | 0.01 – 4 (step 0.001) | `0.5` |
+| `h` (Height) | number | 0.01 – 4 (step 0.001) | `0.5` |
+| `repeat` (Repeat) | bool |  | `false` |
+| `mode` (Over the background) | choice | 0 `replace`, 1 `max`, 2 `add`, 3 `min` | `replace` |
+
+```glsl
+float a = radians(p_angle); mat2 r = mat2(cos(a), -sin(a), sin(a), cos(a));
+vec2 size = max(vec2(p_w, p_h), vec2(1e-4));
+vec3 bg = inC_bg(uv).rgb; vec3 col = bg; bool hit = false; vec3 pic = vec3(0.);
+if (p_repeat > 0.5) { pic = inC_in(r * (uv - vec2(p_x, p_y)) / size + 0.5).rgb; hit = true; }
+else {
+  // The copy and its neighbours one square away, so it wraps across the edges.
+  for (int oy = -1; oy <= 1; oy++) for (int ox = -1; ox <= 1; ox++) {
+    vec2 q = r * (uv + vec2(float(ox), float(oy)) - vec2(p_x, p_y)) / size;
+    if (!hit && abs(q.x) <= 0.5 && abs(q.y) <= 0.5) { pic = inC_in(q + 0.5).rgb; hit = true; }
+  }
+}
+if (hit) { int m = int(p_mode + 0.5); col = m == 0 ? pic : m == 1 ? max(bg, pic) : m == 2 ? bg + pic : min(bg, pic); }
+outColor = vec4(col, 1.);
+```
+
 ## Combine
 
 ### Blend — `blend`
@@ -1195,6 +2157,37 @@ float d = distance(inC_in(uv).rgb, p_color);
 outColor = vec4(vec3(1. - smoothstep(p_tolerance, p_tolerance + p_softness * 0.3 + 1e-3, d)), 1.);
 ```
 
+### Pick per cell — `cellPick`
+
+Up to four pictures, one picked at random for each cell or square: mixed tiles, patchwork, varied stones.
+
+Makes: color · hash `5992b106`
+
+| Input | Reads as | Unlinked |
+|---|---|---|
+| `a` (A) | color | 1, 1, 1 |
+| `b` (B) | color | 0, 0, 0 |
+| `c` (C) | color | 0.5, 0.5, 0.5 |
+| `d` (D) | color | 0.25, 0.25, 0.25 |
+
+| Setting | Kind | Range | Default |
+|---|---|---|---|
+| `shape` (Cells) | choice | 0 `squares`, 1 `voronoi` | `squares` |
+| `scale` (Scale) | int | 1 – 64 | `4` |
+| `seed` (Seed) | seed | any whole number | `0` |
+
+```glsl
+float id = p_shape < 0.5 ? hash12(mod(floor(uv * p_scale), p_scale) + seedv(p_seed)) : voronoi(uv, p_scale, 1., p_seed).z;
+// Only the linked inputs take part.
+float n = h_a + h_b + h_c + h_d; float k = floor(id * max(n, 1.)); vec3 col = inC_a(uv).rgb;
+float seen = 0.;
+if (h_a > 0.5) { if (seen == k) col = inC_a(uv).rgb; seen += 1.; }
+if (h_b > 0.5) { if (seen == k) col = inC_b(uv).rgb; seen += 1.; }
+if (h_c > 0.5) { if (seen == k) col = inC_c(uv).rgb; seen += 1.; }
+if (h_d > 0.5) { if (seen == k) col = inC_d(uv).rgb; seen += 1.; }
+outColor = vec4(col, 1.);
+```
+
 ## Colour
 
 ### Gradient map — `gradientMap`
@@ -1337,6 +2330,56 @@ Makes: color · hash `e6f8a4ca`
 ```glsl
 vec3 c = inC_in(uv).rgb; c.r += p_warmth * 0.12; c.b -= p_warmth * 0.12; c.g -= p_tint * 0.1; c.rb += p_tint * 0.04;
 outColor = vec4(clamp(c, 0., 1.), 1.);
+```
+
+### Colour balance — `colorBalance`
+
+Tint the dark, middle and light parts separately: warm highlights, cool shadows, aged looks.
+
+Makes: color · hash `c85643d9`
+
+| Input | Reads as | Unlinked |
+|---|---|---|
+| `in` (In) | color | 0.5, 0.5, 0.5 |
+
+| Setting | Kind | Range | Default |
+|---|---|---|---|
+| `shadows` (Shadows) | color |  | `#2a3a5a` |
+| `mids` (Mid-tones) | color |  | `#808080` |
+| `lights` (Highlights) | color |  | `#ffe0b0` |
+| `amount` (Amount) | number | 0 – 1 | `0.4` |
+
+```glsl
+vec3 c = inC_in(uv).rgb; float g = dot(c, vec3(0.2126, 0.7152, 0.0722));
+float ws = 1. - smoothstep(0., 0.5, g), wl = smoothstep(0.5, 1., g), wm = 1. - ws - wl;
+vec3 shift = (p_shadows - 0.5) * ws + (p_mids - 0.5) * wm + (p_lights - 0.5) * wl;
+outColor = vec4(clamp(c + shift * p_amount, 0., 1.), 1.);
+```
+
+### Rainbow palette — `palette`
+
+Colour a grey picture by a smooth looping palette: rainbows, oil slicks, heat, sci-fi glows.
+
+Makes: color · hash `ce06b609`
+
+| Input | Reads as | Unlinked |
+|---|---|---|
+| `in` (In) | grey | 0.5, 0.5, 0.5 |
+
+| Setting | Kind | Range | Default |
+|---|---|---|---|
+| `preset` (Palette) | choice | 0 `rainbow`, 1 `fire`, 2 `ocean`, 3 `oil`, 4 `toxic` | `rainbow` |
+| `repeats` (Repeats) | number | 0.1 – 8 | `1` |
+| `shift` (Shift) | number | 0 – 1 | `0` |
+
+```glsl
+int k = int(p_preset + 0.5); vec3 a = vec3(0.5), b = vec3(0.5), c = vec3(1.), d = vec3(0., 0.33, 0.67);
+if (k == 1) { c = vec3(1., 1., 1.); d = vec3(0., 0.1, 0.2); a = vec3(0.6, 0.35, 0.15); b = vec3(0.5, 0.4, 0.2); }
+else if (k == 2) { a = vec3(0.2, 0.45, 0.6); b = vec3(0.2, 0.3, 0.3); d = vec3(0.5, 0.2, 0.25); }
+else if (k == 3) { c = vec3(2., 1., 0.); d = vec3(0.5, 0.2, 0.25); }
+else if (k == 4) { a = vec3(0.4, 0.6, 0.3); b = vec3(0.4, 0.4, 0.3); c = vec3(1., 1., 0.5); d = vec3(0.8, 0.9, 0.3); }
+float t = inG_in(uv) * p_repeats + p_shift;
+outColor = vec4(clamp(a + b * cos(6.2831853 * (c * t + d)), 0., 1.), 1.);
 ```
 
 ## Surface
@@ -1513,6 +2556,81 @@ float start = hash12(vec2(cm, 2.) + o); float len = p_length * (0.3 + 0.7 * hash
 float y = fract(uv.y - start); float t = clamp(y / max(len, 1e-3), 0., 1.);
 float fx = fract(uv.x * p_count) - 0.5; float wd = 0.35 * (1. - t) + 0.02;
 float v = has * step(y, len) * (1. - smoothstep(wd * 0.6, wd, abs(fx))) * (1. - t);
+outColor = vec4(vec3(v), 1.);
+```
+
+### Puddles — `puddles`
+
+A mask of water filling the low parts of a height picture, with ragged shores: puddles, wet floors, flooded ground.
+
+Makes: grey · hash `1d26532f`
+
+| Input | Reads as | Unlinked |
+|---|---|---|
+| `in` (Height) | grey | 0.5, 0.5, 0.5 |
+
+| Setting | Kind | Range | Default |
+|---|---|---|---|
+| `level` (Water level) | number | 0 – 1 | `0.35` |
+| `edge` (Shore softness) | number | 0 – 0.3 | `0.05` |
+| `breakup` (Breakup) | number | 0 – 1 | `0.4` |
+| `scale` (Noise size) | int | 1 – 32 | `4` |
+| `seed` (Seed) | seed | any whole number | `0` |
+
+```glsl
+float h = inG_in(uv) + (fbm(uv, p_scale, 5., 0.55, 0., p_seed) - 0.5) * p_breakup * 0.6;
+outColor = vec4(vec3(1. - smoothstep(p_level - p_edge, p_level + p_edge + 1e-4, h)), 1.);
+```
+
+### Settles on top — `topCover`
+
+A mask of what lands on upward-facing slopes and tops of a height picture (top of the square is up): snow, dust, moss, sand.
+
+Makes: grey · hash `49aba443`
+
+| Input | Reads as | Unlinked |
+|---|---|---|
+| `in` (Height) | grey | 0.5, 0.5, 0.5 |
+
+| Setting | Kind | Range | Default |
+|---|---|---|---|
+| `amount` (Amount) | number | 0 – 1 | `0.5` |
+| `tops` (On high parts too) | number | 0 – 1 | `0.3` |
+| `breakup` (Breakup) | number | 0 – 1 | `0.3` |
+| `scale` (Noise size) | int | 1 – 64 | `8` |
+| `seed` (Seed) | seed | any whole number | `0` |
+
+```glsl
+float e = 0.006; float h = inG_in(uv);
+float up = clamp((h - inG_in(uv - vec2(0., e))) / e * 0.08 + 0.5, 0., 1.);
+float v = mix(up, h, p_tops) + (fbm(uv, p_scale, 5., 0.55, 0., p_seed) - 0.5) * p_breakup;
+float m = 1. - p_amount;
+outColor = vec4(vec3(smoothstep(m - 0.08, m + 0.08, v)), 1.);
+```
+
+### Slope mask — `slopeMask`
+
+White where a height picture is steep (or flat): rock on cliffs, grass on level ground, wear on sides.
+
+Makes: grey · hash `f3b45836`
+
+| Input | Reads as | Unlinked |
+|---|---|---|
+| `in` (Height) | grey | 0.5, 0.5, 0.5 |
+
+| Setting | Kind | Range | Default |
+|---|---|---|---|
+| `mode` (White where) | choice | 0 `steep`, 1 `flat` | `steep` |
+| `threshold` (Threshold) | number | 0 – 1 | `0.3` |
+| `softness` (Softness) | number | 0 – 0.5 | `0.1` |
+| `strength` (Height strength) | number | 0.1 – 10 | `1` |
+
+```glsl
+float e = 0.004;
+vec2 g = vec2(inG_in(uv + vec2(e, 0.)) - inG_in(uv - vec2(e, 0.)), inG_in(uv + vec2(0., e)) - inG_in(uv - vec2(0., e))) / (2. * e);
+float s = clamp(length(g) * p_strength * 0.05, 0., 1.);
+float v = smoothstep(p_threshold - p_softness, p_threshold + p_softness + 1e-4, s);
+if (p_mode > 0.5) v = 1. - v;
 outColor = vec4(vec3(v), 1.);
 ```
 

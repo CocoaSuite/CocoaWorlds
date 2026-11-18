@@ -4689,6 +4689,3561 @@
       "hash": "251095ef"
     },
     {
+      "type": "billows",
+      "group": "make",
+      "label": {
+        "en": "Billows",
+        "ru": "Клубы"
+      },
+      "hint": {
+        "en": "Puffy, folded noise (each layer turned inside out): clouds, smoke, lumpy rock.",
+        "ru": "Пышный, складчатый шум (каждый слой вывернут): облака, дым, бугристый камень."
+      },
+      "inputs": [],
+      "output": "grey",
+      "params": [
+        {
+          "id": "scale",
+          "kind": "int",
+          "label": {
+            "en": "Scale",
+            "ru": "Масштаб"
+          },
+          "default": 4,
+          "min": 1,
+          "max": 64
+        },
+        {
+          "id": "octaves",
+          "kind": "int",
+          "label": {
+            "en": "Detail",
+            "ru": "Детали"
+          },
+          "default": 5,
+          "min": 1,
+          "max": 10
+        },
+        {
+          "id": "roughness",
+          "kind": "number",
+          "label": {
+            "en": "Roughness",
+            "ru": "Грубость"
+          },
+          "default": 0.5,
+          "min": 0,
+          "max": 1
+        },
+        {
+          "id": "invert",
+          "kind": "bool",
+          "label": {
+            "en": "Turn over (creases up)",
+            "ru": "Перевернуть (складки вверх)"
+          },
+          "default": false
+        },
+        {
+          "id": "seed",
+          "kind": "seed",
+          "label": {
+            "en": "Seed",
+            "ru": "Зерно"
+          },
+          "default": 0
+        }
+      ],
+      "glsl": "float sum = 0., amp = 1., norm = 0.;\nfor (int k = 0; k < 10; k++) {\n  if (float(k) >= p_octaves) break;\n  float per = p_scale * exp2(float(k));\n  float n = gradNoise(uv * per, per, p_seed + float(k));\n  sum += abs(n * 2. - 1.) * amp; norm += amp; amp *= p_roughness;\n}\nfloat v = clamp(sum / max(norm, 1e-5) * 1.15, 0., 1.);\nif (p_invert > 0.5) v = 1. - v;\noutColor = vec4(vec3(v), 1.);",
+      "hash": "a1b35b0e"
+    },
+    {
+      "type": "warpedNoise",
+      "group": "make",
+      "label": {
+        "en": "Warped noise",
+        "ru": "Закрученный шум"
+      },
+      "hint": {
+        "en": "Noise pushed around by noise, twice over: flowing marble-like swirls, lava, gas giants.",
+        "ru": "Шум, сдвинутый шумом дважды: текучие завихрения, лава, газовые гиганты."
+      },
+      "inputs": [],
+      "output": "grey",
+      "params": [
+        {
+          "id": "scale",
+          "kind": "int",
+          "label": {
+            "en": "Scale",
+            "ru": "Масштаб"
+          },
+          "default": 3,
+          "min": 1,
+          "max": 32
+        },
+        {
+          "id": "octaves",
+          "kind": "int",
+          "label": {
+            "en": "Detail",
+            "ru": "Детали"
+          },
+          "default": 5,
+          "min": 1,
+          "max": 8
+        },
+        {
+          "id": "warp",
+          "kind": "number",
+          "label": {
+            "en": "Swirl",
+            "ru": "Завихрение"
+          },
+          "default": 1,
+          "min": 0,
+          "max": 2
+        },
+        {
+          "id": "contrast",
+          "kind": "number",
+          "label": {
+            "en": "Contrast",
+            "ru": "Контраст"
+          },
+          "default": 0.4,
+          "min": 0,
+          "max": 1
+        },
+        {
+          "id": "seed",
+          "kind": "seed",
+          "label": {
+            "en": "Seed",
+            "ru": "Зерно"
+          },
+          "default": 0
+        }
+      ],
+      "glsl": "float w = p_warp * 0.35;\nvec2 q = vec2(fbm(uv, p_scale, p_octaves, 0.5, 0., p_seed), fbm(uv, p_scale, p_octaves, 0.5, 0., p_seed + 5.2)) - 0.5;\nvec2 r = vec2(fbm(uv + w * q, p_scale, p_octaves, 0.5, 0., p_seed + 1.7), fbm(uv + w * q, p_scale, p_octaves, 0.5, 0., p_seed + 9.2)) - 0.5;\nfloat v = fbm(uv + w * r, p_scale, p_octaves, 0.5, 0., p_seed + 3.3);\nv = clamp((v - 0.5) * (1. + p_contrast * 3.) + 0.5, 0., 1.);\noutColor = vec4(vec3(v), 1.);",
+      "hash": "1ed80d65"
+    },
+    {
+      "type": "fibers",
+      "group": "make",
+      "label": {
+        "en": "Fibers",
+        "ru": "Волокна"
+      },
+      "hint": {
+        "en": "Noise stretched one way: brushed metal, wood fibres, bark (ridged), hair, rain on glass.",
+        "ru": "Шум, вытянутый в одну сторону: шлифованный металл, волокна дерева, кора (с прожилками), волосы."
+      },
+      "inputs": [],
+      "output": "grey",
+      "params": [
+        {
+          "id": "kind",
+          "kind": "choice",
+          "label": {
+            "en": "Kind",
+            "ru": "Вид"
+          },
+          "default": "soft",
+          "options": [
+            {
+              "value": "soft",
+              "label": {
+                "en": "Soft",
+                "ru": "Мягкие"
+              }
+            },
+            {
+              "value": "ridged",
+              "label": {
+                "en": "Ridged (bark)",
+                "ru": "С прожилками (кора)"
+              }
+            }
+          ]
+        },
+        {
+          "id": "direction",
+          "kind": "choice",
+          "label": {
+            "en": "Lines run",
+            "ru": "Линии идут"
+          },
+          "default": "across",
+          "options": [
+            {
+              "value": "across",
+              "label": {
+                "en": "Across",
+                "ru": "Поперёк"
+              }
+            },
+            {
+              "value": "down",
+              "label": {
+                "en": "Down",
+                "ru": "Вниз"
+              }
+            }
+          ]
+        },
+        {
+          "id": "scale",
+          "kind": "int",
+          "label": {
+            "en": "Scale",
+            "ru": "Масштаб"
+          },
+          "default": 2,
+          "min": 1,
+          "max": 32
+        },
+        {
+          "id": "stretch",
+          "kind": "int",
+          "label": {
+            "en": "Stretch",
+            "ru": "Вытянутость"
+          },
+          "default": 12,
+          "min": 1,
+          "max": 32
+        },
+        {
+          "id": "octaves",
+          "kind": "int",
+          "label": {
+            "en": "Detail",
+            "ru": "Детали"
+          },
+          "default": 4,
+          "min": 1,
+          "max": 6
+        },
+        {
+          "id": "roughness",
+          "kind": "number",
+          "label": {
+            "en": "Roughness",
+            "ru": "Грубость"
+          },
+          "default": 0.55,
+          "min": 0,
+          "max": 1
+        },
+        {
+          "id": "seed",
+          "kind": "seed",
+          "label": {
+            "en": "Seed",
+            "ru": "Зерно"
+          },
+          "default": 0
+        }
+      ],
+      "glsl": "vec2 P0 = p_direction < 0.5 ? vec2(p_scale, p_scale * p_stretch) : vec2(p_scale * p_stretch, p_scale);\nfloat sum = 0., amp = 1., norm = 0.;\nfor (int k = 0; k < 6; k++) {\n  if (float(k) >= p_octaves) break;\n  vec2 P = P0 * exp2(float(k)); vec2 p = uv * P; vec2 i = floor(p), f = fract(p); vec2 u = f * f * (3. - 2. * f);\n  vec2 o = seedv(p_seed + float(k) * 7.);\n  float a = hash12(mod(i, P) + o), b = hash12(mod(i + vec2(1., 0.), P) + o);\n  float c = hash12(mod(i + vec2(0., 1.), P) + o), d = hash12(mod(i + vec2(1., 1.), P) + o);\n  float n = mix(mix(a, b, u.x), mix(c, d, u.x), u.y);\n  if (p_kind > 0.5) n = 1. - abs(n * 2. - 1.);\n  sum += n * amp; norm += amp; amp *= p_roughness;\n}\noutColor = vec4(vec3(sum / max(norm, 1e-5)), 1.);",
+      "hash": "6a63d56f"
+    },
+    {
+      "type": "whiteNoise",
+      "group": "make",
+      "label": {
+        "en": "Static",
+        "ru": "Помехи"
+      },
+      "hint": {
+        "en": "A random grey for every little square (white noise): grain, sand, pixel dither.",
+        "ru": "Случайный серый для каждого квадратика (белый шум): зерно, песок, пиксельный шум."
+      },
+      "inputs": [],
+      "output": "grey",
+      "params": [
+        {
+          "id": "grid",
+          "kind": "int",
+          "label": {
+            "en": "Grid",
+            "ru": "Сетка"
+          },
+          "default": 256,
+          "min": 2,
+          "max": 1024
+        },
+        {
+          "id": "contrast",
+          "kind": "number",
+          "label": {
+            "en": "Contrast",
+            "ru": "Контраст"
+          },
+          "default": 0.5,
+          "min": 0,
+          "max": 1
+        },
+        {
+          "id": "seed",
+          "kind": "seed",
+          "label": {
+            "en": "Seed",
+            "ru": "Зерно"
+          },
+          "default": 0
+        }
+      ],
+      "glsl": "float n = hash12(mod(floor(uv * p_grid), p_grid) + seedv(p_seed));\noutColor = vec4(vec3(clamp((n - 0.5) * (0.4 + p_contrast * 1.6) + 0.5, 0., 1.)), 1.);",
+      "hash": "2871f29d"
+    },
+    {
+      "type": "crystals",
+      "group": "make",
+      "label": {
+        "en": "Crystals",
+        "ru": "Кристаллы"
+      },
+      "hint": {
+        "en": "Cells, each a flat face tilted its own way: crystals, faceted gems, hammered metal, ice.",
+        "ru": "Ячейки, каждая — плоская грань со своим наклоном: кристаллы, гранёные камни, кованый металл, лёд."
+      },
+      "inputs": [],
+      "output": "grey",
+      "params": [
+        {
+          "id": "scale",
+          "kind": "int",
+          "label": {
+            "en": "Scale",
+            "ru": "Масштаб"
+          },
+          "default": 8,
+          "min": 1,
+          "max": 64
+        },
+        {
+          "id": "jitter",
+          "kind": "number",
+          "label": {
+            "en": "Randomness",
+            "ru": "Случайность"
+          },
+          "default": 1,
+          "min": 0,
+          "max": 1
+        },
+        {
+          "id": "facet",
+          "kind": "number",
+          "label": {
+            "en": "Tilt",
+            "ru": "Наклон"
+          },
+          "default": 0.7,
+          "min": 0,
+          "max": 1
+        },
+        {
+          "id": "gap",
+          "kind": "number",
+          "label": {
+            "en": "Gap",
+            "ru": "Шов"
+          },
+          "default": 0.03,
+          "min": 0,
+          "max": 0.3
+        },
+        {
+          "id": "seed",
+          "kind": "seed",
+          "label": {
+            "en": "Seed",
+            "ru": "Зерно"
+          },
+          "default": 0
+        }
+      ],
+      "glsl": "vec2 p = uv * p_scale; vec2 i = floor(p), f = fract(p); vec2 o = seedv(p_seed);\nfloat f1 = 8., f2 = 8., id = 0.; vec2 best = vec2(0.);\nfor (int y = -1; y <= 1; y++) for (int x = -1; x <= 1; x++) {\n  vec2 c = vec2(float(x), float(y)); vec2 w = mod(i + c, p_scale);\n  vec2 dv = c + 0.5 + (hash22(w + o) - 0.5) * p_jitter - f; float d = length(dv);\n  if (d < f1) { f2 = f1; f1 = d; best = dv; id = hash12(w + o + 7.7); } else if (d < f2) f2 = d;\n}\nfloat a = id * 6.2831853;\nfloat face = clamp(0.5 + dot(-best, vec2(cos(a), sin(a))) * 0.9, 0., 1.);\nfloat v = mix(0.25 + 0.5 * id, face, p_facet);\nif (p_gap > 0.) v *= smoothstep(0., p_gap, f2 - f1);\noutColor = vec4(vec3(v), 1.);",
+      "hash": "9a70bc66"
+    },
+    {
+      "type": "rings",
+      "group": "make",
+      "label": {
+        "en": "Rings and ripples",
+        "ru": "Кольца и рябь"
+      },
+      "hint": {
+        "en": "Rings around the middle of each tile, optionally wobbly: ripples, tree rings, targets, sliced agate.",
+        "ru": "Кольца вокруг середины каждой плитки, можно волнистые: рябь, годичные кольца, мишени, агат."
+      },
+      "inputs": [],
+      "output": "grey",
+      "params": [
+        {
+          "id": "tiles",
+          "kind": "int",
+          "label": {
+            "en": "Repeat",
+            "ru": "Повторов"
+          },
+          "default": 1,
+          "min": 1,
+          "max": 16
+        },
+        {
+          "id": "count",
+          "kind": "number",
+          "label": {
+            "en": "Rings",
+            "ru": "Колец"
+          },
+          "default": 10,
+          "min": 1,
+          "max": 64,
+          "step": 1
+        },
+        {
+          "id": "sharpness",
+          "kind": "number",
+          "label": {
+            "en": "Sharpness",
+            "ru": "Чёткость"
+          },
+          "default": 0.3,
+          "min": 0,
+          "max": 1
+        },
+        {
+          "id": "fade",
+          "kind": "number",
+          "label": {
+            "en": "Fade outwards",
+            "ru": "Затухание наружу"
+          },
+          "default": 0,
+          "min": 0,
+          "max": 1
+        },
+        {
+          "id": "wobble",
+          "kind": "number",
+          "label": {
+            "en": "Wobble",
+            "ru": "Волнистость"
+          },
+          "default": 0.2,
+          "min": 0,
+          "max": 1
+        },
+        {
+          "id": "wobbleScale",
+          "kind": "int",
+          "label": {
+            "en": "Wobble size",
+            "ru": "Размер волнистости"
+          },
+          "default": 3,
+          "min": 1,
+          "max": 16
+        },
+        {
+          "id": "seed",
+          "kind": "seed",
+          "label": {
+            "en": "Seed",
+            "ru": "Зерно"
+          },
+          "default": 0
+        }
+      ],
+      "glsl": "vec2 q = fract(uv * p_tiles) - 0.5; float r = length(q) * 2.;\nfloat rw = r + (fbm(uv, p_wobbleScale, 4., 0.5, 0., p_seed) - 0.5) * p_wobble * 0.5;\nfloat v = 0.5 + 0.5 * cos(fract(rw * p_count) * 6.2831853);\nfloat e = (1. - p_sharpness) * 0.5 + 0.01; v = mix(v, smoothstep(0.5 - e, 0.5 + e, v), p_sharpness);\nv *= mix(1., 1. - clamp(r, 0., 1.), p_fade);\noutColor = vec4(vec3(v), 1.);",
+      "hash": "65088173"
+    },
+    {
+      "type": "truchet",
+      "group": "make",
+      "label": {
+        "en": "Truchet",
+        "ru": "Трюше"
+      },
+      "hint": {
+        "en": "Tiles of quarter-circle arcs or diagonals turned at random, joining into endless paths and mazes.",
+        "ru": "Плитки с дугами или диагоналями, повёрнутые наугад, складываются в бесконечные дорожки и лабиринты."
+      },
+      "inputs": [],
+      "output": "grey",
+      "params": [
+        {
+          "id": "style",
+          "kind": "choice",
+          "label": {
+            "en": "Style",
+            "ru": "Вид"
+          },
+          "default": "arcs",
+          "options": [
+            {
+              "value": "arcs",
+              "label": {
+                "en": "Arcs",
+                "ru": "Дуги"
+              }
+            },
+            {
+              "value": "lines",
+              "label": {
+                "en": "Diagonals (maze)",
+                "ru": "Диагонали (лабиринт)"
+              }
+            }
+          ]
+        },
+        {
+          "id": "tiles",
+          "kind": "int",
+          "label": {
+            "en": "Tiles across",
+            "ru": "Плиток в ряд"
+          },
+          "default": 8,
+          "min": 1,
+          "max": 64
+        },
+        {
+          "id": "width",
+          "kind": "number",
+          "label": {
+            "en": "Width",
+            "ru": "Толщина"
+          },
+          "default": 0.25,
+          "min": 0.02,
+          "max": 0.9
+        },
+        {
+          "id": "rounded",
+          "kind": "bool",
+          "label": {
+            "en": "Rounded (as height)",
+            "ru": "Скруглённые (как высота)"
+          },
+          "default": true
+        },
+        {
+          "id": "seed",
+          "kind": "seed",
+          "label": {
+            "en": "Seed",
+            "ru": "Зерно"
+          },
+          "default": 0
+        }
+      ],
+      "glsl": "vec2 p = uv * p_tiles; vec2 c = floor(p); vec2 f = fract(p);\nif (hash12(mod(c, p_tiles) + seedv(p_seed)) > 0.5) f.x = 1. - f.x;\nfloat d = p_style < 0.5 ? min(abs(length(f) - 0.5), abs(length(f - 1.) - 0.5)) : abs(f.x - f.y) * 0.70711;\nfloat hw = p_width * 0.5; float t = clamp((hw - d) / hw, 0., 1.);\nfloat v = p_rounded > 0.5 ? sqrt(1. - (1. - t) * (1. - t)) : smoothstep(0., 0.08, t);\noutColor = vec4(vec3(v), 1.);",
+      "hash": "b12b41cd"
+    },
+    {
+      "type": "herringbone",
+      "group": "make",
+      "label": {
+        "en": "Herringbone",
+        "ru": "Ёлочка"
+      },
+      "hint": {
+        "en": "Planks laid in a zigzag herringbone: parquet floors, paving (white plank, black gap).",
+        "ru": "Доски, уложенные ёлочкой: паркет, мощение (белое — доска, чёрное — шов)."
+      },
+      "inputs": [],
+      "output": "grey",
+      "params": [
+        {
+          "id": "repeats",
+          "kind": "int",
+          "label": {
+            "en": "Repeats",
+            "ru": "Повторов"
+          },
+          "default": 2,
+          "min": 1,
+          "max": 16
+        },
+        {
+          "id": "length",
+          "kind": "int",
+          "label": {
+            "en": "Plank length",
+            "ru": "Длина доски"
+          },
+          "default": 3,
+          "min": 2,
+          "max": 8
+        },
+        {
+          "id": "gap",
+          "kind": "number",
+          "label": {
+            "en": "Gap",
+            "ru": "Шов"
+          },
+          "default": 0.06,
+          "min": 0,
+          "max": 0.4
+        },
+        {
+          "id": "bevel",
+          "kind": "number",
+          "label": {
+            "en": "Bevel",
+            "ru": "Скос"
+          },
+          "default": 0.12,
+          "min": 0,
+          "max": 0.5
+        },
+        {
+          "id": "random",
+          "kind": "number",
+          "label": {
+            "en": "Random brightness",
+            "ru": "Разная яркость"
+          },
+          "default": 0.3,
+          "min": 0,
+          "max": 1
+        },
+        {
+          "id": "seed",
+          "kind": "seed",
+          "label": {
+            "en": "Seed",
+            "ru": "Зерно"
+          },
+          "default": 0
+        }
+      ],
+      "glsl": "float L = p_length; float N = p_repeats * 2. * L;\nvec2 p = uv * N; vec2 cell = floor(p); vec2 f = fract(p);\nfloat d = mod(cell.x - cell.y, 2. * L);\nvec2 start; float e;\nif (d < L) { start = vec2(cell.x - d, cell.y); float lx = p.x - start.x; e = min(min(lx, L - lx), min(f.y, 1. - f.y)); }\nelse { float j = 2. * L - 1. - d; start = vec2(cell.x, cell.y - j); float ly = p.y - start.y; e = min(min(ly, L - ly), min(f.x, 1. - f.x)); }\ne -= p_gap * 0.5;\nfloat r = hash12(mod(start, N) + vec2(d < L ? 0. : 0.5) + seedv(p_seed));\nfloat v = e <= 0. ? 0. : (p_bevel > 0. ? smoothstep(0., p_bevel, e) : 1.) * (1. - p_random * r);\noutColor = vec4(vec3(v), 1.);",
+      "hash": "d053bc1d"
+    },
+    {
+      "type": "scales",
+      "group": "make",
+      "label": {
+        "en": "Scales",
+        "ru": "Чешуя"
+      },
+      "hint": {
+        "en": "Overlapping round scales in staggered rows: fish, dragons, roof shingles, chain mail.",
+        "ru": "Перекрывающиеся круглые чешуйки рядами со сдвигом: рыба, драконы, черепица."
+      },
+      "inputs": [],
+      "output": "grey",
+      "params": [
+        {
+          "id": "count",
+          "kind": "int",
+          "label": {
+            "en": "Across",
+            "ru": "В ряд"
+          },
+          "default": 8,
+          "min": 1,
+          "max": 48
+        },
+        {
+          "id": "size",
+          "kind": "number",
+          "label": {
+            "en": "Size",
+            "ru": "Размер"
+          },
+          "default": 0.75,
+          "min": 0.55,
+          "max": 1
+        },
+        {
+          "id": "bevel",
+          "kind": "number",
+          "label": {
+            "en": "Roundness",
+            "ru": "Округлость"
+          },
+          "default": 0.6,
+          "min": 0,
+          "max": 1
+        },
+        {
+          "id": "random",
+          "kind": "number",
+          "label": {
+            "en": "Random brightness",
+            "ru": "Разная яркость"
+          },
+          "default": 0.25,
+          "min": 0,
+          "max": 1
+        },
+        {
+          "id": "seed",
+          "kind": "seed",
+          "label": {
+            "en": "Seed",
+            "ru": "Зерно"
+          },
+          "default": 0
+        }
+      ],
+      "glsl": "vec2 P = vec2(p_count, p_count * 2.); vec2 p = uv * P; float best = 99.; float v = 0.; vec2 o = seedv(p_seed);\nfor (int dy = -2; dy <= 2; dy++) for (int dx = -1; dx <= 1; dx++) {\n  float row = floor(p.y) + float(dy); float off = mod(row, 2.) * 0.5;\n  float col = floor(p.x - off) + float(dx);\n  vec2 dd = vec2(p.x - (col + 0.5 + off), (p.y - row) * 0.5);\n  float t = 1. - length(dd) / p_size;\n  // Each row lies over the one below (as roof shingles), so a scale shows its lower edge.\n  if (t > 0. && row < best) {\n    best = row;\n    float rnd = hash12(vec2(mod(col, P.x), mod(row, P.y)) + o);\n    v = (p_bevel > 0. ? smoothstep(0., p_bevel * 0.6, t) : 1.) * (0.6 + 0.4 * clamp(1. - dd.y / p_size, 0., 1.)) * (1. - p_random * rnd);\n  }\n}\noutColor = vec4(vec3(v), 1.);",
+      "hash": "c576c7dd"
+    },
+    {
+      "type": "treadPlate",
+      "group": "make",
+      "label": {
+        "en": "Tread plate",
+        "ru": "Рифлёный лист"
+      },
+      "hint": {
+        "en": "Raised bars crossing each other in a diamond pattern: metal floor plates, stairs (as height).",
+        "ru": "Выпуклые полоски ромбическим узором: рифлёный металлический пол, ступени (как высота)."
+      },
+      "inputs": [],
+      "output": "grey",
+      "params": [
+        {
+          "id": "count",
+          "kind": "int",
+          "label": {
+            "en": "Across",
+            "ru": "В ряд"
+          },
+          "default": 8,
+          "min": 2,
+          "max": 48
+        },
+        {
+          "id": "length",
+          "kind": "number",
+          "label": {
+            "en": "Bar length",
+            "ru": "Длина полоски"
+          },
+          "default": 0.3,
+          "min": 0.1,
+          "max": 0.45
+        },
+        {
+          "id": "width",
+          "kind": "number",
+          "label": {
+            "en": "Bar width",
+            "ru": "Ширина полоски"
+          },
+          "default": 0.14,
+          "min": 0.03,
+          "max": 0.3
+        }
+      ],
+      "glsl": "vec2 p = uv * p_count; vec2 c = floor(p); vec2 f = fract(p) - 0.5;\nfloat s = mod(c.x + c.y, 2.) < 0.5 ? 1. : -1.;\nvec2 dir = normalize(vec2(1., s));\nfloat t = clamp(dot(f, dir), -p_length, p_length);\nfloat d = length(f - dir * t);\nfloat k = clamp(1. - d / p_width, 0., 1.);\noutColor = vec4(vec3(sqrt(k * (2. - k))), 1.);",
+      "hash": "46a2263e"
+    },
+    {
+      "type": "studs",
+      "group": "make",
+      "label": {
+        "en": "Studs and rivets",
+        "ru": "Заклёпки и шипы"
+      },
+      "hint": {
+        "en": "Round bumps on a grid, domed or flat-topped: rivets, studs, rubber mats, perforated sheets.",
+        "ru": "Круглые выпуклости по сетке, куполом или с плоским верхом: заклёпки, шипы, резиновые коврики."
+      },
+      "inputs": [],
+      "output": "grey",
+      "params": [
+        {
+          "id": "count",
+          "kind": "int",
+          "label": {
+            "en": "Across",
+            "ru": "В ряд"
+          },
+          "default": 8,
+          "min": 1,
+          "max": 64
+        },
+        {
+          "id": "size",
+          "kind": "number",
+          "label": {
+            "en": "Size",
+            "ru": "Размер"
+          },
+          "default": 0.65,
+          "min": 0.05,
+          "max": 1
+        },
+        {
+          "id": "profile",
+          "kind": "choice",
+          "label": {
+            "en": "Shape",
+            "ru": "Форма"
+          },
+          "default": "dome",
+          "options": [
+            {
+              "value": "dome",
+              "label": {
+                "en": "Dome",
+                "ru": "Купол"
+              }
+            },
+            {
+              "value": "flat",
+              "label": {
+                "en": "Flat top",
+                "ru": "Плоский верх"
+              }
+            },
+            {
+              "value": "cone",
+              "label": {
+                "en": "Cone",
+                "ru": "Конус"
+              }
+            }
+          ]
+        },
+        {
+          "id": "offset",
+          "kind": "bool",
+          "label": {
+            "en": "Offset rows",
+            "ru": "Сдвиг рядов"
+          },
+          "default": false
+        },
+        {
+          "id": "random",
+          "kind": "number",
+          "label": {
+            "en": "Random height",
+            "ru": "Разная высота"
+          },
+          "default": 0,
+          "min": 0,
+          "max": 1
+        },
+        {
+          "id": "seed",
+          "kind": "seed",
+          "label": {
+            "en": "Seed",
+            "ru": "Зерно"
+          },
+          "default": 0
+        }
+      ],
+      "glsl": "vec2 p = uv * p_count; float row = floor(p.y);\nif (p_offset > 0.5) p.x += mod(row, 2.) * 0.5;\nvec2 c = floor(p); vec2 f = fract(p) - 0.5;\nfloat t = clamp(1. - length(f) / (p_size * 0.5), 0., 1.);\nfloat v = p_profile < 0.5 ? sqrt(t * (2. - t)) : p_profile < 1.5 ? smoothstep(0., 0.25, t) : t;\nv *= 1. - p_random * hash12(mod(c, p_count) + seedv(p_seed));\noutColor = vec4(vec3(v), 1.);",
+      "hash": "6b528d4e"
+    },
+    {
+      "type": "caustics",
+      "group": "make",
+      "label": {
+        "en": "Caustics",
+        "ru": "Каустика"
+      },
+      "hint": {
+        "en": "Bright wavy light lines, as on the floor of a pool: water light, glints, energy shields.",
+        "ru": "Яркие волнистые линии света, как на дне бассейна: блики воды, энергетические щиты."
+      },
+      "inputs": [],
+      "output": "grey",
+      "params": [
+        {
+          "id": "scale",
+          "kind": "int",
+          "label": {
+            "en": "Scale",
+            "ru": "Масштаб"
+          },
+          "default": 5,
+          "min": 1,
+          "max": 32
+        },
+        {
+          "id": "width",
+          "kind": "number",
+          "label": {
+            "en": "Line width",
+            "ru": "Толщина линий"
+          },
+          "default": 0.12,
+          "min": 0.01,
+          "max": 0.4
+        },
+        {
+          "id": "warp",
+          "kind": "number",
+          "label": {
+            "en": "Wobble",
+            "ru": "Волнистость"
+          },
+          "default": 0.5,
+          "min": 0,
+          "max": 1
+        },
+        {
+          "id": "seed",
+          "kind": "seed",
+          "label": {
+            "en": "Seed",
+            "ru": "Зерно"
+          },
+          "default": 0
+        }
+      ],
+      "glsl": "vec2 q = uv + p_warp * 0.12 * (vec2(fbm(uv, 2., 3., 0.5, 0., p_seed), fbm(uv, 2., 3., 0.5, 0., p_seed + 4.)) - 0.5);\nvec3 a = voronoi(q, p_scale, 1., p_seed + 1.);\nvec3 b = voronoi(q, p_scale * 2., 1., p_seed + 2.);\nfloat la = 1. - smoothstep(0., p_width, a.y - a.x);\nfloat lb = 1. - smoothstep(0., p_width, b.y - b.x);\noutColor = vec4(vec3(clamp(pow(la, 1.5) + 0.5 * pow(lb, 2.), 0., 1.)), 1.);",
+      "hash": "b5a5827c"
+    },
+    {
+      "type": "dunes",
+      "group": "make",
+      "label": {
+        "en": "Sand ripples",
+        "ru": "Песчаная рябь"
+      },
+      "hint": {
+        "en": "Lopsided ridges, gentle on one side and steep on the other, wandering a little: sand, dunes, snow drifts.",
+        "ru": "Несимметричные гребни, пологие с одной стороны и крутые с другой: песок, дюны, сугробы."
+      },
+      "inputs": [],
+      "output": "grey",
+      "params": [
+        {
+          "id": "count",
+          "kind": "int",
+          "label": {
+            "en": "Ridges",
+            "ru": "Гребней"
+          },
+          "default": 12,
+          "min": 1,
+          "max": 64
+        },
+        {
+          "id": "direction",
+          "kind": "choice",
+          "label": {
+            "en": "Ridges run",
+            "ru": "Гребни идут"
+          },
+          "default": "across",
+          "options": [
+            {
+              "value": "across",
+              "label": {
+                "en": "Across",
+                "ru": "Поперёк"
+              }
+            },
+            {
+              "value": "down",
+              "label": {
+                "en": "Down",
+                "ru": "Вниз"
+              }
+            }
+          ]
+        },
+        {
+          "id": "lean",
+          "kind": "number",
+          "label": {
+            "en": "Lean",
+            "ru": "Наклон"
+          },
+          "default": 0.75,
+          "min": 0.05,
+          "max": 0.95
+        },
+        {
+          "id": "wobble",
+          "kind": "number",
+          "label": {
+            "en": "Wander",
+            "ru": "Извилистость"
+          },
+          "default": 0.5,
+          "min": 0,
+          "max": 1
+        },
+        {
+          "id": "wobbleScale",
+          "kind": "int",
+          "label": {
+            "en": "Wander size",
+            "ru": "Размер извилин"
+          },
+          "default": 3,
+          "min": 1,
+          "max": 16
+        },
+        {
+          "id": "seed",
+          "kind": "seed",
+          "label": {
+            "en": "Seed",
+            "ru": "Зерно"
+          },
+          "default": 0
+        }
+      ],
+      "glsl": "float t = p_direction < 0.5 ? uv.y : uv.x;\nt += (fbm(uv, p_wobbleScale, 4., 0.5, 0., p_seed) - 0.5) * p_wobble * 3. / p_count;\nfloat x = fract(t * p_count);\nfloat v = x < p_lean ? x / p_lean : (1. - x) / (1. - p_lean);\noutColor = vec4(vec3(smoothstep(0., 1., v)), 1.);",
+      "hash": "fc5d8d1f"
+    },
+    {
+      "type": "triangles",
+      "group": "make",
+      "label": {
+        "en": "Triangles",
+        "ru": "Треугольники"
+      },
+      "hint": {
+        "en": "Triangle tiles pointing up and down in rows (white tile, black gap).",
+        "ru": "Треугольная плитка, вершинами вверх и вниз (белое — плитка, чёрное — шов)."
+      },
+      "inputs": [],
+      "output": "grey",
+      "params": [
+        {
+          "id": "count",
+          "kind": "int",
+          "label": {
+            "en": "Across",
+            "ru": "В ряд"
+          },
+          "default": 6,
+          "min": 1,
+          "max": 48
+        },
+        {
+          "id": "gap",
+          "kind": "number",
+          "label": {
+            "en": "Gap",
+            "ru": "Шов"
+          },
+          "default": 0.05,
+          "min": 0,
+          "max": 0.4
+        },
+        {
+          "id": "bevel",
+          "kind": "number",
+          "label": {
+            "en": "Bevel",
+            "ru": "Скос"
+          },
+          "default": 0.3,
+          "min": 0,
+          "max": 1
+        },
+        {
+          "id": "random",
+          "kind": "number",
+          "label": {
+            "en": "Random brightness",
+            "ru": "Разная яркость"
+          },
+          "default": 0.3,
+          "min": 0,
+          "max": 1
+        },
+        {
+          "id": "seed",
+          "kind": "seed",
+          "label": {
+            "en": "Seed",
+            "ru": "Зерно"
+          },
+          "default": 0
+        }
+      ],
+      "glsl": "float N = p_count; float M = max(2., 2. * floor(N / 1.7320508 + 0.5));\nvec2 p = uv * vec2(N, M); float row = floor(p.y); float fy = fract(p.y);\nfloat x = p.x + mod(row, 2.) * 0.5;\nfloat a = x + fy * 0.5 - 0.5, b = x - fy * 0.5 - 0.5;\nfloat fa = floor(a), fb = floor(b); bool up = fa > fb;\nfloat e = up ? min(min(fract(a), 1. - fract(b)), 1. - fy) : min(min(1. - fract(a), fract(b)), fy);\ne = e * 0.866 / 0.2887 - p_gap * 2.;\nfloat rnd = hash12(vec2(mod(fa + fb, 2. * N), mod(row, M)) + seedv(p_seed));\nfloat v = e <= 0. ? 0. : (p_bevel > 0. ? smoothstep(0., p_bevel, e) : 1.) * (1. - p_random * rnd);\noutColor = vec4(vec3(v), 1.);",
+      "hash": "02e7236c"
+    },
+    {
+      "type": "interference",
+      "group": "make",
+      "label": {
+        "en": "Interference",
+        "ru": "Интерференция"
+      },
+      "hint": {
+        "en": "Several waves running different ways, added up: moiré, shimmering water, alien surfaces.",
+        "ru": "Несколько волн в разные стороны, сложенных вместе: муар, мерцающая вода, инопланетные поверхности."
+      },
+      "inputs": [],
+      "output": "grey",
+      "params": [
+        {
+          "id": "waves",
+          "kind": "int",
+          "label": {
+            "en": "Waves",
+            "ru": "Волн"
+          },
+          "default": 4,
+          "min": 1,
+          "max": 8
+        },
+        {
+          "id": "frequency",
+          "kind": "int",
+          "label": {
+            "en": "Frequency",
+            "ru": "Частота"
+          },
+          "default": 6,
+          "min": 1,
+          "max": 32
+        },
+        {
+          "id": "sharpness",
+          "kind": "number",
+          "label": {
+            "en": "Sharpness",
+            "ru": "Чёткость"
+          },
+          "default": 0,
+          "min": 0,
+          "max": 1
+        },
+        {
+          "id": "seed",
+          "kind": "seed",
+          "label": {
+            "en": "Seed",
+            "ru": "Зерно"
+          },
+          "default": 0
+        }
+      ],
+      "glsl": "float s = 0.; vec2 o = seedv(p_seed);\nfor (int k = 0; k < 8; k++) {\n  if (float(k) >= p_waves) break;\n  vec2 h = hash22(vec2(float(k), 1.) + o);\n  // Whole numbers of waves across the square, so it tiles.\n  vec2 kv = floor((h - 0.5) * 2. * p_frequency + 0.5); if (kv.x == 0. && kv.y == 0.) kv.x = 1.;\n  s += cos(6.2831853 * dot(kv, uv) + hash12(vec2(float(k), 2.) + o) * 6.2831853);\n}\nfloat v = 0.5 + 0.5 * s / max(1., sqrt(p_waves));\nfloat e = (1. - p_sharpness) * 0.5 + 0.01; v = mix(clamp(v, 0., 1.), smoothstep(0.5 - e, 0.5 + e, v), p_sharpness);\noutColor = vec4(vec3(v), 1.);",
+      "hash": "30fbc5b3"
+    },
+    {
+      "type": "spiral",
+      "group": "make",
+      "label": {
+        "en": "Spiral",
+        "ru": "Спираль"
+      },
+      "hint": {
+        "en": "A spiral (or several arms) in each tile: shells, vortices, hypnotic swirls, ammonites.",
+        "ru": "Спираль (или несколько рукавов) в каждой плитке: ракушки, вихри, аммониты."
+      },
+      "inputs": [],
+      "output": "grey",
+      "params": [
+        {
+          "id": "tiles",
+          "kind": "int",
+          "label": {
+            "en": "Repeat",
+            "ru": "Повторов"
+          },
+          "default": 1,
+          "min": 1,
+          "max": 16
+        },
+        {
+          "id": "arms",
+          "kind": "int",
+          "label": {
+            "en": "Arms",
+            "ru": "Рукавов"
+          },
+          "default": 2,
+          "min": 1,
+          "max": 12
+        },
+        {
+          "id": "twist",
+          "kind": "number",
+          "label": {
+            "en": "Twist",
+            "ru": "Закрученность"
+          },
+          "default": 6,
+          "min": -20,
+          "max": 20,
+          "step": 0.1
+        },
+        {
+          "id": "sharpness",
+          "kind": "number",
+          "label": {
+            "en": "Sharpness",
+            "ru": "Чёткость"
+          },
+          "default": 0.3,
+          "min": 0,
+          "max": 1
+        }
+      ],
+      "glsl": "vec2 q = fract(uv * p_tiles) - 0.5; float r = length(q) * 2.; float a = atan(q.y, q.x) / 6.2831853;\nfloat v = 0.5 + 0.5 * cos((a * p_arms + r * p_twist) * 6.2831853);\nfloat e = (1. - p_sharpness) * 0.5 + 0.01; v = mix(v, smoothstep(0.5 - e, 0.5 + e, v), p_sharpness);\noutColor = vec4(vec3(v), 1.);",
+      "hash": "dc829510"
+    },
+    {
+      "type": "colorCells",
+      "group": "make",
+      "label": {
+        "en": "Colour cells",
+        "ru": "Цветные ячейки"
+      },
+      "hint": {
+        "en": "Cells (Voronoi) or squares, each a random colour between two colours or of a random hue: mosaics, stained glass, terrazzo.",
+        "ru": "Ячейки (Вороной) или квадраты, каждая случайного цвета между двумя цветами или случайного оттенка: мозаика, витраж, терраццо."
+      },
+      "inputs": [],
+      "output": "color",
+      "params": [
+        {
+          "id": "shape",
+          "kind": "choice",
+          "label": {
+            "en": "Cells",
+            "ru": "Ячейки"
+          },
+          "default": "voronoi",
+          "options": [
+            {
+              "value": "voronoi",
+              "label": {
+                "en": "Round (Voronoi)",
+                "ru": "Округлые (Вороной)"
+              }
+            },
+            {
+              "value": "squares",
+              "label": {
+                "en": "Squares",
+                "ru": "Квадраты"
+              }
+            }
+          ]
+        },
+        {
+          "id": "mode",
+          "kind": "choice",
+          "label": {
+            "en": "Colours",
+            "ru": "Цвета"
+          },
+          "default": "between",
+          "options": [
+            {
+              "value": "between",
+              "label": {
+                "en": "Between two colours",
+                "ru": "Между двумя цветами"
+              }
+            },
+            {
+              "value": "hues",
+              "label": {
+                "en": "Any hue",
+                "ru": "Любой оттенок"
+              }
+            }
+          ]
+        },
+        {
+          "id": "a",
+          "kind": "color",
+          "label": {
+            "en": "Colour A",
+            "ru": "Цвет A"
+          },
+          "default": "#2f5d8a"
+        },
+        {
+          "id": "b",
+          "kind": "color",
+          "label": {
+            "en": "Colour B",
+            "ru": "Цвет B"
+          },
+          "default": "#d9a441"
+        },
+        {
+          "id": "saturation",
+          "kind": "number",
+          "label": {
+            "en": "Saturation (any hue)",
+            "ru": "Насыщенность (любой оттенок)"
+          },
+          "default": 0.6,
+          "min": 0,
+          "max": 1
+        },
+        {
+          "id": "scale",
+          "kind": "int",
+          "label": {
+            "en": "Scale",
+            "ru": "Масштаб"
+          },
+          "default": 8,
+          "min": 1,
+          "max": 64
+        },
+        {
+          "id": "gap",
+          "kind": "number",
+          "label": {
+            "en": "Gap",
+            "ru": "Шов"
+          },
+          "default": 0.04,
+          "min": 0,
+          "max": 0.3
+        },
+        {
+          "id": "seed",
+          "kind": "seed",
+          "label": {
+            "en": "Seed",
+            "ru": "Зерно"
+          },
+          "default": 0
+        }
+      ],
+      "glsl": "float id; float edge;\nif (p_shape < 0.5) { vec3 v = voronoi(uv, p_scale, 1., p_seed); id = v.z; edge = v.y - v.x; }\nelse { vec2 c = floor(uv * p_scale); vec2 f = fract(uv * p_scale); id = hash12(mod(c, p_scale) + seedv(p_seed)); edge = 2. * min(min(f.x, 1. - f.x), min(f.y, 1. - f.y)); }\nvec3 col = p_mode < 0.5 ? mix(p_a, p_b, id) : hsv2rgb(vec3(id, p_saturation, 0.55 + 0.4 * hash12(vec2(id * 91.7, 3.))));\nif (p_gap > 0.) col *= smoothstep(p_gap * 0.5, p_gap, edge);\noutColor = vec4(col, 1.);",
+      "hash": "d5261809"
+    },
+    {
+      "type": "tileShuffle",
+      "group": "change",
+      "label": {
+        "en": "Tile shuffle",
+        "ru": "Перемешать плитки"
+      },
+      "hint": {
+        "en": "Cut the picture into a grid and turn or flip each piece at random: breaks up visible repeats.",
+        "ru": "Разрезать картинку сеткой и случайно повернуть или отразить каждый кусок: убирает заметные повторы."
+      },
+      "inputs": [
+        {
+          "id": "in",
+          "kind": "color",
+          "label": {
+            "en": "In",
+            "ru": "Вход"
+          },
+          "fallback": [
+            0,
+            0,
+            0
+          ]
+        }
+      ],
+      "output": "color",
+      "params": [
+        {
+          "id": "tiles",
+          "kind": "int",
+          "label": {
+            "en": "Pieces across",
+            "ru": "Кусков в ряд"
+          },
+          "default": 4,
+          "min": 1,
+          "max": 32
+        },
+        {
+          "id": "turn",
+          "kind": "bool",
+          "label": {
+            "en": "Turn",
+            "ru": "Поворачивать"
+          },
+          "default": true
+        },
+        {
+          "id": "flip",
+          "kind": "bool",
+          "label": {
+            "en": "Flip",
+            "ru": "Отражать"
+          },
+          "default": true
+        },
+        {
+          "id": "bright",
+          "kind": "number",
+          "label": {
+            "en": "Brightness varies",
+            "ru": "Разная яркость"
+          },
+          "default": 0,
+          "min": 0,
+          "max": 1
+        },
+        {
+          "id": "seed",
+          "kind": "seed",
+          "label": {
+            "en": "Seed",
+            "ru": "Зерно"
+          },
+          "default": 0
+        }
+      ],
+      "glsl": "vec2 p = uv * p_tiles; vec2 c = floor(p); vec2 f = fract(p) - 0.5; vec2 o = seedv(p_seed); vec2 cm = mod(c, p_tiles);\nfloat r = hash12(cm + o);\nif (p_turn > 0.5) { float k = floor(r * 4.); if (k > 0.5 && k < 1.5) f = vec2(-f.y, f.x); else if (k > 1.5 && k < 2.5) f = -f; else if (k > 2.5) f = vec2(f.y, -f.x); }\nif (p_flip > 0.5 && hash12(cm + o + 3.3) > 0.5) f.x = -f.x;\nvec3 col = inC_in((c + f + 0.5) / p_tiles).rgb * (1. - p_bright * hash12(cm + o + 6.1));\noutColor = vec4(col, 1.);",
+      "hash": "e5984ef7"
+    },
+    {
+      "type": "halftone",
+      "group": "change",
+      "label": {
+        "en": "Halftone",
+        "ru": "Растр"
+      },
+      "hint": {
+        "en": "Turn a picture into a grid of dots, big where it is light: print looks, perforated metal, LED panels.",
+        "ru": "Превратить картинку в сетку точек, крупных там, где светло: печатный растр, перфорация, LED-панели."
+      },
+      "inputs": [
+        {
+          "id": "in",
+          "kind": "grey",
+          "label": {
+            "en": "In",
+            "ru": "Вход"
+          },
+          "fallback": [
+            0.5,
+            0.5,
+            0.5
+          ]
+        }
+      ],
+      "output": "grey",
+      "params": [
+        {
+          "id": "grid",
+          "kind": "int",
+          "label": {
+            "en": "Dots across",
+            "ru": "Точек в ряд"
+          },
+          "default": 24,
+          "min": 2,
+          "max": 128
+        },
+        {
+          "id": "angle",
+          "kind": "choice",
+          "label": {
+            "en": "Grid",
+            "ru": "Сетка"
+          },
+          "default": "diagonal",
+          "options": [
+            {
+              "value": "square",
+              "label": {
+                "en": "Square",
+                "ru": "Прямая"
+              }
+            },
+            {
+              "value": "diagonal",
+              "label": {
+                "en": "Diagonal (45°)",
+                "ru": "Диагональная (45°)"
+              }
+            }
+          ]
+        },
+        {
+          "id": "softness",
+          "kind": "number",
+          "label": {
+            "en": "Softness",
+            "ru": "Мягкость"
+          },
+          "default": 0.2,
+          "min": 0,
+          "max": 1
+        },
+        {
+          "id": "invert",
+          "kind": "bool",
+          "label": {
+            "en": "Dark makes big dots",
+            "ru": "Крупнее в тёмном"
+          },
+          "default": false
+        }
+      ],
+      "glsl": "vec2 p = uv * p_grid; vec2 ctr;\nif (p_angle < 0.5) ctr = floor(p) + 0.5;\nelse { vec2 r = vec2(p.x + p.y, p.x - p.y); vec2 rc = floor(r * 0.5) * 2. + 1.; ctr = vec2(rc.x + rc.y, rc.x - rc.y) * 0.5; }\nfloat dd = length(p - ctr) / (p_angle < 0.5 ? 0.70711 : 1.);\nfloat g = inG_in(ctr / p_grid); if (p_invert > 0.5) g = 1. - g;\nfloat rad = sqrt(clamp(g, 0., 1.)); float s = max(p_softness * 0.3, 0.02);\noutColor = vec4(vec3(1. - smoothstep(rad - s, rad, dd)), 1.);",
+      "hash": "ba5be986"
+    },
+    {
+      "type": "highPass",
+      "group": "change",
+      "label": {
+        "en": "High pass",
+        "ru": "Высокие частоты"
+      },
+      "hint": {
+        "en": "Keep only the fine detail and drop the broad light and dark (mid grey where flat): evens out a photo, sharpens heights.",
+        "ru": "Оставить только мелкие детали, убрав крупные перепады (средне-серое там, где ровно): выравнивает фото, подчёркивает рельеф."
+      },
+      "inputs": [
+        {
+          "id": "in",
+          "kind": "color",
+          "label": {
+            "en": "In",
+            "ru": "Вход"
+          },
+          "fallback": [
+            0,
+            0,
+            0
+          ]
+        }
+      ],
+      "output": "color",
+      "params": [
+        {
+          "id": "radius",
+          "kind": "number",
+          "label": {
+            "en": "Radius",
+            "ru": "Радиус"
+          },
+          "default": 0.02,
+          "min": 0.001,
+          "max": 0.1,
+          "step": 0.001
+        },
+        {
+          "id": "strength",
+          "kind": "number",
+          "label": {
+            "en": "Strength",
+            "ru": "Сила"
+          },
+          "default": 1,
+          "min": 0,
+          "max": 4
+        }
+      ],
+      "glsl": "vec3 s = vec3(0.); float w = 0.;\nfor (int y = -3; y <= 3; y++) for (int x = -3; x <= 3; x++) {\n  vec2 o = vec2(x, y) / 3.; float k = exp(-dot(o, o) * 2.);\n  s += inC_in(uv + o * p_radius).rgb * k; w += k;\n}\noutColor = vec4(clamp((inC_in(uv).rgb - s / w) * p_strength + 0.5, 0., 1.), 1.);",
+      "hash": "5acacc72"
+    },
+    {
+      "type": "growShrink",
+      "group": "change",
+      "label": {
+        "en": "Grow or shrink",
+        "ru": "Расширить или сузить"
+      },
+      "hint": {
+        "en": "Make light shapes fatter (grow) or thinner (shrink): thicken lines, close gaps, eat into edges.",
+        "ru": "Сделать светлые фигуры толще или тоньше: утолщить линии, закрыть щели, подъесть края."
+      },
+      "inputs": [
+        {
+          "id": "in",
+          "kind": "color",
+          "label": {
+            "en": "In",
+            "ru": "Вход"
+          },
+          "fallback": [
+            0,
+            0,
+            0
+          ]
+        }
+      ],
+      "output": "color",
+      "params": [
+        {
+          "id": "mode",
+          "kind": "choice",
+          "label": {
+            "en": "Make shapes",
+            "ru": "Фигуры"
+          },
+          "default": "grow",
+          "options": [
+            {
+              "value": "grow",
+              "label": {
+                "en": "Grow",
+                "ru": "Расширить"
+              }
+            },
+            {
+              "value": "shrink",
+              "label": {
+                "en": "Shrink",
+                "ru": "Сузить"
+              }
+            }
+          ]
+        },
+        {
+          "id": "radius",
+          "kind": "number",
+          "label": {
+            "en": "Radius",
+            "ru": "Радиус"
+          },
+          "default": 0.006,
+          "min": 0,
+          "max": 0.05,
+          "step": 0.0005
+        }
+      ],
+      "glsl": "vec3 r = inC_in(uv).rgb; bool grow = p_mode < 0.5;\nfor (int y = -3; y <= 3; y++) for (int x = -3; x <= 3; x++) {\n  vec2 o = vec2(x, y) / 3.; if (dot(o, o) > 1.) continue;\n  vec3 c = inC_in(uv + o * p_radius).rgb; r = grow ? max(r, c) : min(r, c);\n}\noutColor = vec4(r, 1.);",
+      "hash": "c566074b"
+    },
+    {
+      "type": "rippleWarp",
+      "group": "change",
+      "label": {
+        "en": "Ripple",
+        "ru": "Рябь"
+      },
+      "hint": {
+        "en": "Wiggle the picture with even sine waves: wavy glass, heat haze, water, flags.",
+        "ru": "Покачать картинку ровными волнами: волнистое стекло, марево, вода, флаги."
+      },
+      "inputs": [
+        {
+          "id": "in",
+          "kind": "color",
+          "label": {
+            "en": "In",
+            "ru": "Вход"
+          },
+          "fallback": [
+            0,
+            0,
+            0
+          ]
+        }
+      ],
+      "output": "color",
+      "params": [
+        {
+          "id": "count",
+          "kind": "int",
+          "label": {
+            "en": "Waves",
+            "ru": "Волн"
+          },
+          "default": 4,
+          "min": 1,
+          "max": 32
+        },
+        {
+          "id": "amount",
+          "kind": "number",
+          "label": {
+            "en": "Amount",
+            "ru": "Сила"
+          },
+          "default": 0.02,
+          "min": 0,
+          "max": 0.1,
+          "step": 0.001
+        },
+        {
+          "id": "mode",
+          "kind": "choice",
+          "label": {
+            "en": "Moves",
+            "ru": "Сдвигает"
+          },
+          "default": "both",
+          "options": [
+            {
+              "value": "both",
+              "label": {
+                "en": "Both ways",
+                "ru": "В обе стороны"
+              }
+            },
+            {
+              "value": "across",
+              "label": {
+                "en": "Across only",
+                "ru": "Только поперёк"
+              }
+            },
+            {
+              "value": "down",
+              "label": {
+                "en": "Down only",
+                "ru": "Только вниз"
+              }
+            }
+          ]
+        }
+      ],
+      "glsl": "vec2 o = vec2(sin(uv.y * p_count * 6.2831853), sin(uv.x * p_count * 6.2831853)) * p_amount;\nif (p_mode > 0.5 && p_mode < 1.5) o.y = 0.; else if (p_mode > 1.5) o.x = 0.;\noutColor = vec4(inC_in(uv + o).rgb, 1.);",
+      "hash": "395894f9"
+    },
+    {
+      "type": "stagger",
+      "group": "change",
+      "label": {
+        "en": "Stagger rows",
+        "ru": "Сдвиг рядов"
+      },
+      "hint": {
+        "en": "Cut the picture into rows (or columns) and slide every other one: brick-like offsets of any pattern.",
+        "ru": "Разрезать картинку на ряды (или столбцы) и сдвинуть каждый второй: кирпичный сдвиг любого узора."
+      },
+      "inputs": [
+        {
+          "id": "in",
+          "kind": "color",
+          "label": {
+            "en": "In",
+            "ru": "Вход"
+          },
+          "fallback": [
+            0,
+            0,
+            0
+          ]
+        }
+      ],
+      "output": "color",
+      "params": [
+        {
+          "id": "rows",
+          "kind": "int",
+          "label": {
+            "en": "Rows",
+            "ru": "Рядов"
+          },
+          "default": 4,
+          "min": 1,
+          "max": 64
+        },
+        {
+          "id": "offset",
+          "kind": "number",
+          "label": {
+            "en": "Offset",
+            "ru": "Сдвиг"
+          },
+          "default": 0.5,
+          "min": 0,
+          "max": 1
+        },
+        {
+          "id": "direction",
+          "kind": "choice",
+          "label": {
+            "en": "Rows run",
+            "ru": "Ряды идут"
+          },
+          "default": "across",
+          "options": [
+            {
+              "value": "across",
+              "label": {
+                "en": "Across",
+                "ru": "Поперёк"
+              }
+            },
+            {
+              "value": "down",
+              "label": {
+                "en": "Down (columns)",
+                "ru": "Вниз (столбцы)"
+              }
+            }
+          ]
+        },
+        {
+          "id": "random",
+          "kind": "bool",
+          "label": {
+            "en": "Random offsets",
+            "ru": "Случайные сдвиги"
+          },
+          "default": false
+        },
+        {
+          "id": "seed",
+          "kind": "seed",
+          "label": {
+            "en": "Seed",
+            "ru": "Зерно"
+          },
+          "default": 0
+        }
+      ],
+      "glsl": "vec2 q = p_direction < 0.5 ? uv : uv.yx; float row = floor(q.y * p_rows);\nfloat s = p_random > 0.5 ? hash12(vec2(mod(row, p_rows), 4.) + seedv(p_seed)) * p_offset : mod(row, 2.) * p_offset;\nq.x += s; if (p_direction > 0.5) q = q.yx;\noutColor = vec4(inC_in(q).rgb, 1.);",
+      "hash": "e0f77418"
+    },
+    {
+      "type": "cellPick",
+      "group": "combine",
+      "label": {
+        "en": "Pick per cell",
+        "ru": "Выбор по ячейкам"
+      },
+      "hint": {
+        "en": "Up to four pictures, one picked at random for each cell or square: mixed tiles, patchwork, varied stones.",
+        "ru": "До четырёх картинок, одна наугад для каждой ячейки или квадрата: смешанная плитка, лоскутное одеяло, разные камни."
+      },
+      "inputs": [
+        {
+          "id": "a",
+          "kind": "color",
+          "label": {
+            "en": "A",
+            "ru": "A"
+          },
+          "fallback": [
+            1,
+            1,
+            1
+          ]
+        },
+        {
+          "id": "b",
+          "kind": "color",
+          "label": {
+            "en": "B",
+            "ru": "B"
+          },
+          "fallback": [
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "id": "c",
+          "kind": "color",
+          "label": {
+            "en": "C",
+            "ru": "C"
+          },
+          "fallback": [
+            0.5,
+            0.5,
+            0.5
+          ]
+        },
+        {
+          "id": "d",
+          "kind": "color",
+          "label": {
+            "en": "D",
+            "ru": "D"
+          },
+          "fallback": [
+            0.25,
+            0.25,
+            0.25
+          ]
+        }
+      ],
+      "output": "color",
+      "params": [
+        {
+          "id": "shape",
+          "kind": "choice",
+          "label": {
+            "en": "Cells",
+            "ru": "Ячейки"
+          },
+          "default": "squares",
+          "options": [
+            {
+              "value": "squares",
+              "label": {
+                "en": "Squares",
+                "ru": "Квадраты"
+              }
+            },
+            {
+              "value": "voronoi",
+              "label": {
+                "en": "Round (Voronoi)",
+                "ru": "Округлые (Вороной)"
+              }
+            }
+          ]
+        },
+        {
+          "id": "scale",
+          "kind": "int",
+          "label": {
+            "en": "Scale",
+            "ru": "Масштаб"
+          },
+          "default": 4,
+          "min": 1,
+          "max": 64
+        },
+        {
+          "id": "seed",
+          "kind": "seed",
+          "label": {
+            "en": "Seed",
+            "ru": "Зерно"
+          },
+          "default": 0
+        }
+      ],
+      "glsl": "float id = p_shape < 0.5 ? hash12(mod(floor(uv * p_scale), p_scale) + seedv(p_seed)) : voronoi(uv, p_scale, 1., p_seed).z;\n// Only the linked inputs take part.\nfloat n = h_a + h_b + h_c + h_d; float k = floor(id * max(n, 1.)); vec3 col = inC_a(uv).rgb;\nfloat seen = 0.;\nif (h_a > 0.5) { if (seen == k) col = inC_a(uv).rgb; seen += 1.; }\nif (h_b > 0.5) { if (seen == k) col = inC_b(uv).rgb; seen += 1.; }\nif (h_c > 0.5) { if (seen == k) col = inC_c(uv).rgb; seen += 1.; }\nif (h_d > 0.5) { if (seen == k) col = inC_d(uv).rgb; seen += 1.; }\noutColor = vec4(col, 1.);",
+      "hash": "5992b106"
+    },
+    {
+      "type": "colorBalance",
+      "group": "colour",
+      "label": {
+        "en": "Colour balance",
+        "ru": "Цветовой баланс"
+      },
+      "hint": {
+        "en": "Tint the dark, middle and light parts separately: warm highlights, cool shadows, aged looks.",
+        "ru": "Подкрасить тёмные, средние и светлые части по отдельности: тёплые блики, холодные тени, состаривание."
+      },
+      "inputs": [
+        {
+          "id": "in",
+          "kind": "color",
+          "label": {
+            "en": "In",
+            "ru": "Вход"
+          },
+          "fallback": [
+            0.5,
+            0.5,
+            0.5
+          ]
+        }
+      ],
+      "output": "color",
+      "params": [
+        {
+          "id": "shadows",
+          "kind": "color",
+          "label": {
+            "en": "Shadows",
+            "ru": "Тени"
+          },
+          "default": "#2a3a5a"
+        },
+        {
+          "id": "mids",
+          "kind": "color",
+          "label": {
+            "en": "Mid-tones",
+            "ru": "Средние тона"
+          },
+          "default": "#808080"
+        },
+        {
+          "id": "lights",
+          "kind": "color",
+          "label": {
+            "en": "Highlights",
+            "ru": "Света"
+          },
+          "default": "#ffe0b0"
+        },
+        {
+          "id": "amount",
+          "kind": "number",
+          "label": {
+            "en": "Amount",
+            "ru": "Сила"
+          },
+          "default": 0.4,
+          "min": 0,
+          "max": 1
+        }
+      ],
+      "glsl": "vec3 c = inC_in(uv).rgb; float g = dot(c, vec3(0.2126, 0.7152, 0.0722));\nfloat ws = 1. - smoothstep(0., 0.5, g), wl = smoothstep(0.5, 1., g), wm = 1. - ws - wl;\nvec3 shift = (p_shadows - 0.5) * ws + (p_mids - 0.5) * wm + (p_lights - 0.5) * wl;\noutColor = vec4(clamp(c + shift * p_amount, 0., 1.), 1.);",
+      "hash": "c85643d9"
+    },
+    {
+      "type": "palette",
+      "group": "colour",
+      "label": {
+        "en": "Rainbow palette",
+        "ru": "Радужная палитра"
+      },
+      "hint": {
+        "en": "Colour a grey picture by a smooth looping palette: rainbows, oil slicks, heat, sci-fi glows.",
+        "ru": "Раскрасить серую картинку плавной зацикленной палитрой: радуга, бензиновые разводы, жар, неон."
+      },
+      "inputs": [
+        {
+          "id": "in",
+          "kind": "grey",
+          "label": {
+            "en": "In",
+            "ru": "Вход"
+          },
+          "fallback": [
+            0.5,
+            0.5,
+            0.5
+          ]
+        }
+      ],
+      "output": "color",
+      "params": [
+        {
+          "id": "preset",
+          "kind": "choice",
+          "label": {
+            "en": "Palette",
+            "ru": "Палитра"
+          },
+          "default": "rainbow",
+          "options": [
+            {
+              "value": "rainbow",
+              "label": {
+                "en": "Rainbow",
+                "ru": "Радуга"
+              }
+            },
+            {
+              "value": "fire",
+              "label": {
+                "en": "Fire",
+                "ru": "Огонь"
+              }
+            },
+            {
+              "value": "ocean",
+              "label": {
+                "en": "Ocean",
+                "ru": "Океан"
+              }
+            },
+            {
+              "value": "oil",
+              "label": {
+                "en": "Oil slick",
+                "ru": "Бензин"
+              }
+            },
+            {
+              "value": "toxic",
+              "label": {
+                "en": "Toxic",
+                "ru": "Кислотная"
+              }
+            }
+          ]
+        },
+        {
+          "id": "repeats",
+          "kind": "number",
+          "label": {
+            "en": "Repeats",
+            "ru": "Повторов"
+          },
+          "default": 1,
+          "min": 0.1,
+          "max": 8
+        },
+        {
+          "id": "shift",
+          "kind": "number",
+          "label": {
+            "en": "Shift",
+            "ru": "Сдвиг"
+          },
+          "default": 0,
+          "min": 0,
+          "max": 1
+        }
+      ],
+      "glsl": "int k = int(p_preset + 0.5); vec3 a = vec3(0.5), b = vec3(0.5), c = vec3(1.), d = vec3(0., 0.33, 0.67);\nif (k == 1) { c = vec3(1., 1., 1.); d = vec3(0., 0.1, 0.2); a = vec3(0.6, 0.35, 0.15); b = vec3(0.5, 0.4, 0.2); }\nelse if (k == 2) { a = vec3(0.2, 0.45, 0.6); b = vec3(0.2, 0.3, 0.3); d = vec3(0.5, 0.2, 0.25); }\nelse if (k == 3) { c = vec3(2., 1., 0.); d = vec3(0.5, 0.2, 0.25); }\nelse if (k == 4) { a = vec3(0.4, 0.6, 0.3); b = vec3(0.4, 0.4, 0.3); c = vec3(1., 1., 0.5); d = vec3(0.8, 0.9, 0.3); }\nfloat t = inG_in(uv) * p_repeats + p_shift;\noutColor = vec4(clamp(a + b * cos(6.2831853 * (c * t + d)), 0., 1.), 1.);",
+      "hash": "ce06b609"
+    },
+    {
+      "type": "puddles",
+      "group": "surface",
+      "label": {
+        "en": "Puddles",
+        "ru": "Лужи"
+      },
+      "hint": {
+        "en": "A mask of water filling the low parts of a height picture, with ragged shores: puddles, wet floors, flooded ground.",
+        "ru": "Маска воды, заполняющей низкие места карты высот, с неровными берегами: лужи, мокрый пол."
+      },
+      "inputs": [
+        {
+          "id": "in",
+          "kind": "grey",
+          "label": {
+            "en": "Height",
+            "ru": "Высота"
+          },
+          "fallback": [
+            0.5,
+            0.5,
+            0.5
+          ]
+        }
+      ],
+      "output": "grey",
+      "params": [
+        {
+          "id": "level",
+          "kind": "number",
+          "label": {
+            "en": "Water level",
+            "ru": "Уровень воды"
+          },
+          "default": 0.35,
+          "min": 0,
+          "max": 1
+        },
+        {
+          "id": "edge",
+          "kind": "number",
+          "label": {
+            "en": "Shore softness",
+            "ru": "Мягкость берега"
+          },
+          "default": 0.05,
+          "min": 0,
+          "max": 0.3
+        },
+        {
+          "id": "breakup",
+          "kind": "number",
+          "label": {
+            "en": "Breakup",
+            "ru": "Разрывы"
+          },
+          "default": 0.4,
+          "min": 0,
+          "max": 1
+        },
+        {
+          "id": "scale",
+          "kind": "int",
+          "label": {
+            "en": "Noise size",
+            "ru": "Размер шума"
+          },
+          "default": 4,
+          "min": 1,
+          "max": 32
+        },
+        {
+          "id": "seed",
+          "kind": "seed",
+          "label": {
+            "en": "Seed",
+            "ru": "Зерно"
+          },
+          "default": 0
+        }
+      ],
+      "glsl": "float h = inG_in(uv) + (fbm(uv, p_scale, 5., 0.55, 0., p_seed) - 0.5) * p_breakup * 0.6;\noutColor = vec4(vec3(1. - smoothstep(p_level - p_edge, p_level + p_edge + 1e-4, h)), 1.);",
+      "hash": "1d26532f"
+    },
+    {
+      "type": "topCover",
+      "group": "surface",
+      "label": {
+        "en": "Settles on top",
+        "ru": "Оседает сверху"
+      },
+      "hint": {
+        "en": "A mask of what lands on upward-facing slopes and tops of a height picture (top of the square is up): snow, dust, moss, sand.",
+        "ru": "Маска того, что ложится на обращённые вверх склоны и вершины карты высот (верх квадрата — верх): снег, пыль, мох, песок."
+      },
+      "inputs": [
+        {
+          "id": "in",
+          "kind": "grey",
+          "label": {
+            "en": "Height",
+            "ru": "Высота"
+          },
+          "fallback": [
+            0.5,
+            0.5,
+            0.5
+          ]
+        }
+      ],
+      "output": "grey",
+      "params": [
+        {
+          "id": "amount",
+          "kind": "number",
+          "label": {
+            "en": "Amount",
+            "ru": "Сколько"
+          },
+          "default": 0.5,
+          "min": 0,
+          "max": 1
+        },
+        {
+          "id": "tops",
+          "kind": "number",
+          "label": {
+            "en": "On high parts too",
+            "ru": "И на возвышениях"
+          },
+          "default": 0.3,
+          "min": 0,
+          "max": 1
+        },
+        {
+          "id": "breakup",
+          "kind": "number",
+          "label": {
+            "en": "Breakup",
+            "ru": "Разрывы"
+          },
+          "default": 0.3,
+          "min": 0,
+          "max": 1
+        },
+        {
+          "id": "scale",
+          "kind": "int",
+          "label": {
+            "en": "Noise size",
+            "ru": "Размер шума"
+          },
+          "default": 8,
+          "min": 1,
+          "max": 64
+        },
+        {
+          "id": "seed",
+          "kind": "seed",
+          "label": {
+            "en": "Seed",
+            "ru": "Зерно"
+          },
+          "default": 0
+        }
+      ],
+      "glsl": "float e = 0.006; float h = inG_in(uv);\nfloat up = clamp((h - inG_in(uv - vec2(0., e))) / e * 0.08 + 0.5, 0., 1.);\nfloat v = mix(up, h, p_tops) + (fbm(uv, p_scale, 5., 0.55, 0., p_seed) - 0.5) * p_breakup;\nfloat m = 1. - p_amount;\noutColor = vec4(vec3(smoothstep(m - 0.08, m + 0.08, v)), 1.);",
+      "hash": "49aba443"
+    },
+    {
+      "type": "slopeMask",
+      "group": "surface",
+      "label": {
+        "en": "Slope mask",
+        "ru": "Маска склонов"
+      },
+      "hint": {
+        "en": "White where a height picture is steep (or flat): rock on cliffs, grass on level ground, wear on sides.",
+        "ru": "Белое там, где карта высот крутая (или ровная): скалы на обрывах, трава на ровном, износ на боках."
+      },
+      "inputs": [
+        {
+          "id": "in",
+          "kind": "grey",
+          "label": {
+            "en": "Height",
+            "ru": "Высота"
+          },
+          "fallback": [
+            0.5,
+            0.5,
+            0.5
+          ]
+        }
+      ],
+      "output": "grey",
+      "params": [
+        {
+          "id": "mode",
+          "kind": "choice",
+          "label": {
+            "en": "White where",
+            "ru": "Белое там, где"
+          },
+          "default": "steep",
+          "options": [
+            {
+              "value": "steep",
+              "label": {
+                "en": "Steep",
+                "ru": "Круто"
+              }
+            },
+            {
+              "value": "flat",
+              "label": {
+                "en": "Flat",
+                "ru": "Ровно"
+              }
+            }
+          ]
+        },
+        {
+          "id": "threshold",
+          "kind": "number",
+          "label": {
+            "en": "Threshold",
+            "ru": "Порог"
+          },
+          "default": 0.3,
+          "min": 0,
+          "max": 1
+        },
+        {
+          "id": "softness",
+          "kind": "number",
+          "label": {
+            "en": "Softness",
+            "ru": "Мягкость"
+          },
+          "default": 0.1,
+          "min": 0,
+          "max": 0.5
+        },
+        {
+          "id": "strength",
+          "kind": "number",
+          "label": {
+            "en": "Height strength",
+            "ru": "Сила высоты"
+          },
+          "default": 1,
+          "min": 0.1,
+          "max": 10
+        }
+      ],
+      "glsl": "float e = 0.004;\nvec2 g = vec2(inG_in(uv + vec2(e, 0.)) - inG_in(uv - vec2(e, 0.)), inG_in(uv + vec2(0., e)) - inG_in(uv - vec2(0., e))) / (2. * e);\nfloat s = clamp(length(g) * p_strength * 0.05, 0., 1.);\nfloat v = smoothstep(p_threshold - p_softness, p_threshold + p_softness + 1e-4, s);\nif (p_mode > 0.5) v = 1. - v;\noutColor = vec4(vec3(v), 1.);",
+      "hash": "f3b45836"
+    },
+    {
+      "type": "clouds1",
+      "group": "make",
+      "label": {
+        "en": "Clouds 1",
+        "ru": "Облака 1"
+      },
+      "hint": {
+        "en": "Soft, smooth clouds: many layers of Perlin noise.",
+        "ru": "Мягкие гладкие облака: много слоёв шума Перлина."
+      },
+      "inputs": [],
+      "output": "grey",
+      "params": [
+        {
+          "id": "scale",
+          "kind": "int",
+          "label": {
+            "en": "Scale",
+            "ru": "Масштаб"
+          },
+          "default": 4,
+          "min": 1,
+          "max": 64
+        },
+        {
+          "id": "octaves",
+          "kind": "int",
+          "label": {
+            "en": "Detail",
+            "ru": "Детали"
+          },
+          "default": 8,
+          "min": 1,
+          "max": 10
+        },
+        {
+          "id": "roughness",
+          "kind": "number",
+          "label": {
+            "en": "Roughness",
+            "ru": "Грубость"
+          },
+          "default": 0.5,
+          "min": 0,
+          "max": 1
+        },
+        {
+          "id": "contrast",
+          "kind": "number",
+          "label": {
+            "en": "Contrast",
+            "ru": "Контраст"
+          },
+          "default": 0.2,
+          "min": 0,
+          "max": 1
+        },
+        {
+          "id": "seed",
+          "kind": "seed",
+          "label": {
+            "en": "Seed",
+            "ru": "Зерно"
+          },
+          "default": 0
+        }
+      ],
+      "glsl": "float v = fbm(uv, p_scale, p_octaves, p_roughness, 0., p_seed);\nv = clamp((v - 0.5) * (1. + p_contrast * 3.) + 0.5, 0., 1.);\noutColor = vec4(vec3(v), 1.);",
+      "hash": "e379df04"
+    },
+    {
+      "type": "clouds2",
+      "group": "make",
+      "label": {
+        "en": "Clouds 2",
+        "ru": "Облака 2"
+      },
+      "hint": {
+        "en": "Busier, more contrasty clouds, gently swirled: overcast skies, smoke, stains.",
+        "ru": "Более пёстрые и контрастные облака, слегка закрученные: пасмурное небо, дым, пятна."
+      },
+      "inputs": [],
+      "output": "grey",
+      "params": [
+        {
+          "id": "scale",
+          "kind": "int",
+          "label": {
+            "en": "Scale",
+            "ru": "Масштаб"
+          },
+          "default": 3,
+          "min": 1,
+          "max": 64
+        },
+        {
+          "id": "octaves",
+          "kind": "int",
+          "label": {
+            "en": "Detail",
+            "ru": "Детали"
+          },
+          "default": 8,
+          "min": 1,
+          "max": 10
+        },
+        {
+          "id": "roughness",
+          "kind": "number",
+          "label": {
+            "en": "Roughness",
+            "ru": "Грубость"
+          },
+          "default": 0.6,
+          "min": 0,
+          "max": 1
+        },
+        {
+          "id": "contrast",
+          "kind": "number",
+          "label": {
+            "en": "Contrast",
+            "ru": "Контраст"
+          },
+          "default": 0.5,
+          "min": 0,
+          "max": 1
+        },
+        {
+          "id": "seed",
+          "kind": "seed",
+          "label": {
+            "en": "Seed",
+            "ru": "Зерно"
+          },
+          "default": 0
+        }
+      ],
+      "glsl": "vec2 w = vec2(fbm(uv, p_scale, 4., 0.5, 0., p_seed + 3.), fbm(uv, p_scale, 4., 0.5, 0., p_seed + 8.)) - 0.5;\nfloat v = fbm(uv + w * 0.15, p_scale, p_octaves, p_roughness, 0., p_seed) * 0.7 + fbm(uv, p_scale * 2., p_octaves, p_roughness, 0., p_seed + 1.) * 0.3;\nv = clamp((v - 0.5) * (1. + p_contrast * 3.) + 0.5, 0., 1.);\noutColor = vec4(vec3(v), 1.);",
+      "hash": "eba02fb9"
+    },
+    {
+      "type": "perlin",
+      "group": "make",
+      "label": {
+        "en": "Perlin noise",
+        "ru": "Шум Перлина"
+      },
+      "hint": {
+        "en": "Plain Perlin noise: smooth round blobs, one size (add detail for more layers).",
+        "ru": "Простой шум Перлина: гладкие округлые пятна одного размера (детали добавляют слои)."
+      },
+      "inputs": [],
+      "output": "grey",
+      "params": [
+        {
+          "id": "scale",
+          "kind": "int",
+          "label": {
+            "en": "Scale",
+            "ru": "Масштаб"
+          },
+          "default": 8,
+          "min": 1,
+          "max": 64
+        },
+        {
+          "id": "octaves",
+          "kind": "int",
+          "label": {
+            "en": "Detail",
+            "ru": "Детали"
+          },
+          "default": 1,
+          "min": 1,
+          "max": 10
+        },
+        {
+          "id": "roughness",
+          "kind": "number",
+          "label": {
+            "en": "Roughness",
+            "ru": "Грубость"
+          },
+          "default": 0.5,
+          "min": 0,
+          "max": 1
+        },
+        {
+          "id": "contrast",
+          "kind": "number",
+          "label": {
+            "en": "Contrast",
+            "ru": "Контраст"
+          },
+          "default": 0,
+          "min": 0,
+          "max": 1
+        },
+        {
+          "id": "seed",
+          "kind": "seed",
+          "label": {
+            "en": "Seed",
+            "ru": "Зерно"
+          },
+          "default": 0
+        }
+      ],
+      "glsl": "float v = fbm(uv, p_scale, p_octaves, p_roughness, 0., p_seed);\nv = clamp((v - 0.5) * (1. + p_contrast * 3.) + 0.5, 0., 1.);\noutColor = vec4(vec3(v), 1.);",
+      "hash": "e379df04"
+    },
+    {
+      "type": "plasma",
+      "group": "make",
+      "label": {
+        "en": "Plasma",
+        "ru": "Плазма"
+      },
+      "hint": {
+        "en": "Bright branching veins on dark, like electric plasma: energy, lightning glow, veined rock.",
+        "ru": "Яркие ветвящиеся прожилки на тёмном, как плазма: энергия, свечение молний, жилы в камне."
+      },
+      "inputs": [],
+      "output": "grey",
+      "params": [
+        {
+          "id": "scale",
+          "kind": "int",
+          "label": {
+            "en": "Scale",
+            "ru": "Масштаб"
+          },
+          "default": 3,
+          "min": 1,
+          "max": 64
+        },
+        {
+          "id": "octaves",
+          "kind": "int",
+          "label": {
+            "en": "Detail",
+            "ru": "Детали"
+          },
+          "default": 6,
+          "min": 1,
+          "max": 10
+        },
+        {
+          "id": "roughness",
+          "kind": "number",
+          "label": {
+            "en": "Roughness",
+            "ru": "Грубость"
+          },
+          "default": 0.55,
+          "min": 0,
+          "max": 1
+        },
+        {
+          "id": "contrast",
+          "kind": "number",
+          "label": {
+            "en": "Sharpness",
+            "ru": "Чёткость"
+          },
+          "default": 0.5,
+          "min": 0,
+          "max": 1
+        },
+        {
+          "id": "seed",
+          "kind": "seed",
+          "label": {
+            "en": "Seed",
+            "ru": "Зерно"
+          },
+          "default": 0
+        }
+      ],
+      "glsl": "vec2 w = vec2(fbm(uv, p_scale, 3., 0.5, 0., p_seed + 5.), fbm(uv, p_scale, 3., 0.5, 0., p_seed + 9.)) - 0.5;\nfloat n = fbm(uv + w * 0.2, p_scale, p_octaves, p_roughness, 0., p_seed);\nfloat v = pow(1. - abs(n * 2. - 1.), 1. + p_contrast * 6.);\nv = clamp(v, 0., 1.);\noutColor = vec4(vec3(v), 1.);",
+      "hash": "09fb9193"
+    },
+    {
+      "type": "crystal1",
+      "group": "make",
+      "label": {
+        "en": "Crystal 1",
+        "ru": "Кристалл 1"
+      },
+      "hint": {
+        "en": "Layers of flat, tilted shards on top of each other: crystals, broken glass, rock faces.",
+        "ru": "Слои плоских наклонных осколков друг на друге: кристаллы, битое стекло, грани скал."
+      },
+      "inputs": [],
+      "output": "grey",
+      "params": [
+        {
+          "id": "scale",
+          "kind": "int",
+          "label": {
+            "en": "Scale",
+            "ru": "Масштаб"
+          },
+          "default": 4,
+          "min": 1,
+          "max": 64
+        },
+        {
+          "id": "octaves",
+          "kind": "int",
+          "label": {
+            "en": "Detail",
+            "ru": "Детали"
+          },
+          "default": 3,
+          "min": 1,
+          "max": 10
+        },
+        {
+          "id": "roughness",
+          "kind": "number",
+          "label": {
+            "en": "Roughness",
+            "ru": "Грубость"
+          },
+          "default": 0.6,
+          "min": 0,
+          "max": 1
+        },
+        {
+          "id": "contrast",
+          "kind": "number",
+          "label": {
+            "en": "Contrast",
+            "ru": "Контраст"
+          },
+          "default": 0.2,
+          "min": 0,
+          "max": 1
+        },
+        {
+          "id": "seed",
+          "kind": "seed",
+          "label": {
+            "en": "Seed",
+            "ru": "Зерно"
+          },
+          "default": 0
+        }
+      ],
+      "glsl": "float v = 0.;\nfor (int k = 0; k < 6; k++) {\n  if (float(k) >= p_octaves) break;\n  float sc = p_scale * exp2(float(k)); vec2 p = uv * sc; vec2 i = floor(p), f = fract(p); vec2 o = seedv(p_seed + float(k) * 13.);\n  float f1 = 8.; vec2 best = vec2(0.); float id = 0.;\n  for (int y = -1; y <= 1; y++) for (int x = -1; x <= 1; x++) {\n    vec2 c = vec2(float(x), float(y)); vec2 w = mod(i + c, sc);\n    vec2 dv = c + hash22(w + o) - f; float d = length(dv);\n    if (d < f1) { f1 = d; best = dv; id = hash12(w + o + 7.7); }\n  }\n  float a = id * 6.2831853;\n  float face = clamp(0.5 + dot(-best, vec2(cos(a), sin(a))) * 0.8 + (id - 0.5) * 0.4, 0., 1.);\n  v = max(v, face * pow(p_roughness, float(k)));\n}\nv = clamp((v - 0.5) * (1. + p_contrast * 3.) + 0.5, 0., 1.);\noutColor = vec4(vec3(v), 1.);",
+      "hash": "be190c70"
+    },
+    {
+      "type": "crystal2",
+      "group": "make",
+      "label": {
+        "en": "Crystal 2",
+        "ru": "Кристалл 2"
+      },
+      "hint": {
+        "en": "Sharp facets with bright ridges where they meet: gems, quartz, ice, hammered metal.",
+        "ru": "Чёткие грани с яркими рёбрами на стыках: самоцветы, кварц, лёд, кованый металл."
+      },
+      "inputs": [],
+      "output": "grey",
+      "params": [
+        {
+          "id": "scale",
+          "kind": "int",
+          "label": {
+            "en": "Scale",
+            "ru": "Масштаб"
+          },
+          "default": 6,
+          "min": 1,
+          "max": 64
+        },
+        {
+          "id": "octaves",
+          "kind": "int",
+          "label": {
+            "en": "Detail",
+            "ru": "Детали"
+          },
+          "default": 2,
+          "min": 1,
+          "max": 10
+        },
+        {
+          "id": "roughness",
+          "kind": "number",
+          "label": {
+            "en": "Roughness",
+            "ru": "Грубость"
+          },
+          "default": 0.5,
+          "min": 0,
+          "max": 1
+        },
+        {
+          "id": "contrast",
+          "kind": "number",
+          "label": {
+            "en": "Contrast",
+            "ru": "Контраст"
+          },
+          "default": 0.3,
+          "min": 0,
+          "max": 1
+        },
+        {
+          "id": "seed",
+          "kind": "seed",
+          "label": {
+            "en": "Seed",
+            "ru": "Зерно"
+          },
+          "default": 0
+        }
+      ],
+      "glsl": "float v = 0., norm = 0., amp = 1.;\nfor (int k = 0; k < 6; k++) {\n  if (float(k) >= p_octaves) break;\n  float sc = p_scale * exp2(float(k)); vec2 p = uv * sc; vec2 i = floor(p), f = fract(p); vec2 o = seedv(p_seed + float(k) * 17.);\n  float f1 = 8., f2 = 8.; vec2 best = vec2(0.); float id = 0.;\n  for (int y = -1; y <= 1; y++) for (int x = -1; x <= 1; x++) {\n    vec2 c = vec2(float(x), float(y)); vec2 w = mod(i + c, sc);\n    vec2 dv = c + hash22(w + o) - f; float d = length(dv);\n    if (d < f1) { f2 = f1; f1 = d; best = dv; id = hash12(w + o + 3.3); } else if (d < f2) f2 = d;\n  }\n  float a = id * 6.2831853;\n  float face = clamp(0.5 + dot(-best, vec2(cos(a), sin(a))) * 1.2, 0., 1.);\n  float ridge = 1. - smoothstep(0., 0.08, f2 - f1);\n  v += max(face, ridge) * amp; norm += amp; amp *= p_roughness;\n}\nv /= max(norm, 1e-5);\nv = clamp((v - 0.5) * (1. + p_contrast * 3.) + 0.5, 0., 1.);\noutColor = vec4(vec3(v), 1.);",
+      "hash": "18514714"
+    },
+    {
+      "type": "fractalSum1",
+      "group": "make",
+      "label": {
+        "en": "Fractal sum 1",
+        "ru": "Фрактальная сумма 1"
+      },
+      "hint": {
+        "en": "Layers of blocky value noise added up: a rough, grainy base for dirt and stone.",
+        "ru": "Сумма слоёв пятнистого шума: грубая зернистая основа для грязи и камня."
+      },
+      "inputs": [],
+      "output": "grey",
+      "params": [
+        {
+          "id": "scale",
+          "kind": "int",
+          "label": {
+            "en": "Scale",
+            "ru": "Масштаб"
+          },
+          "default": 6,
+          "min": 1,
+          "max": 64
+        },
+        {
+          "id": "octaves",
+          "kind": "int",
+          "label": {
+            "en": "Detail",
+            "ru": "Детали"
+          },
+          "default": 7,
+          "min": 1,
+          "max": 10
+        },
+        {
+          "id": "roughness",
+          "kind": "number",
+          "label": {
+            "en": "Roughness",
+            "ru": "Грубость"
+          },
+          "default": 0.62,
+          "min": 0,
+          "max": 1
+        },
+        {
+          "id": "contrast",
+          "kind": "number",
+          "label": {
+            "en": "Contrast",
+            "ru": "Контраст"
+          },
+          "default": 0.3,
+          "min": 0,
+          "max": 1
+        },
+        {
+          "id": "seed",
+          "kind": "seed",
+          "label": {
+            "en": "Seed",
+            "ru": "Зерно"
+          },
+          "default": 0
+        }
+      ],
+      "glsl": "float sum = 0., amp = 1., norm = 0.;\nfor (int k = 0; k < 10; k++) {\n  if (float(k) >= p_octaves) break;\n  float per = p_scale * exp2(float(k)); vec2 q = uv * per; vec2 i = floor(q), f = fract(q); vec2 u = f * f * (3. - 2. * f);\n  vec2 o = seedv(p_seed + float(k) * 3.7) * 0.37 + float(k) * 19.19;\n  float a = hash12(mod(i, per) * 1.731 + o), b = hash12(mod(i + vec2(1., 0.), per) * 1.731 + o);\n  float c = hash12(mod(i + vec2(0., 1.), per) * 1.731 + o), d = hash12(mod(i + vec2(1., 1.), per) * 1.731 + o);\n  sum += mix(mix(a, b, u.x), mix(c, d, u.x), u.y) * amp; norm += amp; amp *= p_roughness;\n}\nfloat v = sum / max(norm, 1e-5);\nv = clamp((v - 0.5) * (1. + p_contrast * 3.) + 0.5, 0., 1.);\noutColor = vec4(vec3(v), 1.);",
+      "hash": "06f574f0"
+    },
+    {
+      "type": "fractalSum2",
+      "group": "make",
+      "label": {
+        "en": "Fractal sum 2",
+        "ru": "Фрактальная сумма 2"
+      },
+      "hint": {
+        "en": "Smooth Perlin layers with strong fine detail: weathered surfaces, plaster, terrain.",
+        "ru": "Гладкие слои Перлина с сильной мелкой деталью: выветренные поверхности, штукатурка, рельеф."
+      },
+      "inputs": [],
+      "output": "grey",
+      "params": [
+        {
+          "id": "scale",
+          "kind": "int",
+          "label": {
+            "en": "Scale",
+            "ru": "Масштаб"
+          },
+          "default": 2,
+          "min": 1,
+          "max": 64
+        },
+        {
+          "id": "octaves",
+          "kind": "int",
+          "label": {
+            "en": "Detail",
+            "ru": "Детали"
+          },
+          "default": 9,
+          "min": 1,
+          "max": 10
+        },
+        {
+          "id": "roughness",
+          "kind": "number",
+          "label": {
+            "en": "Roughness",
+            "ru": "Грубость"
+          },
+          "default": 0.68,
+          "min": 0,
+          "max": 1
+        },
+        {
+          "id": "contrast",
+          "kind": "number",
+          "label": {
+            "en": "Contrast",
+            "ru": "Контраст"
+          },
+          "default": 0.4,
+          "min": 0,
+          "max": 1
+        },
+        {
+          "id": "seed",
+          "kind": "seed",
+          "label": {
+            "en": "Seed",
+            "ru": "Зерно"
+          },
+          "default": 0
+        }
+      ],
+      "glsl": "float v = fbm(uv, p_scale, p_octaves, p_roughness, 0., p_seed);\nv = clamp((v - 0.5) * (1. + p_contrast * 3.) + 0.5, 0., 1.);\noutColor = vec4(vec3(v), 1.);",
+      "hash": "e379df04"
+    },
+    {
+      "type": "fractalSum3",
+      "group": "make",
+      "label": {
+        "en": "Fractal sum 3",
+        "ru": "Фрактальная сумма 3"
+      },
+      "hint": {
+        "en": "Folded (billowy) noise layers, turned over: lumpy, cauliflower-like detail, moss, coral.",
+        "ru": "Сложенные (клубящиеся) слои шума, перевёрнутые: бугристая деталь, мох, кораллы."
+      },
+      "inputs": [],
+      "output": "grey",
+      "params": [
+        {
+          "id": "scale",
+          "kind": "int",
+          "label": {
+            "en": "Scale",
+            "ru": "Масштаб"
+          },
+          "default": 3,
+          "min": 1,
+          "max": 64
+        },
+        {
+          "id": "octaves",
+          "kind": "int",
+          "label": {
+            "en": "Detail",
+            "ru": "Детали"
+          },
+          "default": 7,
+          "min": 1,
+          "max": 10
+        },
+        {
+          "id": "roughness",
+          "kind": "number",
+          "label": {
+            "en": "Roughness",
+            "ru": "Грубость"
+          },
+          "default": 0.55,
+          "min": 0,
+          "max": 1
+        },
+        {
+          "id": "contrast",
+          "kind": "number",
+          "label": {
+            "en": "Contrast",
+            "ru": "Контраст"
+          },
+          "default": 0.3,
+          "min": 0,
+          "max": 1
+        },
+        {
+          "id": "seed",
+          "kind": "seed",
+          "label": {
+            "en": "Seed",
+            "ru": "Зерно"
+          },
+          "default": 0
+        }
+      ],
+      "glsl": "float sum = 0., amp = 1., norm = 0.;\nfor (int k = 0; k < 10; k++) {\n  if (float(k) >= p_octaves) break;\n  float per = p_scale * exp2(float(k));\n  sum += abs(gradNoise(uv * per, per, p_seed + float(k) * 5.3) * 2. - 1.) * amp; norm += amp; amp *= p_roughness;\n}\nfloat v = 1. - clamp(sum / max(norm, 1e-5) * 1.2, 0., 1.);\nv = clamp((v - 0.5) * (1. + p_contrast * 3.) + 0.5, 0., 1.);\noutColor = vec4(vec3(v), 1.);",
+      "hash": "d4bb3b25"
+    },
+    {
+      "type": "fractalSum4",
+      "group": "make",
+      "label": {
+        "en": "Fractal sum 4",
+        "ru": "Фрактальная сумма 4"
+      },
+      "hint": {
+        "en": "Ridged layers: sharp creases and crests, mountains, wrinkled leather, veins.",
+        "ru": "Слои с гребнями: острые складки и хребты, горы, морщинистая кожа, прожилки."
+      },
+      "inputs": [],
+      "output": "grey",
+      "params": [
+        {
+          "id": "scale",
+          "kind": "int",
+          "label": {
+            "en": "Scale",
+            "ru": "Масштаб"
+          },
+          "default": 3,
+          "min": 1,
+          "max": 64
+        },
+        {
+          "id": "octaves",
+          "kind": "int",
+          "label": {
+            "en": "Detail",
+            "ru": "Детали"
+          },
+          "default": 8,
+          "min": 1,
+          "max": 10
+        },
+        {
+          "id": "roughness",
+          "kind": "number",
+          "label": {
+            "en": "Roughness",
+            "ru": "Грубость"
+          },
+          "default": 0.6,
+          "min": 0,
+          "max": 1
+        },
+        {
+          "id": "contrast",
+          "kind": "number",
+          "label": {
+            "en": "Contrast",
+            "ru": "Контраст"
+          },
+          "default": 0.3,
+          "min": 0,
+          "max": 1
+        },
+        {
+          "id": "seed",
+          "kind": "seed",
+          "label": {
+            "en": "Seed",
+            "ru": "Зерно"
+          },
+          "default": 0
+        }
+      ],
+      "glsl": "float v = fbm(uv, p_scale, p_octaves, p_roughness, 2., p_seed);\nv = clamp((v - 0.5) * (1. + p_contrast * 3.) + 0.5, 0., 1.);\noutColor = vec4(vec3(v), 1.);",
+      "hash": "158ecaca"
+    },
+    {
+      "type": "bnwSpots1",
+      "group": "make",
+      "label": {
+        "en": "B&W spots 1",
+        "ru": "Ч/б пятна 1"
+      },
+      "hint": {
+        "en": "Black and white blotches with soft edges: patches, camouflage, a mask to mix two materials.",
+        "ru": "Чёрно-белые пятна с мягкими краями: пятна, камуфляж, маска для смешивания двух материалов."
+      },
+      "inputs": [],
+      "output": "grey",
+      "params": [
+        {
+          "id": "scale",
+          "kind": "int",
+          "label": {
+            "en": "Scale",
+            "ru": "Масштаб"
+          },
+          "default": 5,
+          "min": 1,
+          "max": 64
+        },
+        {
+          "id": "octaves",
+          "kind": "int",
+          "label": {
+            "en": "Detail",
+            "ru": "Детали"
+          },
+          "default": 6,
+          "min": 1,
+          "max": 10
+        },
+        {
+          "id": "roughness",
+          "kind": "number",
+          "label": {
+            "en": "Roughness",
+            "ru": "Грубость"
+          },
+          "default": 0.5,
+          "min": 0,
+          "max": 1
+        },
+        {
+          "id": "contrast",
+          "kind": "number",
+          "label": {
+            "en": "Contrast",
+            "ru": "Контраст"
+          },
+          "default": 0.7,
+          "min": 0,
+          "max": 1
+        },
+        {
+          "id": "balance",
+          "kind": "number",
+          "label": {
+            "en": "More white",
+            "ru": "Больше белого"
+          },
+          "default": 0.5,
+          "min": 0,
+          "max": 1
+        },
+        {
+          "id": "seed",
+          "kind": "seed",
+          "label": {
+            "en": "Seed",
+            "ru": "Зерно"
+          },
+          "default": 0
+        }
+      ],
+      "glsl": "float v = fbm(uv, p_scale, p_octaves, p_roughness, 0., p_seed);\nfloat e = (1. - p_contrast) * 0.5 + 0.005; v = smoothstep(0.5 - e, 0.5 + e, v + p_balance - 0.5);\noutColor = vec4(vec3(v), 1.);",
+      "hash": "50f0d71c"
+    },
+    {
+      "type": "bnwSpots2",
+      "group": "make",
+      "label": {
+        "en": "B&W spots 2",
+        "ru": "Ч/б пятна 2"
+      },
+      "hint": {
+        "en": "Smaller, busier black and white spots with ragged edges: lichen, grime, mottled paint.",
+        "ru": "Мелкие частые чёрно-белые пятна с рваными краями: лишайник, грязь, пёстрая краска."
+      },
+      "inputs": [],
+      "output": "grey",
+      "params": [
+        {
+          "id": "scale",
+          "kind": "int",
+          "label": {
+            "en": "Scale",
+            "ru": "Масштаб"
+          },
+          "default": 12,
+          "min": 1,
+          "max": 64
+        },
+        {
+          "id": "octaves",
+          "kind": "int",
+          "label": {
+            "en": "Detail",
+            "ru": "Детали"
+          },
+          "default": 5,
+          "min": 1,
+          "max": 10
+        },
+        {
+          "id": "roughness",
+          "kind": "number",
+          "label": {
+            "en": "Roughness",
+            "ru": "Грубость"
+          },
+          "default": 0.65,
+          "min": 0,
+          "max": 1
+        },
+        {
+          "id": "contrast",
+          "kind": "number",
+          "label": {
+            "en": "Contrast",
+            "ru": "Контраст"
+          },
+          "default": 0.75,
+          "min": 0,
+          "max": 1
+        },
+        {
+          "id": "balance",
+          "kind": "number",
+          "label": {
+            "en": "More white",
+            "ru": "Больше белого"
+          },
+          "default": 0.5,
+          "min": 0,
+          "max": 1
+        },
+        {
+          "id": "seed",
+          "kind": "seed",
+          "label": {
+            "en": "Seed",
+            "ru": "Зерно"
+          },
+          "default": 0
+        }
+      ],
+      "glsl": "float sum = 0., amp = 1., norm = 0.;\nfor (int k = 0; k < 10; k++) {\n  if (float(k) >= p_octaves) break;\n  float per = p_scale * exp2(float(k)); vec2 q = uv * per; vec2 i = floor(q), f = fract(q); vec2 u = f * f * (3. - 2. * f);\n  vec2 o = seedv(p_seed + float(k) * 3.7) * 0.37 + float(k) * 19.19;\n  float a = hash12(mod(i, per) * 1.731 + o), b = hash12(mod(i + vec2(1., 0.), per) * 1.731 + o);\n  float c = hash12(mod(i + vec2(0., 1.), per) * 1.731 + o), d = hash12(mod(i + vec2(1., 1.), per) * 1.731 + o);\n  sum += mix(mix(a, b, u.x), mix(c, d, u.x), u.y) * amp; norm += amp; amp *= p_roughness;\n}\nfloat v = sum / max(norm, 1e-5);\nfloat e = (1. - p_contrast) * 0.5 + 0.005; v = smoothstep(0.5 - e, 0.5 + e, v + p_balance - 0.5);\noutColor = vec4(vec3(v), 1.);",
+      "hash": "95a4e148"
+    },
+    {
+      "type": "bnwSpots3",
+      "group": "make",
+      "label": {
+        "en": "B&W spots 3",
+        "ru": "Ч/б пятна 3"
+      },
+      "hint": {
+        "en": "Big, rounded black and white areas: large patches of wear, puddle masks, cow spots.",
+        "ru": "Крупные округлые чёрно-белые области: большие пятна износа, маски луж, коровьи пятна."
+      },
+      "inputs": [],
+      "output": "grey",
+      "params": [
+        {
+          "id": "scale",
+          "kind": "int",
+          "label": {
+            "en": "Scale",
+            "ru": "Масштаб"
+          },
+          "default": 3,
+          "min": 1,
+          "max": 64
+        },
+        {
+          "id": "octaves",
+          "kind": "int",
+          "label": {
+            "en": "Detail",
+            "ru": "Детали"
+          },
+          "default": 4,
+          "min": 1,
+          "max": 10
+        },
+        {
+          "id": "roughness",
+          "kind": "number",
+          "label": {
+            "en": "Roughness",
+            "ru": "Грубость"
+          },
+          "default": 0.4,
+          "min": 0,
+          "max": 1
+        },
+        {
+          "id": "contrast",
+          "kind": "number",
+          "label": {
+            "en": "Contrast",
+            "ru": "Контраст"
+          },
+          "default": 0.8,
+          "min": 0,
+          "max": 1
+        },
+        {
+          "id": "balance",
+          "kind": "number",
+          "label": {
+            "en": "More white",
+            "ru": "Больше белого"
+          },
+          "default": 0.5,
+          "min": 0,
+          "max": 1
+        },
+        {
+          "id": "seed",
+          "kind": "seed",
+          "label": {
+            "en": "Seed",
+            "ru": "Зерно"
+          },
+          "default": 0
+        }
+      ],
+      "glsl": "float v = sqrt(fbm(uv, p_scale, p_octaves, p_roughness, 0., p_seed) * fbm(uv, p_scale, p_octaves, p_roughness, 0., p_seed + 21.)) * 1.08;\nfloat e = (1. - p_contrast) * 0.5 + 0.005; v = smoothstep(0.5 - e, 0.5 + e, v + p_balance - 0.5);\noutColor = vec4(vec3(v), 1.);",
+      "hash": "1a429d9d"
+    },
+    {
+      "type": "bnwSpots4",
+      "group": "make",
+      "label": {
+        "en": "B&W spots 4",
+        "ru": "Ч/б пятна 4"
+      },
+      "hint": {
+        "en": "Fine speckled spots clustered by a broad noise: rust pitting, dust, terrazzo, salt and pepper.",
+        "ru": "Мелкие крапинки, собранные в группы крупным шумом: ржавые раковины, пыль, терраццо."
+      },
+      "inputs": [],
+      "output": "grey",
+      "params": [
+        {
+          "id": "scale",
+          "kind": "int",
+          "label": {
+            "en": "Scale",
+            "ru": "Масштаб"
+          },
+          "default": 24,
+          "min": 1,
+          "max": 64
+        },
+        {
+          "id": "octaves",
+          "kind": "int",
+          "label": {
+            "en": "Detail",
+            "ru": "Детали"
+          },
+          "default": 3,
+          "min": 1,
+          "max": 10
+        },
+        {
+          "id": "roughness",
+          "kind": "number",
+          "label": {
+            "en": "Roughness",
+            "ru": "Грубость"
+          },
+          "default": 0.5,
+          "min": 0,
+          "max": 1
+        },
+        {
+          "id": "contrast",
+          "kind": "number",
+          "label": {
+            "en": "Contrast",
+            "ru": "Контраст"
+          },
+          "default": 0.8,
+          "min": 0,
+          "max": 1
+        },
+        {
+          "id": "balance",
+          "kind": "number",
+          "label": {
+            "en": "More white",
+            "ru": "Больше белого"
+          },
+          "default": 0.5,
+          "min": 0,
+          "max": 1
+        },
+        {
+          "id": "seed",
+          "kind": "seed",
+          "label": {
+            "en": "Seed",
+            "ru": "Зерно"
+          },
+          "default": 0
+        }
+      ],
+      "glsl": "float sum = 0., amp = 1., norm = 0.;\nfor (int k = 0; k < 10; k++) {\n  if (float(k) >= p_octaves) break;\n  float per = p_scale * exp2(float(k)); vec2 q = uv * per; vec2 i = floor(q), f = fract(q); vec2 u = f * f * (3. - 2. * f);\n  vec2 o = seedv(p_seed + float(k) * 3.7) * 0.37 + float(k) * 19.19;\n  float a = hash12(mod(i, per) * 1.731 + o), b = hash12(mod(i + vec2(1., 0.), per) * 1.731 + o);\n  float c = hash12(mod(i + vec2(0., 1.), per) * 1.731 + o), d = hash12(mod(i + vec2(1., 1.), per) * 1.731 + o);\n  sum += mix(mix(a, b, u.x), mix(c, d, u.x), u.y) * amp; norm += amp; amp *= p_roughness;\n}\nfloat v = sum / max(norm, 1e-5);\nv = v * 0.65 + fbm(uv, max(1., floor(p_scale / 6.)), 4., 0.5, 0., p_seed + 4.) * 0.35;\nfloat e = (1. - p_contrast) * 0.5 + 0.005; v = smoothstep(0.5 - e, 0.5 + e, v + p_balance - 0.5);\noutColor = vec4(vec3(v), 1.);",
+      "hash": "e440751c"
+    },
+    {
+      "type": "freeTransform",
+      "group": "change",
+      "label": {
+        "en": "Free transform",
+        "ru": "Свободная трансформация"
+      },
+      "hint": {
+        "en": "Place a picture anywhere by hand: drag, turn and size it with the handles in the Flat preview (a bolt, a logo, a crack). One copy wraps around the edges so the square still tiles; or repeat it.",
+        "ru": "Поставить картинку куда угодно вручную: двигайте, поворачивайте и меняйте размер ручками в плоском просмотре (болт, логотип, трещина). Одна копия переходит через края, так что квадрат стыкуется; или повторите её."
+      },
+      "inputs": [
+        {
+          "id": "in",
+          "kind": "color",
+          "label": {
+            "en": "Picture",
+            "ru": "Картинка"
+          },
+          "fallback": [
+            1,
+            1,
+            1
+          ]
+        },
+        {
+          "id": "bg",
+          "kind": "color",
+          "label": {
+            "en": "Background",
+            "ru": "Фон"
+          },
+          "fallback": [
+            0,
+            0,
+            0
+          ]
+        }
+      ],
+      "output": "color",
+      "params": [
+        {
+          "id": "x",
+          "kind": "number",
+          "label": {
+            "en": "Across",
+            "ru": "Поперёк"
+          },
+          "default": 0.5,
+          "min": 0,
+          "max": 1,
+          "step": 0.001
+        },
+        {
+          "id": "y",
+          "kind": "number",
+          "label": {
+            "en": "Down",
+            "ru": "Вниз"
+          },
+          "default": 0.5,
+          "min": 0,
+          "max": 1,
+          "step": 0.001
+        },
+        {
+          "id": "angle",
+          "kind": "number",
+          "label": {
+            "en": "Turn",
+            "ru": "Поворот"
+          },
+          "default": 0,
+          "min": -180,
+          "max": 180,
+          "step": 0.1
+        },
+        {
+          "id": "w",
+          "kind": "number",
+          "label": {
+            "en": "Width",
+            "ru": "Ширина"
+          },
+          "default": 0.5,
+          "min": 0.01,
+          "max": 4,
+          "step": 0.001
+        },
+        {
+          "id": "h",
+          "kind": "number",
+          "label": {
+            "en": "Height",
+            "ru": "Высота"
+          },
+          "default": 0.5,
+          "min": 0.01,
+          "max": 4,
+          "step": 0.001
+        },
+        {
+          "id": "repeat",
+          "kind": "bool",
+          "label": {
+            "en": "Repeat",
+            "ru": "Повторять"
+          },
+          "default": false
+        },
+        {
+          "id": "mode",
+          "kind": "choice",
+          "label": {
+            "en": "Over the background",
+            "ru": "Поверх фона"
+          },
+          "default": "replace",
+          "options": [
+            {
+              "value": "replace",
+              "label": {
+                "en": "Cover",
+                "ru": "Закрыть"
+              }
+            },
+            {
+              "value": "max",
+              "label": {
+                "en": "Lighter",
+                "ru": "Светлее"
+              }
+            },
+            {
+              "value": "add",
+              "label": {
+                "en": "Add",
+                "ru": "Сложить"
+              }
+            },
+            {
+              "value": "min",
+              "label": {
+                "en": "Darker",
+                "ru": "Темнее"
+              }
+            }
+          ]
+        }
+      ],
+      "glsl": "float a = radians(p_angle); mat2 r = mat2(cos(a), -sin(a), sin(a), cos(a));\nvec2 size = max(vec2(p_w, p_h), vec2(1e-4));\nvec3 bg = inC_bg(uv).rgb; vec3 col = bg; bool hit = false; vec3 pic = vec3(0.);\nif (p_repeat > 0.5) { pic = inC_in(r * (uv - vec2(p_x, p_y)) / size + 0.5).rgb; hit = true; }\nelse {\n  // The copy and its neighbours one square away, so it wraps across the edges.\n  for (int oy = -1; oy <= 1; oy++) for (int ox = -1; ox <= 1; ox++) {\n    vec2 q = r * (uv + vec2(float(ox), float(oy)) - vec2(p_x, p_y)) / size;\n    if (!hit && abs(q.x) <= 0.5 && abs(q.y) <= 0.5) { pic = inC_in(q + 0.5).rgb; hit = true; }\n  }\n}\nif (hit) { int m = int(p_mode + 0.5); col = m == 0 ? pic : m == 1 ? max(bg, pic) : m == 2 ? bg + pic : min(bg, pic); }\noutColor = vec4(col, 1.);",
+      "hash": "36b8fae1"
+    },
+    {
       "type": "outColor",
       "group": "output",
       "label": {

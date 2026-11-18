@@ -540,3 +540,34 @@ message to one object and a move). Not checked by eye in the app; no e2e test.
 
 Next, if wanted: show in the block editor which object a Work internal block will reach; a project default.
 
+
+### 32. Material graph: box select, sections, kept preview, Free transform, 44 more nodes
+
+Status: done. In the Cocoa Materials graph (`editor/MaterialGraph.tsx`): left-drag on empty graph draws a box
+(`selectionOnDrag`, `SelectionMode.Full`), middle or right drag pans (`panOnDrag [1, 2]`); the add menu now opens
+when the right button comes up without moving (`onPointerUpCapture`), so a right-drag doesn't open it. Sections
+are React Flow nodes of type `section` (z −2000, dragged by `.cm-sec-h`, `NodeResizer` when picked, the body
+lets the mouse through); dragging one carries the nodes whose middle is inside and smaller sections inside
+(`startCarry`, found at drag start). Saved in the graph as optional `sections` (`packages/materials/src/graph.ts`:
+`GraphSection`, `newSection`, `sectionMembers`, `setSection`, `removeSections`, `SECTION_COLORS`; checked in
+`validateGraph`; kept by `graphForExport`; spec section 3 says readers may ignore them). Kept preview: ◉ in a
+node's title or double-click (`viewed` in `GraphWorkspace`, shown flat with "Preview kept on"). Free transform
+(`freeTransform` node: x, y, angle, w, h, repeat, mode; one copy wraps across edges) with `PlaceHandles` over the
+flat picture (move, corner size with Shift ratio, turn with Shift 15°, wheel); picking it switches the preview
+to Flat.
+
+New nodes (all tile; no change to the shared GLSL `LIBRARY`, so `.cocoamat` samples and node hashes of old nodes
+are unchanged): Clouds 1–2, Perlin noise, Plasma, Crystal 1–2, Fractal sum 1–4, B&W spots 1–4 (the `noise()`
+helper in `nodes.ts`), Billows, Warped noise, Fibers, Static, Crystals, Rings, Truchet, Herringbone, Scales,
+Tread plate, Studs, Caustics, Sand ripples, Triangles, Interference, Spiral, Colour cells, Tile shuffle, Halftone,
+High pass, Grow or shrink, Ripple, Stagger rows, Pick per cell, Colour balance, Rainbow palette, Puddles, Settles
+on top, Slope mask, Free transform. Each was compiled and drawn 2 × 2 in Chrome (SwiftShader) to check it tiles.
+
+Tests: `packages/materials/test/materials.test.ts` (sections), e2e `test-e2e/material-graph-tools.test.mjs`
+(box select and move with undo, section made around nodes, renamed, recoloured, dragged with its nodes, box
+inside it, deleted and undone; kept preview; right-click menu and right-drag pan; a new node baked; Free
+transform moved, sized, turned, undo). Passed here with Electron under xvfb, with `cocoa-materials`,
+`cocoamat-samples`, `material-export`, `material-variants` and `materials`.
+
+Next, if wanted: Free transform handles for Scatter-like placement of several copies; a shortcut for sections;
+showing the wrapped part of a placed copy in the handles.

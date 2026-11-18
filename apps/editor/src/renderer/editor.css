@@ -450,6 +450,27 @@ code { font: var(--fs-m) var(--mono); color: var(--fg); }
 .cm-node.on { border-color: var(--sel); box-shadow: 0 0 0 1px var(--sel), 0 4px 14px rgba(0, 0, 0, 0.35); }
 .cm-node.bad { border-color: var(--bad); }
 .cm-node-h { padding: 5px 8px; font-weight: 700; font-size: var(--fs-s); border-radius: var(--r-m) 7px 0 0; border-bottom: 1px solid var(--line); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cm-node-h { display: flex; align-items: center; gap: 4px; }
+.cm-node-h > span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.cm-view { flex: none; width: 18px; height: 18px; padding: 0; border: 0; border-radius: var(--r-s); background: none; color: var(--mute); font-size: 11px; line-height: 18px; cursor: pointer; opacity: 0.45; }
+.cm-node:hover .cm-view, .cm-view:focus-visible { opacity: 1; }
+.cm-view:hover { color: var(--fg); background: rgba(255, 255, 255, 0.08); }
+.cm-view.on { opacity: 1; color: var(--sel); }
+.cm-node.viewed { box-shadow: 0 0 0 2px rgba(75, 156, 255, 0.35), 0 4px 14px rgba(0, 0, 0, 0.35); }
+.cm-node.viewed.on { box-shadow: 0 0 0 1px var(--sel), 0 0 0 3px rgba(75, 156, 255, 0.35), 0 4px 14px rgba(0, 0, 0, 0.35); }
+.cm-viewing { align-items: center; justify-content: space-between; min-height: 28px; font-size: var(--fs-m); }
+.cm-viewing strong { font-weight: 700; }
+/* Sections: only the title takes the mouse, so boxes can be drawn and nodes picked inside them. */
+.cm-flow .react-flow__node.cm-sec-node { pointer-events: none !important; }
+.cm-sec { --sec: #6d6d6d; width: 100%; height: 100%; border: 1px solid color-mix(in srgb, var(--sec) 70%, transparent); border-radius: var(--r-m); background: color-mix(in srgb, var(--sec) 10%, transparent); }
+.cm-sec.on { border-color: var(--sel); }
+.cm-sec-h { pointer-events: auto; display: flex; align-items: center; gap: 6px; height: 28px; padding: 0 6px 0 10px; border-radius: var(--r-m) var(--r-m) 0 0; background: color-mix(in srgb, var(--sec) 32%, var(--panel)); color: var(--fg); font-size: var(--fs-m); font-weight: 700; cursor: grab; }
+.cm-sec-name { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cm-sec-h .cw-input { flex: 1; min-width: 0; height: 22px; font-weight: 400; }
+.cm-sec-col { pointer-events: auto; flex: none; width: 14px; height: 14px; padding: 0; border: 1px solid rgba(255, 255, 255, 0.35); border-radius: 50%; cursor: pointer; }
+.cm-flow .cm-sec-handle { pointer-events: auto; width: 9px; height: 9px; border-radius: 2px; }
+.cm-flow .cm-sec-line { pointer-events: auto; }
+.cm-flow .react-flow__selection { background: rgba(75, 156, 255, 0.08); border: 1px solid var(--sel); }
 .cm-node.g-make .cm-node-h { background: #2e3a1a; }
 .cm-node.g-change .cm-node-h { background: #1d2a3a; }
 .cm-node.g-combine .cm-node-h { background: #3a2a1d; }
@@ -482,6 +503,16 @@ code { font: var(--fs-m) var(--mono); color: var(--fg); }
 .cm-preview-tools { display: flex; flex-wrap: wrap; gap: 6px; }
 .cm-preview { position: relative; flex: none; height: 240px; border: 1px solid var(--line); border-radius: var(--r-m); overflow: hidden; background: radial-gradient(circle at 50% 40%, #2a2a2a, #161616); display: flex; align-items: center; justify-content: center; }
 .cm-flat { width: 100%; height: 100%; object-fit: contain; display: block; }
+.cm-flat-box { position: relative; height: 100%; aspect-ratio: 1; max-width: 100%; }
+/* With handles, room around the picture so corners on its edges can still be grabbed. */
+.cm-flat-box:has(.cm-place) { height: calc(100% - 36px); }
+.cm-place { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; touch-action: none; }
+.cm-place * { vector-effect: non-scaling-stroke; }
+.cm-place-box { fill: rgba(75, 156, 255, 0.06); stroke: var(--sel); stroke-width: 1.5; cursor: move; }
+.cm-place-stem { stroke: var(--sel); stroke-width: 1; pointer-events: none; }
+.cm-place-turn { fill: var(--panel); stroke: var(--sel); stroke-width: 1.5; cursor: grab; }
+.cm-place-corner { fill: var(--fg); stroke: var(--sel); stroke-width: 1.5; cursor: nwse-resize; }
+.cm-place-mid { fill: var(--sel); pointer-events: none; }
 .cm-props-h { display: flex; align-items: center; font-size: var(--fs-l); }
 .cm-bad { color: var(--bad); }
 .cm-bake { margin-left: auto; font-size: var(--fs-m); color: var(--mute); }

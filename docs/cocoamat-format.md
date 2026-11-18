@@ -182,6 +182,10 @@ point inside the `.cocoamat`:
 - **`links`**: from a node's output to input `input` of node `to`. Every node has at most one output, and an
   input takes at most one link. The graph has no loops.
 - **`exposed`**: see section 2. The manifest's `parameters` carries the same list with kinds, ranges and values.
+- **`sections`** (optional): labelled boxes a graph editor draws behind nodes to group them, each
+  `{ "id", "label", "x", "y", "w", "h", "color"? }` (top-left corner and size in the same pixels as node
+  positions; `color` is `#rrggbb`). Layout only: they change nothing the graph makes, and a reader may ignore
+  them. A node belongs to a section when its middle is inside the box.
 - Image settings (`kind: image`) hold `"images/<name>"` (a file in the `.cocoamat`) or `""`. In a CocoaWorlds
   project they hold `assets/textures/…`. The exporter copies each image into `images/` and rewrites the path.
 - **Output nodes** (group `output`: `outColor`, `outHeight` … in the catalog, each with a `role`) say which map of

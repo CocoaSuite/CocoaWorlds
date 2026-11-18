@@ -102,7 +102,16 @@ from a small working graph (a stone-like surface) to change.
   The dots can be grabbed (and wires dropped on them) from a little way off.
 - **Unplug**: grab a plugged input and pull its wire off: let go on empty graph to unplug it, or on another
   input to move it there. Alt+click on a wire unplugs it too.
-- **Remove**: pick nodes or wires and press **Delete**. Shift or Ctrl adds to the pick.
+- **Pick several**: drag on empty graph to draw a box; it picks the nodes (and sections) wholly inside it.
+  Drag any picked node and they all move together (one undo step). Shift or Ctrl+click adds to the pick.
+- **Pan and zoom**: drag with the middle or right button (a right *click* still opens the add menu); the wheel
+  zooms.
+- **Sections**: **+ Section** puts a labelled box behind the picked nodes (or in the middle of the view). Drag
+  it by its title and the nodes inside it come along (those whose middle is in the box, and smaller sections
+  inside it). Double-click the title to rename it; the dot on the right changes its colour; picked, its edges
+  and corners resize it; **Delete** removes it and leaves its nodes. Boxes can be drawn inside a section (only
+  its title takes the mouse). Sections are saved in the graph (`sections`) and carried in `.cocoamat` files.
+- **Remove**: pick nodes, wires or sections and press **Delete**.
 - **Copy and paste**: Ctrl+C copies the picked nodes (with their settings and the wires between them), Ctrl+X
   cuts them, Ctrl+V pastes them where the mouse is, Ctrl+D duplicates them beside the originals. Copied nodes
   can be pasted into another graph material too.
@@ -113,15 +122,26 @@ from a small working graph (a stone-like surface) to change.
 Every node shows its picture, so it's easy to see where in the chain something goes wrong. The preview on the
 right shows the material **On a shape** (sphere, cube, wall) or **Flat** (the picked node's picture).
 
+**Keep the preview on a node**: press **◉** in a node's title (or double-click the node). The preview then
+shows that node's picture flat, whatever is picked, so another node further up the chain can be picked and
+changed while watching the result. The node's ◉ turns blue; **Preview the picked node again** (above the
+preview) or ◉ once more lets go.
+
+**Free transform** places a picture by hand. Pick it (the preview turns Flat) and use the handles over its
+picture: drag the box to move it, a corner to size it from its middle (Shift keeps its shape), the round handle
+to turn it (Shift: 15° steps); the wheel over it sizes it too. Each drag is one undo step. One copy wraps
+around the edges of the square, so the result still tiles; **Repeat** fills the square with copies instead.
+The picture goes over **Background** (its second input) by **Cover**, **Lighter**, **Add** or **Darker**.
+
 ### Nodes
 
 | Group | Nodes |
 |---|---|
-| Make | Noise (Perlin, value, ridged), Cells, Bricks and tiles, Shape (circle, square, polygon, star), Gradient, Checker, Scratches, Grunge (blotches, streaks, speckles, rust), Image (a project texture), Colour, Number, Waves and stripes, Hexagons, Weave, Planks, Wood grain, Cobblestones, Cracks, Marble, Blobs, Speckles, Scatter (copies of a picture, varied size, turn and brightness; Keep apart for no overlaps), Zigzag |
-| Change | Levels, Curve, Invert, Clamp, Blur, Warp, Slope blur (blur, darkest, lightest), Directional warp (shift or flow along one direction by an intensity), Flood fill (each white shape of a mask its own random grey, colour, gradient, position or size), Distance, Transform (repeat, slide, quarter turns), Edge detect, Sharpen, Posterize, Threshold, Brightness and contrast (and gamma), Mirror, Pixelate, Swirl, Outline, Directional blur, Light from height |
-| Combine | Blend (mix, add, subtract, multiply, screen, overlay, lighter, darker, difference, through a mask), Switch, Math (+ − × ÷, min, max, power, difference, average), Height blend (colour, height or mask), Combine channels, Pick channel, Colour to mask |
-| Colour | Gradient map, Hue / saturation / lightness, Colourise, Replace colour, Desaturate, Colour variation, Warm or cool |
-| Surface | Height to normal, Height to occlusion, Height to curvature, Combine normals, Adjust normals (strength, flip green), Edge wear, Dirt, Drips and streaks |
+| Make | Noise (Perlin, value, ridged), Clouds 1 and 2, Perlin noise, Plasma, Crystal 1 and 2, Fractal sum 1 to 4, B&W spots 1 to 4 (with **More white**), Billows, Warped noise, Fibers (soft or ridged, stretched one way), Static (white noise), Crystals, Rings and ripples, Truchet (arcs or maze diagonals), Herringbone, Scales, Tread plate, Studs and rivets, Caustics, Sand ripples, Triangles, Interference, Spiral, Colour cells, Cells, Bricks and tiles, Shape (circle, square, polygon, star), Gradient, Checker, Scratches, Grunge (blotches, streaks, speckles, rust), Image (a project texture), Colour, Number, Waves and stripes, Hexagons, Weave, Planks, Wood grain, Cobblestones, Cracks, Marble, Blobs, Speckles, Scatter (copies of a picture, varied size, turn and brightness; Keep apart for no overlaps), Zigzag |
+| Change | Levels, Curve, Invert, Clamp, Blur, Warp, Slope blur (blur, darkest, lightest), Directional warp (shift or flow along one direction by an intensity), Flood fill (each white shape of a mask its own random grey, colour, gradient, position or size), Distance, Transform (repeat, slide, quarter turns), Edge detect, Sharpen, Posterize, Threshold, Brightness and contrast (and gamma), Mirror, Pixelate, Swirl, Outline, Directional blur, Light from height, Free transform (placed by hand, see above), Tile shuffle (random turns and flips per piece), Halftone, High pass, Grow or shrink, Ripple, Stagger rows |
+| Combine | Blend (mix, add, subtract, multiply, screen, overlay, lighter, darker, difference, through a mask), Switch, Math (+ − × ÷, min, max, power, difference, average), Height blend (colour, height or mask), Combine channels, Pick channel, Colour to mask, Pick per cell (one of up to four pictures per cell or square) |
+| Colour | Gradient map, Hue / saturation / lightness, Colourise, Replace colour, Desaturate, Colour variation, Warm or cool, Colour balance (shadows, mid-tones, highlights), Rainbow palette |
+| Surface | Height to normal, Height to occlusion, Height to curvature, Combine normals, Adjust normals (strength, flip green), Edge wear, Dirt, Drips and streaks, Puddles, Settles on top (snow, dust, moss), Slope mask |
 | Outputs | Colour, Height, Normal, Roughness, Metal, Occlusion, Glow, Opacity |
 
 Everything tiles: the patterns repeat over their square, so the material never shows a seam. Random nodes

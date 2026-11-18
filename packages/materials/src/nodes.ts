@@ -68,6 +68,37 @@ function output(type: string, role: OutputRole, kind: Kind, en: string, ru: stri
   };
 }
 
+/**
+ * A named noise: settings shared by all (scale, detail, roughness, contrast, seed); the body sets `float v`.
+ * `sharp`: contrast sharpens inside the body instead. `spots`: black and white, with a balance between them.
+ */
+function noise(
+  type: string,
+  en: string,
+  ru: string,
+  hintEn: string,
+  hintRu: string,
+  d: { scale: number; octaves: number; roughness: number; contrast: number },
+  body: string,
+  sharp = false,
+  spots = false,
+): NodeDef {
+  const params: Param[] = [
+    { id: 'scale', label: l('Scale', 'Масштаб'), kind: 'int', min: 1, max: 64, default: d.scale },
+    { id: 'octaves', label: l('Detail', 'Детали'), kind: 'int', min: 1, max: 10, default: d.octaves },
+    { id: 'roughness', label: l('Roughness', 'Грубость'), kind: 'number', min: 0, max: 1, default: d.roughness },
+    { id: 'contrast', label: sharp && !spots ? l('Sharpness', 'Чёткость') : l('Contrast', 'Контраст'), kind: 'number', min: 0, max: 1, default: d.contrast },
+  ];
+  if (spots) params.push({ id: 'balance', label: l('More white', 'Больше белого'), kind: 'number', min: 0, max: 1, default: 0.5 });
+  params.push(seed);
+  const end = spots
+    ? 'float e = (1. - p_contrast) * 0.5 + 0.005; v = smoothstep(0.5 - e, 0.5 + e, v + p_balance - 0.5);'
+    : sharp
+      ? 'v = clamp(v, 0., 1.);'
+      : 'v = clamp((v - 0.5) * (1. + p_contrast * 3.) + 0.5, 0., 1.);';
+  return { type, group: 'make', label: l(en, ru), hint: l(hintEn, hintRu), inputs: [], output: 'grey', params, glsl: `${body}\n${end}\noutColor = vec4(vec3(v), 1.);` };
+}
+
 export const NODES: NodeDef[] = [
   // ── Make ──
   {
@@ -1279,6 +1310,767 @@ float y = fract(uv.y - start); float t = clamp(y / max(len, 1e-3), 0., 1.);
 float fx = fract(uv.x * p_count) - 0.5; float wd = 0.35 * (1. - t) + 0.02;
 float v = has * step(y, len) * (1. - smoothstep(wd * 0.6, wd, abs(fx))) * (1. - t);
 outColor = vec4(vec3(v), 1.);`,
+  },
+
+  // ── More (2026-11): noises and patterns ──
+  {
+    type: 'billows',
+    group: 'make',
+    label: l('Billows', 'Клубы'),
+    hint: l('Puffy, folded noise (each layer turned inside out): clouds, smoke, lumpy rock.', 'Пышный, складчатый шум (каждый слой вывернут): облака, дым, бугристый камень.'),
+    inputs: [],
+    output: 'grey',
+    params: [
+      { id: 'scale', label: l('Scale', 'Масштаб'), kind: 'int', min: 1, max: 64, default: 4 },
+      { id: 'octaves', label: l('Detail', 'Детали'), kind: 'int', min: 1, max: 10, default: 5 },
+      { id: 'roughness', label: l('Roughness', 'Грубость'), kind: 'number', min: 0, max: 1, default: 0.5 },
+      { id: 'invert', label: l('Turn over (creases up)', 'Перевернуть (складки вверх)'), kind: 'bool', default: false },
+      seed,
+    ],
+    glsl: `float sum = 0., amp = 1., norm = 0.;
+for (int k = 0; k < 10; k++) {
+  if (float(k) >= p_octaves) break;
+  float per = p_scale * exp2(float(k));
+  float n = gradNoise(uv * per, per, p_seed + float(k));
+  sum += abs(n * 2. - 1.) * amp; norm += amp; amp *= p_roughness;
+}
+float v = clamp(sum / max(norm, 1e-5) * 1.15, 0., 1.);
+if (p_invert > 0.5) v = 1. - v;
+outColor = vec4(vec3(v), 1.);`,
+  },
+  {
+    type: 'warpedNoise',
+    group: 'make',
+    label: l('Warped noise', 'Закрученный шум'),
+    hint: l('Noise pushed around by noise, twice over: flowing marble-like swirls, lava, gas giants.', 'Шум, сдвинутый шумом дважды: текучие завихрения, лава, газовые гиганты.'),
+    inputs: [],
+    output: 'grey',
+    params: [
+      { id: 'scale', label: l('Scale', 'Масштаб'), kind: 'int', min: 1, max: 32, default: 3 },
+      { id: 'octaves', label: l('Detail', 'Детали'), kind: 'int', min: 1, max: 8, default: 5 },
+      { id: 'warp', label: l('Swirl', 'Завихрение'), kind: 'number', min: 0, max: 2, default: 1 },
+      { id: 'contrast', label: l('Contrast', 'Контраст'), kind: 'number', min: 0, max: 1, default: 0.4 },
+      seed,
+    ],
+    glsl: `float w = p_warp * 0.35;
+vec2 q = vec2(fbm(uv, p_scale, p_octaves, 0.5, 0., p_seed), fbm(uv, p_scale, p_octaves, 0.5, 0., p_seed + 5.2)) - 0.5;
+vec2 r = vec2(fbm(uv + w * q, p_scale, p_octaves, 0.5, 0., p_seed + 1.7), fbm(uv + w * q, p_scale, p_octaves, 0.5, 0., p_seed + 9.2)) - 0.5;
+float v = fbm(uv + w * r, p_scale, p_octaves, 0.5, 0., p_seed + 3.3);
+v = clamp((v - 0.5) * (1. + p_contrast * 3.) + 0.5, 0., 1.);
+outColor = vec4(vec3(v), 1.);`,
+  },
+  {
+    type: 'fibers',
+    group: 'make',
+    label: l('Fibers', 'Волокна'),
+    hint: l('Noise stretched one way: brushed metal, wood fibres, bark (ridged), hair, rain on glass.', 'Шум, вытянутый в одну сторону: шлифованный металл, волокна дерева, кора (с прожилками), волосы.'),
+    inputs: [],
+    output: 'grey',
+    params: [
+      { id: 'kind', label: l('Kind', 'Вид'), kind: 'choice', options: [opt('soft', 'Soft', 'Мягкие'), opt('ridged', 'Ridged (bark)', 'С прожилками (кора)')], default: 'soft' },
+      { id: 'direction', label: l('Lines run', 'Линии идут'), kind: 'choice', options: [opt('across', 'Across', 'Поперёк'), opt('down', 'Down', 'Вниз')], default: 'across' },
+      { id: 'scale', label: l('Scale', 'Масштаб'), kind: 'int', min: 1, max: 32, default: 2 },
+      { id: 'stretch', label: l('Stretch', 'Вытянутость'), kind: 'int', min: 1, max: 32, default: 12 },
+      { id: 'octaves', label: l('Detail', 'Детали'), kind: 'int', min: 1, max: 6, default: 4 },
+      { id: 'roughness', label: l('Roughness', 'Грубость'), kind: 'number', min: 0, max: 1, default: 0.55 },
+      seed,
+    ],
+    glsl: `vec2 P0 = p_direction < 0.5 ? vec2(p_scale, p_scale * p_stretch) : vec2(p_scale * p_stretch, p_scale);
+float sum = 0., amp = 1., norm = 0.;
+for (int k = 0; k < 6; k++) {
+  if (float(k) >= p_octaves) break;
+  vec2 P = P0 * exp2(float(k)); vec2 p = uv * P; vec2 i = floor(p), f = fract(p); vec2 u = f * f * (3. - 2. * f);
+  vec2 o = seedv(p_seed + float(k) * 7.);
+  float a = hash12(mod(i, P) + o), b = hash12(mod(i + vec2(1., 0.), P) + o);
+  float c = hash12(mod(i + vec2(0., 1.), P) + o), d = hash12(mod(i + vec2(1., 1.), P) + o);
+  float n = mix(mix(a, b, u.x), mix(c, d, u.x), u.y);
+  if (p_kind > 0.5) n = 1. - abs(n * 2. - 1.);
+  sum += n * amp; norm += amp; amp *= p_roughness;
+}
+outColor = vec4(vec3(sum / max(norm, 1e-5)), 1.);`,
+  },
+  {
+    type: 'whiteNoise',
+    group: 'make',
+    label: l('Static', 'Помехи'),
+    hint: l('A random grey for every little square (white noise): grain, sand, pixel dither.', 'Случайный серый для каждого квадратика (белый шум): зерно, песок, пиксельный шум.'),
+    inputs: [],
+    output: 'grey',
+    params: [
+      { id: 'grid', label: l('Grid', 'Сетка'), kind: 'int', min: 2, max: 1024, default: 256 },
+      { id: 'contrast', label: l('Contrast', 'Контраст'), kind: 'number', min: 0, max: 1, default: 0.5 },
+      seed,
+    ],
+    glsl: `float n = hash12(mod(floor(uv * p_grid), p_grid) + seedv(p_seed));
+outColor = vec4(vec3(clamp((n - 0.5) * (0.4 + p_contrast * 1.6) + 0.5, 0., 1.)), 1.);`,
+  },
+  {
+    type: 'crystals',
+    group: 'make',
+    label: l('Crystals', 'Кристаллы'),
+    hint: l('Cells, each a flat face tilted its own way: crystals, faceted gems, hammered metal, ice.', 'Ячейки, каждая — плоская грань со своим наклоном: кристаллы, гранёные камни, кованый металл, лёд.'),
+    inputs: [],
+    output: 'grey',
+    params: [
+      { id: 'scale', label: l('Scale', 'Масштаб'), kind: 'int', min: 1, max: 64, default: 8 },
+      { id: 'jitter', label: l('Randomness', 'Случайность'), kind: 'number', min: 0, max: 1, default: 1 },
+      { id: 'facet', label: l('Tilt', 'Наклон'), kind: 'number', min: 0, max: 1, default: 0.7 },
+      { id: 'gap', label: l('Gap', 'Шов'), kind: 'number', min: 0, max: 0.3, default: 0.03 },
+      seed,
+    ],
+    glsl: `vec2 p = uv * p_scale; vec2 i = floor(p), f = fract(p); vec2 o = seedv(p_seed);
+float f1 = 8., f2 = 8., id = 0.; vec2 best = vec2(0.);
+for (int y = -1; y <= 1; y++) for (int x = -1; x <= 1; x++) {
+  vec2 c = vec2(float(x), float(y)); vec2 w = mod(i + c, p_scale);
+  vec2 dv = c + 0.5 + (hash22(w + o) - 0.5) * p_jitter - f; float d = length(dv);
+  if (d < f1) { f2 = f1; f1 = d; best = dv; id = hash12(w + o + 7.7); } else if (d < f2) f2 = d;
+}
+float a = id * 6.2831853;
+float face = clamp(0.5 + dot(-best, vec2(cos(a), sin(a))) * 0.9, 0., 1.);
+float v = mix(0.25 + 0.5 * id, face, p_facet);
+if (p_gap > 0.) v *= smoothstep(0., p_gap, f2 - f1);
+outColor = vec4(vec3(v), 1.);`,
+  },
+  {
+    type: 'rings',
+    group: 'make',
+    label: l('Rings and ripples', 'Кольца и рябь'),
+    hint: l('Rings around the middle of each tile, optionally wobbly: ripples, tree rings, targets, sliced agate.', 'Кольца вокруг середины каждой плитки, можно волнистые: рябь, годичные кольца, мишени, агат.'),
+    inputs: [],
+    output: 'grey',
+    params: [
+      { id: 'tiles', label: l('Repeat', 'Повторов'), kind: 'int', min: 1, max: 16, default: 1 },
+      { id: 'count', label: l('Rings', 'Колец'), kind: 'number', min: 1, max: 64, step: 1, default: 10 },
+      { id: 'sharpness', label: l('Sharpness', 'Чёткость'), kind: 'number', min: 0, max: 1, default: 0.3 },
+      { id: 'fade', label: l('Fade outwards', 'Затухание наружу'), kind: 'number', min: 0, max: 1, default: 0 },
+      { id: 'wobble', label: l('Wobble', 'Волнистость'), kind: 'number', min: 0, max: 1, default: 0.2 },
+      { id: 'wobbleScale', label: l('Wobble size', 'Размер волнистости'), kind: 'int', min: 1, max: 16, default: 3 },
+      seed,
+    ],
+    glsl: `vec2 q = fract(uv * p_tiles) - 0.5; float r = length(q) * 2.;
+float rw = r + (fbm(uv, p_wobbleScale, 4., 0.5, 0., p_seed) - 0.5) * p_wobble * 0.5;
+float v = 0.5 + 0.5 * cos(fract(rw * p_count) * 6.2831853);
+float e = (1. - p_sharpness) * 0.5 + 0.01; v = mix(v, smoothstep(0.5 - e, 0.5 + e, v), p_sharpness);
+v *= mix(1., 1. - clamp(r, 0., 1.), p_fade);
+outColor = vec4(vec3(v), 1.);`,
+  },
+  {
+    type: 'truchet',
+    group: 'make',
+    label: l('Truchet', 'Трюше'),
+    hint: l('Tiles of quarter-circle arcs or diagonals turned at random, joining into endless paths and mazes.', 'Плитки с дугами или диагоналями, повёрнутые наугад, складываются в бесконечные дорожки и лабиринты.'),
+    inputs: [],
+    output: 'grey',
+    params: [
+      { id: 'style', label: l('Style', 'Вид'), kind: 'choice', options: [opt('arcs', 'Arcs', 'Дуги'), opt('lines', 'Diagonals (maze)', 'Диагонали (лабиринт)')], default: 'arcs' },
+      { id: 'tiles', label: l('Tiles across', 'Плиток в ряд'), kind: 'int', min: 1, max: 64, default: 8 },
+      { id: 'width', label: l('Width', 'Толщина'), kind: 'number', min: 0.02, max: 0.9, default: 0.25 },
+      { id: 'rounded', label: l('Rounded (as height)', 'Скруглённые (как высота)'), kind: 'bool', default: true },
+      seed,
+    ],
+    glsl: `vec2 p = uv * p_tiles; vec2 c = floor(p); vec2 f = fract(p);
+if (hash12(mod(c, p_tiles) + seedv(p_seed)) > 0.5) f.x = 1. - f.x;
+float d = p_style < 0.5 ? min(abs(length(f) - 0.5), abs(length(f - 1.) - 0.5)) : abs(f.x - f.y) * 0.70711;
+float hw = p_width * 0.5; float t = clamp((hw - d) / hw, 0., 1.);
+float v = p_rounded > 0.5 ? sqrt(1. - (1. - t) * (1. - t)) : smoothstep(0., 0.08, t);
+outColor = vec4(vec3(v), 1.);`,
+  },
+  {
+    type: 'herringbone',
+    group: 'make',
+    label: l('Herringbone', 'Ёлочка'),
+    hint: l('Planks laid in a zigzag herringbone: parquet floors, paving (white plank, black gap).', 'Доски, уложенные ёлочкой: паркет, мощение (белое — доска, чёрное — шов).'),
+    inputs: [],
+    output: 'grey',
+    params: [
+      { id: 'repeats', label: l('Repeats', 'Повторов'), kind: 'int', min: 1, max: 16, default: 2 },
+      { id: 'length', label: l('Plank length', 'Длина доски'), kind: 'int', min: 2, max: 8, default: 3 },
+      { id: 'gap', label: l('Gap', 'Шов'), kind: 'number', min: 0, max: 0.4, default: 0.06 },
+      { id: 'bevel', label: l('Bevel', 'Скос'), kind: 'number', min: 0, max: 0.5, default: 0.12 },
+      { id: 'random', label: l('Random brightness', 'Разная яркость'), kind: 'number', min: 0, max: 1, default: 0.3 },
+      seed,
+    ],
+    glsl: `float L = p_length; float N = p_repeats * 2. * L;
+vec2 p = uv * N; vec2 cell = floor(p); vec2 f = fract(p);
+float d = mod(cell.x - cell.y, 2. * L);
+vec2 start; float e;
+if (d < L) { start = vec2(cell.x - d, cell.y); float lx = p.x - start.x; e = min(min(lx, L - lx), min(f.y, 1. - f.y)); }
+else { float j = 2. * L - 1. - d; start = vec2(cell.x, cell.y - j); float ly = p.y - start.y; e = min(min(ly, L - ly), min(f.x, 1. - f.x)); }
+e -= p_gap * 0.5;
+float r = hash12(mod(start, N) + vec2(d < L ? 0. : 0.5) + seedv(p_seed));
+float v = e <= 0. ? 0. : (p_bevel > 0. ? smoothstep(0., p_bevel, e) : 1.) * (1. - p_random * r);
+outColor = vec4(vec3(v), 1.);`,
+  },
+  {
+    type: 'scales',
+    group: 'make',
+    label: l('Scales', 'Чешуя'),
+    hint: l('Overlapping round scales in staggered rows: fish, dragons, roof shingles, chain mail.', 'Перекрывающиеся круглые чешуйки рядами со сдвигом: рыба, драконы, черепица.'),
+    inputs: [],
+    output: 'grey',
+    params: [
+      { id: 'count', label: l('Across', 'В ряд'), kind: 'int', min: 1, max: 48, default: 8 },
+      { id: 'size', label: l('Size', 'Размер'), kind: 'number', min: 0.55, max: 1, default: 0.75 },
+      { id: 'bevel', label: l('Roundness', 'Округлость'), kind: 'number', min: 0, max: 1, default: 0.6 },
+      { id: 'random', label: l('Random brightness', 'Разная яркость'), kind: 'number', min: 0, max: 1, default: 0.25 },
+      seed,
+    ],
+    glsl: `vec2 P = vec2(p_count, p_count * 2.); vec2 p = uv * P; float best = 99.; float v = 0.; vec2 o = seedv(p_seed);
+for (int dy = -2; dy <= 2; dy++) for (int dx = -1; dx <= 1; dx++) {
+  float row = floor(p.y) + float(dy); float off = mod(row, 2.) * 0.5;
+  float col = floor(p.x - off) + float(dx);
+  vec2 dd = vec2(p.x - (col + 0.5 + off), (p.y - row) * 0.5);
+  float t = 1. - length(dd) / p_size;
+  // Each row lies over the one below (as roof shingles), so a scale shows its lower edge.
+  if (t > 0. && row < best) {
+    best = row;
+    float rnd = hash12(vec2(mod(col, P.x), mod(row, P.y)) + o);
+    v = (p_bevel > 0. ? smoothstep(0., p_bevel * 0.6, t) : 1.) * (0.6 + 0.4 * clamp(1. - dd.y / p_size, 0., 1.)) * (1. - p_random * rnd);
+  }
+}
+outColor = vec4(vec3(v), 1.);`,
+  },
+  {
+    type: 'treadPlate',
+    group: 'make',
+    label: l('Tread plate', 'Рифлёный лист'),
+    hint: l('Raised bars crossing each other in a diamond pattern: metal floor plates, stairs (as height).', 'Выпуклые полоски ромбическим узором: рифлёный металлический пол, ступени (как высота).'),
+    inputs: [],
+    output: 'grey',
+    params: [
+      { id: 'count', label: l('Across', 'В ряд'), kind: 'int', min: 2, max: 48, default: 8 },
+      { id: 'length', label: l('Bar length', 'Длина полоски'), kind: 'number', min: 0.1, max: 0.45, default: 0.3 },
+      { id: 'width', label: l('Bar width', 'Ширина полоски'), kind: 'number', min: 0.03, max: 0.3, default: 0.14 },
+    ],
+    glsl: `vec2 p = uv * p_count; vec2 c = floor(p); vec2 f = fract(p) - 0.5;
+float s = mod(c.x + c.y, 2.) < 0.5 ? 1. : -1.;
+vec2 dir = normalize(vec2(1., s));
+float t = clamp(dot(f, dir), -p_length, p_length);
+float d = length(f - dir * t);
+float k = clamp(1. - d / p_width, 0., 1.);
+outColor = vec4(vec3(sqrt(k * (2. - k))), 1.);`,
+  },
+  {
+    type: 'studs',
+    group: 'make',
+    label: l('Studs and rivets', 'Заклёпки и шипы'),
+    hint: l('Round bumps on a grid, domed or flat-topped: rivets, studs, rubber mats, perforated sheets.', 'Круглые выпуклости по сетке, куполом или с плоским верхом: заклёпки, шипы, резиновые коврики.'),
+    inputs: [],
+    output: 'grey',
+    params: [
+      { id: 'count', label: l('Across', 'В ряд'), kind: 'int', min: 1, max: 64, default: 8 },
+      { id: 'size', label: l('Size', 'Размер'), kind: 'number', min: 0.05, max: 1, default: 0.65 },
+      { id: 'profile', label: l('Shape', 'Форма'), kind: 'choice', options: [opt('dome', 'Dome', 'Купол'), opt('flat', 'Flat top', 'Плоский верх'), opt('cone', 'Cone', 'Конус')], default: 'dome' },
+      { id: 'offset', label: l('Offset rows', 'Сдвиг рядов'), kind: 'bool', default: false },
+      { id: 'random', label: l('Random height', 'Разная высота'), kind: 'number', min: 0, max: 1, default: 0 },
+      seed,
+    ],
+    glsl: `vec2 p = uv * p_count; float row = floor(p.y);
+if (p_offset > 0.5) p.x += mod(row, 2.) * 0.5;
+vec2 c = floor(p); vec2 f = fract(p) - 0.5;
+float t = clamp(1. - length(f) / (p_size * 0.5), 0., 1.);
+float v = p_profile < 0.5 ? sqrt(t * (2. - t)) : p_profile < 1.5 ? smoothstep(0., 0.25, t) : t;
+v *= 1. - p_random * hash12(mod(c, p_count) + seedv(p_seed));
+outColor = vec4(vec3(v), 1.);`,
+  },
+  {
+    type: 'caustics',
+    group: 'make',
+    label: l('Caustics', 'Каустика'),
+    hint: l('Bright wavy light lines, as on the floor of a pool: water light, glints, energy shields.', 'Яркие волнистые линии света, как на дне бассейна: блики воды, энергетические щиты.'),
+    inputs: [],
+    output: 'grey',
+    params: [
+      { id: 'scale', label: l('Scale', 'Масштаб'), kind: 'int', min: 1, max: 32, default: 5 },
+      { id: 'width', label: l('Line width', 'Толщина линий'), kind: 'number', min: 0.01, max: 0.4, default: 0.12 },
+      { id: 'warp', label: l('Wobble', 'Волнистость'), kind: 'number', min: 0, max: 1, default: 0.5 },
+      seed,
+    ],
+    glsl: `vec2 q = uv + p_warp * 0.12 * (vec2(fbm(uv, 2., 3., 0.5, 0., p_seed), fbm(uv, 2., 3., 0.5, 0., p_seed + 4.)) - 0.5);
+vec3 a = voronoi(q, p_scale, 1., p_seed + 1.);
+vec3 b = voronoi(q, p_scale * 2., 1., p_seed + 2.);
+float la = 1. - smoothstep(0., p_width, a.y - a.x);
+float lb = 1. - smoothstep(0., p_width, b.y - b.x);
+outColor = vec4(vec3(clamp(pow(la, 1.5) + 0.5 * pow(lb, 2.), 0., 1.)), 1.);`,
+  },
+  {
+    type: 'dunes',
+    group: 'make',
+    label: l('Sand ripples', 'Песчаная рябь'),
+    hint: l('Lopsided ridges, gentle on one side and steep on the other, wandering a little: sand, dunes, snow drifts.', 'Несимметричные гребни, пологие с одной стороны и крутые с другой: песок, дюны, сугробы.'),
+    inputs: [],
+    output: 'grey',
+    params: [
+      { id: 'count', label: l('Ridges', 'Гребней'), kind: 'int', min: 1, max: 64, default: 12 },
+      { id: 'direction', label: l('Ridges run', 'Гребни идут'), kind: 'choice', options: [opt('across', 'Across', 'Поперёк'), opt('down', 'Down', 'Вниз')], default: 'across' },
+      { id: 'lean', label: l('Lean', 'Наклон'), kind: 'number', min: 0.05, max: 0.95, default: 0.75 },
+      { id: 'wobble', label: l('Wander', 'Извилистость'), kind: 'number', min: 0, max: 1, default: 0.5 },
+      { id: 'wobbleScale', label: l('Wander size', 'Размер извилин'), kind: 'int', min: 1, max: 16, default: 3 },
+      seed,
+    ],
+    glsl: `float t = p_direction < 0.5 ? uv.y : uv.x;
+t += (fbm(uv, p_wobbleScale, 4., 0.5, 0., p_seed) - 0.5) * p_wobble * 3. / p_count;
+float x = fract(t * p_count);
+float v = x < p_lean ? x / p_lean : (1. - x) / (1. - p_lean);
+outColor = vec4(vec3(smoothstep(0., 1., v)), 1.);`,
+  },
+  {
+    type: 'triangles',
+    group: 'make',
+    label: l('Triangles', 'Треугольники'),
+    hint: l('Triangle tiles pointing up and down in rows (white tile, black gap).', 'Треугольная плитка, вершинами вверх и вниз (белое — плитка, чёрное — шов).'),
+    inputs: [],
+    output: 'grey',
+    params: [
+      { id: 'count', label: l('Across', 'В ряд'), kind: 'int', min: 1, max: 48, default: 6 },
+      { id: 'gap', label: l('Gap', 'Шов'), kind: 'number', min: 0, max: 0.4, default: 0.05 },
+      { id: 'bevel', label: l('Bevel', 'Скос'), kind: 'number', min: 0, max: 1, default: 0.3 },
+      { id: 'random', label: l('Random brightness', 'Разная яркость'), kind: 'number', min: 0, max: 1, default: 0.3 },
+      seed,
+    ],
+    glsl: `float N = p_count; float M = max(2., 2. * floor(N / 1.7320508 + 0.5));
+vec2 p = uv * vec2(N, M); float row = floor(p.y); float fy = fract(p.y);
+float x = p.x + mod(row, 2.) * 0.5;
+float a = x + fy * 0.5 - 0.5, b = x - fy * 0.5 - 0.5;
+float fa = floor(a), fb = floor(b); bool up = fa > fb;
+float e = up ? min(min(fract(a), 1. - fract(b)), 1. - fy) : min(min(1. - fract(a), fract(b)), fy);
+e = e * 0.866 / 0.2887 - p_gap * 2.;
+float rnd = hash12(vec2(mod(fa + fb, 2. * N), mod(row, M)) + seedv(p_seed));
+float v = e <= 0. ? 0. : (p_bevel > 0. ? smoothstep(0., p_bevel, e) : 1.) * (1. - p_random * rnd);
+outColor = vec4(vec3(v), 1.);`,
+  },
+  {
+    type: 'interference',
+    group: 'make',
+    label: l('Interference', 'Интерференция'),
+    hint: l('Several waves running different ways, added up: moiré, shimmering water, alien surfaces.', 'Несколько волн в разные стороны, сложенных вместе: муар, мерцающая вода, инопланетные поверхности.'),
+    inputs: [],
+    output: 'grey',
+    params: [
+      { id: 'waves', label: l('Waves', 'Волн'), kind: 'int', min: 1, max: 8, default: 4 },
+      { id: 'frequency', label: l('Frequency', 'Частота'), kind: 'int', min: 1, max: 32, default: 6 },
+      { id: 'sharpness', label: l('Sharpness', 'Чёткость'), kind: 'number', min: 0, max: 1, default: 0 },
+      seed,
+    ],
+    glsl: `float s = 0.; vec2 o = seedv(p_seed);
+for (int k = 0; k < 8; k++) {
+  if (float(k) >= p_waves) break;
+  vec2 h = hash22(vec2(float(k), 1.) + o);
+  // Whole numbers of waves across the square, so it tiles.
+  vec2 kv = floor((h - 0.5) * 2. * p_frequency + 0.5); if (kv.x == 0. && kv.y == 0.) kv.x = 1.;
+  s += cos(6.2831853 * dot(kv, uv) + hash12(vec2(float(k), 2.) + o) * 6.2831853);
+}
+float v = 0.5 + 0.5 * s / max(1., sqrt(p_waves));
+float e = (1. - p_sharpness) * 0.5 + 0.01; v = mix(clamp(v, 0., 1.), smoothstep(0.5 - e, 0.5 + e, v), p_sharpness);
+outColor = vec4(vec3(v), 1.);`,
+  },
+  {
+    type: 'spiral',
+    group: 'make',
+    label: l('Spiral', 'Спираль'),
+    hint: l('A spiral (or several arms) in each tile: shells, vortices, hypnotic swirls, ammonites.', 'Спираль (или несколько рукавов) в каждой плитке: ракушки, вихри, аммониты.'),
+    inputs: [],
+    output: 'grey',
+    params: [
+      { id: 'tiles', label: l('Repeat', 'Повторов'), kind: 'int', min: 1, max: 16, default: 1 },
+      { id: 'arms', label: l('Arms', 'Рукавов'), kind: 'int', min: 1, max: 12, default: 2 },
+      { id: 'twist', label: l('Twist', 'Закрученность'), kind: 'number', min: -20, max: 20, step: 0.1, default: 6 },
+      { id: 'sharpness', label: l('Sharpness', 'Чёткость'), kind: 'number', min: 0, max: 1, default: 0.3 },
+    ],
+    glsl: `vec2 q = fract(uv * p_tiles) - 0.5; float r = length(q) * 2.; float a = atan(q.y, q.x) / 6.2831853;
+float v = 0.5 + 0.5 * cos((a * p_arms + r * p_twist) * 6.2831853);
+float e = (1. - p_sharpness) * 0.5 + 0.01; v = mix(v, smoothstep(0.5 - e, 0.5 + e, v), p_sharpness);
+outColor = vec4(vec3(v), 1.);`,
+  },
+  {
+    type: 'colorCells',
+    group: 'make',
+    label: l('Colour cells', 'Цветные ячейки'),
+    hint: l('Cells (Voronoi) or squares, each a random colour between two colours or of a random hue: mosaics, stained glass, terrazzo.', 'Ячейки (Вороной) или квадраты, каждая случайного цвета между двумя цветами или случайного оттенка: мозаика, витраж, терраццо.'),
+    inputs: [],
+    output: 'color',
+    params: [
+      { id: 'shape', label: l('Cells', 'Ячейки'), kind: 'choice', options: [opt('voronoi', 'Round (Voronoi)', 'Округлые (Вороной)'), opt('squares', 'Squares', 'Квадраты')], default: 'voronoi' },
+      { id: 'mode', label: l('Colours', 'Цвета'), kind: 'choice', options: [opt('between', 'Between two colours', 'Между двумя цветами'), opt('hues', 'Any hue', 'Любой оттенок')], default: 'between' },
+      { id: 'a', label: l('Colour A', 'Цвет A'), kind: 'color', default: '#2f5d8a' },
+      { id: 'b', label: l('Colour B', 'Цвет B'), kind: 'color', default: '#d9a441' },
+      { id: 'saturation', label: l('Saturation (any hue)', 'Насыщенность (любой оттенок)'), kind: 'number', min: 0, max: 1, default: 0.6 },
+      { id: 'scale', label: l('Scale', 'Масштаб'), kind: 'int', min: 1, max: 64, default: 8 },
+      { id: 'gap', label: l('Gap', 'Шов'), kind: 'number', min: 0, max: 0.3, default: 0.04 },
+      seed,
+    ],
+    glsl: `float id; float edge;
+if (p_shape < 0.5) { vec3 v = voronoi(uv, p_scale, 1., p_seed); id = v.z; edge = v.y - v.x; }
+else { vec2 c = floor(uv * p_scale); vec2 f = fract(uv * p_scale); id = hash12(mod(c, p_scale) + seedv(p_seed)); edge = 2. * min(min(f.x, 1. - f.x), min(f.y, 1. - f.y)); }
+vec3 col = p_mode < 0.5 ? mix(p_a, p_b, id) : hsv2rgb(vec3(id, p_saturation, 0.55 + 0.4 * hash12(vec2(id * 91.7, 3.))));
+if (p_gap > 0.) col *= smoothstep(p_gap * 0.5, p_gap, edge);
+outColor = vec4(col, 1.);`,
+  },
+
+  // ── More (2026-11): change ──
+  {
+    type: 'tileShuffle',
+    group: 'change',
+    label: l('Tile shuffle', 'Перемешать плитки'),
+    hint: l('Cut the picture into a grid and turn or flip each piece at random: breaks up visible repeats.', 'Разрезать картинку сеткой и случайно повернуть или отразить каждый кусок: убирает заметные повторы.'),
+    inputs: [IN_COLOR()],
+    output: 'color',
+    params: [
+      { id: 'tiles', label: l('Pieces across', 'Кусков в ряд'), kind: 'int', min: 1, max: 32, default: 4 },
+      { id: 'turn', label: l('Turn', 'Поворачивать'), kind: 'bool', default: true },
+      { id: 'flip', label: l('Flip', 'Отражать'), kind: 'bool', default: true },
+      { id: 'bright', label: l('Brightness varies', 'Разная яркость'), kind: 'number', min: 0, max: 1, default: 0 },
+      seed,
+    ],
+    glsl: `vec2 p = uv * p_tiles; vec2 c = floor(p); vec2 f = fract(p) - 0.5; vec2 o = seedv(p_seed); vec2 cm = mod(c, p_tiles);
+float r = hash12(cm + o);
+if (p_turn > 0.5) { float k = floor(r * 4.); if (k > 0.5 && k < 1.5) f = vec2(-f.y, f.x); else if (k > 1.5 && k < 2.5) f = -f; else if (k > 2.5) f = vec2(f.y, -f.x); }
+if (p_flip > 0.5 && hash12(cm + o + 3.3) > 0.5) f.x = -f.x;
+vec3 col = inC_in((c + f + 0.5) / p_tiles).rgb * (1. - p_bright * hash12(cm + o + 6.1));
+outColor = vec4(col, 1.);`,
+  },
+  {
+    type: 'halftone',
+    group: 'change',
+    label: l('Halftone', 'Растр'),
+    hint: l('Turn a picture into a grid of dots, big where it is light: print looks, perforated metal, LED panels.', 'Превратить картинку в сетку точек, крупных там, где светло: печатный растр, перфорация, LED-панели.'),
+    inputs: [IN_GREY('in', l('In', 'Вход'), [0.5, 0.5, 0.5])],
+    output: 'grey',
+    params: [
+      { id: 'grid', label: l('Dots across', 'Точек в ряд'), kind: 'int', min: 2, max: 128, default: 24 },
+      { id: 'angle', label: l('Grid', 'Сетка'), kind: 'choice', options: [opt('square', 'Square', 'Прямая'), opt('diagonal', 'Diagonal (45°)', 'Диагональная (45°)')], default: 'diagonal' },
+      { id: 'softness', label: l('Softness', 'Мягкость'), kind: 'number', min: 0, max: 1, default: 0.2 },
+      { id: 'invert', label: l('Dark makes big dots', 'Крупнее в тёмном'), kind: 'bool', default: false },
+    ],
+    glsl: `vec2 p = uv * p_grid; vec2 ctr;
+if (p_angle < 0.5) ctr = floor(p) + 0.5;
+else { vec2 r = vec2(p.x + p.y, p.x - p.y); vec2 rc = floor(r * 0.5) * 2. + 1.; ctr = vec2(rc.x + rc.y, rc.x - rc.y) * 0.5; }
+float dd = length(p - ctr) / (p_angle < 0.5 ? 0.70711 : 1.);
+float g = inG_in(ctr / p_grid); if (p_invert > 0.5) g = 1. - g;
+float rad = sqrt(clamp(g, 0., 1.)); float s = max(p_softness * 0.3, 0.02);
+outColor = vec4(vec3(1. - smoothstep(rad - s, rad, dd)), 1.);`,
+  },
+  {
+    type: 'highPass',
+    group: 'change',
+    label: l('High pass', 'Высокие частоты'),
+    hint: l('Keep only the fine detail and drop the broad light and dark (mid grey where flat): evens out a photo, sharpens heights.', 'Оставить только мелкие детали, убрав крупные перепады (средне-серое там, где ровно): выравнивает фото, подчёркивает рельеф.'),
+    inputs: [IN_COLOR()],
+    output: 'color',
+    params: [
+      { id: 'radius', label: l('Radius', 'Радиус'), kind: 'number', min: 0.001, max: 0.1, step: 0.001, default: 0.02 },
+      { id: 'strength', label: l('Strength', 'Сила'), kind: 'number', min: 0, max: 4, default: 1 },
+    ],
+    glsl: `vec3 s = vec3(0.); float w = 0.;
+for (int y = -3; y <= 3; y++) for (int x = -3; x <= 3; x++) {
+  vec2 o = vec2(x, y) / 3.; float k = exp(-dot(o, o) * 2.);
+  s += inC_in(uv + o * p_radius).rgb * k; w += k;
+}
+outColor = vec4(clamp((inC_in(uv).rgb - s / w) * p_strength + 0.5, 0., 1.), 1.);`,
+  },
+  {
+    type: 'growShrink',
+    group: 'change',
+    label: l('Grow or shrink', 'Расширить или сузить'),
+    hint: l('Make light shapes fatter (grow) or thinner (shrink): thicken lines, close gaps, eat into edges.', 'Сделать светлые фигуры толще или тоньше: утолщить линии, закрыть щели, подъесть края.'),
+    inputs: [IN_COLOR()],
+    output: 'color',
+    params: [
+      { id: 'mode', label: l('Make shapes', 'Фигуры'), kind: 'choice', options: [opt('grow', 'Grow', 'Расширить'), opt('shrink', 'Shrink', 'Сузить')], default: 'grow' },
+      { id: 'radius', label: l('Radius', 'Радиус'), kind: 'number', min: 0, max: 0.05, step: 0.0005, default: 0.006 },
+    ],
+    glsl: `vec3 r = inC_in(uv).rgb; bool grow = p_mode < 0.5;
+for (int y = -3; y <= 3; y++) for (int x = -3; x <= 3; x++) {
+  vec2 o = vec2(x, y) / 3.; if (dot(o, o) > 1.) continue;
+  vec3 c = inC_in(uv + o * p_radius).rgb; r = grow ? max(r, c) : min(r, c);
+}
+outColor = vec4(r, 1.);`,
+  },
+  {
+    type: 'rippleWarp',
+    group: 'change',
+    label: l('Ripple', 'Рябь'),
+    hint: l('Wiggle the picture with even sine waves: wavy glass, heat haze, water, flags.', 'Покачать картинку ровными волнами: волнистое стекло, марево, вода, флаги.'),
+    inputs: [IN_COLOR()],
+    output: 'color',
+    params: [
+      { id: 'count', label: l('Waves', 'Волн'), kind: 'int', min: 1, max: 32, default: 4 },
+      { id: 'amount', label: l('Amount', 'Сила'), kind: 'number', min: 0, max: 0.1, step: 0.001, default: 0.02 },
+      { id: 'mode', label: l('Moves', 'Сдвигает'), kind: 'choice', options: [opt('both', 'Both ways', 'В обе стороны'), opt('across', 'Across only', 'Только поперёк'), opt('down', 'Down only', 'Только вниз')], default: 'both' },
+    ],
+    glsl: `vec2 o = vec2(sin(uv.y * p_count * 6.2831853), sin(uv.x * p_count * 6.2831853)) * p_amount;
+if (p_mode > 0.5 && p_mode < 1.5) o.y = 0.; else if (p_mode > 1.5) o.x = 0.;
+outColor = vec4(inC_in(uv + o).rgb, 1.);`,
+  },
+  {
+    type: 'stagger',
+    group: 'change',
+    label: l('Stagger rows', 'Сдвиг рядов'),
+    hint: l('Cut the picture into rows (or columns) and slide every other one: brick-like offsets of any pattern.', 'Разрезать картинку на ряды (или столбцы) и сдвинуть каждый второй: кирпичный сдвиг любого узора.'),
+    inputs: [IN_COLOR()],
+    output: 'color',
+    params: [
+      { id: 'rows', label: l('Rows', 'Рядов'), kind: 'int', min: 1, max: 64, default: 4 },
+      { id: 'offset', label: l('Offset', 'Сдвиг'), kind: 'number', min: 0, max: 1, default: 0.5 },
+      { id: 'direction', label: l('Rows run', 'Ряды идут'), kind: 'choice', options: [opt('across', 'Across', 'Поперёк'), opt('down', 'Down (columns)', 'Вниз (столбцы)')], default: 'across' },
+      { id: 'random', label: l('Random offsets', 'Случайные сдвиги'), kind: 'bool', default: false },
+      seed,
+    ],
+    glsl: `vec2 q = p_direction < 0.5 ? uv : uv.yx; float row = floor(q.y * p_rows);
+float s = p_random > 0.5 ? hash12(vec2(mod(row, p_rows), 4.) + seedv(p_seed)) * p_offset : mod(row, 2.) * p_offset;
+q.x += s; if (p_direction > 0.5) q = q.yx;
+outColor = vec4(inC_in(q).rgb, 1.);`,
+  },
+
+  // ── More (2026-11): combine and colour ──
+  {
+    type: 'cellPick',
+    group: 'combine',
+    label: l('Pick per cell', 'Выбор по ячейкам'),
+    hint: l('Up to four pictures, one picked at random for each cell or square: mixed tiles, patchwork, varied stones.', 'До четырёх картинок, одна наугад для каждой ячейки или квадрата: смешанная плитка, лоскутное одеяло, разные камни.'),
+    inputs: [IN_COLOR('a', l('A', 'A'), [1, 1, 1]), IN_COLOR('b', l('B', 'B'), [0, 0, 0]), IN_COLOR('c', l('C', 'C'), [0.5, 0.5, 0.5]), IN_COLOR('d', l('D', 'D'), [0.25, 0.25, 0.25])],
+    output: 'color',
+    params: [
+      { id: 'shape', label: l('Cells', 'Ячейки'), kind: 'choice', options: [opt('squares', 'Squares', 'Квадраты'), opt('voronoi', 'Round (Voronoi)', 'Округлые (Вороной)')], default: 'squares' },
+      { id: 'scale', label: l('Scale', 'Масштаб'), kind: 'int', min: 1, max: 64, default: 4 },
+      seed,
+    ],
+    glsl: `float id = p_shape < 0.5 ? hash12(mod(floor(uv * p_scale), p_scale) + seedv(p_seed)) : voronoi(uv, p_scale, 1., p_seed).z;
+// Only the linked inputs take part.
+float n = h_a + h_b + h_c + h_d; float k = floor(id * max(n, 1.)); vec3 col = inC_a(uv).rgb;
+float seen = 0.;
+if (h_a > 0.5) { if (seen == k) col = inC_a(uv).rgb; seen += 1.; }
+if (h_b > 0.5) { if (seen == k) col = inC_b(uv).rgb; seen += 1.; }
+if (h_c > 0.5) { if (seen == k) col = inC_c(uv).rgb; seen += 1.; }
+if (h_d > 0.5) { if (seen == k) col = inC_d(uv).rgb; seen += 1.; }
+outColor = vec4(col, 1.);`,
+  },
+  {
+    type: 'colorBalance',
+    group: 'colour',
+    label: l('Colour balance', 'Цветовой баланс'),
+    hint: l('Tint the dark, middle and light parts separately: warm highlights, cool shadows, aged looks.', 'Подкрасить тёмные, средние и светлые части по отдельности: тёплые блики, холодные тени, состаривание.'),
+    inputs: [IN_COLOR('in', l('In', 'Вход'), [0.5, 0.5, 0.5])],
+    output: 'color',
+    params: [
+      { id: 'shadows', label: l('Shadows', 'Тени'), kind: 'color', default: '#2a3a5a' },
+      { id: 'mids', label: l('Mid-tones', 'Средние тона'), kind: 'color', default: '#808080' },
+      { id: 'lights', label: l('Highlights', 'Света'), kind: 'color', default: '#ffe0b0' },
+      { id: 'amount', label: l('Amount', 'Сила'), kind: 'number', min: 0, max: 1, default: 0.4 },
+    ],
+    glsl: `vec3 c = inC_in(uv).rgb; float g = dot(c, vec3(0.2126, 0.7152, 0.0722));
+float ws = 1. - smoothstep(0., 0.5, g), wl = smoothstep(0.5, 1., g), wm = 1. - ws - wl;
+vec3 shift = (p_shadows - 0.5) * ws + (p_mids - 0.5) * wm + (p_lights - 0.5) * wl;
+outColor = vec4(clamp(c + shift * p_amount, 0., 1.), 1.);`,
+  },
+  {
+    type: 'palette',
+    group: 'colour',
+    label: l('Rainbow palette', 'Радужная палитра'),
+    hint: l('Colour a grey picture by a smooth looping palette: rainbows, oil slicks, heat, sci-fi glows.', 'Раскрасить серую картинку плавной зацикленной палитрой: радуга, бензиновые разводы, жар, неон.'),
+    inputs: [IN_GREY('in', l('In', 'Вход'), [0.5, 0.5, 0.5])],
+    output: 'color',
+    params: [
+      { id: 'preset', label: l('Palette', 'Палитра'), kind: 'choice', options: [opt('rainbow', 'Rainbow', 'Радуга'), opt('fire', 'Fire', 'Огонь'), opt('ocean', 'Ocean', 'Океан'), opt('oil', 'Oil slick', 'Бензин'), opt('toxic', 'Toxic', 'Кислотная')], default: 'rainbow' },
+      { id: 'repeats', label: l('Repeats', 'Повторов'), kind: 'number', min: 0.1, max: 8, default: 1 },
+      { id: 'shift', label: l('Shift', 'Сдвиг'), kind: 'number', min: 0, max: 1, default: 0 },
+    ],
+    glsl: `int k = int(p_preset + 0.5); vec3 a = vec3(0.5), b = vec3(0.5), c = vec3(1.), d = vec3(0., 0.33, 0.67);
+if (k == 1) { c = vec3(1., 1., 1.); d = vec3(0., 0.1, 0.2); a = vec3(0.6, 0.35, 0.15); b = vec3(0.5, 0.4, 0.2); }
+else if (k == 2) { a = vec3(0.2, 0.45, 0.6); b = vec3(0.2, 0.3, 0.3); d = vec3(0.5, 0.2, 0.25); }
+else if (k == 3) { c = vec3(2., 1., 0.); d = vec3(0.5, 0.2, 0.25); }
+else if (k == 4) { a = vec3(0.4, 0.6, 0.3); b = vec3(0.4, 0.4, 0.3); c = vec3(1., 1., 0.5); d = vec3(0.8, 0.9, 0.3); }
+float t = inG_in(uv) * p_repeats + p_shift;
+outColor = vec4(clamp(a + b * cos(6.2831853 * (c * t + d)), 0., 1.), 1.);`,
+  },
+
+  // ── More (2026-11): surface ──
+  {
+    type: 'puddles',
+    group: 'surface',
+    label: l('Puddles', 'Лужи'),
+    hint: l('A mask of water filling the low parts of a height picture, with ragged shores: puddles, wet floors, flooded ground.', 'Маска воды, заполняющей низкие места карты высот, с неровными берегами: лужи, мокрый пол.'),
+    inputs: [IN_GREY('in', l('Height', 'Высота'), [0.5, 0.5, 0.5])],
+    output: 'grey',
+    params: [
+      { id: 'level', label: l('Water level', 'Уровень воды'), kind: 'number', min: 0, max: 1, default: 0.35 },
+      { id: 'edge', label: l('Shore softness', 'Мягкость берега'), kind: 'number', min: 0, max: 0.3, default: 0.05 },
+      { id: 'breakup', label: l('Breakup', 'Разрывы'), kind: 'number', min: 0, max: 1, default: 0.4 },
+      { id: 'scale', label: l('Noise size', 'Размер шума'), kind: 'int', min: 1, max: 32, default: 4 },
+      seed,
+    ],
+    glsl: `float h = inG_in(uv) + (fbm(uv, p_scale, 5., 0.55, 0., p_seed) - 0.5) * p_breakup * 0.6;
+outColor = vec4(vec3(1. - smoothstep(p_level - p_edge, p_level + p_edge + 1e-4, h)), 1.);`,
+  },
+  {
+    type: 'topCover',
+    group: 'surface',
+    label: l('Settles on top', 'Оседает сверху'),
+    hint: l('A mask of what lands on upward-facing slopes and tops of a height picture (top of the square is up): snow, dust, moss, sand.', 'Маска того, что ложится на обращённые вверх склоны и вершины карты высот (верх квадрата — верх): снег, пыль, мох, песок.'),
+    inputs: [IN_GREY('in', l('Height', 'Высота'), [0.5, 0.5, 0.5])],
+    output: 'grey',
+    params: [
+      { id: 'amount', label: l('Amount', 'Сколько'), kind: 'number', min: 0, max: 1, default: 0.5 },
+      { id: 'tops', label: l('On high parts too', 'И на возвышениях'), kind: 'number', min: 0, max: 1, default: 0.3 },
+      { id: 'breakup', label: l('Breakup', 'Разрывы'), kind: 'number', min: 0, max: 1, default: 0.3 },
+      { id: 'scale', label: l('Noise size', 'Размер шума'), kind: 'int', min: 1, max: 64, default: 8 },
+      seed,
+    ],
+    glsl: `float e = 0.006; float h = inG_in(uv);
+float up = clamp((h - inG_in(uv - vec2(0., e))) / e * 0.08 + 0.5, 0., 1.);
+float v = mix(up, h, p_tops) + (fbm(uv, p_scale, 5., 0.55, 0., p_seed) - 0.5) * p_breakup;
+float m = 1. - p_amount;
+outColor = vec4(vec3(smoothstep(m - 0.08, m + 0.08, v)), 1.);`,
+  },
+  {
+    type: 'slopeMask',
+    group: 'surface',
+    label: l('Slope mask', 'Маска склонов'),
+    hint: l('White where a height picture is steep (or flat): rock on cliffs, grass on level ground, wear on sides.', 'Белое там, где карта высот крутая (или ровная): скалы на обрывах, трава на ровном, износ на боках.'),
+    inputs: [IN_GREY('in', l('Height', 'Высота'), [0.5, 0.5, 0.5])],
+    output: 'grey',
+    params: [
+      { id: 'mode', label: l('White where', 'Белое там, где'), kind: 'choice', options: [opt('steep', 'Steep', 'Круто'), opt('flat', 'Flat', 'Ровно')], default: 'steep' },
+      { id: 'threshold', label: l('Threshold', 'Порог'), kind: 'number', min: 0, max: 1, default: 0.3 },
+      { id: 'softness', label: l('Softness', 'Мягкость'), kind: 'number', min: 0, max: 0.5, default: 0.1 },
+      { id: 'strength', label: l('Height strength', 'Сила высоты'), kind: 'number', min: 0.1, max: 10, default: 1 },
+    ],
+    glsl: `float e = 0.004;
+vec2 g = vec2(inG_in(uv + vec2(e, 0.)) - inG_in(uv - vec2(e, 0.)), inG_in(uv + vec2(0., e)) - inG_in(uv - vec2(0., e))) / (2. * e);
+float s = clamp(length(g) * p_strength * 0.05, 0., 1.);
+float v = smoothstep(p_threshold - p_softness, p_threshold + p_softness + 1e-4, s);
+if (p_mode > 0.5) v = 1. - v;
+outColor = vec4(vec3(v), 1.);`,
+  },
+
+  // ── More (2026-11): named noises (as in Substance Designer's noise library) ──
+  noise('clouds1', 'Clouds 1', 'Облака 1', 'Soft, smooth clouds: many layers of Perlin noise.', 'Мягкие гладкие облака: много слоёв шума Перлина.', { scale: 4, octaves: 8, roughness: 0.5, contrast: 0.2 },
+    `float v = fbm(uv, p_scale, p_octaves, p_roughness, 0., p_seed);`),
+  noise('clouds2', 'Clouds 2', 'Облака 2', 'Busier, more contrasty clouds, gently swirled: overcast skies, smoke, stains.', 'Более пёстрые и контрастные облака, слегка закрученные: пасмурное небо, дым, пятна.', { scale: 3, octaves: 8, roughness: 0.6, contrast: 0.5 },
+    `vec2 w = vec2(fbm(uv, p_scale, 4., 0.5, 0., p_seed + 3.), fbm(uv, p_scale, 4., 0.5, 0., p_seed + 8.)) - 0.5;
+float v = fbm(uv + w * 0.15, p_scale, p_octaves, p_roughness, 0., p_seed) * 0.7 + fbm(uv, p_scale * 2., p_octaves, p_roughness, 0., p_seed + 1.) * 0.3;`),
+  noise('perlin', 'Perlin noise', 'Шум Перлина', 'Plain Perlin noise: smooth round blobs, one size (add detail for more layers).', 'Простой шум Перлина: гладкие округлые пятна одного размера (детали добавляют слои).', { scale: 8, octaves: 1, roughness: 0.5, contrast: 0 },
+    `float v = fbm(uv, p_scale, p_octaves, p_roughness, 0., p_seed);`),
+  noise('plasma', 'Plasma', 'Плазма', 'Bright branching veins on dark, like electric plasma: energy, lightning glow, veined rock.', 'Яркие ветвящиеся прожилки на тёмном, как плазма: энергия, свечение молний, жилы в камне.', { scale: 3, octaves: 6, roughness: 0.55, contrast: 0.5 },
+    `vec2 w = vec2(fbm(uv, p_scale, 3., 0.5, 0., p_seed + 5.), fbm(uv, p_scale, 3., 0.5, 0., p_seed + 9.)) - 0.5;
+float n = fbm(uv + w * 0.2, p_scale, p_octaves, p_roughness, 0., p_seed);
+float v = pow(1. - abs(n * 2. - 1.), 1. + p_contrast * 6.);`, true),
+  noise('crystal1', 'Crystal 1', 'Кристалл 1', 'Layers of flat, tilted shards on top of each other: crystals, broken glass, rock faces.', 'Слои плоских наклонных осколков друг на друге: кристаллы, битое стекло, грани скал.', { scale: 4, octaves: 3, roughness: 0.6, contrast: 0.2 },
+    `float v = 0.;
+for (int k = 0; k < 6; k++) {
+  if (float(k) >= p_octaves) break;
+  float sc = p_scale * exp2(float(k)); vec2 p = uv * sc; vec2 i = floor(p), f = fract(p); vec2 o = seedv(p_seed + float(k) * 13.);
+  float f1 = 8.; vec2 best = vec2(0.); float id = 0.;
+  for (int y = -1; y <= 1; y++) for (int x = -1; x <= 1; x++) {
+    vec2 c = vec2(float(x), float(y)); vec2 w = mod(i + c, sc);
+    vec2 dv = c + hash22(w + o) - f; float d = length(dv);
+    if (d < f1) { f1 = d; best = dv; id = hash12(w + o + 7.7); }
+  }
+  float a = id * 6.2831853;
+  float face = clamp(0.5 + dot(-best, vec2(cos(a), sin(a))) * 0.8 + (id - 0.5) * 0.4, 0., 1.);
+  v = max(v, face * pow(p_roughness, float(k)));
+}`),
+  noise('crystal2', 'Crystal 2', 'Кристалл 2', 'Sharp facets with bright ridges where they meet: gems, quartz, ice, hammered metal.', 'Чёткие грани с яркими рёбрами на стыках: самоцветы, кварц, лёд, кованый металл.', { scale: 6, octaves: 2, roughness: 0.5, contrast: 0.3 },
+    `float v = 0., norm = 0., amp = 1.;
+for (int k = 0; k < 6; k++) {
+  if (float(k) >= p_octaves) break;
+  float sc = p_scale * exp2(float(k)); vec2 p = uv * sc; vec2 i = floor(p), f = fract(p); vec2 o = seedv(p_seed + float(k) * 17.);
+  float f1 = 8., f2 = 8.; vec2 best = vec2(0.); float id = 0.;
+  for (int y = -1; y <= 1; y++) for (int x = -1; x <= 1; x++) {
+    vec2 c = vec2(float(x), float(y)); vec2 w = mod(i + c, sc);
+    vec2 dv = c + hash22(w + o) - f; float d = length(dv);
+    if (d < f1) { f2 = f1; f1 = d; best = dv; id = hash12(w + o + 3.3); } else if (d < f2) f2 = d;
+  }
+  float a = id * 6.2831853;
+  float face = clamp(0.5 + dot(-best, vec2(cos(a), sin(a))) * 1.2, 0., 1.);
+  float ridge = 1. - smoothstep(0., 0.08, f2 - f1);
+  v += max(face, ridge) * amp; norm += amp; amp *= p_roughness;
+}
+v /= max(norm, 1e-5);`),
+  noise('fractalSum1', 'Fractal sum 1', 'Фрактальная сумма 1', 'Layers of blocky value noise added up: a rough, grainy base for dirt and stone.', 'Сумма слоёв пятнистого шума: грубая зернистая основа для грязи и камня.', { scale: 6, octaves: 7, roughness: 0.62, contrast: 0.3 },
+    `float sum = 0., amp = 1., norm = 0.;
+for (int k = 0; k < 10; k++) {
+  if (float(k) >= p_octaves) break;
+  float per = p_scale * exp2(float(k)); vec2 q = uv * per; vec2 i = floor(q), f = fract(q); vec2 u = f * f * (3. - 2. * f);
+  vec2 o = seedv(p_seed + float(k) * 3.7) * 0.37 + float(k) * 19.19;
+  float a = hash12(mod(i, per) * 1.731 + o), b = hash12(mod(i + vec2(1., 0.), per) * 1.731 + o);
+  float c = hash12(mod(i + vec2(0., 1.), per) * 1.731 + o), d = hash12(mod(i + vec2(1., 1.), per) * 1.731 + o);
+  sum += mix(mix(a, b, u.x), mix(c, d, u.x), u.y) * amp; norm += amp; amp *= p_roughness;
+}
+float v = sum / max(norm, 1e-5);`),
+  noise('fractalSum2', 'Fractal sum 2', 'Фрактальная сумма 2', 'Smooth Perlin layers with strong fine detail: weathered surfaces, plaster, terrain.', 'Гладкие слои Перлина с сильной мелкой деталью: выветренные поверхности, штукатурка, рельеф.', { scale: 2, octaves: 9, roughness: 0.68, contrast: 0.4 },
+    `float v = fbm(uv, p_scale, p_octaves, p_roughness, 0., p_seed);`),
+  noise('fractalSum3', 'Fractal sum 3', 'Фрактальная сумма 3', 'Folded (billowy) noise layers, turned over: lumpy, cauliflower-like detail, moss, coral.', 'Сложенные (клубящиеся) слои шума, перевёрнутые: бугристая деталь, мох, кораллы.', { scale: 3, octaves: 7, roughness: 0.55, contrast: 0.3 },
+    `float sum = 0., amp = 1., norm = 0.;
+for (int k = 0; k < 10; k++) {
+  if (float(k) >= p_octaves) break;
+  float per = p_scale * exp2(float(k));
+  sum += abs(gradNoise(uv * per, per, p_seed + float(k) * 5.3) * 2. - 1.) * amp; norm += amp; amp *= p_roughness;
+}
+float v = 1. - clamp(sum / max(norm, 1e-5) * 1.2, 0., 1.);`),
+  noise('fractalSum4', 'Fractal sum 4', 'Фрактальная сумма 4', 'Ridged layers: sharp creases and crests, mountains, wrinkled leather, veins.', 'Слои с гребнями: острые складки и хребты, горы, морщинистая кожа, прожилки.', { scale: 3, octaves: 8, roughness: 0.6, contrast: 0.3 },
+    `float v = fbm(uv, p_scale, p_octaves, p_roughness, 2., p_seed);`),
+  noise('bnwSpots1', 'B&W spots 1', 'Ч/б пятна 1', 'Black and white blotches with soft edges: patches, camouflage, a mask to mix two materials.', 'Чёрно-белые пятна с мягкими краями: пятна, камуфляж, маска для смешивания двух материалов.', { scale: 5, octaves: 6, roughness: 0.5, contrast: 0.7 },
+    `float v = fbm(uv, p_scale, p_octaves, p_roughness, 0., p_seed);`, true, true),
+  noise('bnwSpots2', 'B&W spots 2', 'Ч/б пятна 2', 'Smaller, busier black and white spots with ragged edges: lichen, grime, mottled paint.', 'Мелкие частые чёрно-белые пятна с рваными краями: лишайник, грязь, пёстрая краска.', { scale: 12, octaves: 5, roughness: 0.65, contrast: 0.75 },
+    `float sum = 0., amp = 1., norm = 0.;
+for (int k = 0; k < 10; k++) {
+  if (float(k) >= p_octaves) break;
+  float per = p_scale * exp2(float(k)); vec2 q = uv * per; vec2 i = floor(q), f = fract(q); vec2 u = f * f * (3. - 2. * f);
+  vec2 o = seedv(p_seed + float(k) * 3.7) * 0.37 + float(k) * 19.19;
+  float a = hash12(mod(i, per) * 1.731 + o), b = hash12(mod(i + vec2(1., 0.), per) * 1.731 + o);
+  float c = hash12(mod(i + vec2(0., 1.), per) * 1.731 + o), d = hash12(mod(i + vec2(1., 1.), per) * 1.731 + o);
+  sum += mix(mix(a, b, u.x), mix(c, d, u.x), u.y) * amp; norm += amp; amp *= p_roughness;
+}
+float v = sum / max(norm, 1e-5);`, true, true),
+  noise('bnwSpots3', 'B&W spots 3', 'Ч/б пятна 3', 'Big, rounded black and white areas: large patches of wear, puddle masks, cow spots.', 'Крупные округлые чёрно-белые области: большие пятна износа, маски луж, коровьи пятна.', { scale: 3, octaves: 4, roughness: 0.4, contrast: 0.8 },
+    `float v = sqrt(fbm(uv, p_scale, p_octaves, p_roughness, 0., p_seed) * fbm(uv, p_scale, p_octaves, p_roughness, 0., p_seed + 21.)) * 1.08;`, true, true),
+  noise('bnwSpots4', 'B&W spots 4', 'Ч/б пятна 4', 'Fine speckled spots clustered by a broad noise: rust pitting, dust, terrazzo, salt and pepper.', 'Мелкие крапинки, собранные в группы крупным шумом: ржавые раковины, пыль, терраццо.', { scale: 24, octaves: 3, roughness: 0.5, contrast: 0.8 },
+    `float sum = 0., amp = 1., norm = 0.;
+for (int k = 0; k < 10; k++) {
+  if (float(k) >= p_octaves) break;
+  float per = p_scale * exp2(float(k)); vec2 q = uv * per; vec2 i = floor(q), f = fract(q); vec2 u = f * f * (3. - 2. * f);
+  vec2 o = seedv(p_seed + float(k) * 3.7) * 0.37 + float(k) * 19.19;
+  float a = hash12(mod(i, per) * 1.731 + o), b = hash12(mod(i + vec2(1., 0.), per) * 1.731 + o);
+  float c = hash12(mod(i + vec2(0., 1.), per) * 1.731 + o), d = hash12(mod(i + vec2(1., 1.), per) * 1.731 + o);
+  sum += mix(mix(a, b, u.x), mix(c, d, u.x), u.y) * amp; norm += amp; amp *= p_roughness;
+}
+float v = sum / max(norm, 1e-5);
+v = v * 0.65 + fbm(uv, max(1., floor(p_scale / 6.)), 4., 0.5, 0., p_seed + 4.) * 0.35;`, true, true),
+
+  // ── More (2026-11): free transform ──
+  {
+    type: 'freeTransform',
+    group: 'change',
+    label: l('Free transform', 'Свободная трансформация'),
+    hint: l(
+      'Place a picture anywhere by hand: drag, turn and size it with the handles in the Flat preview (a bolt, a logo, a crack). One copy wraps around the edges so the square still tiles; or repeat it.',
+      'Поставить картинку куда угодно вручную: двигайте, поворачивайте и меняйте размер ручками в плоском просмотре (болт, логотип, трещина). Одна копия переходит через края, так что квадрат стыкуется; или повторите её.',
+    ),
+    inputs: [IN_COLOR('in', l('Picture', 'Картинка'), [1, 1, 1]), IN_COLOR('bg', l('Background', 'Фон'), [0, 0, 0])],
+    output: 'color',
+    params: [
+      { id: 'x', label: l('Across', 'Поперёк'), kind: 'number', min: 0, max: 1, step: 0.001, default: 0.5 },
+      { id: 'y', label: l('Down', 'Вниз'), kind: 'number', min: 0, max: 1, step: 0.001, default: 0.5 },
+      { id: 'angle', label: l('Turn', 'Поворот'), kind: 'number', min: -180, max: 180, step: 0.1, default: 0 },
+      { id: 'w', label: l('Width', 'Ширина'), kind: 'number', min: 0.01, max: 4, step: 0.001, default: 0.5 },
+      { id: 'h', label: l('Height', 'Высота'), kind: 'number', min: 0.01, max: 4, step: 0.001, default: 0.5 },
+      { id: 'repeat', label: l('Repeat', 'Повторять'), kind: 'bool', default: false },
+      { id: 'mode', label: l('Over the background', 'Поверх фона'), kind: 'choice', options: [opt('replace', 'Cover', 'Закрыть'), opt('max', 'Lighter', 'Светлее'), opt('add', 'Add', 'Сложить'), opt('min', 'Darker', 'Темнее')], default: 'replace' },
+    ],
+    glsl: `float a = radians(p_angle); mat2 r = mat2(cos(a), -sin(a), sin(a), cos(a));
+vec2 size = max(vec2(p_w, p_h), vec2(1e-4));
+vec3 bg = inC_bg(uv).rgb; vec3 col = bg; bool hit = false; vec3 pic = vec3(0.);
+if (p_repeat > 0.5) { pic = inC_in(r * (uv - vec2(p_x, p_y)) / size + 0.5).rgb; hit = true; }
+else {
+  // The copy and its neighbours one square away, so it wraps across the edges.
+  for (int oy = -1; oy <= 1; oy++) for (int ox = -1; ox <= 1; ox++) {
+    vec2 q = r * (uv + vec2(float(ox), float(oy)) - vec2(p_x, p_y)) / size;
+    if (!hit && abs(q.x) <= 0.5 && abs(q.y) <= 0.5) { pic = inC_in(q + 0.5).rgb; hit = true; }
+  }
+}
+if (hit) { int m = int(p_mode + 0.5); col = m == 0 ? pic : m == 1 ? max(bg, pic) : m == 2 ? bg + pic : min(bg, pic); }
+outColor = vec4(col, 1.);`,
   },
 
   // ── Outputs ──
