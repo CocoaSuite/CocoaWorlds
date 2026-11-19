@@ -1,6 +1,6 @@
 /**
  * Cocoa Materials: the graph of a graph material (decision C2: React Flow, in CocoaCanvas styling). Nodes show
- * what they make; wires go from an output (right) to an input (left). Right-click, Space or “+ Node” adds a
+ * what they make; wires go from an output (right) to an input (left). Right-click, Space, Ctrl+A or “+ Node” adds a
  * node; Delete removes the picked nodes or wires. Dragging on empty graph draws a box that picks nodes (moved
  * together); the middle or right button pans. Sections are labelled boxes behind nodes that carry the nodes
  * inside them when moved. The right side shows the material on a shape (or the picked node's picture flat) and
@@ -202,18 +202,45 @@ function SectionView({ id, data, selected }: NodeProps<SecNode>) {
 }
 const nodeTypes = { cm: CmNodeView, section: SectionView };
 
-/** The add-node menu: search box and the nodes by group. */
+/** Node types added lately (newest first), shown at the top of the add menu. */
+const RECENT_KEY = 'cw-cm-recent';
+function recentTypes(): string[] {
+  try {
+    const v = JSON.parse(localStorage.getItem(RECENT_KEY) ?? '[]');
+    return Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string' && !!nodeDef(x)) : [];
+  } catch {
+    return [];
+  }
+}
+function noteRecent(type: string) {
+  try {
+    localStorage.setItem(RECENT_KEY, JSON.stringify([type, ...recentTypes().filter((x) => x !== type)].slice(0, 5)));
+  } catch {
+    /* ignore */
+  }
+}
+
+/** The add-node menu: search box, the recently added nodes, then the nodes by group. */
 function AddMenu({ at, onPick, onClose }: { at: { x: number; y: number }; onPick: (type: string) => void; onClose: () => void }) {
   const [q, setQ] = useState('');
   const [hi, setHi] = useState(0);
   const query = q.trim().toLowerCase();
   const list = NODES.filter((n) => !query || say(n.label).toLowerCase().includes(query) || n.label.en.toLowerCase().includes(query) || say(n.hint).toLowerCase().includes(query));
+  const [recent] = useState(recentTypes);
+  // In the order shown (so the arrow keys follow what is on screen).
+  const sections = [
+    ...(query ? [] : [{ id: 'recent', label: t('cm.recent'), items: recent.map((r) => NODES.find((n) => n.type === r)!).filter(Boolean) }]),
+    ...GROUPS.map((g) => ({ id: g.id, label: say(g.label), items: list.filter((n) => n.group === g.id) })),
+  ].filter((x) => x.items.length);
+  const shown = sections.flatMap((x) => x.items);
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const away = (e: PointerEvent) => !ref.current?.contains(e.target as globalThis.Node) && onClose();
     window.addEventListener('pointerdown', away, true);
     return () => window.removeEventListener('pointerdown', away, true);
   }, [onClose]);
+  useEffect(() => ref.current?.querySelector('.cm-add-list .hi')?.scrollIntoView({ block: 'nearest' }), [hi]);
+  let i = 0;
   return (
     <div className="cm-add" ref={ref} style={{ left: at.x, top: at.y }} role="dialog" aria-label={t('cm.addNode')}>
       <input
@@ -229,28 +256,27 @@ function AddMenu({ at, onPick, onClose }: { at: { x: number; y: number }; onPick
         onKeyDown={(e) => {
           e.stopPropagation();
           if (e.key === 'Escape') onClose();
-          if (e.key === 'ArrowDown') setHi((h) => Math.min(list.length - 1, h + 1));
+          if (e.key === 'ArrowDown') setHi((h) => Math.min(shown.length - 1, h + 1));
           if (e.key === 'ArrowUp') setHi((h) => Math.max(0, h - 1));
-          if (e.key === 'Enter' && list[hi]) onPick(list[hi]!.type);
+          if (e.key === 'Enter' && shown[hi]) onPick(shown[hi]!.type);
         }}
       />
       <div className="cm-add-list" role="menu">
-        {GROUPS.map((g) => {
-          const items = list.filter((n) => n.group === g.id);
-          if (!items.length) return null;
-          return (
-            <div key={g.id}>
-              <div className="cm-add-g">{say(g.label)}</div>
-              {items.map((n) => (
-                <button key={n.type} type="button" role="menuitem" className={list[hi] === n ? 'hi' : ''} onClick={() => onPick(n.type)}>
+        {sections.map((g) => (
+          <div key={g.id}>
+            <div className="cm-add-g">{g.label}</div>
+            {g.items.map((n) => {
+              const k = i++;
+              return (
+                <button key={`${g.id}-${n.type}`} type="button" role="menuitem" className={k === hi ? 'hi' : ''} onClick={() => onPick(n.type)}>
                   <i className={`cm-dot g-${n.group}`} />
                   {say(n.label)}
                 </button>
-              ))}
-            </div>
-          );
-        })}
-        {!list.length && <div className="cw-muted cm-add-none">{t('cm.noMatch')}</div>}
+              );
+            })}
+          </div>
+        ))}
+        {!shown.length && <div className="cw-muted cm-add-none">{t('cm.noMatch')}</div>}
       </div>
     </div>
   );
@@ -561,6 +587,7 @@ function Flow({ path, graph, sel, onSelect, wideLibrary }: { path: string; graph
 
   const add = (type: string, at: { x: number; y: number }) => {
     const n = newNode(type, Math.round(at.x), Math.round(at.y));
+    noteRecent(type);
     setGraph(path, { ...graphRef.current, nodes: [...graphRef.current.nodes, n] }, `Add ${nodeDef(type)!.label.en} node`);
     onSelect([n.id]);
     setMenu(null);
@@ -622,12 +649,34 @@ function Flow({ path, graph, sel, onSelect, wideLibrary }: { path: string; graph
 
   // (On the window: picking a node can leave nothing focused. Only when focus is in the graph or nowhere, and
   // never while typing.)
-  const keyRef = useRef(clipboardKey);
-  keyRef.current = clipboardKey;
+  /** Where the mouse is, if it is over the graph (else the graph's top-left corner). */
+  const pointerOrCorner = () => {
+    const box = host.current!.getBoundingClientRect();
+    const p = pointer.current;
+    const inside = p.x >= box.left && p.x <= box.right && p.y >= box.top && p.y <= box.bottom;
+    return inside ? p : { x: box.left + 200, y: box.top + 120 };
+  };
+  /** B adds a Blend node at the mouse; Ctrl+A opens the add menu (as Space does). */
+  const graphKey = (e: KeyboardEvent) => {
+    if (e.repeat || menu) return;
+    const k = e.code.replace(/^Key/, '').toLowerCase();
+    if (k === 'b' && !e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey) {
+      e.preventDefault();
+      const p = rf.screenToFlowPosition(pointerOrCorner());
+      add('blend', { x: p.x - 66, y: p.y - 20 });
+    } else if (k === 'a' && (e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey) {
+      e.preventDefault();
+      const p = pointerOrCorner();
+      openMenu(p.x, p.y);
+    } else clipboardKey(e);
+  };
+  const keyRef = useRef(graphKey);
+  keyRef.current = graphKey;
   useEffect(() => {
     const down = (e: KeyboardEvent) => {
       const a = document.activeElement;
       if (a && a !== document.body && !host.current?.contains(a)) return;
+      if (a?.closest('input, select, textarea, [contenteditable="true"]')) return;
       if (document.querySelector('.cw-modal')) return;
       keyRef.current(e);
     };
@@ -669,6 +718,33 @@ function Flow({ path, graph, sel, onSelect, wideLibrary }: { path: string; graph
     [path],
   );
 
+  // ── Moving all of a node's outgoing wires to another node (Ctrl+drag from its output) ──
+  const rewire = (from: string, e: React.PointerEvent) => {
+    const box = host.current?.getBoundingClientRect();
+    const out = host.current?.querySelector(`.react-flow__node[data-id="${from}"] .react-flow__handle-right`)?.getBoundingClientRect();
+    if (!box || !out || !graphRef.current.links.some((l) => l.from === from)) return false;
+    const rel = (x: number, y: number) => ({ x: x - box.left, y: y - box.top });
+    setLifted({ from, to: '', input: '', start: rel(out.left + out.width / 2, out.top + out.height / 2), at: rel(e.clientX, e.clientY) });
+    const move = (ev: PointerEvent) => setLifted((l) => (l ? { ...l, at: rel(ev.clientX, ev.clientY) } : l));
+    const up = (ev: PointerEvent) => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+      setLifted(null);
+      // Dropped on another node (anywhere on it): every wire that left the old node now leaves this one.
+      const el = document.elementFromPoint(ev.clientX, ev.clientY)?.closest<HTMLElement>('.react-flow__node');
+      const to = el?.dataset.id;
+      const g0 = graphRef.current;
+      const target = g0.nodes.find((n) => n.id === to);
+      if (!to || to === from || !target || !nodeDef(target.type)?.output) return;
+      let g = g0;
+      for (const l of g0.links) if (l.from === from && l.to !== to) g = connect(g, to, l.to, l.input);
+      if (g !== g0) setGraph(path, g, 'Move wires');
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+    return true;
+  };
+
   /** Right button: a click opens the add menu, a drag pans (so the menu waits for the button to come up). */
   const rightDown = useRef<{ x: number; y: number } | null>(null);
 
@@ -697,6 +773,13 @@ function Flow({ path, graph, sel, onSelect, wideLibrary }: { path: string; graph
       }}
       onPointerDownCapture={(e) => {
         if (e.button === 2) rightDown.current = { x: e.clientX, y: e.clientY };
+        if (e.button === 0 && (e.ctrlKey || e.metaKey)) {
+          const id = (e.target as HTMLElement).closest<HTMLElement>('.react-flow__handle.source')?.dataset.nodeid;
+          if (id && rewire(id, e)) {
+            e.preventDefault();
+            e.stopPropagation();
+          }
+        }
       }}
       onPointerUpCapture={(e) => {
         const start = rightDown.current;
