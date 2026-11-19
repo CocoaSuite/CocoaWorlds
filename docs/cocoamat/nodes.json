@@ -273,6 +273,29 @@
           "max": 1
         },
         {
+          "id": "distort",
+          "kind": "number",
+          "label": {
+            "en": "Shape distortion",
+            "ru": "Shape distortion"
+          },
+          "default": 0,
+          "min": 0,
+          "max": 1
+        },
+        {
+          "id": "turn",
+          "kind": "number",
+          "label": {
+            "en": "Random turn",
+            "ru": "Random turn"
+          },
+          "default": 0,
+          "min": 0,
+          "max": 30,
+          "step": 0.5
+        },
+        {
           "id": "seed",
           "kind": "seed",
           "label": {
@@ -282,8 +305,8 @@
           "default": 0
         }
       ],
-      "glsl": "float y = uv.y * p_rows; float row = floor(y);\nfloat x = uv.x * p_columns + p_offset * mod(row, 2.); float col = floor(x);\nvec2 f = vec2(fract(x), fract(y));\n// Distance to the brick's edge, in row heights.\nfloat dx = min(f.x, 1. - f.x) * p_rows / p_columns, dy = min(f.y, 1. - f.y);\nfloat d = min(dx, dy) - p_mortar * 0.5;\nfloat r = hash12(vec2(mod(col, p_columns), mod(row, p_rows)) + seedv(p_seed));\nfloat h = d <= 0. ? 0. : (p_bevel > 0. ? smoothstep(0., p_bevel, d) : 1.) * (1. - p_random * r);\noutColor = vec4(vec3(h), 1.);",
-      "hash": "ab639cef"
+      "glsl": "float y = uv.y * p_rows; float row = floor(y);\nfloat x = uv.x * p_columns + p_offset * mod(row, 2.); float col = floor(x);\nvec2 f = vec2(fract(x), fract(y));\nvec2 cell = vec2(mod(col, p_columns), mod(row, p_rows)) + seedv(p_seed);\nfloat d;\nif (p_distort <= 0. && p_turn <= 0.) {\n  // Distance to the brick's edge, in row heights.\n  float dx = min(f.x, 1. - f.x) * p_rows / p_columns, dy = min(f.y, 1. - f.y);\n  d = min(dx, dy) - p_mortar * 0.5;\n} else {\n  // The brick as an uneven eight-cornered outline (corners cut, sides bent), turned a little; in row heights.\n  vec2 A = vec2(0.5 * p_rows / p_columns, 0.5) - p_mortar * 0.5;\n  vec2 q = (f - 0.5) * vec2(p_rows / p_columns, 1.);\n  float ang = radians(p_turn) * (hash12(cell * 1.37 + 5.1) * 2. - 1.);\n  q = mat2(cos(ang), sin(ang), -sin(ang), cos(ang)) * q;\n  float m = min(A.x, A.y), k = p_distort;\n  vec2 v[8];\n  for (int i = 0; i < 8; i++) {\n    vec2 rn = hash22(cell * 7.13 + float(i) * 13.7 + 0.5);\n    float t = float(i) * PI * 0.25;\n    vec2 dir = vec2(cos(t), sin(t));\n    if (i % 2 == 1) {\n      // Corners: cut in by a random amount each way.\n      vec2 c = sign(dir);\n      v[i] = c * A - c * rn * k * m * vec2(1.1, 0.9);\n    } else {\n      // Middles of the sides: slid along the side and pushed in or out.\n      vec2 side = abs(dir.x) > 0.5 ? vec2(sign(dir.x) * A.x, 0.) : vec2(0., sign(dir.y) * A.y);\n      vec2 along = abs(dir.x) > 0.5 ? vec2(0., A.y) : vec2(A.x, 0.);\n      v[i] = side + along * (rn.x - 0.5) * k * 0.8 + dir * (rn.y - 0.6) * k * m * 0.5;\n    }\n  }\n  float out_ = -1e9;\n  for (int i = 0; i < 8; i++) {\n    vec2 a = v[i], b = v[(i + 1) % 8];\n    vec2 e = normalize(b - a);\n    out_ = max(out_, dot(q - a, vec2(e.y, -e.x)));\n  }\n  // (Never past the cell's own edges.)\n  float dx = min(f.x, 1. - f.x) * p_rows / p_columns, dy = min(f.y, 1. - f.y);\n  d = min(-out_, min(dx, dy) - p_mortar * 0.5);\n}\nfloat r = hash12(cell);\nfloat h = d <= 0. ? 0. : (p_bevel > 0. ? smoothstep(0., p_bevel, d) : 1.) * (1. - p_random * r);\noutColor = vec4(vec3(h), 1.);",
+      "hash": "df3274e1"
     },
     {
       "type": "shape",

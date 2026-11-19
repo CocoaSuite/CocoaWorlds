@@ -151,15 +151,53 @@ outColor = vec4(vec3(r), 1.);`,
       { id: 'mortar', label: l('Mortar', 'Шов'), kind: 'number', min: 0, max: 0.5, default: 0.06 },
       { id: 'bevel', label: l('Bevel', 'Скос'), kind: 'number', min: 0, max: 0.5, default: 0.12 },
       { id: 'random', label: l('Random brightness', 'Разная яркость'), kind: 'number', min: 0, max: 1, default: 0.3 },
+      { id: 'distort', label: l('Shape distortion'), kind: 'number', min: 0, max: 1, default: 0 },
+      { id: 'turn', label: l('Random turn'), kind: 'number', min: 0, max: 30, step: 0.5, default: 0 },
       seed,
     ],
     glsl: `float y = uv.y * p_rows; float row = floor(y);
 float x = uv.x * p_columns + p_offset * mod(row, 2.); float col = floor(x);
 vec2 f = vec2(fract(x), fract(y));
-// Distance to the brick's edge, in row heights.
-float dx = min(f.x, 1. - f.x) * p_rows / p_columns, dy = min(f.y, 1. - f.y);
-float d = min(dx, dy) - p_mortar * 0.5;
-float r = hash12(vec2(mod(col, p_columns), mod(row, p_rows)) + seedv(p_seed));
+vec2 cell = vec2(mod(col, p_columns), mod(row, p_rows)) + seedv(p_seed);
+float d;
+if (p_distort <= 0. && p_turn <= 0.) {
+  // Distance to the brick's edge, in row heights.
+  float dx = min(f.x, 1. - f.x) * p_rows / p_columns, dy = min(f.y, 1. - f.y);
+  d = min(dx, dy) - p_mortar * 0.5;
+} else {
+  // The brick as an uneven eight-cornered outline (corners cut, sides bent), turned a little; in row heights.
+  vec2 A = vec2(0.5 * p_rows / p_columns, 0.5) - p_mortar * 0.5;
+  vec2 q = (f - 0.5) * vec2(p_rows / p_columns, 1.);
+  float ang = radians(p_turn) * (hash12(cell * 1.37 + 5.1) * 2. - 1.);
+  q = mat2(cos(ang), sin(ang), -sin(ang), cos(ang)) * q;
+  float m = min(A.x, A.y), k = p_distort;
+  vec2 v[8];
+  for (int i = 0; i < 8; i++) {
+    vec2 rn = hash22(cell * 7.13 + float(i) * 13.7 + 0.5);
+    float t = float(i) * PI * 0.25;
+    vec2 dir = vec2(cos(t), sin(t));
+    if (i % 2 == 1) {
+      // Corners: cut in by a random amount each way.
+      vec2 c = sign(dir);
+      v[i] = c * A - c * rn * k * m * vec2(1.1, 0.9);
+    } else {
+      // Middles of the sides: slid along the side and pushed in or out.
+      vec2 side = abs(dir.x) > 0.5 ? vec2(sign(dir.x) * A.x, 0.) : vec2(0., sign(dir.y) * A.y);
+      vec2 along = abs(dir.x) > 0.5 ? vec2(0., A.y) : vec2(A.x, 0.);
+      v[i] = side + along * (rn.x - 0.5) * k * 0.8 + dir * (rn.y - 0.6) * k * m * 0.5;
+    }
+  }
+  float out_ = -1e9;
+  for (int i = 0; i < 8; i++) {
+    vec2 a = v[i], b = v[(i + 1) % 8];
+    vec2 e = normalize(b - a);
+    out_ = max(out_, dot(q - a, vec2(e.y, -e.x)));
+  }
+  // (Never past the cell's own edges.)
+  float dx = min(f.x, 1. - f.x) * p_rows / p_columns, dy = min(f.y, 1. - f.y);
+  d = min(-out_, min(dx, dy) - p_mortar * 0.5);
+}
+float r = hash12(cell);
 float h = d <= 0. ? 0. : (p_bevel > 0. ? smoothstep(0., p_bevel, d) : 1.) * (1. - p_random * r);
 outColor = vec4(vec3(h), 1.);`,
   },
