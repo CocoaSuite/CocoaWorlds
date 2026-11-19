@@ -2026,7 +2026,7 @@ outColor = vec4(col, 1.);
 
 Put one picture over another: mixed, added, multiplied … and only where a mask is white.
 
-Makes: color · hash `acd86661`
+Makes: color · hash `d436e858`
 
 | Input | Reads as | Unlinked |
 |---|---|---|
@@ -2038,15 +2038,21 @@ Makes: color · hash `acd86661`
 |---|---|---|---|
 | `mode` (Mode) | choice | 0 `mix`, 1 `add`, 2 `subtract`, 3 `multiply`, 4 `screen`, 5 `overlay`, 6 `max`, 7 `min`, 8 `difference` | `mix` |
 | `opacity` (Opacity) | number | 0 – 1 | `1` |
+| `blackAlpha` (Black to alpha) | bool |  | `false` |
+| `cutoff` (Black cutoff) | number | 0.005 – 1 | `0.1` |
 
 ```glsl
 vec3 a = inC_top(uv).rgb, b = inC_bottom(uv).rgb; vec3 r;
+// Black to alpha: the top's black background turns see-through, so a coloured picture sits on the bottom one.
+// Darks below the cutoff fade out; colours above stay solid. Soft edges keep their full colour.
+float al = 1.;
+if (p_blackAlpha > 0.5) { float mx = max(a.r, max(a.g, a.b)); al = smoothstep(0., p_cutoff, mx); a = mx > 1e-4 ? a / mx * max(mx, min(p_cutoff, 1.)) : a; }
 int m = int(p_mode + 0.5);
 if (m == 0) r = a; else if (m == 1) r = a + b; else if (m == 2) r = b - a; else if (m == 3) r = a * b;
 else if (m == 4) r = 1. - (1. - a) * (1. - b);
 else if (m == 5) r = mix(2. * a * b, 1. - 2. * (1. - a) * (1. - b), step(0.5, b));
 else if (m == 6) r = max(a, b); else if (m == 7) r = min(a, b); else r = abs(a - b);
-outColor = vec4(clamp(mix(b, r, inG_mask(uv) * p_opacity), 0., 1.), 1.);
+outColor = vec4(clamp(mix(b, r, inG_mask(uv) * p_opacity * al), 0., 1.), 1.);
 ```
 
 ### Switch — `switch`

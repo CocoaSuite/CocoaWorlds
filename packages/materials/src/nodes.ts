@@ -565,14 +565,20 @@ outColor = vec4(vec3(smoothstep(p_threshold, p_threshold + 0.05, e)), 1.);`,
         default: 'mix',
       },
       { id: 'opacity', label: l('Opacity', 'Непрозрачность'), kind: 'number', min: 0, max: 1, default: 1 },
+      { id: 'blackAlpha', label: l('Black to alpha', 'Чёрное в прозрачность'), kind: 'bool', default: false },
+      { id: 'cutoff', label: l('Black cutoff', 'Порог чёрного'), kind: 'number', min: 0.005, max: 1, default: 0.1 },
     ],
     glsl: `vec3 a = inC_top(uv).rgb, b = inC_bottom(uv).rgb; vec3 r;
+// Black to alpha: the top's black background turns see-through, so a coloured picture sits on the bottom one.
+// Darks below the cutoff fade out; colours above stay solid. Soft edges keep their full colour.
+float al = 1.;
+if (p_blackAlpha > 0.5) { float mx = max(a.r, max(a.g, a.b)); al = smoothstep(0., p_cutoff, mx); a = mx > 1e-4 ? a / mx * max(mx, min(p_cutoff, 1.)) : a; }
 int m = int(p_mode + 0.5);
 if (m == 0) r = a; else if (m == 1) r = a + b; else if (m == 2) r = b - a; else if (m == 3) r = a * b;
 else if (m == 4) r = 1. - (1. - a) * (1. - b);
 else if (m == 5) r = mix(2. * a * b, 1. - 2. * (1. - a) * (1. - b), step(0.5, b));
 else if (m == 6) r = max(a, b); else if (m == 7) r = min(a, b); else r = abs(a - b);
-outColor = vec4(clamp(mix(b, r, inG_mask(uv) * p_opacity), 0., 1.), 1.);`,
+outColor = vec4(clamp(mix(b, r, inG_mask(uv) * p_opacity * al), 0., 1.), 1.);`,
   },
   {
     type: 'switch',

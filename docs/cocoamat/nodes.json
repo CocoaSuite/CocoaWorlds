@@ -1848,10 +1848,30 @@
           "default": 1,
           "min": 0,
           "max": 1
+        },
+        {
+          "id": "blackAlpha",
+          "kind": "bool",
+          "label": {
+            "en": "Black to alpha",
+            "ru": "Чёрное в прозрачность"
+          },
+          "default": false
+        },
+        {
+          "id": "cutoff",
+          "kind": "number",
+          "label": {
+            "en": "Black cutoff",
+            "ru": "Порог чёрного"
+          },
+          "default": 0.1,
+          "min": 0.005,
+          "max": 1
         }
       ],
-      "glsl": "vec3 a = inC_top(uv).rgb, b = inC_bottom(uv).rgb; vec3 r;\nint m = int(p_mode + 0.5);\nif (m == 0) r = a; else if (m == 1) r = a + b; else if (m == 2) r = b - a; else if (m == 3) r = a * b;\nelse if (m == 4) r = 1. - (1. - a) * (1. - b);\nelse if (m == 5) r = mix(2. * a * b, 1. - 2. * (1. - a) * (1. - b), step(0.5, b));\nelse if (m == 6) r = max(a, b); else if (m == 7) r = min(a, b); else r = abs(a - b);\noutColor = vec4(clamp(mix(b, r, inG_mask(uv) * p_opacity), 0., 1.), 1.);",
-      "hash": "acd86661"
+      "glsl": "vec3 a = inC_top(uv).rgb, b = inC_bottom(uv).rgb; vec3 r;\n// Black to alpha: the top's black background turns see-through, so a coloured picture sits on the bottom one.\n// Darks below the cutoff fade out; colours above stay solid. Soft edges keep their full colour.\nfloat al = 1.;\nif (p_blackAlpha > 0.5) { float mx = max(a.r, max(a.g, a.b)); al = smoothstep(0., p_cutoff, mx); a = mx > 1e-4 ? a / mx * max(mx, min(p_cutoff, 1.)) : a; }\nint m = int(p_mode + 0.5);\nif (m == 0) r = a; else if (m == 1) r = a + b; else if (m == 2) r = b - a; else if (m == 3) r = a * b;\nelse if (m == 4) r = 1. - (1. - a) * (1. - b);\nelse if (m == 5) r = mix(2. * a * b, 1. - 2. * (1. - a) * (1. - b), step(0.5, b));\nelse if (m == 6) r = max(a, b); else if (m == 7) r = min(a, b); else r = abs(a - b);\noutColor = vec4(clamp(mix(b, r, inG_mask(uv) * p_opacity * al), 0., 1.), 1.);",
+      "hash": "d436e858"
     },
     {
       "type": "switch",
