@@ -1418,6 +1418,135 @@
       "hash": "47a3a396"
     },
     {
+      "type": "floodGradient",
+      "group": "change",
+      "label": {
+        "en": "Flood fill to gradient",
+        "ru": "Flood fill to gradient"
+      },
+      "hint": {
+        "en": "A gradient across each separate white shape of a mask (each brick, tile, plank): set its angle and how much each shape turns, how steep it is, and its shape. Good for bevels, uneven bricks and lighting each piece differently.",
+        "ru": "A gradient across each separate white shape of a mask (each brick, tile, plank): set its angle and how much each shape turns, how steep it is, and its shape. Good for bevels, uneven bricks and lighting each piece differently."
+      },
+      "inputs": [
+        {
+          "id": "in",
+          "kind": "grey",
+          "label": {
+            "en": "Mask",
+            "ru": "Mask"
+          },
+          "fallback": [
+            1,
+            1,
+            1
+          ]
+        }
+      ],
+      "output": "grey",
+      "params": [
+        {
+          "id": "angle",
+          "kind": "number",
+          "label": {
+            "en": "Angle",
+            "ru": "Angle"
+          },
+          "default": 0,
+          "min": 0,
+          "max": 360,
+          "step": 1
+        },
+        {
+          "id": "angleVar",
+          "kind": "number",
+          "label": {
+            "en": "Angle variation",
+            "ru": "Angle variation"
+          },
+          "default": 0,
+          "min": 0,
+          "max": 1
+        },
+        {
+          "id": "slope",
+          "kind": "number",
+          "label": {
+            "en": "Steepness",
+            "ru": "Steepness"
+          },
+          "default": 1,
+          "min": 0.1,
+          "max": 4
+        },
+        {
+          "id": "slopeVar",
+          "kind": "number",
+          "label": {
+            "en": "Steepness variation",
+            "ru": "Steepness variation"
+          },
+          "default": 0,
+          "min": 0,
+          "max": 1
+        },
+        {
+          "id": "form",
+          "kind": "choice",
+          "label": {
+            "en": "Shape",
+            "ru": "Shape"
+          },
+          "default": "linear",
+          "options": [
+            {
+              "value": "linear",
+              "label": {
+                "en": "Linear",
+                "ru": "Linear"
+              }
+            },
+            {
+              "value": "mirror",
+              "label": {
+                "en": "Mirrored",
+                "ru": "Mirrored"
+              }
+            },
+            {
+              "value": "radial",
+              "label": {
+                "en": "From the middle",
+                "ru": "From the middle"
+              }
+            }
+          ]
+        },
+        {
+          "id": "threshold",
+          "kind": "number",
+          "label": {
+            "en": "White from",
+            "ru": "White from"
+          },
+          "default": 0.5,
+          "min": 0.01,
+          "max": 0.99
+        },
+        {
+          "id": "seed",
+          "kind": "seed",
+          "label": {
+            "en": "Seed",
+            "ru": "Зерно"
+          },
+          "default": 0
+        }
+      ],
+      "glsl": "if (inG_in(uv) < p_threshold) { outColor = vec4(0., 0., 0., 1.); return; }\nfloat st = u_px * 2.; float l = 0., r = 0., u = 0., d = 0.;\nfor (int k = 1; k <= 160; k++) { if (inG_in(uv - vec2(float(k) * st, 0.)) < p_threshold) break; l = float(k) * st; }\nfor (int k = 1; k <= 160; k++) { if (inG_in(uv + vec2(float(k) * st, 0.)) < p_threshold) break; r = float(k) * st; }\nfor (int k = 1; k <= 160; k++) { if (inG_in(uv - vec2(0., float(k) * st)) < p_threshold) break; u = float(k) * st; }\nfor (int k = 1; k <= 160; k++) { if (inG_in(uv + vec2(0., float(k) * st)) < p_threshold) break; d = float(k) * st; }\nvec2 lo = uv - vec2(l, u), hi = uv + vec2(r, d);\nfloat cell = st * 4.; float n = floor(1. / cell + 0.5);\nvec2 id = mod(floor((lo + hi) * 0.5 / cell + 0.5), n);\nfloat h1 = hash12(id + seedv(p_seed)), h2 = hash12(id + seedv(p_seed) + 5.7);\n// Where in its shape this pixel is: -1..1 each way.\nvec2 t = (uv - lo) / max(hi - lo, vec2(1e-4)) * 2. - 1.;\nfloat a = radians(p_angle) + (h1 - 0.5) * 2. * PI * p_angleVar;\nvec2 dv = vec2(cos(a), sin(a));\nfloat v;\nint f = int(p_form + 0.5);\nif (f == 2) v = 1. - clamp(length(t) / 1.4142, 0., 1.);\nelse {\n  float x = dot(t, dv) / (abs(dv.x) + abs(dv.y) + 1e-4);\n  v = f == 1 ? 1. - abs(x) : x * 0.5 + 0.5;\n}\nfloat k = p_slope * mix(1., 0.25 + 1.5 * h2, p_slopeVar);\nv = clamp((v - 0.5) * k + 0.5, 0., 1.);\noutColor = vec4(vec3(v), 1.);",
+      "hash": "08fbded4"
+    },
+    {
       "type": "transform",
       "group": "change",
       "label": {

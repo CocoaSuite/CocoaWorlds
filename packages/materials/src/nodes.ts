@@ -473,6 +473,47 @@ else c = vec3(clamp((hi - lo) * 1., 0., 1.), 0.);
 outColor = vec4(c, 1.);`,
   },
   {
+    type: 'floodGradient',
+    group: 'change',
+    label: l('Flood fill to gradient'),
+    hint: l('A gradient across each separate white shape of a mask (each brick, tile, plank): set its angle and how much each shape turns, how steep it is, and its shape. Good for bevels, uneven bricks and lighting each piece differently.'),
+    inputs: [IN_GREY('in', l('Mask'), [1, 1, 1])],
+    output: 'grey',
+    params: [
+      { id: 'angle', label: l('Angle'), kind: 'number', min: 0, max: 360, step: 1, default: 0 },
+      { id: 'angleVar', label: l('Angle variation'), kind: 'number', min: 0, max: 1, default: 0 },
+      { id: 'slope', label: l('Steepness'), kind: 'number', min: 0.1, max: 4, default: 1 },
+      { id: 'slopeVar', label: l('Steepness variation'), kind: 'number', min: 0, max: 1, default: 0 },
+      { id: 'form', label: l('Shape'), kind: 'choice', options: [opt('linear', 'Linear', 'Linear'), opt('mirror', 'Mirrored', 'Mirrored'), opt('radial', 'From the middle', 'From the middle')], default: 'linear' },
+      { id: 'threshold', label: l('White from'), kind: 'number', min: 0.01, max: 0.99, default: 0.5 },
+      seed,
+    ],
+    glsl: `if (inG_in(uv) < p_threshold) { outColor = vec4(0., 0., 0., 1.); return; }
+float st = u_px * 2.; float l = 0., r = 0., u = 0., d = 0.;
+for (int k = 1; k <= 160; k++) { if (inG_in(uv - vec2(float(k) * st, 0.)) < p_threshold) break; l = float(k) * st; }
+for (int k = 1; k <= 160; k++) { if (inG_in(uv + vec2(float(k) * st, 0.)) < p_threshold) break; r = float(k) * st; }
+for (int k = 1; k <= 160; k++) { if (inG_in(uv - vec2(0., float(k) * st)) < p_threshold) break; u = float(k) * st; }
+for (int k = 1; k <= 160; k++) { if (inG_in(uv + vec2(0., float(k) * st)) < p_threshold) break; d = float(k) * st; }
+vec2 lo = uv - vec2(l, u), hi = uv + vec2(r, d);
+float cell = st * 4.; float n = floor(1. / cell + 0.5);
+vec2 id = mod(floor((lo + hi) * 0.5 / cell + 0.5), n);
+float h1 = hash12(id + seedv(p_seed)), h2 = hash12(id + seedv(p_seed) + 5.7);
+// Where in its shape this pixel is: -1..1 each way.
+vec2 t = (uv - lo) / max(hi - lo, vec2(1e-4)) * 2. - 1.;
+float a = radians(p_angle) + (h1 - 0.5) * 2. * PI * p_angleVar;
+vec2 dv = vec2(cos(a), sin(a));
+float v;
+int f = int(p_form + 0.5);
+if (f == 2) v = 1. - clamp(length(t) / 1.4142, 0., 1.);
+else {
+  float x = dot(t, dv) / (abs(dv.x) + abs(dv.y) + 1e-4);
+  v = f == 1 ? 1. - abs(x) : x * 0.5 + 0.5;
+}
+float k = p_slope * mix(1., 0.25 + 1.5 * h2, p_slopeVar);
+v = clamp((v - 0.5) * k + 0.5, 0., 1.);
+outColor = vec4(vec3(v), 1.);`,
+  },
+  {
     type: 'transform',
     group: 'change',
     label: l('Transform', 'Трансформация'),
