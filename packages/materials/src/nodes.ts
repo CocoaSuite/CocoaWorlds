@@ -172,20 +172,20 @@ if (p_distort <= 0. && p_turn <= 0.) {
   q = mat2(cos(ang), sin(ang), -sin(ang), cos(ang)) * q;
   float m = min(A.x, A.y), k = p_distort;
   vec2 v[8];
-  for (int i = 0; i < 8; i++) {
+  // Corners: cut in by a random amount each way.
+  for (int i = 1; i < 8; i += 2) {
     vec2 rn = hash22(cell * 7.13 + float(i) * 13.7 + 0.5);
     float t = float(i) * PI * 0.25;
-    vec2 dir = vec2(cos(t), sin(t));
-    if (i % 2 == 1) {
-      // Corners: cut in by a random amount each way.
-      vec2 c = sign(dir);
-      v[i] = c * A - c * rn * k * m * vec2(1.1, 0.9);
-    } else {
-      // Middles of the sides: slid along the side and pushed in or out.
-      vec2 side = abs(dir.x) > 0.5 ? vec2(sign(dir.x) * A.x, 0.) : vec2(0., sign(dir.y) * A.y);
-      vec2 along = abs(dir.x) > 0.5 ? vec2(0., A.y) : vec2(A.x, 0.);
-      v[i] = side + along * (rn.x - 0.5) * k * 0.8 + dir * (rn.y - 0.6) * k * m * 0.5;
-    }
+    vec2 c = sign(vec2(cos(t), sin(t)));
+    v[i] = c * A - c * rn * k * m * vec2(1.1, 0.9);
+  }
+  // Middles of the sides: somewhere between their two corners, bulged out a little (never in, so the outline
+  // stays convex and every brick is one clean piece).
+  for (int i = 0; i < 8; i += 2) {
+    vec2 rn = hash22(cell * 7.13 + float(i) * 13.7 + 0.5);
+    vec2 a = v[(i + 7) % 8], b = v[i + 1];
+    vec2 e = normalize(b - a);
+    v[i] = mix(a, b, 0.5 + (rn.x - 0.5) * 0.6 * k) + vec2(e.y, -e.x) * rn.y * k * m * 0.3;
   }
   float out_ = -1e9;
   for (int i = 0; i < 8; i++) {
@@ -516,7 +516,7 @@ outColor = vec4(inC_in(q).rgb, 1.);`,
     type: 'floodFill',
     group: 'change',
     label: l('Flood fill', 'Заливка областей'),
-    hint: l('Give each separate white shape of a mask (each brick, tile, plank) its own value: a random grey or colour, a gradient across it, or where it is. Exact for rectangular shapes.', 'Дать каждой отдельной белой фигуре маски (кирпичу, плитке, доске) своё значение: случайный серый или цвет, градиент по ней или её положение. Точно для прямоугольных фигур.'),
+    hint: l('Give each separate white shape of a mask (each brick, tile, plank) its own value: a random grey or colour, a gradient across it, or where it is.', 'Дать каждой отдельной белой фигуре маски (кирпичу, плитке, доске) своё значение: случайный серый или цвет, градиент по ней или её положение. Точно для прямоугольных фигур.'),
     inputs: [IN_GREY('in', l('Mask', 'Маска'), [1, 1, 1])],
     output: 'color',
     params: [
@@ -533,18 +533,60 @@ outColor = vec4(inC_in(q).rgb, 1.);`,
       seed,
     ],
     glsl: `if (inG_in(uv) < p_threshold) { outColor = vec4(0., 0., 0., 1.); return; }
-// The shape's extent: step out each way until the mask goes dark (2 pixels a step).
-float st = u_px * 2.; float l = 0., r = 0., u = 0., d = 0.;
-for (int k = 1; k <= 160; k++) { if (inG_in(uv - vec2(float(k) * st, 0.)) < p_threshold) break; l = float(k) * st; }
-for (int k = 1; k <= 160; k++) { if (inG_in(uv + vec2(float(k) * st, 0.)) < p_threshold) break; r = float(k) * st; }
-for (int k = 1; k <= 160; k++) { if (inG_in(uv - vec2(0., float(k) * st)) < p_threshold) break; u = float(k) * st; }
-for (int k = 1; k <= 160; k++) { if (inG_in(uv + vec2(0., float(k) * st)) < p_threshold) break; d = float(k) * st; }
-vec2 lo = uv - vec2(l, u), hi = uv + vec2(r, d);
-vec2 ctr = fract((lo + hi) * 0.5);
-// One id per shape: its centre, rounded to a few pixels so every pixel of it agrees (wrapped whole, so a shape
-// crossing the square's edge gets one id on both sides).
-float cell = st * 4.; float n = floor(1. / cell + 0.5);
-vec2 id = mod(floor((lo + hi) * 0.5 / cell + 0.5), n);
+// The shape's middle: the spot that is halfway across the shape both ways (sideways and up-down). Found by
+// measuring across the shape (2 pixels a step, then narrowed to the exact edge) and jumping to where those
+// halfway points meet, a few times. Every pixel of a shape lands on the same spot, also for uneven, turned or thin
+// slanted shapes, so the whole shape gets one id, one extent and one gradient.
+float st = u_px * 2.; float hh = u_px * 1.5; vec2 sc = uv; vec2 lo = uv, hi = uv;
+for (int it = 0; it < 12; it++) {
+  float mid[4]; float ext[4];
+  for (int q = 0; q < 4; q++) {
+    vec2 o = q == 1 ? sc + vec2(0., hh) : q == 3 ? sc + vec2(hh, 0.) : sc;
+    vec2 ax = q < 2 ? vec2(1., 0.) : vec2(0., 1.);
+    float e[2];
+    for (int w = 0; w < 2; w++) {
+      vec2 dir = w == 0 ? -ax : ax;
+      float a = 0.;
+      for (int k = 1; k <= 160; k++) { if (inG_in(o + dir * float(k) * st) < p_threshold) break; a = float(k) * st; }
+      float b = a + st;
+      for (int j = 0; j < 6; j++) { float m = 0.5 * (a + b); if (inG_in(o + dir * m) < p_threshold) b = m; else a = m; }
+      e[w] = a;
+    }
+    // (A probe that fell outside the shape tells nothing: it reads as straight up and down.)
+    mid[q] = inG_in(o) < p_threshold ? dot(sc, ax) : dot(o, ax) + (e[1] - e[0]) * 0.5;
+    if (q == 0) { ext[0] = e[0]; ext[1] = e[1]; }
+    if (q == 2) { ext[2] = e[0]; ext[3] = e[1]; }
+  }
+  lo = sc - vec2(ext[0], ext[2]); hi = sc + vec2(ext[1], ext[3]);
+  float ex = mid[0] - sc.x, ey = mid[2] - sc.y;
+  float sa = (mid[1] - mid[0]) / hh, sb = (mid[3] - mid[2]) / hh;
+  float den = 1. - sa * sb; den = abs(den) < 0.05 ? 0.05 : den;
+  float dx = (ex + sa * ey) / den; float dy = ey + sb * dx;
+  // (The first rounds only walk part of the way in, so pixels near the edge get well inside first.)
+  vec2 nc = it < 4 ? sc + vec2(ex, ey) * 0.6 : sc + vec2(dx, dy);
+  if (inG_in(nc) < p_threshold) nc = sc + vec2(ex, ey) * 0.6;
+  if (inG_in(nc) < p_threshold) break;
+  bool done = it >= 4 && length(nc - sc) < u_px * 0.01;
+  sc = nc;
+  if (done) break;
+}
+// The extent once more, from where it settled (so every pixel of the shape uses the same one).
+{
+  float ext[4];
+  for (int q = 0; q < 4; q++) {
+    vec2 dir = q == 0 ? vec2(-1., 0.) : q == 1 ? vec2(1., 0.) : q == 2 ? vec2(0., -1.) : vec2(0., 1.);
+    float a = 0.;
+    for (int k = 1; k <= 160; k++) { if (inG_in(sc + dir * float(k) * st) < p_threshold) break; a = float(k) * st; }
+    float b = a + st;
+    for (int j = 0; j < 6; j++) { float m = 0.5 * (a + b); if (inG_in(sc + dir * m) < p_threshold) b = m; else a = m; }
+    ext[q] = a;
+  }
+  lo = sc - vec2(ext[0], ext[2]); hi = sc + vec2(ext[1], ext[3]);
+}
+// (Wrapped whole, so a shape crossing the square's edge gets one id on both sides.)
+float cs = st * 4.; float n = floor(1. / cs + 0.5);
+vec2 id = mod(floor(sc / cs), n);
+vec2 ctr = fract(sc);
 float h = hash12(id + seedv(p_seed));
 int g = int(p_gives + 0.5); vec3 c;
 if (g == 0) c = vec3(h);
@@ -578,14 +620,60 @@ outColor = vec4(c, 1.);`,
       seed,
     ],
     glsl: `if (inG_in(uv) < p_threshold) { outColor = vec4(0., 0., 0., 1.); return; }
-float st = u_px * 2.; float l = 0., r = 0., u = 0., d = 0.;
-for (int k = 1; k <= 160; k++) { if (inG_in(uv - vec2(float(k) * st, 0.)) < p_threshold) break; l = float(k) * st; }
-for (int k = 1; k <= 160; k++) { if (inG_in(uv + vec2(float(k) * st, 0.)) < p_threshold) break; r = float(k) * st; }
-for (int k = 1; k <= 160; k++) { if (inG_in(uv - vec2(0., float(k) * st)) < p_threshold) break; u = float(k) * st; }
-for (int k = 1; k <= 160; k++) { if (inG_in(uv + vec2(0., float(k) * st)) < p_threshold) break; d = float(k) * st; }
-vec2 lo = uv - vec2(l, u), hi = uv + vec2(r, d);
-float cell = st * 4.; float n = floor(1. / cell + 0.5);
-vec2 id = mod(floor((lo + hi) * 0.5 / cell + 0.5), n);
+// The shape's middle: the spot that is halfway across the shape both ways (sideways and up-down). Found by
+// measuring across the shape (2 pixels a step, then narrowed to the exact edge) and jumping to where those
+// halfway points meet, a few times. Every pixel of a shape lands on the same spot, also for uneven, turned or thin
+// slanted shapes, so the whole shape gets one id, one extent and one gradient.
+float st = u_px * 2.; float hh = u_px * 1.5; vec2 sc = uv; vec2 lo = uv, hi = uv;
+for (int it = 0; it < 12; it++) {
+  float mid[4]; float ext[4];
+  for (int q = 0; q < 4; q++) {
+    vec2 o = q == 1 ? sc + vec2(0., hh) : q == 3 ? sc + vec2(hh, 0.) : sc;
+    vec2 ax = q < 2 ? vec2(1., 0.) : vec2(0., 1.);
+    float e[2];
+    for (int w = 0; w < 2; w++) {
+      vec2 dir = w == 0 ? -ax : ax;
+      float a = 0.;
+      for (int k = 1; k <= 160; k++) { if (inG_in(o + dir * float(k) * st) < p_threshold) break; a = float(k) * st; }
+      float b = a + st;
+      for (int j = 0; j < 6; j++) { float m = 0.5 * (a + b); if (inG_in(o + dir * m) < p_threshold) b = m; else a = m; }
+      e[w] = a;
+    }
+    // (A probe that fell outside the shape tells nothing: it reads as straight up and down.)
+    mid[q] = inG_in(o) < p_threshold ? dot(sc, ax) : dot(o, ax) + (e[1] - e[0]) * 0.5;
+    if (q == 0) { ext[0] = e[0]; ext[1] = e[1]; }
+    if (q == 2) { ext[2] = e[0]; ext[3] = e[1]; }
+  }
+  lo = sc - vec2(ext[0], ext[2]); hi = sc + vec2(ext[1], ext[3]);
+  float ex = mid[0] - sc.x, ey = mid[2] - sc.y;
+  float sa = (mid[1] - mid[0]) / hh, sb = (mid[3] - mid[2]) / hh;
+  float den = 1. - sa * sb; den = abs(den) < 0.05 ? 0.05 : den;
+  float dx = (ex + sa * ey) / den; float dy = ey + sb * dx;
+  // (The first rounds only walk part of the way in, so pixels near the edge get well inside first.)
+  vec2 nc = it < 4 ? sc + vec2(ex, ey) * 0.6 : sc + vec2(dx, dy);
+  if (inG_in(nc) < p_threshold) nc = sc + vec2(ex, ey) * 0.6;
+  if (inG_in(nc) < p_threshold) break;
+  bool done = it >= 4 && length(nc - sc) < u_px * 0.01;
+  sc = nc;
+  if (done) break;
+}
+// The extent once more, from where it settled (so every pixel of the shape uses the same one).
+{
+  float ext[4];
+  for (int q = 0; q < 4; q++) {
+    vec2 dir = q == 0 ? vec2(-1., 0.) : q == 1 ? vec2(1., 0.) : q == 2 ? vec2(0., -1.) : vec2(0., 1.);
+    float a = 0.;
+    for (int k = 1; k <= 160; k++) { if (inG_in(sc + dir * float(k) * st) < p_threshold) break; a = float(k) * st; }
+    float b = a + st;
+    for (int j = 0; j < 6; j++) { float m = 0.5 * (a + b); if (inG_in(sc + dir * m) < p_threshold) b = m; else a = m; }
+    ext[q] = a;
+  }
+  lo = sc - vec2(ext[0], ext[2]); hi = sc + vec2(ext[1], ext[3]);
+}
+// (Wrapped whole, so a shape crossing the square's edge gets one id on both sides.)
+float cs = st * 4.; float n = floor(1. / cs + 0.5);
+vec2 id = mod(floor(sc / cs), n);
+vec2 ctr = fract(sc);
 float h1 = hash12(id + seedv(p_seed)), h2 = hash12(id + seedv(p_seed) + 5.7);
 // Where in its shape this pixel is: -1..1 each way.
 vec2 t = (uv - lo) / max(hi - lo, vec2(1e-4)) * 2. - 1.;
