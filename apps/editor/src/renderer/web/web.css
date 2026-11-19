@@ -1,0 +1,10 @@
+/* Cocoa Materials on the web: the frame around the Materials workspace, and touch sizing. */
+html, body, #root { height: 100%; margin: 0; background: var(--bg); overscroll-behavior: none; }
+body { -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent; }
+input, textarea, [contenteditable] { -webkit-user-select: text; user-select: text; }
+.cmw { grid-template-rows: auto minmax(0, 1fr); padding: env(safe-area-inset-top) env(safe-area-inset-right) 0 env(safe-area-inset-left); box-sizing: border-box; }
+.cmw-bar { display: flex; align-items: center; gap: 8px; height: var(--bar); padding: 0 10px; background: var(--panel); border-bottom: 1px solid var(--line); }
+.cmw-gap { flex: 1; }
+.cmw-saved { font-size: var(--fs-s); }
+/* Nothing to put a material on here. */
+.cmw .cw-mats-use { display: none; }
