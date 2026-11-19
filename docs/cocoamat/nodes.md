@@ -3,7 +3,7 @@
 <!-- Written from packages/materials/src/catalog.ts. Do not edit by hand: run
      CW_WRITE_CATALOG=1 npx vitest run packages/materials/test/catalog.test.ts -->
 
-Catalog version 1, for graph format `cocoaworlds.material` version 1. 124 nodes.
+Catalog version 1, for graph format `cocoaworlds.material` version 1. 125 nodes.
 How a node is evaluated (uniforms, inputs, uv) is in [the format spec](../cocoamat-format.md), section 5;
 the same data as JSON, with the shared GLSL library, is in [nodes.json](nodes.json).
 
@@ -1938,6 +1938,53 @@ for (int y = -3; y <= 3; y++) for (int x = -3; x <= 3; x++) {
   vec3 c = inC_in(uv + o * p_radius).rgb; r = grow ? max(r, c) : min(r, c);
 }
 outColor = vec4(r, 1.);
+```
+
+### Edge blur — `edgeBlur`
+
+Soften only the edges of light shapes (made by cutting, masks, thresholds) so they blend into what is under them. Inside fades in from the outline and keeps its shape; Both ways blurs across the outline.
+
+Makes: grey · hash `3186a089`
+
+| Input | Reads as | Unlinked |
+|---|---|---|
+| `in` (In) | grey | 0, 0, 0 |
+
+| Setting | Kind | Range | Default |
+|---|---|---|---|
+| `width` (Width) | number | 0 – 0.2 (step 0.001) | `0.03` |
+| `mode` (Fade) | choice | 0 `inside`, 1 `both` | `inside` |
+| `cut` (Edge at) | number | 0.05 – 0.95 | `0.5` |
+
+```glsl
+float v = inG_in(uv); bool inside = v > p_cut;
+// The nearest spot on the other side of the outline, searched in rings out to the width.
+float near = 1.;
+if (p_width > 0.) {
+  for (int r = 1; r <= 12; r++) {
+    float rr = float(r) / 12.;
+    if (rr > near) break;
+    for (int k = 0; k < 24; k++) {
+      float a = (float(k) + 0.5 * float(r & 1)) * (2. * PI / 24.);
+      vec2 dir = vec2(cos(a), sin(a));
+      bool other = (inG_in(uv + dir * rr * p_width) > p_cut) != inside;
+      if (other) {
+        // Narrow it down between this ring and the one before (no steps in the fade).
+        float lo = rr - 1. / 12., hi = rr;
+        for (int b = 0; b < 5; b++) {
+          float m = 0.5 * (lo + hi);
+          if ((inG_in(uv + dir * m * p_width) > p_cut) != inside) hi = m; else lo = m;
+        }
+        near = min(near, hi);
+      }
+    }
+  }
+}
+float e = near * near * (3. - 2. * near);
+float o;
+if (p_mode < 0.5) o = v * e;
+else { float s = inside ? 0.5 + 0.5 * near : 0.5 - 0.5 * near; o = s * s * (3. - 2. * s); }
+outColor = vec4(vec3(o), 1.);
 ```
 
 ### Ripple — `rippleWarp`

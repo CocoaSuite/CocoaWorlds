@@ -6394,6 +6394,86 @@
       "hash": "c566074b"
     },
     {
+      "type": "edgeBlur",
+      "group": "change",
+      "label": {
+        "en": "Edge blur",
+        "ru": "Edge blur"
+      },
+      "hint": {
+        "en": "Soften only the edges of light shapes (made by cutting, masks, thresholds) so they blend into what is under them. Inside fades in from the outline and keeps its shape; Both ways blurs across the outline.",
+        "ru": "Soften only the edges of light shapes (made by cutting, masks, thresholds) so they blend into what is under them. Inside fades in from the outline and keeps its shape; Both ways blurs across the outline."
+      },
+      "inputs": [
+        {
+          "id": "in",
+          "kind": "grey",
+          "label": {
+            "en": "In",
+            "ru": "Вход"
+          },
+          "fallback": [
+            0,
+            0,
+            0
+          ]
+        }
+      ],
+      "output": "grey",
+      "params": [
+        {
+          "id": "width",
+          "kind": "number",
+          "label": {
+            "en": "Width",
+            "ru": "Width"
+          },
+          "default": 0.03,
+          "min": 0,
+          "max": 0.2,
+          "step": 0.001
+        },
+        {
+          "id": "mode",
+          "kind": "choice",
+          "label": {
+            "en": "Fade",
+            "ru": "Fade"
+          },
+          "default": "inside",
+          "options": [
+            {
+              "value": "inside",
+              "label": {
+                "en": "Inside",
+                "ru": "Inside"
+              }
+            },
+            {
+              "value": "both",
+              "label": {
+                "en": "Both ways",
+                "ru": "Both ways"
+              }
+            }
+          ]
+        },
+        {
+          "id": "cut",
+          "kind": "number",
+          "label": {
+            "en": "Edge at",
+            "ru": "Edge at"
+          },
+          "default": 0.5,
+          "min": 0.05,
+          "max": 0.95
+        }
+      ],
+      "glsl": "float v = inG_in(uv); bool inside = v > p_cut;\n// The nearest spot on the other side of the outline, searched in rings out to the width.\nfloat near = 1.;\nif (p_width > 0.) {\n  for (int r = 1; r <= 12; r++) {\n    float rr = float(r) / 12.;\n    if (rr > near) break;\n    for (int k = 0; k < 24; k++) {\n      float a = (float(k) + 0.5 * float(r & 1)) * (2. * PI / 24.);\n      vec2 dir = vec2(cos(a), sin(a));\n      bool other = (inG_in(uv + dir * rr * p_width) > p_cut) != inside;\n      if (other) {\n        // Narrow it down between this ring and the one before (no steps in the fade).\n        float lo = rr - 1. / 12., hi = rr;\n        for (int b = 0; b < 5; b++) {\n          float m = 0.5 * (lo + hi);\n          if ((inG_in(uv + dir * m * p_width) > p_cut) != inside) hi = m; else lo = m;\n        }\n        near = min(near, hi);\n      }\n    }\n  }\n}\nfloat e = near * near * (3. - 2. * near);\nfloat o;\nif (p_mode < 0.5) o = v * e;\nelse { float s = inside ? 0.5 + 0.5 * near : 0.5 - 0.5 * near; o = s * s * (3. - 2. * s); }\noutColor = vec4(vec3(o), 1.);",
+      "hash": "3186a089"
+    },
+    {
       "type": "rippleWarp",
       "group": "change",
       "label": {

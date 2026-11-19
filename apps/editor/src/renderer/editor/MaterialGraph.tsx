@@ -246,7 +246,9 @@ function AddMenu({ at, onPick, onClose }: { at: { x: number; y: number }; onPick
     window.addEventListener('pointerdown', away, true);
     return () => window.removeEventListener('pointerdown', away, true);
   }, [onClose]);
-  useEffect(() => ref.current?.querySelector('.cm-add-list .hi')?.scrollIntoView({ block: 'nearest' }), [hi]);
+  useEffect(() => {
+    ref.current?.querySelector('.cm-add-list .hi')?.scrollIntoView({ block: 'nearest' });
+  }, [hi]);
   let i = 0;
   return (
     <div className="cm-add" ref={ref} style={{ left: at.x, top: at.y }} role="dialog" aria-label={t('cm.addNode')}>
