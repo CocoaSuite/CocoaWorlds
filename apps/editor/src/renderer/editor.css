@@ -971,3 +971,7 @@ button.cw-sec.cw-fold { width: 100%; border: 0; border-top: 1px solid var(--line
 @media (pointer: coarse) { .cm-reroute { width: 26px; height: 26px; } .cm-reroute .react-flow__handle { width: 8px; height: 8px; } }
 .cm-reroute .cm-h.react-flow__handle::after { display: none; }
 .cm-reroute .cm-h.react-flow__handle:hover { box-shadow: none; }
+/* Touch: the double-tap box, and Delete floating over the graph while something is picked. */
+.cm-touch-box { position: absolute; z-index: 14; border: 1px dashed var(--sel); background: rgba(75, 156, 255, 0.08); pointer-events: none; }
+.cm-float-delete { position: absolute; left: 50%; bottom: 16px; z-index: 16; transform: translateX(-50%); min-height: 44px; padding: 0 22px; border: 1px solid var(--bad); border-radius: 22px; background: rgba(26, 26, 26, 0.92); color: var(--bad); font: inherit; font-size: var(--fs-l); }
+.cm-float-delete:active { background: var(--bad); color: var(--prifg); }

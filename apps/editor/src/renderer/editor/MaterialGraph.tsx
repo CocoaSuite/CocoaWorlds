@@ -764,6 +764,83 @@ function Flow({ path, graph, sel, onSelect, wideLibrary }: { path: string; graph
     onSelect([]);
   };
   const addBlendInView = () => addInView('blend');
+  // ── Touch: one finger pans; a double tap held and dragged on empty graph draws a box that picks nodes ──
+  const coarse = useMemo(() => typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches, []);
+  const lastTap = useRef<{ x: number; y: number; at: number } | null>(null);
+  /** When a box was last finished (the click that follows must not clear what it picked). */
+  const justBoxed = useRef(0);
+  const [box, setBox] = useState<{ x0: number; y0: number; x1: number; y1: number } | null>(null);
+  const boxRef = useRef(box);
+  boxRef.current = box;
+  useEffect(() => {
+    const el = host.current;
+    if (!el) return;
+    // The second tap of a double tap must not start a pan (React Flow pans on touchstart).
+    const start = (e: TouchEvent) => {
+      const t0 = e.touches[0];
+      const last = lastTap.current;
+      if (e.touches.length !== 1 || !t0 || !last || !(e.target as HTMLElement).closest('.react-flow__pane')) return;
+      if (performance.now() - last.at < 320 && Math.hypot(t0.clientX - last.x, t0.clientY - last.y) < 30) {
+        e.stopPropagation();
+        e.preventDefault();
+      }
+    };
+    // (Nor its moves, while the box is drawn.)
+    const move = (e: TouchEvent) => {
+      if (!boxRef.current) return;
+      e.stopPropagation();
+      e.preventDefault();
+    };
+    el.addEventListener('touchstart', start, { capture: true, passive: false });
+    el.addEventListener('touchmove', move, { capture: true, passive: false });
+    return () => {
+      el.removeEventListener('touchstart', start, { capture: true });
+      el.removeEventListener('touchmove', move, { capture: true });
+    };
+  }, []);
+  const touchDown = (e: React.PointerEvent) => {
+    if (e.pointerType !== 'touch' || !(e.target as HTMLElement).closest('.react-flow__pane')) return;
+    const last = lastTap.current;
+    if (last && performance.now() - last.at < 320 && Math.hypot(e.clientX - last.x, e.clientY - last.y) < 30) {
+      lastTap.current = null;
+      cancelPress();
+      const b = host.current!.getBoundingClientRect();
+      const first = { x0: e.clientX - b.left, y0: e.clientY - b.top, x1: e.clientX - b.left, y1: e.clientY - b.top };
+      boxRef.current = first;
+      setBox(first);
+      e.stopPropagation();
+      (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
+    }
+  };
+  const touchMove = (e: React.PointerEvent) => {
+    if (!boxRef.current) return;
+    e.stopPropagation();
+    const b = host.current!.getBoundingClientRect();
+    setBox((x) => (x ? { ...x, x1: e.clientX - b.left, y1: e.clientY - b.top } : x));
+  };
+  const touchUp = (e: React.PointerEvent) => {
+    const bx = boxRef.current;
+    if (!bx) {
+      if (e.pointerType === 'touch' && (e.target as HTMLElement).closest('.react-flow__pane')) lastTap.current = { x: e.clientX, y: e.clientY, at: performance.now() };
+      return;
+    }
+    boxRef.current = null;
+    setBox(null);
+    e.stopPropagation();
+    justBoxed.current = performance.now();
+    const b = host.current!.getBoundingClientRect();
+    const a = rf.screenToFlowPosition({ x: b.left + Math.min(bx.x0, bx.x1), y: b.top + Math.min(bx.y0, bx.y1) });
+    const z = rf.screenToFlowPosition({ x: b.left + Math.max(bx.x0, bx.x1), y: b.top + Math.max(bx.y0, bx.y1) });
+    const ids = rf
+      .getNodes()
+      .filter((n) => {
+        const w = n.measured?.width ?? n.width ?? 0, h = n.measured?.height ?? n.height ?? 0;
+        return n.position.x >= a.x && n.position.y >= a.y && n.position.x + w <= z.x && n.position.y + h <= z.y;
+      })
+      .map((n) => n.id);
+    onSelect(ids);
+  };
+
   /** A long press on empty graph (touch) opens the add menu. */
   const press = useRef<{ x: number; y: number; timer: ReturnType<typeof setTimeout> } | null>(null);
   const cancelPress = () => {
@@ -816,15 +893,20 @@ function Flow({ path, graph, sel, onSelect, wideLibrary }: { path: string; graph
         pointer.current = { x: e.clientX, y: e.clientY };
         if (press.current && Math.hypot(e.clientX - press.current.x, e.clientY - press.current.y) > 8) cancelPress();
       }}
+      onPointerMoveCapture={touchMove}
       onPointerUp={cancelPress}
-      onPointerCancel={cancelPress}
+      onPointerCancel={() => {
+        cancelPress();
+        setBox(null);
+      }}
       // (Keys go to the graph once it has been clicked, even on the empty background.)
       onPointerDown={() => {
         if (!host.current!.contains(document.activeElement)) host.current!.focus({ preventScroll: true });
       }}
       onPointerDownCapture={(e) => {
         if (e.button === 2) rightDown.current = { x: e.clientX, y: e.clientY };
-        if (e.pointerType === 'touch' && (e.target as HTMLElement).closest('.react-flow__pane')) {
+        touchDown(e);
+        if (!boxRef.current && e.pointerType === 'touch' && (e.target as HTMLElement).closest('.react-flow__pane')) {
           cancelPress();
           const x = e.clientX, y = e.clientY;
           press.current = { x, y, timer: setTimeout(() => ((press.current = null), openMenu(x, y)), 500) };
@@ -838,6 +920,7 @@ function Flow({ path, graph, sel, onSelect, wideLibrary }: { path: string; graph
         }
       }}
       onPointerUpCapture={(e) => {
+        touchUp(e);
         const start = rightDown.current;
         if (e.button !== 2 || !start) return;
         rightDown.current = null;
@@ -902,6 +985,7 @@ function Flow({ path, graph, sel, onSelect, wideLibrary }: { path: string; graph
         // (The menu opens when the right button comes up still: see onPointerUpCapture.)
         onPaneContextMenu={(e) => e.preventDefault()}
         onPaneClick={() => {
+          if (performance.now() - justBoxed.current < 400) return;
           setMenu(null);
           onSelect([]);
         }}
@@ -909,9 +993,9 @@ function Flow({ path, graph, sel, onSelect, wideLibrary }: { path: string; graph
         multiSelectionKeyCode={['Shift', 'Control', 'Meta']}
         selectionKeyCode={null}
         // Dragging on empty graph draws a box that picks the nodes wholly inside it; the middle or right button pans.
-        selectionOnDrag
+        selectionOnDrag={!coarse}
         selectionMode={SelectionMode.Full}
-        panOnDrag={[1, 2]}
+        panOnDrag={coarse ? true : [1, 2]}
         zoomOnDoubleClick={false}
         colorMode="dark"
         minZoom={0.2}
@@ -947,6 +1031,13 @@ function Flow({ path, graph, sel, onSelect, wideLibrary }: { path: string; graph
             d={`M ${lifted.start.x} ${lifted.start.y} C ${lifted.start.x + Math.max(40, (lifted.at.x - lifted.start.x) / 2)} ${lifted.start.y}, ${lifted.at.x - Math.max(40, (lifted.at.x - lifted.start.x) / 2)} ${lifted.at.y}, ${lifted.at.x} ${lifted.at.y}`}
           />
         </svg>
+      )}
+      {box && <div className="cm-touch-box" style={{ left: Math.min(box.x0, box.x1), top: Math.min(box.y0, box.y1), width: Math.abs(box.x1 - box.x0), height: Math.abs(box.y1 - box.y0) }} />}
+      {coarse && sel.length > 0 && (
+        <button type="button" className="cm-float-delete" onClick={deletePicked}>
+          {t('cm.delete')}
+          {sel.length > 1 ? ` (${sel.length})` : ''}
+        </button>
       )}
       {menu && <AddMenu at={menu} onPick={(type) => add(type, menu.flow)} onClose={() => setMenu(null)} />}
     </div>
