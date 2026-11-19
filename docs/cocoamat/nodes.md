@@ -508,7 +508,7 @@ outColor = vec4(vec3(v), 1.);
 
 Copies of a picture scattered over the square, each a different size, turn and brightness: leaves, pebbles, bolts.
 
-Makes: color · hash `f66d96c8`
+Makes: color · hash `d3e9580b`
 
 | Input | Reads as | Unlinked |
 |---|---|---|
@@ -1370,7 +1370,7 @@ outColor = vec4(vec3(v), 1.);
 
 Stretch, squeeze and shift the tones: more contrast, darker, lighter.
 
-Makes: color · hash `d67bb2ae`
+Makes: color · hash `3e91592b`
 
 | Input | Reads as | Unlinked |
 |---|---|---|
@@ -1395,7 +1395,7 @@ outColor = vec4(mix(vec3(p_outLow), vec3(p_outHigh), x), 1.);
 
 Turn a grey picture into a mask: Position slides the cut from dark to light (more white as it rises), Contrast hardens the edge.
 
-Makes: grey · hash `27098350`
+Makes: grey · hash `4f718787`
 
 | Input | Reads as | Unlinked |
 |---|---|---|
@@ -1415,7 +1415,7 @@ outColor = vec4(vec3(clamp((inG_in(uv) - (1. - p_position)) / w + 0.5, 0., 1.)),
 
 Squeeze the greys into a narrower range (Range) and place it lighter or darker (Position).
 
-Makes: grey · hash `262aa9e8`
+Makes: grey · hash `d26b94e1`
 
 | Input | Reads as | Unlinked |
 |---|---|---|
@@ -1434,7 +1434,7 @@ outColor = vec4(vec3(clamp((inG_in(uv) - 0.5) * p_range + p_position, 0., 1.)), 
 
 Slide every grey lighter, wrapping white round to black (moves stripes of a gradient along).
 
-Makes: grey · hash `bb7ea0fa`
+Makes: grey · hash `bb5849f5`
 
 | Input | Reads as | Unlinked |
 |---|---|---|
@@ -1452,7 +1452,7 @@ outColor = vec4(vec3(fract(inG_in(uv) + p_position)), 1.);
 
 Pick out one band of greys as white (Position: which grey, Range: how wide, Contrast: how hard its edges).
 
-Makes: grey · hash `774d709b`
+Makes: grey · hash `5153d044`
 
 | Input | Reads as | Unlinked |
 |---|---|---|
@@ -1474,7 +1474,7 @@ outColor = vec4(vec3(1. - smoothstep(half_ - soft, half_ + soft, d)), 1.);
 
 Reshape the tones with four points (black, dark, light, white).
 
-Makes: color · hash `b9c35fd9`
+Makes: color · hash `3c0d9cd6`
 
 | Input | Reads as | Unlinked |
 |---|---|---|
@@ -1495,7 +1495,7 @@ vec3 c = clamp(inC_in(uv).rgb, 0., 1.); outColor = vec4(curve4(c.r, p_y0, p_y1, 
 
 Black becomes white, and the other way round.
 
-Makes: color · hash `7ea3f134`
+Makes: color · hash `0f90a61b`
 
 | Input | Reads as | Unlinked |
 |---|---|---|
@@ -1509,7 +1509,7 @@ outColor = vec4(1. - inC_in(uv).rgb, 1.);
 
 Keep values between a lowest and a highest.
 
-Makes: color · hash `0eedc580`
+Makes: color · hash `42ad37b7`
 
 | Input | Reads as | Unlinked |
 |---|---|---|
@@ -1528,7 +1528,7 @@ outColor = vec4(clamp(inC_in(uv).rgb, p_min, p_max), 1.);
 
 Soften: a share of the square to blur across.
 
-Makes: color · hash `cf979483`
+Makes: color · hash `6f7d8cce`
 
 | Input | Reads as | Unlinked |
 |---|---|---|
@@ -1551,7 +1551,7 @@ outColor = vec4(s / w, 1.);
 
 Push the picture around by another one: along its slopes, or one way by its brightness.
 
-Makes: color · hash `70337ce7`
+Makes: color · hash `28ec67b1`
 
 | Input | Reads as | Unlinked |
 |---|---|---|
@@ -1575,7 +1575,7 @@ outColor = vec4(inC_in(uv + off).rgb, 1.);
 
 Push the picture along one direction by how bright another is: once (a shift), or flowing step by step (smeared, streaky).
 
-Makes: color · hash `0c73c1a6`
+Makes: color · hash `aea628e0`
 
 | Input | Reads as | Unlinked |
 |---|---|---|
@@ -1602,7 +1602,7 @@ outColor = vec4(inC_in(q).rgb, 1.);
 
 Give each separate white shape of a mask (each brick, tile, plank) its own value: a random grey or colour, a gradient across it, or where it is.
 
-Makes: color · hash `15b1c72b`
+Makes: color · hash `a9ea0ba4`
 
 | Input | Reads as | Unlinked |
 |---|---|---|
@@ -1655,8 +1655,11 @@ for (int it = 0; it < 12; it++) {
   sc = nc;
   if (done) break;
 }
-// The extent once more, from where it settled (so every pixel of the shape uses the same one).
+// The extent once more, from the shape's id spot (the same for every pixel of it, so they all use one extent).
 {
+  float cs0 = st * 4.;
+  vec2 sq = floor(sc / cs0 + 0.5) * cs0;
+  if (inG_in(sq) >= p_threshold) sc = sq;
   float ext[4];
   for (int q = 0; q < 4; q++) {
     vec2 dir = q == 0 ? vec2(-1., 0.) : q == 1 ? vec2(1., 0.) : q == 2 ? vec2(0., -1.) : vec2(0., 1.);
@@ -1670,7 +1673,8 @@ for (int it = 0; it < 12; it++) {
 }
 // (Wrapped whole, so a shape crossing the square's edge gets one id on both sides.)
 float cs = st * 4.; float n = floor(1. / cs + 0.5);
-vec2 id = mod(floor(sc / cs), n);
+// (Rounded rather than cut: regular tiles have their middles exactly on the grid's lines.)
+vec2 id = mod(floor(sc / cs + 0.5), n);
 vec2 ctr = fract(sc);
 float h = hash12(id + seedv(p_seed));
 int g = int(p_gives + 0.5); vec3 c;
@@ -1693,7 +1697,7 @@ outColor = vec4(c, 1.);
 
 A gradient across each separate white shape of a mask (each brick, tile, plank): set its angle and how much each shape turns, how steep it is, and its shape. Good for bevels, uneven bricks and lighting each piece differently.
 
-Makes: grey · hash `3c845f0e`
+Makes: grey · hash `a22f51e1`
 
 | Input | Reads as | Unlinked |
 |---|---|---|
@@ -1748,8 +1752,11 @@ for (int it = 0; it < 12; it++) {
   sc = nc;
   if (done) break;
 }
-// The extent once more, from where it settled (so every pixel of the shape uses the same one).
+// The extent once more, from the shape's id spot (the same for every pixel of it, so they all use one extent).
 {
+  float cs0 = st * 4.;
+  vec2 sq = floor(sc / cs0 + 0.5) * cs0;
+  if (inG_in(sq) >= p_threshold) sc = sq;
   float ext[4];
   for (int q = 0; q < 4; q++) {
     vec2 dir = q == 0 ? vec2(-1., 0.) : q == 1 ? vec2(1., 0.) : q == 2 ? vec2(0., -1.) : vec2(0., 1.);
@@ -1763,7 +1770,8 @@ for (int it = 0; it < 12; it++) {
 }
 // (Wrapped whole, so a shape crossing the square's edge gets one id on both sides.)
 float cs = st * 4.; float n = floor(1. / cs + 0.5);
-vec2 id = mod(floor(sc / cs), n);
+// (Rounded rather than cut: regular tiles have their middles exactly on the grid's lines.)
+vec2 id = mod(floor(sc / cs + 0.5), n);
 vec2 ctr = fract(sc);
 float h1 = hash12(id + seedv(p_seed)), h2 = hash12(id + seedv(p_seed) + 5.7);
 // Where in its shape this pixel is: -1..1 each way.
@@ -1786,7 +1794,7 @@ outColor = vec4(vec3(v), 1.);
 
 Repeat, scale, slide or turn the picture (in quarter turns, so it still tiles; a scale other than 1 can break the tiling).
 
-Makes: color · hash `ff57536e`
+Makes: color · hash `8101a589`
 
 | Input | Reads as | Unlinked |
 |---|---|---|
@@ -1810,7 +1818,7 @@ outColor = vec4(inC_in((q / max(p_scale, 1e-3) + 0.5) * p_tiles + vec2(p_x, p_y)
 
 Smear a picture along the slopes of another: melted, eroded or flowing looks.
 
-Makes: color · hash `cee99dd4`
+Makes: color · hash `50c07456`
 
 | Input | Reads as | Unlinked |
 |---|---|---|
@@ -1838,7 +1846,7 @@ outColor = vec4(p_mode < 0.5 ? acc / 13. : p_mode < 1.5 ? lo : hi, 1.);
 
 A soft edge growing out from white shapes: bevels, glows and wear around marks.
 
-Makes: grey · hash `1fc245e1`
+Makes: grey · hash `7e1428f8`
 
 | Input | Reads as | Unlinked |
 |---|---|---|
@@ -1864,7 +1872,7 @@ outColor = vec4(vec3(clamp(1. - best / p_distance, 0., 1.)), 1.);
 
 White lines where the picture changes sharply: outlines of bricks and shapes.
 
-Makes: grey · hash `7fe7f100`
+Makes: grey · hash `c04f702d`
 
 | Input | Reads as | Unlinked |
 |---|---|---|
@@ -1884,7 +1892,7 @@ outColor = vec4(vec3(smoothstep(p_threshold, p_threshold + 0.05, e)), 1.);
 
 Crisper details: edges pushed apart.
 
-Makes: color · hash `f8619346`
+Makes: color · hash `11b96ae1`
 
 | Input | Reads as | Unlinked |
 |---|---|---|
@@ -1905,7 +1913,7 @@ outColor = vec4(clamp(c + (c - b) * p_amount, 0., 1.), 1.);
 
 Fewer shades: hard steps instead of smooth changes (good for stylized looks).
 
-Makes: color · hash `6b194cd0`
+Makes: color · hash `4c85520b`
 
 | Input | Reads as | Unlinked |
 |---|---|---|
@@ -1923,7 +1931,7 @@ outColor = vec4(min(floor(inC_in(uv).rgb * p_steps), vec3(p_steps - 1.)) / max(p
 
 Black below a level, white above, with a soft or hard step between: turn any grey into a mask.
 
-Makes: grey · hash `ea11a658`
+Makes: grey · hash `96135181`
 
 | Input | Reads as | Unlinked |
 |---|---|---|
@@ -1943,7 +1951,7 @@ outColor = vec4(vec3(smoothstep(p_position - w, p_position + w, inG_in(uv))), 1.
 
 Lighter or darker, more or less contrast, and gamma (mid-tones).
 
-Makes: color · hash `c200ab6e`
+Makes: color · hash `c0accd3f`
 
 | Input | Reads as | Unlinked |
 |---|---|---|
@@ -1964,7 +1972,7 @@ outColor = vec4(pow(clamp(c, 0., 1.), vec3(1. / p_gamma)), 1.);
 
 Make the picture symmetric: left matches right, top matches bottom, or both.
 
-Makes: color · hash `06e94c6b`
+Makes: color · hash `6b153334`
 
 | Input | Reads as | Unlinked |
 |---|---|---|
@@ -1985,7 +1993,7 @@ outColor = vec4(inC_in(q).rgb, 1.);
 
 Big square pixels (retro look).
 
-Makes: color · hash `3314f39c`
+Makes: color · hash `3dfb4641`
 
 | Input | Reads as | Unlinked |
 |---|---|---|
@@ -2003,7 +2011,7 @@ outColor = vec4(inC_in((floor(uv * p_cells) + 0.5) / p_cells).rgb, 1.);
 
 Twist the middle of the picture round (the edges stay put, so it still tiles).
 
-Makes: color · hash `d6f0a9e6`
+Makes: color · hash `86dc2217`
 
 | Input | Reads as | Unlinked |
 |---|---|---|
@@ -2023,7 +2031,7 @@ outColor = vec4(inC_in(0.5 + mat2(cos(a), -sin(a), sin(a), cos(a)) * d).rgb, 1.)
 
 White where brightness changes quickly: the edges of shapes.
 
-Makes: grey · hash `e0699b21`
+Makes: grey · hash `8e16ab72`
 
 | Input | Reads as | Unlinked |
 |---|---|---|
@@ -2047,7 +2055,7 @@ outColor = vec4(vec3(clamp(length(vec2(gx, gy)) * p_strength, 0., 1.)), 1.);
 
 Smear the picture one way: streaks, brushed metal, rain.
 
-Makes: color · hash `30d2bfbb`
+Makes: color · hash `5e6f8fca`
 
 | Input | Reads as | Unlinked |
 |---|---|---|
@@ -2068,7 +2076,7 @@ outColor = vec4(s / 17., 1.);
 
 Light a height picture from one side: bright slopes face the light (a quick preview or stylized shading).
 
-Makes: grey · hash `db3373bb`
+Makes: grey · hash `02111cf6`
 
 | Input | Reads as | Unlinked |
 |---|---|---|
@@ -2092,7 +2100,7 @@ outColor = vec4(vec3(clamp(dot(n, L), 0., 1.)), 1.);
 
 Cut the picture into a grid and turn or flip each piece at random: breaks up visible repeats.
 
-Makes: color · hash `e5984ef7`
+Makes: color · hash `c06bfb22`
 
 | Input | Reads as | Unlinked |
 |---|---|---|
@@ -2119,7 +2127,7 @@ outColor = vec4(col, 1.);
 
 Turn a picture into a grid of dots, big where it is light: print looks, perforated metal, LED panels.
 
-Makes: grey · hash `ba5be986`
+Makes: grey · hash `d654f287`
 
 | Input | Reads as | Unlinked |
 |---|---|---|
@@ -2146,7 +2154,7 @@ outColor = vec4(vec3(1. - smoothstep(rad - s, rad, dd)), 1.);
 
 Keep only the fine detail and drop the broad light and dark (mid grey where flat): evens out a photo, sharpens heights.
 
-Makes: color · hash `5acacc72`
+Makes: color · hash `d0d367bb`
 
 | Input | Reads as | Unlinked |
 |---|---|---|
@@ -2170,7 +2178,7 @@ outColor = vec4(clamp((inC_in(uv).rgb - s / w) * p_strength + 0.5, 0., 1.), 1.);
 
 Make light shapes fatter (grow) or thinner (shrink): thicken lines, close gaps, eat into edges.
 
-Makes: color · hash `c566074b`
+Makes: color · hash `ca92a284`
 
 | Input | Reads as | Unlinked |
 |---|---|---|
@@ -2194,7 +2202,7 @@ outColor = vec4(r, 1.);
 
 Soften only the edges of light shapes (made by cutting, masks, thresholds) so they blend into what is under them. Inside fades in from the outline and keeps its shape; Outside keeps the shape solid and fades out around it; Both ways blurs across the outline.
 
-Makes: grey · hash `2c402a0c`
+Makes: grey · hash `c9e6bb23`
 
 | Input | Reads as | Unlinked |
 |---|---|---|
@@ -2242,7 +2250,7 @@ outColor = vec4(vec3(o), 1.);
 
 Wiggle the picture with even sine waves: wavy glass, heat haze, water, flags.
 
-Makes: color · hash `395894f9`
+Makes: color · hash `4a05767e`
 
 | Input | Reads as | Unlinked |
 |---|---|---|
@@ -2264,7 +2272,7 @@ outColor = vec4(inC_in(uv + o).rgb, 1.);
 
 Cut the picture into rows (or columns) and slide every other one: brick-like offsets of any pattern.
 
-Makes: color · hash `e0f77418`
+Makes: color · hash `afaca1e3`
 
 | Input | Reads as | Unlinked |
 |---|---|---|
@@ -2289,7 +2297,7 @@ outColor = vec4(inC_in(q).rgb, 1.);
 
 Place a picture anywhere by hand: drag, turn and size it with the handles in the Flat preview (a bolt, a logo, a crack). One copy wraps around the edges so the square still tiles; or repeat it.
 
-Makes: color · hash `36b8fae1`
+Makes: color · hash `9ede9179`
 
 | Input | Reads as | Unlinked |
 |---|---|---|
@@ -2328,7 +2336,7 @@ outColor = vec4(col, 1.);
 
 A dot on a wire, to route it around other nodes. Passes its input through unchanged.
 
-Makes: color · hash `8698166a`
+Makes: color · hash `22489aeb`
 
 | Input | Reads as | Unlinked |
 |---|---|---|
@@ -2342,7 +2350,7 @@ outColor = vec4(inC_in(uv).rgb, 1.);
 
 Put one picture over another: mixed, added, multiplied … and only where a mask is white.
 
-Makes: color · hash `d436e858`
+Makes: color · hash `d39a15ff`
 
 | Input | Reads as | Unlinked |
 |---|---|---|
@@ -2375,7 +2383,7 @@ outColor = vec4(clamp(mix(b, r, inG_mask(uv) * p_opacity * al), 0., 1.), 1.);
 
 Pass on one of two inputs (handy for trying a change).
 
-Makes: color · hash `cb6cc0ef`
+Makes: color · hash `58792537`
 
 | Input | Reads as | Unlinked |
 |---|---|---|
@@ -2394,7 +2402,7 @@ outColor = vec4(p_useB > 0.5 ? inC_b(uv).rgb : inC_a(uv).rgb, 1.);
 
 Combine two greys with a sum: add, subtract, multiply, divide, min, max, power … (B is the number when not linked).
 
-Makes: grey · hash `879ba4a3`
+Makes: grey · hash `60cdd1e1`
 
 | Input | Reads as | Unlinked |
 |---|---|---|
@@ -2417,7 +2425,7 @@ outColor = vec4(vec3(clamp(r, 0., 1.)), 1.);
 
 Two materials meet by height: the higher one shows (sand between stones, moss in cracks, paint chipping off).
 
-Makes: color · hash `420941fb`
+Makes: color · hash `b84bf5a3`
 
 | Input | Reads as | Unlinked |
 |---|---|---|
@@ -2443,7 +2451,7 @@ outColor = vec4(r, 1.);
 
 Make a colour from three greys as its red, green and blue.
 
-Makes: color · hash `50efb3e7`
+Makes: color · hash `1ec92276`
 
 | Input | Reads as | Unlinked |
 |---|---|---|
@@ -2459,7 +2467,7 @@ outColor = vec4(inG_r(uv), inG_g(uv), inG_b(uv), 1.);
 
 One channel of a colour as grey: red, green, blue, or brightness.
 
-Makes: grey · hash `19c4e3b2`
+Makes: grey · hash `72bbb1cb`
 
 | Input | Reads as | Unlinked |
 |---|---|---|
@@ -2479,7 +2487,7 @@ outColor = vec4(vec3(v), 1.);
 
 White where the picture is close to a colour: pick out one part to treat differently.
 
-Makes: grey · hash `8c112f0e`
+Makes: grey · hash `cbcfc721`
 
 | Input | Reads as | Unlinked |
 |---|---|---|
@@ -2500,7 +2508,7 @@ outColor = vec4(vec3(1. - smoothstep(p_tolerance, p_tolerance + p_softness * 0.3
 
 Up to four pictures, one picked at random for each cell or square: mixed tiles, patchwork, varied stones.
 
-Makes: color · hash `5992b106`
+Makes: color · hash `1f93b1f6`
 
 | Input | Reads as | Unlinked |
 |---|---|---|
@@ -2533,7 +2541,7 @@ outColor = vec4(col, 1.);
 
 Colour a grey picture: black takes the left colour, white the right.
 
-Makes: color · hash `b0ff3b9e`
+Makes: color · hash `c69e4515`
 
 | Input | Reads as | Unlinked |
 |---|---|---|
@@ -2551,7 +2559,7 @@ outColor = vec4(ramp(inG_in(uv), p_ramp_c, p_ramp_t, p_ramp_n), 1.);
 
 Shift the colours round the wheel, make them stronger or greyer, lighter or darker.
 
-Makes: color · hash `b733a909`
+Makes: color · hash `83a81cf8`
 
 | Input | Reads as | Unlinked |
 |---|---|---|
@@ -2573,7 +2581,7 @@ outColor = vec4(clamp(hsv2rgb(h) + p_lightness, 0., 1.), 1.);
 
 Tint a picture with one colour.
 
-Makes: color · hash `27cabfba`
+Makes: color · hash `8fcb5e07`
 
 | Input | Reads as | Unlinked |
 |---|---|---|
@@ -2591,7 +2599,7 @@ outColor = vec4(p_color * inG_in(uv), 1.);
 
 Swap one colour for another (and its near shades).
 
-Makes: color · hash `40dd0feb`
+Makes: color · hash `74e45830`
 
 | Input | Reads as | Unlinked |
 |---|---|---|
@@ -2614,7 +2622,7 @@ outColor = vec4(mix(c, clamp(c + (p_to - p_from), 0., 1.), m), 1.);
 
 Take the colour out, partly or fully.
 
-Makes: color · hash `55f322e3`
+Makes: color · hash `6329b1f8`
 
 | Input | Reads as | Unlinked |
 |---|---|---|
@@ -2632,7 +2640,7 @@ vec3 c = inC_in(uv).rgb; outColor = vec4(mix(c, vec3(dot(c, vec3(0.2126, 0.7152,
 
 Break up a flat colour with large, soft shifts in brightness and hue.
 
-Makes: color · hash `f4583232`
+Makes: color · hash `645a4c2f`
 
 | Input | Reads as | Unlinked |
 |---|---|---|
@@ -2655,7 +2663,7 @@ outColor = vec4(hsv2rgb(h), 1.);
 
 Shift the colours warmer (orange) or cooler (blue), and greener or pinker.
 
-Makes: color · hash `e6f8a4ca`
+Makes: color · hash `48c044fd`
 
 | Input | Reads as | Unlinked |
 |---|---|---|
@@ -2675,7 +2683,7 @@ outColor = vec4(clamp(c, 0., 1.), 1.);
 
 Tint the dark, middle and light parts separately: warm highlights, cool shadows, aged looks.
 
-Makes: color · hash `c85643d9`
+Makes: color · hash `f6bd6e0e`
 
 | Input | Reads as | Unlinked |
 |---|---|---|
@@ -2699,7 +2707,7 @@ outColor = vec4(clamp(c + shift * p_amount, 0., 1.), 1.);
 
 Colour a grey picture by a smooth looping palette: rainbows, oil slicks, heat, sci-fi glows.
 
-Makes: color · hash `ce06b609`
+Makes: color · hash `aa898c0c`
 
 | Input | Reads as | Unlinked |
 |---|---|---|
@@ -2727,7 +2735,7 @@ outColor = vec4(clamp(a + b * cos(6.2831853 * (c * t + d)), 0., 1.), 1.);
 
 Bumps for lighting from a height picture (white is high).
 
-Makes: color · hash `6be334fa`
+Makes: color · hash `1442e56b`
 
 | Input | Reads as | Unlinked |
 |---|---|---|
@@ -2749,7 +2757,7 @@ outColor = vec4(n * 0.5 + 0.5, 1.);
 
 Dark in the dips and cracks, where light hardly reaches.
 
-Makes: grey · hash `05ae9673`
+Makes: grey · hash `1f92bbe6`
 
 | Input | Reads as | Unlinked |
 |---|---|---|
@@ -2770,7 +2778,7 @@ outColor = vec4(vec3(clamp(1. - max(s / w - h, 0.) * p_strength * 4., 0., 1.)), 
 
 Light on ridges and edges, dark in grooves (grey where flat): for wear and dirt masks.
 
-Makes: grey · hash `5f8328d8`
+Makes: grey · hash `8677c615`
 
 | Input | Reads as | Unlinked |
 |---|---|---|
@@ -2791,7 +2799,7 @@ outColor = vec4(vec3(clamp(0.5 + lap * p_strength, 0., 1.)), 1.);
 
 Lay fine detail bumps over a base normal map (both from Height to normal).
 
-Makes: color · hash `b203840a`
+Makes: color · hash `ee5c71ea`
 
 | Input | Reads as | Unlinked |
 |---|---|---|
@@ -2811,7 +2819,7 @@ outColor = vec4(normalize(vec3(a.xy + b.xy, max(a.z * b.z, 1e-3))) * 0.5 + 0.5, 
 
 Make bumps stronger or flatter, or flip them (for maps made the other way up).
 
-Makes: color · hash `afcfadf8`
+Makes: color · hash `d4f1ab9d`
 
 | Input | Reads as | Unlinked |
 |---|---|---|
@@ -2831,7 +2839,7 @@ outColor = vec4(normalize(vec3(n.xy, max(n.z, 1e-3))) * 0.5 + 0.5, 1.);
 
 A mask of worn edges from a height picture, broken up with noise: paint chipped off corners.
 
-Makes: grey · hash `16124dcc`
+Makes: grey · hash `307534c5`
 
 | Input | Reads as | Unlinked |
 |---|---|---|
@@ -2856,7 +2864,7 @@ outColor = vec4(vec3(smoothstep(1. - p_amount, 1. - p_amount + 0.15, v)), 1.);
 
 A mask of dirt gathering in the dips of a height picture, spread a little with noise.
 
-Makes: grey · hash `1778ff5d`
+Makes: grey · hash `18b9812a`
 
 | Input | Reads as | Unlinked |
 |---|---|---|
@@ -2902,7 +2910,7 @@ outColor = vec4(vec3(v), 1.);
 
 A mask of water filling the low parts of a height picture, with ragged shores: puddles, wet floors, flooded ground.
 
-Makes: grey · hash `1d26532f`
+Makes: grey · hash `e253d332`
 
 | Input | Reads as | Unlinked |
 |---|---|---|
@@ -2925,7 +2933,7 @@ outColor = vec4(vec3(1. - smoothstep(p_level - p_edge, p_level + p_edge + 1e-4, 
 
 A mask of what lands on upward-facing slopes and tops of a height picture (top of the square is up): snow, dust, moss, sand.
 
-Makes: grey · hash `49aba443`
+Makes: grey · hash `bb20b0a6`
 
 | Input | Reads as | Unlinked |
 |---|---|---|
@@ -2951,7 +2959,7 @@ outColor = vec4(vec3(smoothstep(m - 0.08, m + 0.08, v)), 1.);
 
 White where a height picture is steep (or flat): rock on cliffs, grass on level ground, wear on sides.
 
-Makes: grey · hash `f3b45836`
+Makes: grey · hash `9484c723`
 
 | Input | Reads as | Unlinked |
 |---|---|---|
@@ -2979,7 +2987,7 @@ outColor = vec4(vec3(v), 1.);
 
 The material’s colour.
 
-Makes: nothing (output node: the material's `color` map) · hash `8b3d7a05`
+Makes: nothing (output node: the material's `color` map) · hash `9c2e4524`
 
 | Input | Reads as | Unlinked |
 |---|---|---|
@@ -2993,7 +3001,7 @@ outColor = vec4(inC_in(uv).rgb, 1.);
 
 How high each spot is (white high): bumps when there is no normal map.
 
-Makes: nothing (output node: the material's `height` map) · hash `f07eeb40`
+Makes: nothing (output node: the material's `height` map) · hash `1f1a90ab`
 
 | Input | Reads as | Unlinked |
 |---|---|---|
@@ -3007,7 +3015,7 @@ float v = inG_in(uv); outColor = vec4(vec3(v), 1.);
 
 Bumps for lighting (from Height to normal).
 
-Makes: nothing (output node: the material's `normal` map) · hash `d1e74c57`
+Makes: nothing (output node: the material's `normal` map) · hash `d59fc206`
 
 | Input | Reads as | Unlinked |
 |---|---|---|
@@ -3021,7 +3029,7 @@ outColor = vec4(inC_in(uv).rgb, 1.);
 
 White is matte, black mirror-smooth.
 
-Makes: nothing (output node: the material's `roughness` map) · hash `b65cc607`
+Makes: nothing (output node: the material's `roughness` map) · hash `9ce2f01c`
 
 | Input | Reads as | Unlinked |
 |---|---|---|
@@ -3035,7 +3043,7 @@ float v = inG_in(uv); outColor = vec4(vec3(v), 1.);
 
 White where it is metal.
 
-Makes: nothing (output node: the material's `metalness` map) · hash `b7eb8fdf`
+Makes: nothing (output node: the material's `metalness` map) · hash `4f12b514`
 
 | Input | Reads as | Unlinked |
 |---|---|---|
@@ -3049,7 +3057,7 @@ float v = inG_in(uv); outColor = vec4(vec3(v), 1.);
 
 Dark where little light gets in (cracks, dips).
 
-Makes: nothing (output node: the material's `occlusion` map) · hash `b88aca60`
+Makes: nothing (output node: the material's `occlusion` map) · hash `ea010fb3`
 
 | Input | Reads as | Unlinked |
 |---|---|---|
@@ -3063,7 +3071,7 @@ float v = inG_in(uv); outColor = vec4(vec3(v), 1.);
 
 Where it glows, and in what colour (black: no glow).
 
-Makes: nothing (output node: the material's `glow` map) · hash `8698166a`
+Makes: nothing (output node: the material's `glow` map) · hash `22489aeb`
 
 | Input | Reads as | Unlinked |
 |---|---|---|
@@ -3077,7 +3085,7 @@ outColor = vec4(inC_in(uv).rgb, 1.);
 
 Black is see-through (cut out), white solid.
 
-Makes: nothing (output node: the material's `opacity` map) · hash `b88aca60`
+Makes: nothing (output node: the material's `opacity` map) · hash `ea010fb3`
 
 | Input | Reads as | Unlinked |
 |---|---|---|
@@ -3091,7 +3099,7 @@ float v = inG_in(uv); outColor = vec4(vec3(v), 1.);
 
 The wear layer’s colour (bare metal under paint, dust): shown on edges, in creases or on top, as the material’s Wear settings say.
 
-Makes: nothing (output node: the material's `wearColor` map) · hash `56efa4fc`
+Makes: nothing (output node: the material's `wearColor` map) · hash `3491259d`
 
 | Input | Reads as | Unlinked |
 |---|---|---|
@@ -3105,7 +3113,7 @@ outColor = vec4(inC_in(uv).rgb, 1.);
 
 The wear layer’s roughness (white matte).
 
-Makes: nothing (output node: the material's `wearRoughness` map) · hash `174b988b`
+Makes: nothing (output node: the material's `wearRoughness` map) · hash `364b9a6c`
 
 | Input | Reads as | Unlinked |
 |---|---|---|
@@ -3119,7 +3127,7 @@ float v = inG_in(uv); outColor = vec4(vec3(v), 1.);
 
 Where the wear layer is metal (white).
 
-Makes: nothing (output node: the material's `wearMetal` map) · hash `b88aca60`
+Makes: nothing (output node: the material's `wearMetal` map) · hash `ea010fb3`
 
 | Input | Reads as | Unlinked |
 |---|---|---|
@@ -3133,7 +3141,7 @@ float v = inG_in(uv); outColor = vec4(vec3(v), 1.);
 
 Breaks the wear up: where it is white, wear shows sooner (a grunge works well).
 
-Makes: nothing (output node: the material's `wearNoise` map) · hash `f07eeb40`
+Makes: nothing (output node: the material's `wearNoise` map) · hash `1f1a90ab`
 
 | Input | Reads as | Unlinked |
 |---|---|---|

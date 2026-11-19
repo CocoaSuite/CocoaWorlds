@@ -102,7 +102,7 @@ const decl = (def: NodeDef): string => {
     out.push(
       `uniform sampler2D i_${i.id};`,
       `uniform float h_${i.id};`,
-      `vec4 inC_${i.id}(vec2 uv) { return h_${i.id} > 0.5 ? texture(i_${i.id}, uv) : vec4(${fb}, 1.); }`,
+      `vec4 inC_${i.id}(vec2 uv) { return h_${i.id} > 0.5 ? textureLod(i_${i.id}, uv, 0.) : vec4(${fb}, 1.); }`,
       `float inG_${i.id}(vec2 uv) { return dot(inC_${i.id}(uv).rgb, vec3(0.2126, 0.7152, 0.0722)); }`,
     );
   }

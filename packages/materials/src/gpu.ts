@@ -58,7 +58,8 @@ function sharedOf(gl: WebGL2RenderingContext): Shared {
   gl.bindVertexArray(quad);
   const buf = gl.createBuffer();
   gl.bindBuffer(gl.ARRAY_BUFFER, buf);
-  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, -1, 1, 1, -1, 1, 1]), gl.STATIC_DRAW);
+  // One triangle covering the whole square (no seam down the middle, where two would meet).
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
   gl.enableVertexAttribArray(0);
   gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
   gl.bindVertexArray(null);
@@ -206,7 +207,7 @@ export class GraphEvaluator {
     gl.bindTexture(gl.TEXTURE_2D, tex);
     gl.uniform1i(uniform(gl, p, 'u_tex'), 0);
     gl.uniform1f(uniform(gl, p, 'u_flip'), flip ? 1 : 0);
-    gl.drawArrays(gl.TRIANGLES, 0, 6);
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
     gl.bindVertexArray(null);
   }
 
@@ -313,6 +314,6 @@ export class GraphEvaluator {
       bind(`i_${port.id}`, src?.tex ?? this.sh.blank);
       gl.uniform1f(uniform(gl, p, `h_${port.id}`), src ? 1 : 0);
     }
-    gl.drawArrays(gl.TRIANGLES, 0, 6);
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
   }
 }

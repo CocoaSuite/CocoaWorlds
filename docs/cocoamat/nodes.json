@@ -897,7 +897,7 @@
         }
       ],
       "glsl": "vec3 c = inC_in(uv).rgb;\nvec3 x = clamp((c - p_inLow) / max(p_inHigh - p_inLow, 1e-4), 0., 1.);\nx = pow(x, vec3(1. / p_gamma));\noutColor = vec4(mix(vec3(p_outLow), vec3(p_outHigh), x), 1.);",
-      "hash": "d67bb2ae"
+      "hash": "3e91592b"
     },
     {
       "type": "histogramScan",
@@ -951,7 +951,7 @@
         }
       ],
       "glsl": "float w = max(1. - p_contrast, 0.001);\noutColor = vec4(vec3(clamp((inG_in(uv) - (1. - p_position)) / w + 0.5, 0., 1.)), 1.);",
-      "hash": "27098350"
+      "hash": "4f718787"
     },
     {
       "type": "histogramRange",
@@ -1005,7 +1005,7 @@
         }
       ],
       "glsl": "outColor = vec4(vec3(clamp((inG_in(uv) - 0.5) * p_range + p_position, 0., 1.)), 1.);",
-      "hash": "262aa9e8"
+      "hash": "d26b94e1"
     },
     {
       "type": "histogramShift",
@@ -1048,7 +1048,7 @@
         }
       ],
       "glsl": "outColor = vec4(vec3(fract(inG_in(uv) + p_position)), 1.);",
-      "hash": "bb7ea0fa"
+      "hash": "bb5849f5"
     },
     {
       "type": "histogramSelect",
@@ -1113,7 +1113,7 @@
         }
       ],
       "glsl": "float half_ = p_range * 0.5; float soft = max((1. - p_contrast) * half_, 0.001);\nfloat d = abs(inG_in(uv) - p_position);\noutColor = vec4(vec3(1. - smoothstep(half_ - soft, half_ + soft, d)), 1.);",
-      "hash": "774d709b"
+      "hash": "5153d044"
     },
     {
       "type": "curve",
@@ -1189,7 +1189,7 @@
         }
       ],
       "glsl": "vec3 c = clamp(inC_in(uv).rgb, 0., 1.); outColor = vec4(curve4(c.r, p_y0, p_y1, p_y2, p_y3), curve4(c.g, p_y0, p_y1, p_y2, p_y3), curve4(c.b, p_y0, p_y1, p_y2, p_y3), 1.);",
-      "hash": "b9c35fd9"
+      "hash": "3c0d9cd6"
     },
     {
       "type": "invert",
@@ -1220,7 +1220,7 @@
       "output": "color",
       "params": [],
       "glsl": "outColor = vec4(1. - inC_in(uv).rgb, 1.);",
-      "hash": "7ea3f134"
+      "hash": "0f90a61b"
     },
     {
       "type": "clamp",
@@ -1274,7 +1274,7 @@
         }
       ],
       "glsl": "outColor = vec4(clamp(inC_in(uv).rgb, p_min, p_max), 1.);",
-      "hash": "0eedc580"
+      "hash": "42ad37b7"
     },
     {
       "type": "blur",
@@ -1318,7 +1318,7 @@
         }
       ],
       "glsl": "vec3 s = vec3(0.); float w = 0.;\nfor (int y = -3; y <= 3; y++) for (int x = -3; x <= 3; x++) {\n  vec2 o = vec2(x, y) / 3.; float k = exp(-dot(o, o) * 2.);\n  s += inC_in(uv + o * p_radius).rgb * k; w += k;\n}\noutColor = vec4(s / w, 1.);",
-      "hash": "cf979483"
+      "hash": "6f7d8cce"
     },
     {
       "type": "warp",
@@ -1411,7 +1411,7 @@
         }
       ],
       "glsl": "vec2 off;\nif (p_mode < 0.5) { float e = 1. / 256.; off = vec2(inG_by(uv + vec2(e, 0.)) - inG_by(uv - vec2(e, 0.)), inG_by(uv + vec2(0., e)) - inG_by(uv - vec2(0., e))) / (2. * e) * p_amount * 0.01; }\nelse off = vec2(cos(radians(p_angle)), sin(radians(p_angle))) * (inG_by(uv) - 0.5) * p_amount * 0.25;\noutColor = vec4(inC_in(uv + off).rgb, 1.);",
-      "hash": "70337ce7"
+      "hash": "28ec67b1"
     },
     {
       "type": "directionalWarp",
@@ -1513,7 +1513,7 @@
         }
       ],
       "glsl": "vec2 dir = vec2(cos(radians(p_angle)), sin(radians(p_angle)));\nfloat bias = p_centred > 0.5 ? 0.5 : 0.;\nvec2 q = uv;\nif (p_mode < 0.5) q += dir * (inG_by(uv) - bias) * p_amount;\nelse for (int k = 0; k < 12; k++) q += dir * (inG_by(q) - bias) * p_amount / 12.;\noutColor = vec4(inC_in(q).rgb, 1.);",
-      "hash": "0c73c1a6"
+      "hash": "aea628e0"
     },
     {
       "type": "floodFill",
@@ -1653,8 +1653,8 @@
           "default": 0
         }
       ],
-      "glsl": "if (inG_in(uv) < p_threshold) { outColor = vec4(0., 0., 0., 1.); return; }\n// The shape's middle: the spot that is halfway across the shape both ways (sideways and up-down). Found by\n// measuring across the shape (2 pixels a step, then narrowed to the exact edge) and jumping to where those\n// halfway points meet, a few times. Every pixel of a shape lands on the same spot, also for uneven, turned or thin\n// slanted shapes, so the whole shape gets one id, one extent and one gradient.\nfloat st = u_px * 2.; float hh = u_px * 1.5; vec2 sc = uv; vec2 lo = uv, hi = uv;\nfor (int it = 0; it < 12; it++) {\n  float mid[4]; float ext[4];\n  for (int q = 0; q < 4; q++) {\n    vec2 o = q == 1 ? sc + vec2(0., hh) : q == 3 ? sc + vec2(hh, 0.) : sc;\n    vec2 ax = q < 2 ? vec2(1., 0.) : vec2(0., 1.);\n    float e[2];\n    for (int w = 0; w < 2; w++) {\n      vec2 dir = w == 0 ? -ax : ax;\n      float a = 0.;\n      for (int k = 1; k <= 160; k++) { if (inG_in(o + dir * float(k) * st) < p_threshold) break; a = float(k) * st; }\n      float b = a + st;\n      for (int j = 0; j < 6; j++) { float m = 0.5 * (a + b); if (inG_in(o + dir * m) < p_threshold) b = m; else a = m; }\n      e[w] = a;\n    }\n    // (A probe that fell outside the shape tells nothing: it reads as straight up and down.)\n    mid[q] = inG_in(o) < p_threshold ? dot(sc, ax) : dot(o, ax) + (e[1] - e[0]) * 0.5;\n    if (q == 0) { ext[0] = e[0]; ext[1] = e[1]; }\n    if (q == 2) { ext[2] = e[0]; ext[3] = e[1]; }\n  }\n  lo = sc - vec2(ext[0], ext[2]); hi = sc + vec2(ext[1], ext[3]);\n  float ex = mid[0] - sc.x, ey = mid[2] - sc.y;\n  float sa = (mid[1] - mid[0]) / hh, sb = (mid[3] - mid[2]) / hh;\n  float den = 1. - sa * sb; den = abs(den) < 0.05 ? 0.05 : den;\n  float dx = (ex + sa * ey) / den; float dy = ey + sb * dx;\n  // (The first rounds only walk part of the way in, so pixels near the edge get well inside first.)\n  vec2 nc = it < 4 ? sc + vec2(ex, ey) * 0.6 : sc + vec2(dx, dy);\n  if (inG_in(nc) < p_threshold) nc = sc + vec2(ex, ey) * 0.6;\n  if (inG_in(nc) < p_threshold) break;\n  bool done = it >= 4 && length(nc - sc) < u_px * 0.01;\n  sc = nc;\n  if (done) break;\n}\n// The extent once more, from where it settled (so every pixel of the shape uses the same one).\n{\n  float ext[4];\n  for (int q = 0; q < 4; q++) {\n    vec2 dir = q == 0 ? vec2(-1., 0.) : q == 1 ? vec2(1., 0.) : q == 2 ? vec2(0., -1.) : vec2(0., 1.);\n    float a = 0.;\n    for (int k = 1; k <= 160; k++) { if (inG_in(sc + dir * float(k) * st) < p_threshold) break; a = float(k) * st; }\n    float b = a + st;\n    for (int j = 0; j < 6; j++) { float m = 0.5 * (a + b); if (inG_in(sc + dir * m) < p_threshold) b = m; else a = m; }\n    ext[q] = a;\n  }\n  lo = sc - vec2(ext[0], ext[2]); hi = sc + vec2(ext[1], ext[3]);\n}\n// (Wrapped whole, so a shape crossing the square's edge gets one id on both sides.)\nfloat cs = st * 4.; float n = floor(1. / cs + 0.5);\nvec2 id = mod(floor(sc / cs), n);\nvec2 ctr = fract(sc);\nfloat h = hash12(id + seedv(p_seed));\nint g = int(p_gives + 0.5); vec3 c;\nif (g == 0) c = vec3(h);\nelse if (g == 1) c = hsv2rgb(vec3(h, 0.55 + 0.4 * hash12(id + seedv(p_seed) + 3.3), 0.6 + 0.4 * hash12(id + seedv(p_seed) + 7.1)));\nelse if (g == 2) {\n  vec2 t = (uv - lo) / max(hi - lo, vec2(1e-4));\n  float a = p_direction < 0.5 ? 0. : p_direction < 1.5 ? 1.5707963 : h * 6.2831853;\n  a += (hash12(id + seedv(p_seed) + 11.3) - 0.5) * 6.2831853 * p_angleVar;\n  vec2 dv = vec2(cos(a), sin(a));\n  float v = dot(t - 0.5, dv) / (abs(dv.x) * 0.5 + abs(dv.y) * 0.5 + 1e-4) * 0.5 + 0.5;\n  c = vec3(clamp(v, 0., 1.));\n}\nelse if (g == 3) c = vec3(ctr, 0.);\nelse c = vec3(clamp((hi - lo) * 1., 0., 1.), 0.);\noutColor = vec4(c, 1.);",
-      "hash": "15b1c72b"
+      "glsl": "if (inG_in(uv) < p_threshold) { outColor = vec4(0., 0., 0., 1.); return; }\n// The shape's middle: the spot that is halfway across the shape both ways (sideways and up-down). Found by\n// measuring across the shape (2 pixels a step, then narrowed to the exact edge) and jumping to where those\n// halfway points meet, a few times. Every pixel of a shape lands on the same spot, also for uneven, turned or thin\n// slanted shapes, so the whole shape gets one id, one extent and one gradient.\nfloat st = u_px * 2.; float hh = u_px * 1.5; vec2 sc = uv; vec2 lo = uv, hi = uv;\nfor (int it = 0; it < 12; it++) {\n  float mid[4]; float ext[4];\n  for (int q = 0; q < 4; q++) {\n    vec2 o = q == 1 ? sc + vec2(0., hh) : q == 3 ? sc + vec2(hh, 0.) : sc;\n    vec2 ax = q < 2 ? vec2(1., 0.) : vec2(0., 1.);\n    float e[2];\n    for (int w = 0; w < 2; w++) {\n      vec2 dir = w == 0 ? -ax : ax;\n      float a = 0.;\n      for (int k = 1; k <= 160; k++) { if (inG_in(o + dir * float(k) * st) < p_threshold) break; a = float(k) * st; }\n      float b = a + st;\n      for (int j = 0; j < 6; j++) { float m = 0.5 * (a + b); if (inG_in(o + dir * m) < p_threshold) b = m; else a = m; }\n      e[w] = a;\n    }\n    // (A probe that fell outside the shape tells nothing: it reads as straight up and down.)\n    mid[q] = inG_in(o) < p_threshold ? dot(sc, ax) : dot(o, ax) + (e[1] - e[0]) * 0.5;\n    if (q == 0) { ext[0] = e[0]; ext[1] = e[1]; }\n    if (q == 2) { ext[2] = e[0]; ext[3] = e[1]; }\n  }\n  lo = sc - vec2(ext[0], ext[2]); hi = sc + vec2(ext[1], ext[3]);\n  float ex = mid[0] - sc.x, ey = mid[2] - sc.y;\n  float sa = (mid[1] - mid[0]) / hh, sb = (mid[3] - mid[2]) / hh;\n  float den = 1. - sa * sb; den = abs(den) < 0.05 ? 0.05 : den;\n  float dx = (ex + sa * ey) / den; float dy = ey + sb * dx;\n  // (The first rounds only walk part of the way in, so pixels near the edge get well inside first.)\n  vec2 nc = it < 4 ? sc + vec2(ex, ey) * 0.6 : sc + vec2(dx, dy);\n  if (inG_in(nc) < p_threshold) nc = sc + vec2(ex, ey) * 0.6;\n  if (inG_in(nc) < p_threshold) break;\n  bool done = it >= 4 && length(nc - sc) < u_px * 0.01;\n  sc = nc;\n  if (done) break;\n}\n// The extent once more, from the shape's id spot (the same for every pixel of it, so they all use one extent).\n{\n  float cs0 = st * 4.;\n  vec2 sq = floor(sc / cs0 + 0.5) * cs0;\n  if (inG_in(sq) >= p_threshold) sc = sq;\n  float ext[4];\n  for (int q = 0; q < 4; q++) {\n    vec2 dir = q == 0 ? vec2(-1., 0.) : q == 1 ? vec2(1., 0.) : q == 2 ? vec2(0., -1.) : vec2(0., 1.);\n    float a = 0.;\n    for (int k = 1; k <= 160; k++) { if (inG_in(sc + dir * float(k) * st) < p_threshold) break; a = float(k) * st; }\n    float b = a + st;\n    for (int j = 0; j < 6; j++) { float m = 0.5 * (a + b); if (inG_in(sc + dir * m) < p_threshold) b = m; else a = m; }\n    ext[q] = a;\n  }\n  lo = sc - vec2(ext[0], ext[2]); hi = sc + vec2(ext[1], ext[3]);\n}\n// (Wrapped whole, so a shape crossing the square's edge gets one id on both sides.)\nfloat cs = st * 4.; float n = floor(1. / cs + 0.5);\n// (Rounded rather than cut: regular tiles have their middles exactly on the grid's lines.)\nvec2 id = mod(floor(sc / cs + 0.5), n);\nvec2 ctr = fract(sc);\nfloat h = hash12(id + seedv(p_seed));\nint g = int(p_gives + 0.5); vec3 c;\nif (g == 0) c = vec3(h);\nelse if (g == 1) c = hsv2rgb(vec3(h, 0.55 + 0.4 * hash12(id + seedv(p_seed) + 3.3), 0.6 + 0.4 * hash12(id + seedv(p_seed) + 7.1)));\nelse if (g == 2) {\n  vec2 t = (uv - lo) / max(hi - lo, vec2(1e-4));\n  float a = p_direction < 0.5 ? 0. : p_direction < 1.5 ? 1.5707963 : h * 6.2831853;\n  a += (hash12(id + seedv(p_seed) + 11.3) - 0.5) * 6.2831853 * p_angleVar;\n  vec2 dv = vec2(cos(a), sin(a));\n  float v = dot(t - 0.5, dv) / (abs(dv.x) * 0.5 + abs(dv.y) * 0.5 + 1e-4) * 0.5 + 0.5;\n  c = vec3(clamp(v, 0., 1.));\n}\nelse if (g == 3) c = vec3(ctr, 0.);\nelse c = vec3(clamp((hi - lo) * 1., 0., 1.), 0.);\noutColor = vec4(c, 1.);",
+      "hash": "a9ea0ba4"
     },
     {
       "type": "floodGradient",
@@ -1782,8 +1782,8 @@
           "default": 0
         }
       ],
-      "glsl": "if (inG_in(uv) < p_threshold) { outColor = vec4(0., 0., 0., 1.); return; }\n// The shape's middle: the spot that is halfway across the shape both ways (sideways and up-down). Found by\n// measuring across the shape (2 pixels a step, then narrowed to the exact edge) and jumping to where those\n// halfway points meet, a few times. Every pixel of a shape lands on the same spot, also for uneven, turned or thin\n// slanted shapes, so the whole shape gets one id, one extent and one gradient.\nfloat st = u_px * 2.; float hh = u_px * 1.5; vec2 sc = uv; vec2 lo = uv, hi = uv;\nfor (int it = 0; it < 12; it++) {\n  float mid[4]; float ext[4];\n  for (int q = 0; q < 4; q++) {\n    vec2 o = q == 1 ? sc + vec2(0., hh) : q == 3 ? sc + vec2(hh, 0.) : sc;\n    vec2 ax = q < 2 ? vec2(1., 0.) : vec2(0., 1.);\n    float e[2];\n    for (int w = 0; w < 2; w++) {\n      vec2 dir = w == 0 ? -ax : ax;\n      float a = 0.;\n      for (int k = 1; k <= 160; k++) { if (inG_in(o + dir * float(k) * st) < p_threshold) break; a = float(k) * st; }\n      float b = a + st;\n      for (int j = 0; j < 6; j++) { float m = 0.5 * (a + b); if (inG_in(o + dir * m) < p_threshold) b = m; else a = m; }\n      e[w] = a;\n    }\n    // (A probe that fell outside the shape tells nothing: it reads as straight up and down.)\n    mid[q] = inG_in(o) < p_threshold ? dot(sc, ax) : dot(o, ax) + (e[1] - e[0]) * 0.5;\n    if (q == 0) { ext[0] = e[0]; ext[1] = e[1]; }\n    if (q == 2) { ext[2] = e[0]; ext[3] = e[1]; }\n  }\n  lo = sc - vec2(ext[0], ext[2]); hi = sc + vec2(ext[1], ext[3]);\n  float ex = mid[0] - sc.x, ey = mid[2] - sc.y;\n  float sa = (mid[1] - mid[0]) / hh, sb = (mid[3] - mid[2]) / hh;\n  float den = 1. - sa * sb; den = abs(den) < 0.05 ? 0.05 : den;\n  float dx = (ex + sa * ey) / den; float dy = ey + sb * dx;\n  // (The first rounds only walk part of the way in, so pixels near the edge get well inside first.)\n  vec2 nc = it < 4 ? sc + vec2(ex, ey) * 0.6 : sc + vec2(dx, dy);\n  if (inG_in(nc) < p_threshold) nc = sc + vec2(ex, ey) * 0.6;\n  if (inG_in(nc) < p_threshold) break;\n  bool done = it >= 4 && length(nc - sc) < u_px * 0.01;\n  sc = nc;\n  if (done) break;\n}\n// The extent once more, from where it settled (so every pixel of the shape uses the same one).\n{\n  float ext[4];\n  for (int q = 0; q < 4; q++) {\n    vec2 dir = q == 0 ? vec2(-1., 0.) : q == 1 ? vec2(1., 0.) : q == 2 ? vec2(0., -1.) : vec2(0., 1.);\n    float a = 0.;\n    for (int k = 1; k <= 160; k++) { if (inG_in(sc + dir * float(k) * st) < p_threshold) break; a = float(k) * st; }\n    float b = a + st;\n    for (int j = 0; j < 6; j++) { float m = 0.5 * (a + b); if (inG_in(sc + dir * m) < p_threshold) b = m; else a = m; }\n    ext[q] = a;\n  }\n  lo = sc - vec2(ext[0], ext[2]); hi = sc + vec2(ext[1], ext[3]);\n}\n// (Wrapped whole, so a shape crossing the square's edge gets one id on both sides.)\nfloat cs = st * 4.; float n = floor(1. / cs + 0.5);\nvec2 id = mod(floor(sc / cs), n);\nvec2 ctr = fract(sc);\nfloat h1 = hash12(id + seedv(p_seed)), h2 = hash12(id + seedv(p_seed) + 5.7);\n// Where in its shape this pixel is: -1..1 each way.\nvec2 t = (uv - lo) / max(hi - lo, vec2(1e-4)) * 2. - 1.;\nfloat a = radians(p_angle) + (h1 - 0.5) * 2. * PI * p_angleVar;\nvec2 dv = vec2(cos(a), sin(a));\nfloat v;\nint f = int(p_form + 0.5);\nif (f == 2) v = 1. - clamp(length(t) / 1.4142, 0., 1.);\nelse {\n  float x = dot(t, dv) / (abs(dv.x) + abs(dv.y) + 1e-4);\n  v = f == 1 ? 1. - abs(x) : x * 0.5 + 0.5;\n}\nfloat k = p_slope * mix(1., 0.25 + 1.5 * h2, p_slopeVar);\nv = clamp((v - 0.5) * k + 0.5, 0., 1.);\noutColor = vec4(vec3(v), 1.);",
-      "hash": "3c845f0e"
+      "glsl": "if (inG_in(uv) < p_threshold) { outColor = vec4(0., 0., 0., 1.); return; }\n// The shape's middle: the spot that is halfway across the shape both ways (sideways and up-down). Found by\n// measuring across the shape (2 pixels a step, then narrowed to the exact edge) and jumping to where those\n// halfway points meet, a few times. Every pixel of a shape lands on the same spot, also for uneven, turned or thin\n// slanted shapes, so the whole shape gets one id, one extent and one gradient.\nfloat st = u_px * 2.; float hh = u_px * 1.5; vec2 sc = uv; vec2 lo = uv, hi = uv;\nfor (int it = 0; it < 12; it++) {\n  float mid[4]; float ext[4];\n  for (int q = 0; q < 4; q++) {\n    vec2 o = q == 1 ? sc + vec2(0., hh) : q == 3 ? sc + vec2(hh, 0.) : sc;\n    vec2 ax = q < 2 ? vec2(1., 0.) : vec2(0., 1.);\n    float e[2];\n    for (int w = 0; w < 2; w++) {\n      vec2 dir = w == 0 ? -ax : ax;\n      float a = 0.;\n      for (int k = 1; k <= 160; k++) { if (inG_in(o + dir * float(k) * st) < p_threshold) break; a = float(k) * st; }\n      float b = a + st;\n      for (int j = 0; j < 6; j++) { float m = 0.5 * (a + b); if (inG_in(o + dir * m) < p_threshold) b = m; else a = m; }\n      e[w] = a;\n    }\n    // (A probe that fell outside the shape tells nothing: it reads as straight up and down.)\n    mid[q] = inG_in(o) < p_threshold ? dot(sc, ax) : dot(o, ax) + (e[1] - e[0]) * 0.5;\n    if (q == 0) { ext[0] = e[0]; ext[1] = e[1]; }\n    if (q == 2) { ext[2] = e[0]; ext[3] = e[1]; }\n  }\n  lo = sc - vec2(ext[0], ext[2]); hi = sc + vec2(ext[1], ext[3]);\n  float ex = mid[0] - sc.x, ey = mid[2] - sc.y;\n  float sa = (mid[1] - mid[0]) / hh, sb = (mid[3] - mid[2]) / hh;\n  float den = 1. - sa * sb; den = abs(den) < 0.05 ? 0.05 : den;\n  float dx = (ex + sa * ey) / den; float dy = ey + sb * dx;\n  // (The first rounds only walk part of the way in, so pixels near the edge get well inside first.)\n  vec2 nc = it < 4 ? sc + vec2(ex, ey) * 0.6 : sc + vec2(dx, dy);\n  if (inG_in(nc) < p_threshold) nc = sc + vec2(ex, ey) * 0.6;\n  if (inG_in(nc) < p_threshold) break;\n  bool done = it >= 4 && length(nc - sc) < u_px * 0.01;\n  sc = nc;\n  if (done) break;\n}\n// The extent once more, from the shape's id spot (the same for every pixel of it, so they all use one extent).\n{\n  float cs0 = st * 4.;\n  vec2 sq = floor(sc / cs0 + 0.5) * cs0;\n  if (inG_in(sq) >= p_threshold) sc = sq;\n  float ext[4];\n  for (int q = 0; q < 4; q++) {\n    vec2 dir = q == 0 ? vec2(-1., 0.) : q == 1 ? vec2(1., 0.) : q == 2 ? vec2(0., -1.) : vec2(0., 1.);\n    float a = 0.;\n    for (int k = 1; k <= 160; k++) { if (inG_in(sc + dir * float(k) * st) < p_threshold) break; a = float(k) * st; }\n    float b = a + st;\n    for (int j = 0; j < 6; j++) { float m = 0.5 * (a + b); if (inG_in(sc + dir * m) < p_threshold) b = m; else a = m; }\n    ext[q] = a;\n  }\n  lo = sc - vec2(ext[0], ext[2]); hi = sc + vec2(ext[1], ext[3]);\n}\n// (Wrapped whole, so a shape crossing the square's edge gets one id on both sides.)\nfloat cs = st * 4.; float n = floor(1. / cs + 0.5);\n// (Rounded rather than cut: regular tiles have their middles exactly on the grid's lines.)\nvec2 id = mod(floor(sc / cs + 0.5), n);\nvec2 ctr = fract(sc);\nfloat h1 = hash12(id + seedv(p_seed)), h2 = hash12(id + seedv(p_seed) + 5.7);\n// Where in its shape this pixel is: -1..1 each way.\nvec2 t = (uv - lo) / max(hi - lo, vec2(1e-4)) * 2. - 1.;\nfloat a = radians(p_angle) + (h1 - 0.5) * 2. * PI * p_angleVar;\nvec2 dv = vec2(cos(a), sin(a));\nfloat v;\nint f = int(p_form + 0.5);\nif (f == 2) v = 1. - clamp(length(t) / 1.4142, 0., 1.);\nelse {\n  float x = dot(t, dv) / (abs(dv.x) + abs(dv.y) + 1e-4);\n  v = f == 1 ? 1. - abs(x) : x * 0.5 + 0.5;\n}\nfloat k = p_slope * mix(1., 0.25 + 1.5 * h2, p_slopeVar);\nv = clamp((v - 0.5) * k + 0.5, 0., 1.);\noutColor = vec4(vec3(v), 1.);",
+      "hash": "a22f51e1"
     },
     {
       "type": "transform",
@@ -1899,7 +1899,7 @@
         }
       ],
       "glsl": "vec2 q = uv - 0.5;\nif (p_turn > 0.5 && p_turn < 1.5) q = vec2(-q.y, q.x); else if (p_turn > 1.5 && p_turn < 2.5) q = -q; else if (p_turn > 2.5) q = vec2(q.y, -q.x);\noutColor = vec4(inC_in((q / max(p_scale, 1e-3) + 0.5) * p_tiles + vec2(p_x, p_y)).rgb, 1.);",
-      "hash": "ff57536e"
+      "hash": "8101a589"
     },
     {
       "type": "slopeBlur",
@@ -1988,7 +1988,7 @@
         }
       ],
       "glsl": "float e = 1. / 256.;\nvec2 g = vec2(inG_slope(uv + vec2(e, 0.)) - inG_slope(uv - vec2(e, 0.)), inG_slope(uv + vec2(0., e)) - inG_slope(uv - vec2(0., e)));\nvec2 dir = length(g) > 1e-5 ? -normalize(g) : vec2(0.);\nvec3 acc = inC_in(uv).rgb; vec3 lo = acc, hi = acc;\nfor (int i = 1; i <= 12; i++) {\n  vec3 c = inC_in(uv + dir * p_amount * float(i) / 12.).rgb;\n  acc += c; lo = min(lo, c); hi = max(hi, c);\n}\noutColor = vec4(p_mode < 0.5 ? acc / 13. : p_mode < 1.5 ? lo : hi, 1.);",
-      "hash": "cee99dd4"
+      "hash": "50c07456"
     },
     {
       "type": "distance",
@@ -2032,7 +2032,7 @@
         }
       ],
       "glsl": "float best = inG_in(uv) > 0.5 ? 0. : 1e3;\nfor (int r = 1; r <= 10; r++) {\n  float rad = p_distance * float(r) / 10.;\n  for (int a = 0; a < 16; a++) {\n    float t = float(a) / 16. * 6.2831853 + float(r) * 0.37;\n    if (inG_in(uv + vec2(cos(t), sin(t)) * rad) > 0.5) best = min(best, rad);\n  }\n}\noutColor = vec4(vec3(clamp(1. - best / p_distance, 0., 1.)), 1.);",
-      "hash": "1fc245e1"
+      "hash": "7e1428f8"
     },
     {
       "type": "edges",
@@ -2087,7 +2087,7 @@
         }
       ],
       "glsl": "float e = abs(inG_in(uv + vec2(p_width, 0.)) - inG_in(uv - vec2(p_width, 0.))) + abs(inG_in(uv + vec2(0., p_width)) - inG_in(uv - vec2(0., p_width)));\noutColor = vec4(vec3(smoothstep(p_threshold, p_threshold + 0.05, e)), 1.);",
-      "hash": "7fe7f100"
+      "hash": "c04f702d"
     },
     {
       "type": "reroute",
@@ -2118,7 +2118,7 @@
       "output": "color",
       "params": [],
       "glsl": "outColor = vec4(inC_in(uv).rgb, 1.);",
-      "hash": "8698166a"
+      "hash": "22489aeb"
     },
     {
       "type": "blend",
@@ -2281,7 +2281,7 @@
         }
       ],
       "glsl": "vec3 a = inC_top(uv).rgb, b = inC_bottom(uv).rgb; vec3 r;\n// Black to alpha: the top's black background turns see-through, so a coloured picture sits on the bottom one.\n// Darks below the cutoff fade out; colours above stay solid. Soft edges keep their full colour.\nfloat al = 1.;\nif (p_blackAlpha > 0.5) { float mx = max(a.r, max(a.g, a.b)); al = smoothstep(0., p_cutoff, mx); a = mx > 1e-4 ? a / mx * max(mx, min(p_cutoff, 1.)) : a; }\nint m = int(p_mode + 0.5);\nif (m == 0) r = a; else if (m == 1) r = a + b; else if (m == 2) r = b - a; else if (m == 3) r = a * b;\nelse if (m == 4) r = 1. - (1. - a) * (1. - b);\nelse if (m == 5) r = mix(2. * a * b, 1. - 2. * (1. - a) * (1. - b), step(0.5, b));\nelse if (m == 6) r = max(a, b); else if (m == 7) r = min(a, b); else r = abs(a - b);\noutColor = vec4(clamp(mix(b, r, inG_mask(uv) * p_opacity * al), 0., 1.), 1.);",
-      "hash": "d436e858"
+      "hash": "d39a15ff"
     },
     {
       "type": "switch",
@@ -2335,7 +2335,7 @@
         }
       ],
       "glsl": "outColor = vec4(p_useB > 0.5 ? inC_b(uv).rgb : inC_a(uv).rgb, 1.);",
-      "hash": "cb6cc0ef"
+      "hash": "58792537"
     },
     {
       "type": "gradientMap",
@@ -2385,7 +2385,7 @@
         }
       ],
       "glsl": "outColor = vec4(ramp(inG_in(uv), p_ramp_c, p_ramp_t, p_ramp_n), 1.);",
-      "hash": "b0ff3b9e"
+      "hash": "c69e4515"
     },
     {
       "type": "hsl",
@@ -2451,7 +2451,7 @@
         }
       ],
       "glsl": "vec3 h = rgb2hsv(inC_in(uv).rgb);\nh.x = fract(h.x + p_hue / 360.); h.y = clamp(h.y * p_saturation, 0., 1.);\noutColor = vec4(clamp(hsv2rgb(h) + p_lightness, 0., 1.), 1.);",
-      "hash": "b733a909"
+      "hash": "83a81cf8"
     },
     {
       "type": "tint",
@@ -2492,7 +2492,7 @@
         }
       ],
       "glsl": "outColor = vec4(p_color * inG_in(uv), 1.);",
-      "hash": "27cabfba"
+      "hash": "8fcb5e07"
     },
     {
       "type": "normal",
@@ -2535,7 +2535,7 @@
         }
       ],
       "glsl": "float e = u_px;\nfloat dx = (inG_in(uv + vec2(e, 0.)) - inG_in(uv - vec2(e, 0.))) / (2. * e);\nfloat dy = (inG_in(uv + vec2(0., e)) - inG_in(uv - vec2(0., e))) / (2. * e);\nvec3 n = normalize(vec3(-dx * p_strength * 0.02, -dy * p_strength * 0.02, 1.));\noutColor = vec4(n * 0.5 + 0.5, 1.);",
-      "hash": "6be334fa"
+      "hash": "1442e56b"
     },
     {
       "type": "occlusion",
@@ -2590,7 +2590,7 @@
         }
       ],
       "glsl": "float h = inG_in(uv); float s = 0., w = 0.;\nfor (int y = -2; y <= 2; y++) for (int x = -2; x <= 2; x++) { vec2 o = vec2(x, y) / 2.; float k = exp(-dot(o, o)); s += inG_in(uv + o * p_radius) * k; w += k; }\noutColor = vec4(vec3(clamp(1. - max(s / w - h, 0.) * p_strength * 4., 0., 1.)), 1.);",
-      "hash": "05ae9673"
+      "hash": "1f92bbe6"
     },
     {
       "type": "curvature",
@@ -2645,7 +2645,7 @@
         }
       ],
       "glsl": "float h = inG_in(uv); float r = p_radius;\nfloat lap = 4. * h - inG_in(uv + vec2(r, 0.)) - inG_in(uv - vec2(r, 0.)) - inG_in(uv + vec2(0., r)) - inG_in(uv - vec2(0., r));\noutColor = vec4(vec3(clamp(0.5 + lap * p_strength, 0., 1.)), 1.);",
-      "hash": "5f8328d8"
+      "hash": "8677c615"
     },
     {
       "type": "waves",
@@ -3499,7 +3499,7 @@
         }
       ],
       "glsl": "vec2 N = vec2(p_count, p_countY); vec2 p = uv * N; vec2 c = floor(p); float best = 0.; vec3 col = vec3(0.); vec2 o = seedv(p_seed);\n// Copies are measured in units of a cell's shorter side, so uneven X/Y amounts don't stretch them.\nfloat k = max(N.x, N.y); vec2 dims = k / N;\n// Keep apart: each copy stays inside its own cell (its turned corners too, plus the space between), so none touch.\nfloat reach = p_turn > 0. ? 0.70711 : 0.5;\nfloat room = max(0., 1. - p_margin);\n// No clipping: copies stack whole, one over another in a fixed random order, instead of mixing pixel by pixel.\n// Black counts as empty. Looks two cells out so big copies aren't cut off at cell edges.\nbool stk = p_stack > 0.5; float top = -1.;\nfor (int y = -2; y <= 2; y++) for (int x = -2; x <= 2; x++) {\n  if (!stk && (abs(x) > 1 || abs(y) > 1)) continue;\n  vec2 cc = c + vec2(float(x), float(y)); vec2 cm = mod(cc, N);\n  if (p_apart > 0.5 && (x != 0 || y != 0)) continue;\n  float s = p_size * (1. - p_sizeRandom * hash12(cm + o + 1.7));\n  if (p_apart > 0.5) s = min(s, room / (2. * reach));\n  vec2 slack = p_apart > 0.5 ? max(vec2(0.), (dims - p_margin - 2. * reach * s) / dims) : vec2(0.8);\n  vec2 ctr = cc + 0.5 + (hash22(cm + o) - 0.5) * slack;\n  float a = hash12(cm + o + 4.4) * 6.2831853 * p_turn;\n  vec2 d = mat2(cos(a), -sin(a), sin(a), cos(a)) * ((p - ctr) * dims / max(s, 1e-3));\n  if (abs(d.x) < 0.5 && abs(d.y) < 0.5) {\n    vec3 t = inC_in(d + 0.5).rgb * (1. - p_brightRandom * hash12(cm + o + 8.8));\n    float g = dot(t, vec3(0.3333));\n    if (stk) { float z = hash12(cm + o + 6.6); if (g > 0.004 && z > top) { top = z; col = t; } }\n    else if (g > best) { best = g; col = t; }\n  }\n}\noutColor = vec4(col, 1.);",
-      "hash": "f66d96c8"
+      "hash": "d3e9580b"
     },
     {
       "type": "zigzag",
@@ -3630,7 +3630,7 @@
         }
       ],
       "glsl": "vec3 c = inC_in(uv).rgb; float r = p_radius;\nvec3 b = (inC_in(uv + vec2(r, 0.)).rgb + inC_in(uv - vec2(r, 0.)).rgb + inC_in(uv + vec2(0., r)).rgb + inC_in(uv - vec2(0., r)).rgb) * 0.25;\noutColor = vec4(clamp(c + (c - b) * p_amount, 0., 1.), 1.);",
-      "hash": "f8619346"
+      "hash": "11b96ae1"
     },
     {
       "type": "posterize",
@@ -3673,7 +3673,7 @@
         }
       ],
       "glsl": "outColor = vec4(min(floor(inC_in(uv).rgb * p_steps), vec3(p_steps - 1.)) / max(p_steps - 1., 1.), 1.);",
-      "hash": "6b194cd0"
+      "hash": "4c85520b"
     },
     {
       "type": "threshold",
@@ -3727,7 +3727,7 @@
         }
       ],
       "glsl": "float w = (1. - p_contrast) * 0.5 + 0.002;\noutColor = vec4(vec3(smoothstep(p_position - w, p_position + w, inG_in(uv))), 1.);",
-      "hash": "ea11a658"
+      "hash": "96135181"
     },
     {
       "type": "brightness",
@@ -3792,7 +3792,7 @@
         }
       ],
       "glsl": "vec3 c = (inC_in(uv).rgb - 0.5) * p_contrast + 0.5 + p_brightness;\noutColor = vec4(pow(clamp(c, 0., 1.), vec3(1. / p_gamma)), 1.);",
-      "hash": "c200ab6e"
+      "hash": "c0accd3f"
     },
     {
       "type": "mirror",
@@ -3856,7 +3856,7 @@
         }
       ],
       "glsl": "vec2 q = uv;\nif (p_mode < 0.5 || p_mode > 1.5) q.x = 0.5 - abs(uv.x - 0.5);\nif (p_mode > 0.5) q.y = 0.5 - abs(uv.y - 0.5);\noutColor = vec4(inC_in(q).rgb, 1.);",
-      "hash": "06e94c6b"
+      "hash": "6b153334"
     },
     {
       "type": "pixelate",
@@ -3899,7 +3899,7 @@
         }
       ],
       "glsl": "outColor = vec4(inC_in((floor(uv * p_cells) + 0.5) / p_cells).rgb, 1.);",
-      "hash": "3314f39c"
+      "hash": "3dfb4641"
     },
     {
       "type": "swirl",
@@ -3953,7 +3953,7 @@
         }
       ],
       "glsl": "vec2 d = uv - 0.5; float t = clamp(1. - length(d) / p_radius, 0., 1.); float a = p_amount * t * t;\noutColor = vec4(inC_in(0.5 + mat2(cos(a), -sin(a), sin(a), cos(a)) * d).rgb, 1.);",
-      "hash": "d6f0a9e6"
+      "hash": "86dc2217"
     },
     {
       "type": "outline",
@@ -4008,7 +4008,7 @@
         }
       ],
       "glsl": "float r = p_radius;\nfloat tl = inG_in(uv + vec2(-r, -r)), tc = inG_in(uv + vec2(0., -r)), tr = inG_in(uv + vec2(r, -r));\nfloat ml = inG_in(uv + vec2(-r, 0.)), mr = inG_in(uv + vec2(r, 0.));\nfloat bl = inG_in(uv + vec2(-r, r)), bc = inG_in(uv + vec2(0., r)), br = inG_in(uv + vec2(r, r));\nfloat gx = tr + 2. * mr + br - tl - 2. * ml - bl; float gy = bl + 2. * bc + br - tl - 2. * tc - tr;\noutColor = vec4(vec3(clamp(length(vec2(gx, gy)) * p_strength, 0., 1.)), 1.);",
-      "hash": "e0699b21"
+      "hash": "8e16ab72"
     },
     {
       "type": "motionBlur",
@@ -4064,7 +4064,7 @@
         }
       ],
       "glsl": "vec2 dir = vec2(cos(radians(p_angle)), sin(radians(p_angle))) * p_length;\nvec3 s = vec3(0.); for (int k = -8; k <= 8; k++) s += inC_in(uv + dir * float(k) / 8.).rgb;\noutColor = vec4(s / 17., 1.);",
-      "hash": "30d2bfbb"
+      "hash": "5e6f8fca"
     },
     {
       "type": "emboss",
@@ -4131,7 +4131,7 @@
         }
       ],
       "glsl": "float e = 1. / 256.;\nvec2 g = vec2(inG_in(uv + vec2(e, 0.)) - inG_in(uv - vec2(e, 0.)), inG_in(uv + vec2(0., e)) - inG_in(uv - vec2(0., e))) * p_strength * 32.;\nvec3 n = normalize(vec3(-g, 1.)); float el = radians(p_elevation), az = radians(p_angle);\nvec3 L = vec3(cos(az) * cos(el), sin(az) * cos(el), sin(el));\noutColor = vec4(vec3(clamp(dot(n, L), 0., 1.)), 1.);",
-      "hash": "db3373bb"
+      "hash": "02111cf6"
     },
     {
       "type": "math",
@@ -4261,7 +4261,7 @@
         }
       ],
       "glsl": "float a = inG_a(uv); float b = h_b > 0.5 ? inG_b(uv) : p_value; int m = int(p_op + 0.5); float r;\nif (m == 0) r = a + b; else if (m == 1) r = a - b; else if (m == 2) r = a * b; else if (m == 3) r = a / max(abs(b), 1e-4) * sign(b + 1e-9);\nelse if (m == 4) r = min(a, b); else if (m == 5) r = max(a, b); else if (m == 6) r = pow(max(a, 0.), b); else if (m == 7) r = abs(a - b); else r = (a + b) * 0.5;\noutColor = vec4(vec3(clamp(r, 0., 1.)), 1.);",
-      "hash": "879ba4a3"
+      "hash": "60cdd1e1"
     },
     {
       "type": "heightBlend",
@@ -4386,7 +4386,7 @@
         }
       ],
       "glsl": "float ha = inG_heightTop(uv) + p_offset, hb = inG_heightBottom(uv); float w = (1. - p_contrast) * 0.5 + 0.005;\nfloat m = smoothstep(-w, w, ha - hb);\nvec3 r = p_out < 0.5 ? mix(inC_bottom(uv).rgb, inC_top(uv).rgb, m) : p_out < 1.5 ? vec3(clamp(mix(hb, ha, m), 0., 1.)) : vec3(m);\noutColor = vec4(r, 1.);",
-      "hash": "420941fb"
+      "hash": "b84bf5a3"
     },
     {
       "type": "combineChannels",
@@ -4443,7 +4443,7 @@
       "output": "color",
       "params": [],
       "glsl": "outColor = vec4(inG_r(uv), inG_g(uv), inG_b(uv), 1.);",
-      "hash": "50efb3e7"
+      "hash": "1ec92276"
     },
     {
       "type": "splitChannel",
@@ -4514,7 +4514,7 @@
         }
       ],
       "glsl": "vec3 c = inC_in(uv).rgb; int k = int(p_channel + 0.5);\nfloat v = k == 0 ? c.r : k == 1 ? c.g : k == 2 ? c.b : dot(c, vec3(0.2126, 0.7152, 0.0722));\noutColor = vec4(vec3(v), 1.);",
-      "hash": "19c4e3b2"
+      "hash": "72bbb1cb"
     },
     {
       "type": "colorSelect",
@@ -4577,7 +4577,7 @@
         }
       ],
       "glsl": "float d = distance(inC_in(uv).rgb, p_color);\noutColor = vec4(vec3(1. - smoothstep(p_tolerance, p_tolerance + p_softness * 0.3 + 1e-3, d)), 1.);",
-      "hash": "8c112f0e"
+      "hash": "cbcfc721"
     },
     {
       "type": "replaceColor",
@@ -4649,7 +4649,7 @@
         }
       ],
       "glsl": "vec3 c = inC_in(uv).rgb;\nfloat m = 1. - smoothstep(p_tolerance, p_tolerance + p_softness * 0.3 + 1e-3, distance(c, p_from));\noutColor = vec4(mix(c, clamp(c + (p_to - p_from), 0., 1.), m), 1.);",
-      "hash": "40dd0feb"
+      "hash": "74e45830"
     },
     {
       "type": "desaturate",
@@ -4692,7 +4692,7 @@
         }
       ],
       "glsl": "vec3 c = inC_in(uv).rgb; outColor = vec4(mix(c, vec3(dot(c, vec3(0.2126, 0.7152, 0.0722))), p_amount), 1.);",
-      "hash": "55f322e3"
+      "hash": "6329b1f8"
     },
     {
       "type": "colorVariation",
@@ -4766,7 +4766,7 @@
         }
       ],
       "glsl": "float n = fbm(uv, p_scale, 4., 0.5, 0., p_seed) - 0.5; float n2 = fbm(uv, p_scale, 4., 0.5, 0., p_seed + 9.) - 0.5;\nvec3 h = rgb2hsv(inC_in(uv).rgb); h.x = fract(h.x + n2 * p_hue * 2.); h.z = clamp(h.z * (1. + n * p_amount * 2.), 0., 1.);\noutColor = vec4(hsv2rgb(h), 1.);",
-      "hash": "f4583232"
+      "hash": "645a4c2f"
     },
     {
       "type": "temperature",
@@ -4820,7 +4820,7 @@
         }
       ],
       "glsl": "vec3 c = inC_in(uv).rgb; c.r += p_warmth * 0.12; c.b -= p_warmth * 0.12; c.g -= p_tint * 0.1; c.rb += p_tint * 0.04;\noutColor = vec4(clamp(c, 0., 1.), 1.);",
-      "hash": "e6f8a4ca"
+      "hash": "48c044fd"
     },
     {
       "type": "normalBlend",
@@ -4876,7 +4876,7 @@
         }
       ],
       "glsl": "vec3 a = inC_base(uv).rgb * 2. - 1.; vec3 b = inC_detail(uv).rgb * 2. - 1.; b.xy *= p_strength;\noutColor = vec4(normalize(vec3(a.xy + b.xy, max(a.z * b.z, 1e-3))) * 0.5 + 0.5, 1.);",
-      "hash": "b203840a"
+      "hash": "ee5c71ea"
     },
     {
       "type": "normalAdjust",
@@ -4928,7 +4928,7 @@
         }
       ],
       "glsl": "vec3 n = inC_in(uv).rgb * 2. - 1.; n.xy *= p_strength; if (p_flip > 0.5) n.y = -n.y;\noutColor = vec4(normalize(vec3(n.xy, max(n.z, 1e-3))) * 0.5 + 0.5, 1.);",
-      "hash": "afcfadf8"
+      "hash": "d4f1ab9d"
     },
     {
       "type": "edgeWear",
@@ -5002,7 +5002,7 @@
         }
       ],
       "glsl": "float h = inG_in(uv); float r = 0.004;\nfloat lap = 4. * h - inG_in(uv + vec2(r, 0.)) - inG_in(uv - vec2(r, 0.)) - inG_in(uv + vec2(0., r)) - inG_in(uv - vec2(0., r));\nfloat edge = clamp(lap * 40., 0., 1.); float n = fbm(uv, p_scale, 5., 0.6, 0., p_seed);\nfloat v = edge * mix(1., n * 1.6, p_breakup);\noutColor = vec4(vec3(smoothstep(1. - p_amount, 1. - p_amount + 0.15, v)), 1.);",
-      "hash": "16124dcc"
+      "hash": "307534c5"
     },
     {
       "type": "dirt",
@@ -5065,7 +5065,7 @@
         }
       ],
       "glsl": "float h = inG_in(uv); float s = 0., w = 0.;\nfor (int y = -2; y <= 2; y++) for (int x = -2; x <= 2; x++) { vec2 o = vec2(x, y) / 2.; float k = exp(-dot(o, o)); s += inG_in(uv + o * 0.03) * k; w += k; }\nfloat cav = clamp((s / w - h) * 8., 0., 1.); float n = fbm(uv, p_scale, 5., 0.55, 0., p_seed);\noutColor = vec4(vec3(clamp(cav * 1.5 + (n - 1. + p_amount) * 1.5, 0., 1.)), 1.);",
-      "hash": "1778ff5d"
+      "hash": "18b9812a"
     },
     {
       "type": "drips",
@@ -6547,7 +6547,7 @@
         }
       ],
       "glsl": "vec2 p = uv * p_tiles; vec2 c = floor(p); vec2 f = fract(p) - 0.5; vec2 o = seedv(p_seed); vec2 cm = mod(c, p_tiles);\nfloat r = hash12(cm + o);\nif (p_turn > 0.5) { float k = floor(r * 4.); if (k > 0.5 && k < 1.5) f = vec2(-f.y, f.x); else if (k > 1.5 && k < 2.5) f = -f; else if (k > 2.5) f = vec2(f.y, -f.x); }\nif (p_flip > 0.5 && hash12(cm + o + 3.3) > 0.5) f.x = -f.x;\nvec3 col = inC_in((c + f + 0.5) / p_tiles).rgb * (1. - p_bright * hash12(cm + o + 6.1));\noutColor = vec4(col, 1.);",
-      "hash": "e5984ef7"
+      "hash": "c06bfb22"
     },
     {
       "type": "halftone",
@@ -6635,7 +6635,7 @@
         }
       ],
       "glsl": "vec2 p = uv * p_grid; vec2 ctr;\nif (p_angle < 0.5) ctr = floor(p) + 0.5;\nelse { vec2 r = vec2(p.x + p.y, p.x - p.y); vec2 rc = floor(r * 0.5) * 2. + 1.; ctr = vec2(rc.x + rc.y, rc.x - rc.y) * 0.5; }\nfloat dd = length(p - ctr) / (p_angle < 0.5 ? 0.70711 : 1.);\nfloat g = inG_in(ctr / p_grid); if (p_invert > 0.5) g = 1. - g;\nfloat rad = sqrt(clamp(g, 0., 1.)); float s = max(p_softness * 0.3, 0.02);\noutColor = vec4(vec3(1. - smoothstep(rad - s, rad, dd)), 1.);",
-      "hash": "ba5be986"
+      "hash": "d654f287"
     },
     {
       "type": "highPass",
@@ -6690,7 +6690,7 @@
         }
       ],
       "glsl": "vec3 s = vec3(0.); float w = 0.;\nfor (int y = -3; y <= 3; y++) for (int x = -3; x <= 3; x++) {\n  vec2 o = vec2(x, y) / 3.; float k = exp(-dot(o, o) * 2.);\n  s += inC_in(uv + o * p_radius).rgb * k; w += k;\n}\noutColor = vec4(clamp((inC_in(uv).rgb - s / w) * p_strength + 0.5, 0., 1.), 1.);",
-      "hash": "5acacc72"
+      "hash": "d0d367bb"
     },
     {
       "type": "growShrink",
@@ -6759,7 +6759,7 @@
         }
       ],
       "glsl": "vec3 r = inC_in(uv).rgb; bool grow = p_mode < 0.5;\nfor (int y = -3; y <= 3; y++) for (int x = -3; x <= 3; x++) {\n  vec2 o = vec2(x, y) / 3.; if (dot(o, o) > 1.) continue;\n  vec3 c = inC_in(uv + o * p_radius).rgb; r = grow ? max(r, c) : min(r, c);\n}\noutColor = vec4(r, 1.);",
-      "hash": "c566074b"
+      "hash": "ca92a284"
     },
     {
       "type": "edgeBlur",
@@ -6846,7 +6846,7 @@
         }
       ],
       "glsl": "float v = inG_in(uv); bool inside = v > p_cut;\n// The nearest spot on the other side of the outline, searched in rings out to the width.\nfloat near = 1.;\nif (p_width > 0.) {\n  for (int r = 1; r <= 12; r++) {\n    float rr = float(r) / 12.;\n    if (rr > near) break;\n    for (int k = 0; k < 24; k++) {\n      float a = (float(k) + 0.5 * float(r & 1)) * (2. * PI / 24.);\n      vec2 dir = vec2(cos(a), sin(a));\n      bool other = (inG_in(uv + dir * rr * p_width) > p_cut) != inside;\n      if (other) {\n        // Narrow it down between this ring and the one before (no steps in the fade).\n        float lo = rr - 1. / 12., hi = rr;\n        for (int b = 0; b < 5; b++) {\n          float m = 0.5 * (lo + hi);\n          if ((inG_in(uv + dir * m * p_width) > p_cut) != inside) hi = m; else lo = m;\n        }\n        near = min(near, hi);\n      }\n    }\n  }\n}\nfloat e = near * near * (3. - 2. * near);\nfloat o;\nif (p_mode < 0.5) o = v * e;\nelse if (p_mode > 1.5) o = inside ? v : max(v, 1. - e);\nelse { float s = inside ? 0.5 + 0.5 * near : 0.5 - 0.5 * near; o = s * s * (3. - 2. * s); }\noutColor = vec4(vec3(o), 1.);",
-      "hash": "2c402a0c"
+      "hash": "c9e6bb23"
     },
     {
       "type": "rippleWarp",
@@ -6933,7 +6933,7 @@
         }
       ],
       "glsl": "vec2 o = vec2(sin(uv.y * p_count * 6.2831853), sin(uv.x * p_count * 6.2831853)) * p_amount;\nif (p_mode > 0.5 && p_mode < 1.5) o.y = 0.; else if (p_mode > 1.5) o.x = 0.;\noutColor = vec4(inC_in(uv + o).rgb, 1.);",
-      "hash": "395894f9"
+      "hash": "4a05767e"
     },
     {
       "type": "stagger",
@@ -7030,7 +7030,7 @@
         }
       ],
       "glsl": "vec2 q = p_direction < 0.5 ? uv : uv.yx; float row = floor(q.y * p_rows);\nfloat s = p_random > 0.5 ? hash12(vec2(mod(row, p_rows), 4.) + seedv(p_seed)) * p_offset : mod(row, 2.) * p_offset;\nq.x += s; if (p_direction > 0.5) q = q.yx;\noutColor = vec4(inC_in(q).rgb, 1.);",
-      "hash": "e0f77418"
+      "hash": "afaca1e3"
     },
     {
       "type": "cellPick",
@@ -7146,7 +7146,7 @@
         }
       ],
       "glsl": "float id = p_shape < 0.5 ? hash12(mod(floor(uv * p_scale), p_scale) + seedv(p_seed)) : voronoi(uv, p_scale, 1., p_seed).z;\n// Only the linked inputs take part.\nfloat n = h_a + h_b + h_c + h_d; float k = floor(id * max(n, 1.)); vec3 col = inC_a(uv).rgb;\nfloat seen = 0.;\nif (h_a > 0.5) { if (seen == k) col = inC_a(uv).rgb; seen += 1.; }\nif (h_b > 0.5) { if (seen == k) col = inC_b(uv).rgb; seen += 1.; }\nif (h_c > 0.5) { if (seen == k) col = inC_c(uv).rgb; seen += 1.; }\nif (h_d > 0.5) { if (seen == k) col = inC_d(uv).rgb; seen += 1.; }\noutColor = vec4(col, 1.);",
-      "hash": "5992b106"
+      "hash": "1f93b1f6"
     },
     {
       "type": "colorBalance",
@@ -7216,7 +7216,7 @@
         }
       ],
       "glsl": "vec3 c = inC_in(uv).rgb; float g = dot(c, vec3(0.2126, 0.7152, 0.0722));\nfloat ws = 1. - smoothstep(0., 0.5, g), wl = smoothstep(0.5, 1., g), wm = 1. - ws - wl;\nvec3 shift = (p_shadows - 0.5) * ws + (p_mids - 0.5) * wm + (p_lights - 0.5) * wl;\noutColor = vec4(clamp(c + shift * p_amount, 0., 1.), 1.);",
-      "hash": "c85643d9"
+      "hash": "f6bd6e0e"
     },
     {
       "type": "palette",
@@ -7316,7 +7316,7 @@
         }
       ],
       "glsl": "int k = int(p_preset + 0.5); vec3 a = vec3(0.5), b = vec3(0.5), c = vec3(1.), d = vec3(0., 0.33, 0.67);\nif (k == 1) { c = vec3(1., 1., 1.); d = vec3(0., 0.1, 0.2); a = vec3(0.6, 0.35, 0.15); b = vec3(0.5, 0.4, 0.2); }\nelse if (k == 2) { a = vec3(0.2, 0.45, 0.6); b = vec3(0.2, 0.3, 0.3); d = vec3(0.5, 0.2, 0.25); }\nelse if (k == 3) { c = vec3(2., 1., 0.); d = vec3(0.5, 0.2, 0.25); }\nelse if (k == 4) { a = vec3(0.4, 0.6, 0.3); b = vec3(0.4, 0.4, 0.3); c = vec3(1., 1., 0.5); d = vec3(0.8, 0.9, 0.3); }\nfloat t = inG_in(uv) * p_repeats + p_shift;\noutColor = vec4(clamp(a + b * cos(6.2831853 * (c * t + d)), 0., 1.), 1.);",
-      "hash": "ce06b609"
+      "hash": "aa898c0c"
     },
     {
       "type": "puddles",
@@ -7401,7 +7401,7 @@
         }
       ],
       "glsl": "float h = inG_in(uv) + (fbm(uv, p_scale, 5., 0.55, 0., p_seed) - 0.5) * p_breakup * 0.6;\noutColor = vec4(vec3(1. - smoothstep(p_level - p_edge, p_level + p_edge + 1e-4, h)), 1.);",
-      "hash": "1d26532f"
+      "hash": "e253d332"
     },
     {
       "type": "topCover",
@@ -7486,7 +7486,7 @@
         }
       ],
       "glsl": "float e = 0.006; float h = inG_in(uv);\nfloat up = clamp((h - inG_in(uv - vec2(0., e))) / e * 0.08 + 0.5, 0., 1.);\nfloat v = mix(up, h, p_tops) + (fbm(uv, p_scale, 5., 0.55, 0., p_seed) - 0.5) * p_breakup;\nfloat m = 1. - p_amount;\noutColor = vec4(vec3(smoothstep(m - 0.08, m + 0.08, v)), 1.);",
-      "hash": "49aba443"
+      "hash": "bb20b0a6"
     },
     {
       "type": "slopeMask",
@@ -7576,7 +7576,7 @@
         }
       ],
       "glsl": "float e = 0.004;\nvec2 g = vec2(inG_in(uv + vec2(e, 0.)) - inG_in(uv - vec2(e, 0.)), inG_in(uv + vec2(0., e)) - inG_in(uv - vec2(0., e))) / (2. * e);\nfloat s = clamp(length(g) * p_strength * 0.05, 0., 1.);\nfloat v = smoothstep(p_threshold - p_softness, p_threshold + p_softness + 1e-4, s);\nif (p_mode > 0.5) v = 1. - v;\noutColor = vec4(vec3(v), 1.);",
-      "hash": "f3b45836"
+      "hash": "9484c723"
     },
     {
       "type": "clouds1",
@@ -8767,7 +8767,7 @@
         }
       ],
       "glsl": "float a = radians(p_angle); mat2 r = mat2(cos(a), -sin(a), sin(a), cos(a));\nvec2 size = max(vec2(p_w, p_h), vec2(1e-4));\nvec3 bg = inC_bg(uv).rgb; vec3 col = bg; bool hit = false; vec3 pic = vec3(0.);\nif (p_repeat > 0.5) { pic = inC_in(r * (uv - vec2(p_x, p_y)) / size + 0.5).rgb; hit = true; }\nelse {\n  // The copy and its neighbours one square away, so it wraps across the edges.\n  for (int oy = -1; oy <= 1; oy++) for (int ox = -1; ox <= 1; ox++) {\n    vec2 q = r * (uv + vec2(float(ox), float(oy)) - vec2(p_x, p_y)) / size;\n    if (!hit && abs(q.x) <= 0.5 && abs(q.y) <= 0.5) { pic = inC_in(q + 0.5).rgb; hit = true; }\n  }\n}\nif (hit) { int m = int(p_mode + 0.5); col = m == 0 ? pic : m == 1 ? max(bg, pic) : m == 2 ? bg + pic : min(bg, pic); }\noutColor = vec4(col, 1.);",
-      "hash": "36b8fae1"
+      "hash": "9ede9179"
     },
     {
       "type": "outColor",
@@ -8799,7 +8799,7 @@
       "role": "color",
       "params": [],
       "glsl": "outColor = vec4(inC_in(uv).rgb, 1.);",
-      "hash": "8b3d7a05"
+      "hash": "9c2e4524"
     },
     {
       "type": "outHeight",
@@ -8831,7 +8831,7 @@
       "role": "height",
       "params": [],
       "glsl": "float v = inG_in(uv); outColor = vec4(vec3(v), 1.);",
-      "hash": "f07eeb40"
+      "hash": "1f1a90ab"
     },
     {
       "type": "outNormal",
@@ -8863,7 +8863,7 @@
       "role": "normal",
       "params": [],
       "glsl": "outColor = vec4(inC_in(uv).rgb, 1.);",
-      "hash": "d1e74c57"
+      "hash": "d59fc206"
     },
     {
       "type": "outRoughness",
@@ -8895,7 +8895,7 @@
       "role": "roughness",
       "params": [],
       "glsl": "float v = inG_in(uv); outColor = vec4(vec3(v), 1.);",
-      "hash": "b65cc607"
+      "hash": "9ce2f01c"
     },
     {
       "type": "outMetal",
@@ -8927,7 +8927,7 @@
       "role": "metalness",
       "params": [],
       "glsl": "float v = inG_in(uv); outColor = vec4(vec3(v), 1.);",
-      "hash": "b7eb8fdf"
+      "hash": "4f12b514"
     },
     {
       "type": "outOcclusion",
@@ -8959,7 +8959,7 @@
       "role": "occlusion",
       "params": [],
       "glsl": "float v = inG_in(uv); outColor = vec4(vec3(v), 1.);",
-      "hash": "b88aca60"
+      "hash": "ea010fb3"
     },
     {
       "type": "outGlow",
@@ -8991,7 +8991,7 @@
       "role": "glow",
       "params": [],
       "glsl": "outColor = vec4(inC_in(uv).rgb, 1.);",
-      "hash": "8698166a"
+      "hash": "22489aeb"
     },
     {
       "type": "outOpacity",
@@ -9023,7 +9023,7 @@
       "role": "opacity",
       "params": [],
       "glsl": "float v = inG_in(uv); outColor = vec4(vec3(v), 1.);",
-      "hash": "b88aca60"
+      "hash": "ea010fb3"
     },
     {
       "type": "outWearColor",
@@ -9055,7 +9055,7 @@
       "role": "wearColor",
       "params": [],
       "glsl": "outColor = vec4(inC_in(uv).rgb, 1.);",
-      "hash": "56efa4fc"
+      "hash": "3491259d"
     },
     {
       "type": "outWearRoughness",
@@ -9087,7 +9087,7 @@
       "role": "wearRoughness",
       "params": [],
       "glsl": "float v = inG_in(uv); outColor = vec4(vec3(v), 1.);",
-      "hash": "174b988b"
+      "hash": "364b9a6c"
     },
     {
       "type": "outWearMetal",
@@ -9119,7 +9119,7 @@
       "role": "wearMetal",
       "params": [],
       "glsl": "float v = inG_in(uv); outColor = vec4(vec3(v), 1.);",
-      "hash": "b88aca60"
+      "hash": "ea010fb3"
     },
     {
       "type": "outWearNoise",
@@ -9151,7 +9151,7 @@
       "role": "wearNoise",
       "params": [],
       "glsl": "float v = inG_in(uv); outColor = vec4(vec3(v), 1.);",
-      "hash": "f07eeb40"
+      "hash": "1f1a90ab"
     }
   ]
 }

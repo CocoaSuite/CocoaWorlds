@@ -570,8 +570,11 @@ for (int it = 0; it < 12; it++) {
   sc = nc;
   if (done) break;
 }
-// The extent once more, from where it settled (so every pixel of the shape uses the same one).
+// The extent once more, from the shape's id spot (the same for every pixel of it, so they all use one extent).
 {
+  float cs0 = st * 4.;
+  vec2 sq = floor(sc / cs0 + 0.5) * cs0;
+  if (inG_in(sq) >= p_threshold) sc = sq;
   float ext[4];
   for (int q = 0; q < 4; q++) {
     vec2 dir = q == 0 ? vec2(-1., 0.) : q == 1 ? vec2(1., 0.) : q == 2 ? vec2(0., -1.) : vec2(0., 1.);
@@ -585,7 +588,8 @@ for (int it = 0; it < 12; it++) {
 }
 // (Wrapped whole, so a shape crossing the square's edge gets one id on both sides.)
 float cs = st * 4.; float n = floor(1. / cs + 0.5);
-vec2 id = mod(floor(sc / cs), n);
+// (Rounded rather than cut: regular tiles have their middles exactly on the grid's lines.)
+vec2 id = mod(floor(sc / cs + 0.5), n);
 vec2 ctr = fract(sc);
 float h = hash12(id + seedv(p_seed));
 int g = int(p_gives + 0.5); vec3 c;
@@ -657,8 +661,11 @@ for (int it = 0; it < 12; it++) {
   sc = nc;
   if (done) break;
 }
-// The extent once more, from where it settled (so every pixel of the shape uses the same one).
+// The extent once more, from the shape's id spot (the same for every pixel of it, so they all use one extent).
 {
+  float cs0 = st * 4.;
+  vec2 sq = floor(sc / cs0 + 0.5) * cs0;
+  if (inG_in(sq) >= p_threshold) sc = sq;
   float ext[4];
   for (int q = 0; q < 4; q++) {
     vec2 dir = q == 0 ? vec2(-1., 0.) : q == 1 ? vec2(1., 0.) : q == 2 ? vec2(0., -1.) : vec2(0., 1.);
@@ -672,7 +679,8 @@ for (int it = 0; it < 12; it++) {
 }
 // (Wrapped whole, so a shape crossing the square's edge gets one id on both sides.)
 float cs = st * 4.; float n = floor(1. / cs + 0.5);
-vec2 id = mod(floor(sc / cs), n);
+// (Rounded rather than cut: regular tiles have their middles exactly on the grid's lines.)
+vec2 id = mod(floor(sc / cs + 0.5), n);
 vec2 ctr = fract(sc);
 float h1 = hash12(id + seedv(p_seed)), h2 = hash12(id + seedv(p_seed) + 5.7);
 // Where in its shape this pixel is: -1..1 each way.
