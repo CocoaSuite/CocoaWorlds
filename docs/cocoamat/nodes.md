@@ -79,7 +79,7 @@ outColor = vec4(vec3(h), 1.);
 
 A circle, square, polygon or star, repeated to tile.
 
-Makes: grey · hash `43b18540`
+Makes: grey · hash `9cb8fe82`
 
 | Setting | Kind | Range | Default |
 |---|---|---|---|
@@ -87,7 +87,6 @@ Makes: grey · hash `43b18540`
 | `sides` (Sides) | int | 3 – 12 | `6` |
 | `size` (Size) | number | 0 – 1.5 | `0.7` |
 | `softness` (Softness) | number | 0 – 1 | `0.05` |
-| `edgeBlur` (Edge blur) | number | 0 – 1 | `0` |
 | `tiles` (Repeat) | int | 1 – 32 | `1` |
 | `angle` (Turn) | number | 0 – 360 (step 1) | `0` |
 
@@ -103,10 +102,7 @@ else {
   if (p_kind > 2.5) { float k = abs(fract(a / r) - 0.5) * 2.; d *= mix(1.6, 0.8, k); }
 }
 float s = max(p_softness * 0.5, 0.002);
-float v = 1. - smoothstep(p_size - s, p_size + s, d);
-// Edge blur: fades in from the outline (the inside stays solid), for blending into what is under it.
-if (p_edgeBlur > 0.) { float e = clamp((p_size - d) / max(p_edgeBlur * p_size, 1e-4), 0., 1.); v *= e * e * (3. - 2. * e); }
-outColor = vec4(vec3(v), 1.);
+outColor = vec4(vec3(1. - smoothstep(p_size - s, p_size + s, d)), 1.);
 ```
 
 ### Gradient — `gradient`

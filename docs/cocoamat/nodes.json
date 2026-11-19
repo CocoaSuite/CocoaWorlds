@@ -372,17 +372,6 @@
           "max": 1
         },
         {
-          "id": "edgeBlur",
-          "kind": "number",
-          "label": {
-            "en": "Edge blur",
-            "ru": "Edge blur"
-          },
-          "default": 0,
-          "min": 0,
-          "max": 1
-        },
-        {
           "id": "tiles",
           "kind": "int",
           "label": {
@@ -406,8 +395,8 @@
           "step": 1
         }
       ],
-      "glsl": "vec2 p = fract(uv * p_tiles) - 0.5;\nfloat a0 = radians(p_angle); p = mat2(cos(a0), -sin(a0), sin(a0), cos(a0)) * p;\nfloat d;\nif (p_kind < 0.5) d = length(p) * 2.;\nelse if (p_kind < 1.5) d = max(abs(p.x), abs(p.y)) * 2.;\nelse {\n  float a = atan(p.x, -p.y) + PI; float r = 2. * PI / p_sides;\n  d = cos(floor(0.5 + a / r) * r - a) * length(p) * 2.;\n  if (p_kind > 2.5) { float k = abs(fract(a / r) - 0.5) * 2.; d *= mix(1.6, 0.8, k); }\n}\nfloat s = max(p_softness * 0.5, 0.002);\nfloat v = 1. - smoothstep(p_size - s, p_size + s, d);\n// Edge blur: fades in from the outline (the inside stays solid), for blending into what is under it.\nif (p_edgeBlur > 0.) { float e = clamp((p_size - d) / max(p_edgeBlur * p_size, 1e-4), 0., 1.); v *= e * e * (3. - 2. * e); }\noutColor = vec4(vec3(v), 1.);",
-      "hash": "43b18540"
+      "glsl": "vec2 p = fract(uv * p_tiles) - 0.5;\nfloat a0 = radians(p_angle); p = mat2(cos(a0), -sin(a0), sin(a0), cos(a0)) * p;\nfloat d;\nif (p_kind < 0.5) d = length(p) * 2.;\nelse if (p_kind < 1.5) d = max(abs(p.x), abs(p.y)) * 2.;\nelse {\n  float a = atan(p.x, -p.y) + PI; float r = 2. * PI / p_sides;\n  d = cos(floor(0.5 + a / r) * r - a) * length(p) * 2.;\n  if (p_kind > 2.5) { float k = abs(fract(a / r) - 0.5) * 2.; d *= mix(1.6, 0.8, k); }\n}\nfloat s = max(p_softness * 0.5, 0.002);\noutColor = vec4(vec3(1. - smoothstep(p_size - s, p_size + s, d)), 1.);",
+      "hash": "9cb8fe82"
     },
     {
       "type": "gradient",
