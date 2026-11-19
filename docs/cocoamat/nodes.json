@@ -888,6 +888,222 @@
       "hash": "d67bb2ae"
     },
     {
+      "type": "histogramScan",
+      "group": "change",
+      "label": {
+        "en": "Histogram scan",
+        "ru": "Histogram scan"
+      },
+      "hint": {
+        "en": "Turn a grey picture into a mask: Position slides the cut from dark to light (more white as it rises), Contrast hardens the edge.",
+        "ru": "Turn a grey picture into a mask: Position slides the cut from dark to light (more white as it rises), Contrast hardens the edge."
+      },
+      "inputs": [
+        {
+          "id": "in",
+          "kind": "grey",
+          "label": {
+            "en": "In",
+            "ru": "Вход"
+          },
+          "fallback": [
+            0,
+            0,
+            0
+          ]
+        }
+      ],
+      "output": "grey",
+      "params": [
+        {
+          "id": "position",
+          "kind": "number",
+          "label": {
+            "en": "Position",
+            "ru": "Position"
+          },
+          "default": 0.5,
+          "min": 0,
+          "max": 1
+        },
+        {
+          "id": "contrast",
+          "kind": "number",
+          "label": {
+            "en": "Contrast",
+            "ru": "Contrast"
+          },
+          "default": 0.5,
+          "min": 0,
+          "max": 1
+        }
+      ],
+      "glsl": "float w = max(1. - p_contrast, 0.001);\noutColor = vec4(vec3(clamp((inG_in(uv) - (1. - p_position)) / w + 0.5, 0., 1.)), 1.);",
+      "hash": "27098350"
+    },
+    {
+      "type": "histogramRange",
+      "group": "change",
+      "label": {
+        "en": "Histogram range",
+        "ru": "Histogram range"
+      },
+      "hint": {
+        "en": "Squeeze the greys into a narrower range (Range) and place it lighter or darker (Position).",
+        "ru": "Squeeze the greys into a narrower range (Range) and place it lighter or darker (Position)."
+      },
+      "inputs": [
+        {
+          "id": "in",
+          "kind": "grey",
+          "label": {
+            "en": "In",
+            "ru": "Вход"
+          },
+          "fallback": [
+            0,
+            0,
+            0
+          ]
+        }
+      ],
+      "output": "grey",
+      "params": [
+        {
+          "id": "range",
+          "kind": "number",
+          "label": {
+            "en": "Range",
+            "ru": "Range"
+          },
+          "default": 0.5,
+          "min": 0,
+          "max": 1
+        },
+        {
+          "id": "position",
+          "kind": "number",
+          "label": {
+            "en": "Position",
+            "ru": "Position"
+          },
+          "default": 0.5,
+          "min": 0,
+          "max": 1
+        }
+      ],
+      "glsl": "outColor = vec4(vec3(clamp((inG_in(uv) - 0.5) * p_range + p_position, 0., 1.)), 1.);",
+      "hash": "262aa9e8"
+    },
+    {
+      "type": "histogramShift",
+      "group": "change",
+      "label": {
+        "en": "Histogram shift",
+        "ru": "Histogram shift"
+      },
+      "hint": {
+        "en": "Slide every grey lighter, wrapping white round to black (moves stripes of a gradient along).",
+        "ru": "Slide every grey lighter, wrapping white round to black (moves stripes of a gradient along)."
+      },
+      "inputs": [
+        {
+          "id": "in",
+          "kind": "grey",
+          "label": {
+            "en": "In",
+            "ru": "Вход"
+          },
+          "fallback": [
+            0,
+            0,
+            0
+          ]
+        }
+      ],
+      "output": "grey",
+      "params": [
+        {
+          "id": "position",
+          "kind": "number",
+          "label": {
+            "en": "Position",
+            "ru": "Position"
+          },
+          "default": 0,
+          "min": 0,
+          "max": 1
+        }
+      ],
+      "glsl": "outColor = vec4(vec3(fract(inG_in(uv) + p_position)), 1.);",
+      "hash": "bb7ea0fa"
+    },
+    {
+      "type": "histogramSelect",
+      "group": "change",
+      "label": {
+        "en": "Histogram select",
+        "ru": "Histogram select"
+      },
+      "hint": {
+        "en": "Pick out one band of greys as white (Position: which grey, Range: how wide, Contrast: how hard its edges).",
+        "ru": "Pick out one band of greys as white (Position: which grey, Range: how wide, Contrast: how hard its edges)."
+      },
+      "inputs": [
+        {
+          "id": "in",
+          "kind": "grey",
+          "label": {
+            "en": "In",
+            "ru": "Вход"
+          },
+          "fallback": [
+            0,
+            0,
+            0
+          ]
+        }
+      ],
+      "output": "grey",
+      "params": [
+        {
+          "id": "position",
+          "kind": "number",
+          "label": {
+            "en": "Position",
+            "ru": "Position"
+          },
+          "default": 0.5,
+          "min": 0,
+          "max": 1
+        },
+        {
+          "id": "range",
+          "kind": "number",
+          "label": {
+            "en": "Range",
+            "ru": "Range"
+          },
+          "default": 0.25,
+          "min": 0,
+          "max": 1
+        },
+        {
+          "id": "contrast",
+          "kind": "number",
+          "label": {
+            "en": "Contrast",
+            "ru": "Contrast"
+          },
+          "default": 0.5,
+          "min": 0,
+          "max": 1
+        }
+      ],
+      "glsl": "float half_ = p_range * 0.5; float soft = max((1. - p_contrast) * half_, 0.001);\nfloat d = abs(inG_in(uv) - p_position);\noutColor = vec4(vec3(1. - smoothstep(half_ - soft, half_ + soft, d)), 1.);",
+      "hash": "774d709b"
+    },
+    {
       "type": "curve",
       "group": "change",
       "label": {
@@ -1394,6 +1610,17 @@
           ]
         },
         {
+          "id": "angleVar",
+          "kind": "number",
+          "label": {
+            "en": "Random angle",
+            "ru": "Random angle"
+          },
+          "default": 0,
+          "min": 0,
+          "max": 1
+        },
+        {
           "id": "threshold",
           "kind": "number",
           "label": {
@@ -1414,8 +1641,8 @@
           "default": 0
         }
       ],
-      "glsl": "if (inG_in(uv) < p_threshold) { outColor = vec4(0., 0., 0., 1.); return; }\n// The shape's extent: step out each way until the mask goes dark (2 pixels a step).\nfloat st = u_px * 2.; float l = 0., r = 0., u = 0., d = 0.;\nfor (int k = 1; k <= 160; k++) { if (inG_in(uv - vec2(float(k) * st, 0.)) < p_threshold) break; l = float(k) * st; }\nfor (int k = 1; k <= 160; k++) { if (inG_in(uv + vec2(float(k) * st, 0.)) < p_threshold) break; r = float(k) * st; }\nfor (int k = 1; k <= 160; k++) { if (inG_in(uv - vec2(0., float(k) * st)) < p_threshold) break; u = float(k) * st; }\nfor (int k = 1; k <= 160; k++) { if (inG_in(uv + vec2(0., float(k) * st)) < p_threshold) break; d = float(k) * st; }\nvec2 lo = uv - vec2(l, u), hi = uv + vec2(r, d);\nvec2 ctr = fract((lo + hi) * 0.5);\n// One id per shape: its centre, rounded to a few pixels so every pixel of it agrees (wrapped whole, so a shape\n// crossing the square's edge gets one id on both sides).\nfloat cell = st * 4.; float n = floor(1. / cell + 0.5);\nvec2 id = mod(floor((lo + hi) * 0.5 / cell + 0.5), n);\nfloat h = hash12(id + seedv(p_seed));\nint g = int(p_gives + 0.5); vec3 c;\nif (g == 0) c = vec3(h);\nelse if (g == 1) c = hsv2rgb(vec3(h, 0.55 + 0.4 * hash12(id + seedv(p_seed) + 3.3), 0.6 + 0.4 * hash12(id + seedv(p_seed) + 7.1)));\nelse if (g == 2) {\n  vec2 t = (uv - lo) / max(hi - lo, vec2(1e-4));\n  float a = p_direction < 0.5 ? 0. : p_direction < 1.5 ? 1.5707963 : h * 6.2831853;\n  vec2 dv = vec2(cos(a), sin(a));\n  float v = dot(t - 0.5, dv) / (abs(dv.x) * 0.5 + abs(dv.y) * 0.5 + 1e-4) * 0.5 + 0.5;\n  c = vec3(clamp(v, 0., 1.));\n}\nelse if (g == 3) c = vec3(ctr, 0.);\nelse c = vec3(clamp((hi - lo) * 1., 0., 1.), 0.);\noutColor = vec4(c, 1.);",
-      "hash": "47a3a396"
+      "glsl": "if (inG_in(uv) < p_threshold) { outColor = vec4(0., 0., 0., 1.); return; }\n// The shape's extent: step out each way until the mask goes dark (2 pixels a step).\nfloat st = u_px * 2.; float l = 0., r = 0., u = 0., d = 0.;\nfor (int k = 1; k <= 160; k++) { if (inG_in(uv - vec2(float(k) * st, 0.)) < p_threshold) break; l = float(k) * st; }\nfor (int k = 1; k <= 160; k++) { if (inG_in(uv + vec2(float(k) * st, 0.)) < p_threshold) break; r = float(k) * st; }\nfor (int k = 1; k <= 160; k++) { if (inG_in(uv - vec2(0., float(k) * st)) < p_threshold) break; u = float(k) * st; }\nfor (int k = 1; k <= 160; k++) { if (inG_in(uv + vec2(0., float(k) * st)) < p_threshold) break; d = float(k) * st; }\nvec2 lo = uv - vec2(l, u), hi = uv + vec2(r, d);\nvec2 ctr = fract((lo + hi) * 0.5);\n// One id per shape: its centre, rounded to a few pixels so every pixel of it agrees (wrapped whole, so a shape\n// crossing the square's edge gets one id on both sides).\nfloat cell = st * 4.; float n = floor(1. / cell + 0.5);\nvec2 id = mod(floor((lo + hi) * 0.5 / cell + 0.5), n);\nfloat h = hash12(id + seedv(p_seed));\nint g = int(p_gives + 0.5); vec3 c;\nif (g == 0) c = vec3(h);\nelse if (g == 1) c = hsv2rgb(vec3(h, 0.55 + 0.4 * hash12(id + seedv(p_seed) + 3.3), 0.6 + 0.4 * hash12(id + seedv(p_seed) + 7.1)));\nelse if (g == 2) {\n  vec2 t = (uv - lo) / max(hi - lo, vec2(1e-4));\n  float a = p_direction < 0.5 ? 0. : p_direction < 1.5 ? 1.5707963 : h * 6.2831853;\n  a += (hash12(id + seedv(p_seed) + 11.3) - 0.5) * 6.2831853 * p_angleVar;\n  vec2 dv = vec2(cos(a), sin(a));\n  float v = dot(t - 0.5, dv) / (abs(dv.x) * 0.5 + abs(dv.y) * 0.5 + 1e-4) * 0.5 + 0.5;\n  c = vec3(clamp(v, 0., 1.));\n}\nelse if (g == 3) c = vec3(ctr, 0.);\nelse c = vec3(clamp((hi - lo) * 1., 0., 1.), 0.);\noutColor = vec4(c, 1.);",
+      "hash": "5086afdc"
     },
     {
       "type": "floodGradient",

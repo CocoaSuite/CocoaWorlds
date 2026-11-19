@@ -336,6 +336,59 @@ x = pow(x, vec3(1. / p_gamma));
 outColor = vec4(mix(vec3(p_outLow), vec3(p_outHigh), x), 1.);`,
   },
   {
+    type: 'histogramScan',
+    group: 'change',
+    label: l('Histogram scan'),
+    hint: l('Turn a grey picture into a mask: Position slides the cut from dark to light (more white as it rises), Contrast hardens the edge.'),
+    inputs: [IN_GREY()],
+    output: 'grey',
+    params: [
+      { id: 'position', label: l('Position'), kind: 'number', min: 0, max: 1, default: 0.5 },
+      { id: 'contrast', label: l('Contrast'), kind: 'number', min: 0, max: 1, default: 0.5 },
+    ],
+    glsl: `float w = max(1. - p_contrast, 0.001);
+outColor = vec4(vec3(clamp((inG_in(uv) - (1. - p_position)) / w + 0.5, 0., 1.)), 1.);`,
+  },
+  {
+    type: 'histogramRange',
+    group: 'change',
+    label: l('Histogram range'),
+    hint: l('Squeeze the greys into a narrower range (Range) and place it lighter or darker (Position).'),
+    inputs: [IN_GREY()],
+    output: 'grey',
+    params: [
+      { id: 'range', label: l('Range'), kind: 'number', min: 0, max: 1, default: 0.5 },
+      { id: 'position', label: l('Position'), kind: 'number', min: 0, max: 1, default: 0.5 },
+    ],
+    glsl: `outColor = vec4(vec3(clamp((inG_in(uv) - 0.5) * p_range + p_position, 0., 1.)), 1.);`,
+  },
+  {
+    type: 'histogramShift',
+    group: 'change',
+    label: l('Histogram shift'),
+    hint: l('Slide every grey lighter, wrapping white round to black (moves stripes of a gradient along).'),
+    inputs: [IN_GREY()],
+    output: 'grey',
+    params: [{ id: 'position', label: l('Position'), kind: 'number', min: 0, max: 1, default: 0 }],
+    glsl: `outColor = vec4(vec3(fract(inG_in(uv) + p_position)), 1.);`,
+  },
+  {
+    type: 'histogramSelect',
+    group: 'change',
+    label: l('Histogram select'),
+    hint: l('Pick out one band of greys as white (Position: which grey, Range: how wide, Contrast: how hard its edges).'),
+    inputs: [IN_GREY()],
+    output: 'grey',
+    params: [
+      { id: 'position', label: l('Position'), kind: 'number', min: 0, max: 1, default: 0.5 },
+      { id: 'range', label: l('Range'), kind: 'number', min: 0, max: 1, default: 0.25 },
+      { id: 'contrast', label: l('Contrast'), kind: 'number', min: 0, max: 1, default: 0.5 },
+    ],
+    glsl: `float half_ = p_range * 0.5; float soft = max((1. - p_contrast) * half_, 0.001);
+float d = abs(inG_in(uv) - p_position);
+outColor = vec4(vec3(1. - smoothstep(half_ - soft, half_ + soft, d)), 1.);`,
+  },
+  {
     type: 'curve',
     group: 'change',
     label: l('Curve', 'Кривая'),
@@ -441,6 +494,7 @@ outColor = vec4(inC_in(q).rgb, 1.);`,
         default: 'grey',
       },
       { id: 'direction', label: l('Gradient', 'Градиент'), kind: 'choice', options: [opt('across', 'Across', 'Поперёк'), opt('down', 'Down', 'Вниз'), opt('random', 'Random way', 'Случайно')], default: 'random' },
+      { id: 'angleVar', label: l('Random angle'), kind: 'number', min: 0, max: 1, default: 0 },
       { id: 'threshold', label: l('White from', 'Белое от'), kind: 'number', min: 0.01, max: 0.99, default: 0.5 },
       seed,
     ],
@@ -464,6 +518,7 @@ else if (g == 1) c = hsv2rgb(vec3(h, 0.55 + 0.4 * hash12(id + seedv(p_seed) + 3.
 else if (g == 2) {
   vec2 t = (uv - lo) / max(hi - lo, vec2(1e-4));
   float a = p_direction < 0.5 ? 0. : p_direction < 1.5 ? 1.5707963 : h * 6.2831853;
+  a += (hash12(id + seedv(p_seed) + 11.3) - 0.5) * 6.2831853 * p_angleVar;
   vec2 dv = vec2(cos(a), sin(a));
   float v = dot(t - 0.5, dv) / (abs(dv.x) * 0.5 + abs(dv.y) * 0.5 + 1e-4) * 0.5 + 0.5;
   c = vec3(clamp(v, 0., 1.));

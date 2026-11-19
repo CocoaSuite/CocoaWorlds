@@ -3,7 +3,7 @@
 <!-- Written from packages/materials/src/catalog.ts. Do not edit by hand: run
      CW_WRITE_CATALOG=1 npx vitest run packages/materials/test/catalog.test.ts -->
 
-Catalog version 1, for graph format `cocoaworlds.material` version 1. 126 nodes.
+Catalog version 1, for graph format `cocoaworlds.material` version 1. 130 nodes.
 How a node is evaluated (uniforms, inputs, uv) is in [the format spec](../cocoamat-format.md), section 5;
 the same data as JSON, with the shared GLSL library, is in [nodes.json](nodes.json).
 
@@ -1357,6 +1357,85 @@ x = pow(x, vec3(1. / p_gamma));
 outColor = vec4(mix(vec3(p_outLow), vec3(p_outHigh), x), 1.);
 ```
 
+### Histogram scan — `histogramScan`
+
+Turn a grey picture into a mask: Position slides the cut from dark to light (more white as it rises), Contrast hardens the edge.
+
+Makes: grey · hash `27098350`
+
+| Input | Reads as | Unlinked |
+|---|---|---|
+| `in` (In) | grey | 0, 0, 0 |
+
+| Setting | Kind | Range | Default |
+|---|---|---|---|
+| `position` (Position) | number | 0 – 1 | `0.5` |
+| `contrast` (Contrast) | number | 0 – 1 | `0.5` |
+
+```glsl
+float w = max(1. - p_contrast, 0.001);
+outColor = vec4(vec3(clamp((inG_in(uv) - (1. - p_position)) / w + 0.5, 0., 1.)), 1.);
+```
+
+### Histogram range — `histogramRange`
+
+Squeeze the greys into a narrower range (Range) and place it lighter or darker (Position).
+
+Makes: grey · hash `262aa9e8`
+
+| Input | Reads as | Unlinked |
+|---|---|---|
+| `in` (In) | grey | 0, 0, 0 |
+
+| Setting | Kind | Range | Default |
+|---|---|---|---|
+| `range` (Range) | number | 0 – 1 | `0.5` |
+| `position` (Position) | number | 0 – 1 | `0.5` |
+
+```glsl
+outColor = vec4(vec3(clamp((inG_in(uv) - 0.5) * p_range + p_position, 0., 1.)), 1.);
+```
+
+### Histogram shift — `histogramShift`
+
+Slide every grey lighter, wrapping white round to black (moves stripes of a gradient along).
+
+Makes: grey · hash `bb7ea0fa`
+
+| Input | Reads as | Unlinked |
+|---|---|---|
+| `in` (In) | grey | 0, 0, 0 |
+
+| Setting | Kind | Range | Default |
+|---|---|---|---|
+| `position` (Position) | number | 0 – 1 | `0` |
+
+```glsl
+outColor = vec4(vec3(fract(inG_in(uv) + p_position)), 1.);
+```
+
+### Histogram select — `histogramSelect`
+
+Pick out one band of greys as white (Position: which grey, Range: how wide, Contrast: how hard its edges).
+
+Makes: grey · hash `774d709b`
+
+| Input | Reads as | Unlinked |
+|---|---|---|
+| `in` (In) | grey | 0, 0, 0 |
+
+| Setting | Kind | Range | Default |
+|---|---|---|---|
+| `position` (Position) | number | 0 – 1 | `0.5` |
+| `range` (Range) | number | 0 – 1 | `0.25` |
+| `contrast` (Contrast) | number | 0 – 1 | `0.5` |
+
+```glsl
+float half_ = p_range * 0.5; float soft = max((1. - p_contrast) * half_, 0.001);
+float d = abs(inG_in(uv) - p_position);
+outColor = vec4(vec3(1. - smoothstep(half_ - soft, half_ + soft, d)), 1.);
+```
+
 ### Curve — `curve`
 
 Reshape the tones with four points (black, dark, light, white).
@@ -1489,7 +1568,7 @@ outColor = vec4(inC_in(q).rgb, 1.);
 
 Give each separate white shape of a mask (each brick, tile, plank) its own value: a random grey or colour, a gradient across it, or where it is. Exact for rectangular shapes.
 
-Makes: color · hash `47a3a396`
+Makes: color · hash `5086afdc`
 
 | Input | Reads as | Unlinked |
 |---|---|---|
@@ -1499,6 +1578,7 @@ Makes: color · hash `47a3a396`
 |---|---|---|---|
 | `gives` (Gives) | choice | 0 `grey`, 1 `colour`, 2 `gradient`, 3 `position`, 4 `size` | `grey` |
 | `direction` (Gradient) | choice | 0 `across`, 1 `down`, 2 `random` | `random` |
+| `angleVar` (Random angle) | number | 0 – 1 | `0` |
 | `threshold` (White from) | number | 0.01 – 0.99 | `0.5` |
 | `seed` (Seed) | seed | any whole number | `0` |
 
@@ -1523,6 +1603,7 @@ else if (g == 1) c = hsv2rgb(vec3(h, 0.55 + 0.4 * hash12(id + seedv(p_seed) + 3.
 else if (g == 2) {
   vec2 t = (uv - lo) / max(hi - lo, vec2(1e-4));
   float a = p_direction < 0.5 ? 0. : p_direction < 1.5 ? 1.5707963 : h * 6.2831853;
+  a += (hash12(id + seedv(p_seed) + 11.3) - 0.5) * 6.2831853 * p_angleVar;
   vec2 dv = vec2(cos(a), sin(a));
   float v = dot(t - 0.5, dv) / (abs(dv.x) * 0.5 + abs(dv.y) * 0.5 + 1e-4) * 0.5 + 0.5;
   c = vec3(clamp(v, 0., 1.));
