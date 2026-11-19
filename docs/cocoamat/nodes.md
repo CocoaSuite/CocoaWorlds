@@ -2066,9 +2066,9 @@ outColor = vec4(r, 1.);
 
 ### Edge blur — `edgeBlur`
 
-Soften only the edges of light shapes (made by cutting, masks, thresholds) so they blend into what is under them. Inside fades in from the outline and keeps its shape; Both ways blurs across the outline.
+Soften only the edges of light shapes (made by cutting, masks, thresholds) so they blend into what is under them. Inside fades in from the outline and keeps its shape; Outside keeps the shape solid and fades out around it; Both ways blurs across the outline.
 
-Makes: grey · hash `3186a089`
+Makes: grey · hash `2c402a0c`
 
 | Input | Reads as | Unlinked |
 |---|---|---|
@@ -2077,7 +2077,7 @@ Makes: grey · hash `3186a089`
 | Setting | Kind | Range | Default |
 |---|---|---|---|
 | `width` (Width) | number | 0 – 0.2 (step 0.001) | `0.03` |
-| `mode` (Fade) | choice | 0 `inside`, 1 `both` | `inside` |
+| `mode` (Fade) | choice | 0 `inside`, 1 `both`, 2 `outside` | `inside` |
 | `cut` (Edge at) | number | 0.05 – 0.95 | `0.5` |
 
 ```glsl
@@ -2107,6 +2107,7 @@ if (p_width > 0.) {
 float e = near * near * (3. - 2. * near);
 float o;
 if (p_mode < 0.5) o = v * e;
+else if (p_mode > 1.5) o = inside ? v : max(v, 1. - e);
 else { float s = inside ? 0.5 + 0.5 * near : 0.5 - 0.5 * near; o = s * s * (3. - 2. * s); }
 outColor = vec4(vec3(o), 1.);
 ```

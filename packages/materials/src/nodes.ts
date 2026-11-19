@@ -1911,12 +1911,12 @@ outColor = vec4(r, 1.);`,
     type: 'edgeBlur',
     group: 'change',
     label: l('Edge blur'),
-    hint: l('Soften only the edges of light shapes (made by cutting, masks, thresholds) so they blend into what is under them. Inside fades in from the outline and keeps its shape; Both ways blurs across the outline.'),
+    hint: l('Soften only the edges of light shapes (made by cutting, masks, thresholds) so they blend into what is under them. Inside fades in from the outline and keeps its shape; Outside keeps the shape solid and fades out around it; Both ways blurs across the outline.'),
     inputs: [IN_GREY()],
     output: 'grey',
     params: [
       { id: 'width', label: l('Width'), kind: 'number', min: 0, max: 0.2, step: 0.001, default: 0.03 },
-      { id: 'mode', label: l('Fade'), kind: 'choice', options: [opt('inside', 'Inside', 'Inside'), opt('both', 'Both ways', 'Both ways')], default: 'inside' },
+      { id: 'mode', label: l('Fade'), kind: 'choice', options: [opt('inside', 'Inside', 'Inside'), opt('both', 'Both ways', 'Both ways'), opt('outside', 'Outside', 'Outside')], default: 'inside' },
       { id: 'cut', label: l('Edge at'), kind: 'number', min: 0.05, max: 0.95, default: 0.5 },
     ],
     glsl: `float v = inG_in(uv); bool inside = v > p_cut;
@@ -1945,6 +1945,7 @@ if (p_width > 0.) {
 float e = near * near * (3. - 2. * near);
 float o;
 if (p_mode < 0.5) o = v * e;
+else if (p_mode > 1.5) o = inside ? v : max(v, 1. - e);
 else { float s = inside ? 0.5 + 0.5 * near : 0.5 - 0.5 * near; o = s * s * (3. - 2. * s); }
 outColor = vec4(vec3(o), 1.);`,
   },
