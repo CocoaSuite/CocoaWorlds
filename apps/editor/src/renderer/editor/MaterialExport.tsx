@@ -5,7 +5,7 @@ import { Button, Dialog, Segmented, Switch, type MenuEntry } from '@cocoaworlds/
 import { useMemo, useState } from 'react';
 import { MAP_FIELDS } from '@cocoaworlds/core';
 import { t, type Key } from '../i18n';
-import { exportCocoaMats, exportImages, type ImageOptions } from '../materials/export';
+import { exportCocoaMats, exportImages, exportPsds, type ImageOptions } from '../materials/export';
 import { context, useGraphs } from '../materials/graphs';
 import { useEditor } from '../store';
 
@@ -72,12 +72,14 @@ export function ImagesDialog({ ms, onClose }: { ms: MaterialDef[]; onClose: () =
   const [size, setSize] = useState(String(Math.min(2048, ms[0]?.bakeSize ?? 1024)));
   const [green, setGreen] = useState<ImageOptions['green']>('down');
   const [orm, setOrm] = useState(false);
+  const [format, setFormat] = useState<'png' | 'psd'>('png');
   const [want, setWant] = useState<Set<OutputRole>>(() => new Set(roles));
   const [busy, setBusy] = useState(false);
   const go = async () => {
     setBusy(true);
     try {
-      done(await exportImages(ms, { size: Number(size), green, orm, roles: want.size === roles.length ? undefined : [...want] }));
+      const opts = { size: Number(size), green, orm: format === 'png' && orm, roles: want.size === roles.length ? undefined : [...want] };
+      done(await (format === 'psd' ? exportPsds(ms, opts) : exportImages(ms, opts)));
       onClose();
     } catch (e) {
       failed(e);
@@ -88,6 +90,18 @@ export function ImagesDialog({ ms, onClose }: { ms: MaterialDef[]; onClose: () =
     <Dialog title={t('mex.imagesTitle')} onClose={() => !busy && onClose()} width={420}>
       <p className="cw-hint">{ms.length === 1 ? ms[0]!.name : t('mex.several').replace('{n}', String(ms.length))}</p>
       <div className="cw-form">
+        <div className="cw-f">
+          <span>{t('mex.format')}</span>
+          <Segmented<'png' | 'psd'>
+            label={t('mex.format')}
+            value={format}
+            onChange={setFormat}
+            options={[
+              { value: 'png', label: t('mex.formatPng') },
+              { value: 'psd', label: t('mex.formatPsd') },
+            ]}
+          />
+        </div>
         <label className="cw-f">
           <span>{t('mex.size')}</span>
           <select className="cw-input" aria-label={t('mex.size')} value={size} disabled={busy} onChange={(e) => setSize(e.currentTarget.value)}>
@@ -110,10 +124,12 @@ export function ImagesDialog({ ms, onClose }: { ms: MaterialDef[]; onClose: () =
             ]}
           />
         </div>
-        <label className="cw-screens-sw">
-          <Switch label={t('mex.orm')} checked={orm} onChange={setOrm} />
-          {t('mex.orm')}
-        </label>
+        {format === 'png' && (
+          <label className="cw-screens-sw">
+            <Switch label={t('mex.orm')} checked={orm} onChange={setOrm} />
+            {t('mex.orm')}
+          </label>
+        )}
         <fieldset className="cw-mex-maps" aria-label={t('mex.maps')}>
           <legend>{t('mex.maps')}</legend>
           {roles.map((r) => (
@@ -138,7 +154,7 @@ export function ImagesDialog({ ms, onClose }: { ms: MaterialDef[]; onClose: () =
         <Button disabled={busy} onClick={onClose}>
           {t('new.cancel')}
         </Button>
-        <Button variant="primary" disabled={busy || (!want.size && !orm)} onClick={() => void go()}>
+        <Button variant="primary" disabled={busy || (!want.size && !(orm && format === 'png'))} onClick={() => void go()}>
           {busy ? t('mex.working') : t('mex.export')}
         </Button>
       </div>

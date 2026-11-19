@@ -718,7 +718,36 @@ function Flow({ path, graph, sel, onSelect, wideLibrary }: { path: string; graph
     [path],
   );
 
-  // ── Moving all of a node's outgoing wires to another node (Ctrl+drag from its output) ──
+  // ── Moving all of a node's outgoing wires to another node (Ctrl+drag from its output, or Rewire on touch) ──
+  const moveWires = (from: string, to: string) => {
+    const g0 = graphRef.current;
+    const target = g0.nodes.find((n) => n.id === to);
+    if (to === from || !target || !nodeDef(target.type)?.output) return false;
+    let g = g0;
+    for (const l of g0.links) if (l.from === from && l.to !== to) g = connect(g, to, l.to, l.input);
+    if (g !== g0) setGraph(path, g, 'Move wires');
+    return g !== g0;
+  };
+  /** Rewire on touch: off, waiting for the old node, or waiting for the new one. */
+  const [rewiring, setRewiring] = useState<null | { from: string | null }>(null);
+  const deletePicked = () => {
+    const picked = selRef.current;
+    if (!picked.length) return;
+    const g = graphRef.current;
+    const sections = (g.sections ?? []).filter((x) => picked.includes(x.id)).map((x) => x.id);
+    let next = removeNodes(g, picked);
+    if (sections.length) next = removeSections(next, sections);
+    setGraph(path, next, picked.length === 1 ? 'Remove node' : 'Remove nodes');
+    onSelect([]);
+  };
+  const addBlendInView = () => addInView('blend');
+  /** A long press on empty graph (touch) opens the add menu. */
+  const press = useRef<{ x: number; y: number; timer: ReturnType<typeof setTimeout> } | null>(null);
+  const cancelPress = () => {
+    if (press.current) clearTimeout(press.current.timer);
+    press.current = null;
+  };
+
   const rewire = (from: string, e: React.PointerEvent) => {
     const box = host.current?.getBoundingClientRect();
     const out = host.current?.querySelector(`.react-flow__node[data-id="${from}"] .react-flow__handle-right`)?.getBoundingClientRect();
@@ -732,13 +761,7 @@ function Flow({ path, graph, sel, onSelect, wideLibrary }: { path: string; graph
       setLifted(null);
       // Dropped on another node (anywhere on it): every wire that left the old node now leaves this one.
       const el = document.elementFromPoint(ev.clientX, ev.clientY)?.closest<HTMLElement>('.react-flow__node');
-      const to = el?.dataset.id;
-      const g0 = graphRef.current;
-      const target = g0.nodes.find((n) => n.id === to);
-      if (!to || to === from || !target || !nodeDef(target.type)?.output) return;
-      let g = g0;
-      for (const l of g0.links) if (l.from === from && l.to !== to) g = connect(g, to, l.to, l.input);
-      if (g !== g0) setGraph(path, g, 'Move wires');
+      if (el?.dataset.id) moveWires(from, el.dataset.id);
     };
     window.addEventListener('pointermove', move);
     window.addEventListener('pointerup', up);
@@ -766,13 +789,23 @@ function Flow({ path, graph, sel, onSelect, wideLibrary }: { path: string; graph
       ref={host}
       data-testid="material-graph"
       tabIndex={-1}
-      onPointerMove={(e) => (pointer.current = { x: e.clientX, y: e.clientY })}
+      onPointerMove={(e) => {
+        pointer.current = { x: e.clientX, y: e.clientY };
+        if (press.current && Math.hypot(e.clientX - press.current.x, e.clientY - press.current.y) > 8) cancelPress();
+      }}
+      onPointerUp={cancelPress}
+      onPointerCancel={cancelPress}
       // (Keys go to the graph once it has been clicked, even on the empty background.)
       onPointerDown={() => {
         if (!host.current!.contains(document.activeElement)) host.current!.focus({ preventScroll: true });
       }}
       onPointerDownCapture={(e) => {
         if (e.button === 2) rightDown.current = { x: e.clientX, y: e.clientY };
+        if (e.pointerType === 'touch' && (e.target as HTMLElement).closest('.react-flow__pane')) {
+          cancelPress();
+          const x = e.clientX, y = e.clientY;
+          press.current = { x, y, timer: setTimeout(() => ((press.current = null), openMenu(x, y)), 500) };
+        }
         if (e.button === 0 && (e.ctrlKey || e.metaKey)) {
           const id = (e.target as HTMLElement).closest<HTMLElement>('.react-flow__handle.source')?.dataset.nodeid;
           if (id && rewire(id, e)) {
@@ -827,6 +860,15 @@ function Flow({ path, graph, sel, onSelect, wideLibrary }: { path: string; graph
         onSelectionDragStart={(_, dragged) => startCarry(dragged)}
         onSelectionDragStop={endCarry}
         onNodeDoubleClick={(_, n) => n.type === 'cm' && ctx.toggleView?.(n.id)}
+        onNodeClick={(_, n) => {
+          if (!rewiring || n.type !== 'cm') return;
+          if (!rewiring.from) {
+            if (graphRef.current.links.some((l) => l.from === n.id)) setRewiring({ from: n.id });
+          } else if (n.id !== rewiring.from) {
+            moveWires(rewiring.from, n.id);
+            setRewiring(null);
+          }
+        }}
         isValidConnection={(c) => c.source !== c.target && !wouldLoop(graphRef.current, c.source, c.target)}
         // (The menu opens when the right button comes up still: see onPointerUpCapture.)
         onPaneContextMenu={(e) => e.preventDefault()}
@@ -858,6 +900,15 @@ function Flow({ path, graph, sel, onSelect, wideLibrary }: { path: string; graph
         </Button>
         <Button size="sm" onClick={addSection} title={t('cm.addSectionHint')}>
           {t('cm.addSection')}
+        </Button>
+        <Button size="sm" onClick={addBlendInView}>
+          {t('cm.blend')}
+        </Button>
+        <Button size="sm" variant={rewiring ? 'primary' : undefined} aria-pressed={!!rewiring} onClick={() => setRewiring((r) => (r ? null : { from: null }))}>
+          {rewiring ? (rewiring.from ? t('cm.rewireTo') : t('cm.rewireFrom')) : t('cm.rewire')}
+        </Button>
+        <Button size="sm" disabled={!sel.length} onClick={deletePicked}>
+          {t('cm.delete')}
         </Button>
         <span className="cw-muted">{t('cm.flowHint')}</span>
       </div>
@@ -1442,6 +1493,7 @@ export function GraphWorkspace({
                 { value: 'sphere', label: t('mat.sphere') },
                 { value: 'cube', label: t('mat.cube') },
                 { value: 'wall', label: t('mat.wall') },
+                { value: 'model', label: t('mat.model') },
               ]}
             />
           )}

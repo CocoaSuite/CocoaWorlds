@@ -8,3 +8,9 @@ input, textarea, [contenteditable] { -webkit-user-select: text; user-select: tex
 .cmw-saved { font-size: var(--fs-s); }
 /* Nothing to put a material on here. */
 .cmw .cw-mats-use { display: none; }
+/* Fingers: bigger plugs, no keyboard hints. */
+@media (pointer: coarse) {
+  .cmw .react-flow__handle { width: 14px; height: 14px; }
+  .cmw .cm-flow-tools .cw-muted { display: none; }
+  .cmw .cm-flow-tools button { min-height: 32px; padding: 0 12px; }
+}

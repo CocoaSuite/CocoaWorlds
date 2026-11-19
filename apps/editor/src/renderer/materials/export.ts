@@ -27,6 +27,7 @@ import {
   type OutputRole,
 } from '@cocoaworlds/materials';
 import { useEditor } from '../store';
+import { buildPsd } from './psd';
 import { bakeLater, context, graphPathFor, loadBitmap, loadGraph, useGraphs } from './graphs';
 
 /** Maps that are pictures of values (one channel), not colours. */
@@ -233,6 +234,40 @@ export async function exportImages(ms: MaterialDef[], opts: ImageOptions): Promi
   if (!r.value) return [];
   const files: { name: string; bytes: Uint8Array }[] = [];
   for (const m of ms) files.push(...(await imageFiles(m, opts)));
+  const names = uniqueNames(files.map((f) => f.name));
+  const w = await window.cocoa.materials.writeFiles(r.value, files.map((f, i) => ({ name: names[i]!, bytes: f.bytes })));
+  if (!w.ok) throw new Error(w.error);
+  return w.value;
+}
+
+/** Layer names in a PSD, top first: the colour on top, then the rest in the usual order. */
+const PSD_NAMES: Partial<Record<OutputRole, string>> = { color: 'Base colour', normal: 'Normal', roughness: 'Roughness', metalness: 'Metalness', height: 'Height', occlusion: 'Ambient occlusion', glow: 'Glow', opacity: 'Opacity', wearColor: 'Wear colour', wearRoughness: 'Wear roughness', wearMetal: 'Wear metalness', wearNoise: 'Wear noise' };
+
+/** One material as a layered `.psd`: each map is a visible layer, base colour on top. */
+export async function psdFile(m: MaterialDef, opts: ImageOptions): Promise<{ name: string; bytes: Uint8Array }> {
+  const n = opts.size;
+  const maps = await mapsOf(m, n);
+  const normal = maps.get('normal');
+  if (normal && opts.green === 'up' && m.graph) for (let i = 1; i < normal.length; i += 4) normal[i] = 255 - normal[i]!;
+  const want = (r: OutputRole) => !opts.roles || opts.roles.includes(r);
+  const order = (['color', ...OUTPUT_ROLES.filter((r) => r !== 'color')] as OutputRole[]).filter((r) => maps.has(r) && want(r));
+  const layers = order.map((r) => {
+    const px = maps.get(r)!.slice();
+    for (let i = 3; i < px.length; i += 4) px[i] = 255;
+    return { name: PSD_NAMES[r] ?? r, px };
+  });
+  if (!layers.length) throw new Error(`${m.name} has no maps to export.`);
+  return { name: `${fileStem(m.name)}.psd`, bytes: buildPsd(n, layers) };
+}
+
+/** Export materials as layered PSDs (one per material). Returns the files written (empty when cancelled). */
+export async function exportPsds(ms: MaterialDef[], opts: ImageOptions): Promise<string[]> {
+  if (!ms.length) return [];
+  const r = await window.cocoa.materials.pickFolder('Export PSD to…');
+  if (!r.ok) throw new Error(r.error);
+  if (!r.value) return [];
+  const files: { name: string; bytes: Uint8Array }[] = [];
+  for (const m of ms) files.push(await psdFile(m, opts));
   const names = uniqueNames(files.map((f) => f.name));
   const w = await window.cocoa.materials.writeFiles(r.value, files.map((f, i) => ({ name: names[i]!, bytes: f.bytes })));
   if (!w.ok) throw new Error(w.error);

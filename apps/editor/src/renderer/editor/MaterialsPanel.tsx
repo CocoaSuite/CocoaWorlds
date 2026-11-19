@@ -7,6 +7,8 @@ import { SURFACES, newMaterial, newWear, type MaterialDef, type Surface, type We
 import { Button, ColorField, ContextMenu, NumberField, Segmented, Switch } from '@cocoaworlds/ui';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import placeholderModel from '../assets/preview/placeholder.glb?url';
 import { brushOf } from '../brush/brushes';
 import { t } from '../i18n';
 import { surfaceGuess } from '../viewport/surface-sounds';
@@ -20,7 +22,7 @@ import { bakeLater, createGraphMaterial, useGraphs } from '../materials/graphs';
 import { bakeImported, importCocoaMats } from '../materials/export';
 import { ImagesDialog, exportItems } from './MaterialExport';
 
-export type Shape = 'sphere' | 'cube' | 'wall';
+export type Shape = 'sphere' | 'cube' | 'wall' | 'model';
 
 /** A unique name: base, base 2, … */
 function unique(base: string, taken: Iterable<string>): string {
@@ -349,6 +351,7 @@ export function MaterialsPanel() {
               { value: 'sphere', label: t('mat.sphere') },
               { value: 'cube', label: t('mat.cube') },
               { value: 'wall', label: t('mat.wall') },
+              { value: 'model', label: t('mat.model') },
             ]}
           />
           <span className="cw-muted cw-screens-tip">{mat ? t('mat.viewHint') : ''}</span>
@@ -386,13 +389,39 @@ export function Row({ label, children }: { label: string; children: React.ReactN
   );
 }
 
-/** A min–max slider with its value beside it. */
+/** A min–max slider with its value beside it; the value can be typed (Enter or leaving the box sets it). */
 export function Slider({ label, value, min = 0, max = 1, step = 0.01, digits, onChange }: { label: string; value: number; min?: number; max?: number; step?: number; digits?: number; onChange: (v: number) => void }) {
   const d = digits ?? (step >= 1 ? 0 : step >= 0.1 ? 1 : step >= 0.01 ? 2 : 3);
+  const [text, setText] = useState<string | null>(null);
+  const commit = () => {
+    if (text === null) return;
+    const v = Number(text.replace(',', '.'));
+    setText(null);
+    if (Number.isFinite(v) && v !== value) onChange(Math.min(max, Math.max(min, v)));
+  };
   return (
     <span className="cw-mats-slider">
       <input type="range" aria-label={label} min={min} max={max} step={step} value={value} onChange={(e) => onChange(Number(e.currentTarget.value))} />
-      <span className="mono">{value.toFixed(d)}</span>
+      <input
+        className="mono cw-mats-slider-num"
+        inputMode="decimal"
+        aria-label={`${label} (number)`}
+        value={text ?? value.toFixed(d)}
+        onFocus={(e) => {
+          setText(value.toFixed(d));
+          e.currentTarget.select();
+        }}
+        onChange={(e) => setText(e.currentTarget.value)}
+        onBlur={commit}
+        onKeyDown={(e) => {
+          e.stopPropagation();
+          if (e.key === 'Enter') e.currentTarget.blur();
+          if (e.key === 'Escape') {
+            setText(null);
+            e.currentTarget.blur();
+          }
+        }}
+      />
     </span>
   );
 }
@@ -592,17 +621,76 @@ function MaterialProps({
 }
 
 /** Texture repeats on the preview shapes, so a material looks the size it will in the level (128-unit shapes). */
-export function previewGeometry(shape: Shape): THREE.BufferGeometry {
+export function previewGeometry(shape: Exclude<Shape, 'model'>, tiles = 1): THREE.BufferGeometry {
   const g = shape === 'sphere' ? new THREE.SphereGeometry(72, 64, 32) : shape === 'cube' ? new THREE.BoxGeometry(128, 128, 128) : new THREE.PlaneGeometry(192, 128);
   // Face coordinates: one dev tile (256 texels) is 64 units.
   const [su, sv] = shape === 'sphere' ? [(2 * Math.PI * 72) / 64, (Math.PI * 72) / 64] : shape === 'cube' ? [2, 2] : [3, 2];
   const uv = g.getAttribute('uv') as THREE.BufferAttribute;
-  for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * su, (1 - uv.getY(i)) * sv);
+  for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * su * tiles, (1 - uv.getY(i)) * sv * tiles);
   uv.needsUpdate = true;
   return g;
 }
 
+/** The preview model (loaded once): its meshes, centred and sized to the other shapes. */
+let modelLoad: Promise<THREE.Object3D> | null = null;
+function previewModel(): Promise<THREE.Object3D> {
+  modelLoad ??= new GLTFLoader().loadAsync(placeholderModel).then((gltf) => {
+    const root = gltf.scene;
+    root.updateMatrixWorld(true);
+    // Parts far from the rest (stray objects in the file) are left out, so the model fills the view.
+    const parts: { mesh: THREE.Object3D; box: THREE.Box3; c: THREE.Vector3 }[] = [];
+    root.traverse((o) => {
+      if (!(o as THREE.Mesh).isMesh) return;
+      const b = new THREE.Box3().setFromObject(o);
+      parts.push({ mesh: o, box: b, c: b.getCenter(new THREE.Vector3()) });
+    });
+    const med = (k: 'x' | 'y' | 'z') => parts.map((q) => q.c[k]).sort((a, b) => a - b)[Math.floor(parts.length / 2)] ?? 0;
+    const mid = new THREE.Vector3(med('x'), med('y'), med('z'));
+    const dists = parts.map((q) => q.c.distanceTo(mid)).sort((a, b) => a - b);
+    const typical = Math.max(dists[Math.floor(dists.length / 2)] ?? 0, 1e-3);
+    const box = new THREE.Box3();
+    for (const q of parts) {
+      if (q.c.distanceTo(mid) > typical * 6) q.mesh.visible = false;
+      else box.union(q.box);
+    }
+    const size = box.getSize(new THREE.Vector3());
+    const k = 150 / Math.max(size.x, size.y, size.z, 1e-6);
+    const centre = box.getCenter(new THREE.Vector3());
+    const holder = new THREE.Group();
+    root.position.sub(centre);
+    holder.add(root);
+    holder.scale.setScalar(k);
+    return holder;
+  });
+  modelLoad.catch(() => (modelLoad = null));
+  return modelLoad;
+}
+
 export function MaterialPreview({ id, shape }: { id: string; shape: Shape }) {
+  /** How many times the material repeats (kept between previews). */
+  const [tiles, setTilesState] = useState(() => {
+    try {
+      return Math.min(16, Math.max(0.25, Number(localStorage.getItem('cw-mats-tiles')) || 1));
+    } catch {
+      return 1;
+    }
+  });
+  const setTiles = (v: number) => {
+    const n = Math.min(16, Math.max(0.25, Math.round(v * 100) / 100));
+    setTilesState(n);
+    try {
+      localStorage.setItem('cw-mats-tiles', String(n));
+    } catch {
+      /* ignore */
+    }
+  };
+  const [full, setFull] = useState(false);
+  useEffect(() => {
+    if (!full) return;
+    const esc = (e: KeyboardEvent) => e.key === 'Escape' && setFull(false);
+    window.addEventListener('keydown', esc);
+    return () => window.removeEventListener('keydown', esc);
+  }, [full]);
   const host = useRef<HTMLDivElement>(null);
   const turn = useRef({ yaw: 0.6, pitch: 0.25, drag: null as null | { x: number; y: number; light: boolean }, idle: 0 });
   /** Closer or further (1 = the whole shape in view), and where the main light comes from. */
@@ -610,8 +698,8 @@ export function MaterialPreview({ id, shape }: { id: string; shape: Shape }) {
   const [lightMode, setLightMode] = useState(false);
   const lightRef = useRef(false);
   lightRef.current = lightMode;
-  const geometry = useMemo(() => previewGeometry(shape), [shape]);
-  useEffect(() => () => geometry.dispose(), [geometry]);
+  const geometry = useMemo(() => (shape === 'model' ? null : previewGeometry(shape, tiles)), [shape, tiles]);
+  useEffect(() => () => geometry?.dispose(), [geometry]);
 
   useEffect(() => {
     const el = host.current;
@@ -629,12 +717,35 @@ export function MaterialPreview({ id, shape }: { id: string; shape: Shape }) {
     rim.position.set(260, 60, -300);
     scene.add(rim);
     const cam = new THREE.PerspectiveCamera(30, 1, 10, 4000);
-    const base = shape === 'cube' ? 560 : shape === 'wall' ? 500 : 420;
+    const base = shape === 'cube' ? 560 : shape === 'wall' ? 500 : shape === 'model' ? 520 : 420;
     let dirty = true;
     view.current.dirty = () => (dirty = true);
     const material = projectMaterial(id, () => (dirty = true));
-    const mesh = new THREE.Mesh(geometry, material);
+    // (The model's own geometry is copied, so its UVs can be scaled for the tile amount.)
+    const mesh: THREE.Object3D = geometry ? new THREE.Mesh(geometry, material) : new THREE.Group();
     scene.add(mesh);
+    const owned: THREE.BufferGeometry[] = [];
+    let gone = false;
+    if (!geometry)
+      void previewModel().then((src) => {
+        if (gone) return;
+        const copy = src.clone(true);
+        copy.traverse((o) => {
+          const m = o as THREE.Mesh;
+          if (!m.isMesh) return;
+          const g = m.geometry.clone();
+          const uv = g.getAttribute('uv') as THREE.BufferAttribute | undefined;
+          if (uv) {
+            for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * tiles, uv.getY(i) * tiles);
+            uv.needsUpdate = true;
+          }
+          owned.push(g);
+          m.geometry = g;
+          m.material = material;
+        });
+        mesh.add(copy);
+        dirty = true;
+      });
     const size = () => {
       const w = el.clientWidth, h = el.clientHeight;
       if (!w || !h) return;
@@ -713,6 +824,8 @@ export function MaterialPreview({ id, shape }: { id: string; shape: Shape }) {
     r.domElement.addEventListener('dblclick', reset);
     r.domElement.addEventListener('contextmenu', noMenu);
     return () => {
+      gone = true;
+      for (const g of owned) g.dispose();
       cancelAnimationFrame(raf);
       obs.disconnect();
       releaseMaterial(material);
@@ -720,7 +833,7 @@ export function MaterialPreview({ id, shape }: { id: string; shape: Shape }) {
       r.dispose();
       r.domElement.remove();
     };
-  }, [id, geometry, shape]);
+  }, [id, geometry, shape, tiles]);
 
   const zoomBy = (k: number) => {
     const v = view.current;
@@ -729,9 +842,26 @@ export function MaterialPreview({ id, shape }: { id: string; shape: Shape }) {
     v.dirty();
   };
   return (
-    <div className={`cw-mats-preview-wrap${lightMode ? ' light' : ''}`}>
+    <div className={`cw-mats-preview-wrap${lightMode ? ' light' : ''}${full ? ' full' : ''}`}>
       <div className="cw-mats-preview" ref={host} />
       <div className="cw-mats-preview-tools">
+        <label className="cw-mats-tiles">
+          <span>{t('mat.tiles')}</span>
+          <input
+            type="number"
+            inputMode="decimal"
+            min={0.25}
+            max={16}
+            step={0.25}
+            value={tiles}
+            aria-label={t('mat.tiles')}
+            onKeyDown={(e) => e.stopPropagation()}
+            onChange={(e) => {
+              const v = Number(e.currentTarget.value);
+              if (Number.isFinite(v) && v > 0) setTiles(v);
+            }}
+          />
+        </label>
         <button type="button" className="cw-iconbtn" aria-label={t('mat.zoomIn')} title={t('mat.zoomIn')} onClick={() => zoomBy(0.8)}>
           +
         </button>
@@ -740,6 +870,9 @@ export function MaterialPreview({ id, shape }: { id: string; shape: Shape }) {
         </button>
         <button type="button" className={`cw-iconbtn${lightMode ? ' on' : ''}`} aria-pressed={lightMode} aria-label={t('mat.turnLight')} title={t('mat.turnLightHint')} onClick={() => setLightMode((v) => !v)}>
           ☀
+        </button>
+        <button type="button" className={`cw-iconbtn${full ? ' on' : ''}`} aria-pressed={full} aria-label={full ? t('mat.exitFull') : t('mat.full')} onClick={() => setFull((v) => !v)}>
+          {full ? '✕' : '⛶'}
         </button>
       </div>
     </div>

@@ -432,6 +432,9 @@ code { font: var(--fs-m) var(--mono); color: var(--fg); }
 .cw-mats-slider { display: flex; align-items: center; gap: 6px; width: 100%; }
 .cw-mats-slider input { flex: 1; min-width: 0; accent-color: var(--sel); }
 .cw-mats-slider .mono { width: 34px; text-align: right; font-size: var(--fs-m); color: var(--mute); }
+.cw-mats-slider input.cw-mats-slider-num { flex: none; width: 46px; padding: 2px 4px; border: 1px solid transparent; border-radius: var(--r-s); background: transparent; font: inherit; font-family: var(--mono); font-size: var(--fs-m); color: var(--mute); text-align: right; }
+.cw-mats-slider input.cw-mats-slider-num:hover { border-color: var(--line); }
+.cw-mats-slider input.cw-mats-slider-num:focus { border-color: var(--sel); color: var(--fg); background: var(--cbg); outline: none; }
 
 /* ── Cocoa Materials: the graph ── */
 .cm-main { padding-bottom: 12px; }
@@ -442,8 +445,9 @@ code { font: var(--fs-m) var(--mono); color: var(--fg); }
 .cm-flow .react-flow__controls { box-shadow: none; border: 1px solid var(--line); border-radius: var(--r-m); overflow: hidden; }
 .cm-flow .react-flow__edge.cm-e.color path { stroke: #b49a6a; }
 .cm-flow .react-flow__edge.selected path { stroke: var(--sel) !important; }
-.cm-flow-tools { position: absolute; top: 8px; left: 8px; right: 8px; display: flex; align-items: center; gap: 10px; pointer-events: none; font-size: var(--fs-m); }
+.cm-flow-tools { position: absolute; top: 8px; left: 8px; right: 8px; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; pointer-events: none; font-size: var(--fs-m); }
 .cm-flow-tools > * { pointer-events: auto; }
+.cm-flow-tools > .cw-muted { flex: 1 1 260px; min-width: 0; }
 .cm-node { width: 132px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-m); color: var(--fg); font-size: var(--fs-s); box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35); }
 /* Outputs: the input's name and a small picture side by side. */
 .cm-node.out .cm-node-b { flex-direction: row; align-items: center; justify-content: space-between; }
@@ -558,6 +562,9 @@ code { font: var(--fs-m) var(--mono); color: var(--fg); }
 .cw-mats-preview-wrap { position: absolute; inset: 0; }
 .cw-mats-preview-wrap.light .cw-mats-preview { cursor: crosshair; }
 .cw-mats-preview-tools { position: absolute; right: 6px; bottom: 6px; display: flex; gap: 4px; }
+.cw-mats-preview-wrap.full { position: fixed; inset: 0; z-index: 80; background: var(--bg); }
+.cw-mats-tiles { display: flex; align-items: center; gap: 4px; height: 26px; padding: 0 6px; border: 1px solid var(--line); border-radius: var(--r-m); background: rgba(26, 26, 26, 0.85); color: var(--mute); font-size: var(--fs-s); }
+.cw-mats-tiles input { width: 42px; border: 0; background: transparent; color: var(--fg); font: inherit; font-family: var(--mono); text-align: right; }
 .cw-mats-preview-tools .cw-iconbtn.on { border-color: var(--cw-warn); color: var(--cw-warn); }
 /* A small square button with one character (‹ › × + −). */
 .cw-iconbtn { display: inline-flex; align-items: center; justify-content: center; flex: none; width: 24px; height: 24px; padding: 0; border: 1px solid var(--line); border-radius: var(--r-m);

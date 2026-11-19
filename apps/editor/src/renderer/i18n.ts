@@ -445,6 +445,11 @@ const en = {
   'cm.addNode': "+ Node",
   'cm.search': "Find a node…",
   'cm.noMatch': "No node by that name.",
+  'cm.blend': "Blend",
+  'cm.rewire': "Rewire",
+  'cm.rewireFrom': "Tap the old node…",
+  'cm.rewireTo': "Tap the new node…",
+  'cm.delete': "Delete",
   'cm.recent': "Recent",
   'mex.export': "Export",
   'mex.exportMenu': "Export…",
@@ -452,10 +457,13 @@ const en = {
   'mex.importHint': "Make graph materials from .cocoamat files (CocoaSurface, another project).",
   'mex.cocoamat': "CocoaSuite material (.cocoamat)…",
   'mex.onlyGraphs': "Only graph materials; export its images instead",
-  'mex.images': "Images (PNG)…",
+  'mex.images': "Images (PNG, PSD)…",
   'mex.imagesTitle': "Export as images",
   'mex.several': "{n} materials",
   'mex.size': "Size",
+  'mex.format': "Format",
+  'mex.formatPng': "PNG files",
+  'mex.formatPsd': "PSD (layers)",
   'mex.green': "Normal map green",
   'mex.greenDown': "Down (DirectX)",
   'mex.greenUp': "Up (OpenGL)",
@@ -497,7 +505,7 @@ const en = {
   'mex.r.wearRoughness': "Wear roughness",
   'mex.r.wearMetal': "Wear metal",
   'mex.r.wearNoise': "Wear noise",
-  'cm.flowHint': "Right-click, Space or Ctrl+A to add; B adds Blend. Ctrl+drag an output onto another node to move its wires there. Drag on empty space to pick several; middle or right drag pans. Delete removes. Ctrl+C, X, V, D copy, cut, paste, duplicate.",
+  'cm.flowHint': "Right-click, Space, Ctrl+A or a long press to add; B adds Blend. Ctrl+drag an output onto another node to move its wires there. Drag on empty space to pick several; middle or right drag pans. Delete removes. Ctrl+C, X, V, D copy, cut, paste, duplicate.",
   'cm.lockView': "Keep the preview on this node (double-click does it too)",
   'cm.unlockView': "Preview the picked node again",
   'cm.viewing': "Preview kept on",
@@ -546,6 +554,10 @@ const en = {
   'mat.sphere': 'Sphere',
   'mat.cube': 'Cube',
   'mat.wall': 'Wall',
+  'mat.model': 'Model',
+  'mat.tiles': 'Tiles',
+  'mat.full': 'Fullscreen preview',
+  'mat.exitFull': 'Leave fullscreen',
   'mat.turnHint': 'Drag to turn it. The shapes are 128 units across, so images show at their size in the level.',
   'mat.pick': 'Pick a material, or make one.',
   'mat.preview': 'Material preview',
@@ -883,7 +895,8 @@ const en = {
 
 export type Key = keyof typeof en;
 
-const ru: Record<Key, string> = {
+/** Russian (missing strings fall back to English). */
+const ru: Partial<Record<Key, string>> = {
   'app.name': 'CocoaWorlds',
   'menu.file': 'Файл',
   'menu.edit': 'Правка',
@@ -1789,5 +1802,5 @@ export function setLang(l: Lang): void {
 }
 
 export function t(key: Key): string {
-  return (lang === 'ru' ? ru[key] : en[key]) ?? key;
+  return (lang === 'ru' ? (ru[key] ?? en[key]) : en[key]) ?? key;
 }
