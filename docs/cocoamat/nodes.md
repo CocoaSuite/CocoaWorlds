@@ -3,7 +3,7 @@
 <!-- Written from packages/materials/src/catalog.ts. Do not edit by hand: run
      CW_WRITE_CATALOG=1 npx vitest run packages/materials/test/catalog.test.ts -->
 
-Catalog version 1, for graph format `cocoaworlds.material` version 1. 123 nodes.
+Catalog version 1, for graph format `cocoaworlds.material` version 1. 124 nodes.
 How a node is evaluated (uniforms, inputs, uv) is in [the format spec](../cocoamat-format.md), section 5;
 the same data as JSON, with the shared GLSL library, is in [nodes.json](nodes.json).
 
@@ -79,7 +79,7 @@ outColor = vec4(vec3(h), 1.);
 
 A circle, square, polygon or star, repeated to tile.
 
-Makes: grey · hash `9cb8fe82`
+Makes: grey · hash `43b18540`
 
 | Setting | Kind | Range | Default |
 |---|---|---|---|
@@ -87,6 +87,7 @@ Makes: grey · hash `9cb8fe82`
 | `sides` (Sides) | int | 3 – 12 | `6` |
 | `size` (Size) | number | 0 – 1.5 | `0.7` |
 | `softness` (Softness) | number | 0 – 1 | `0.05` |
+| `edgeBlur` (Edge blur) | number | 0 – 1 | `0` |
 | `tiles` (Repeat) | int | 1 – 32 | `1` |
 | `angle` (Turn) | number | 0 – 360 (step 1) | `0` |
 
@@ -102,7 +103,10 @@ else {
   if (p_kind > 2.5) { float k = abs(fract(a / r) - 0.5) * 2.; d *= mix(1.6, 0.8, k); }
 }
 float s = max(p_softness * 0.5, 0.002);
-outColor = vec4(vec3(1. - smoothstep(p_size - s, p_size + s, d)), 1.);
+float v = 1. - smoothstep(p_size - s, p_size + s, d);
+// Edge blur: fades in from the outline (the inside stays solid), for blending into what is under it.
+if (p_edgeBlur > 0.) { float e = clamp((p_size - d) / max(p_edgeBlur * p_size, 1e-4), 0., 1.); v *= e * e * (3. - 2. * e); }
+outColor = vec4(vec3(v), 1.);
 ```
 
 ### Gradient — `gradient`
@@ -2021,6 +2025,20 @@ outColor = vec4(col, 1.);
 ```
 
 ## Combine
+
+### Reroute — `reroute`
+
+A dot on a wire, to route it around other nodes. Passes its input through unchanged.
+
+Makes: color · hash `8698166a`
+
+| Input | Reads as | Unlinked |
+|---|---|---|
+| `in` (In) | color | 0, 0, 0 |
+
+```glsl
+outColor = vec4(inC_in(uv).rgb, 1.);
+```
 
 ### Blend — `blend`
 

@@ -97,6 +97,13 @@ const Thumb = memo(function Thumb({ id, size = 116 }: { id: string; size?: numbe
 
 function CmNodeView({ id, data, selected }: NodeProps<CmNode>) {
   const def = nodeDef(data.node.type)!;
+  if (def.type === 'reroute')
+    return (
+      <div className={`cm-reroute${selected ? ' on' : ''}`} data-node-type="reroute" aria-label={say(def.label)}>
+        <Handle type="target" position={Position.Left} id="in" className="cm-h color" />
+        <Handle type="source" position={Position.Right} id="out" className="cm-h color" />
+      </div>
+    );
   const { errors, lift, viewed, toggleView } = useContext(GraphCtx);
   const err = errors.get(id);
   const shown = viewed === id;
@@ -225,11 +232,11 @@ function AddMenu({ at, onPick, onClose }: { at: { x: number; y: number }; onPick
   const [q, setQ] = useState('');
   const [hi, setHi] = useState(0);
   const query = q.trim().toLowerCase();
-  const list = NODES.filter((n) => !query || say(n.label).toLowerCase().includes(query) || n.label.en.toLowerCase().includes(query) || say(n.hint).toLowerCase().includes(query));
+  const list = NODES.filter((n) => !n.hidden).filter((n) => !query || say(n.label).toLowerCase().includes(query) || n.label.en.toLowerCase().includes(query) || say(n.hint).toLowerCase().includes(query));
   const [recent] = useState(recentTypes);
   // In the order shown (so the arrow keys follow what is on screen).
   const sections = [
-    ...(query ? [] : [{ id: 'recent', label: t('cm.recent'), items: recent.map((r) => NODES.find((n) => n.type === r)!).filter(Boolean) }]),
+    ...(query ? [] : [{ id: 'recent', label: t('cm.recent'), items: recent.map((r) => NODES.find((n) => n.type === r && !n.hidden)!).filter(Boolean) }]),
     ...GROUPS.map((g) => ({ id: g.id, label: say(g.label), items: list.filter((n) => n.group === g.id) })),
   ].filter((x) => x.items.length);
   const shown = sections.flatMap((x) => x.items);
@@ -288,7 +295,7 @@ function NodeLibrary({ onAdd, onHide, wide }: { onAdd: (type: string) => void; o
   const [shut, setShut] = useState<Set<string>>(new Set());
   const icons = useMemo(() => nodeIcons(), []);
   const query = q.trim().toLowerCase();
-  const match = (n: (typeof NODES)[number]) => !query || say(n.label).toLowerCase().includes(query) || n.label.en.toLowerCase().includes(query) || say(n.hint).toLowerCase().includes(query);
+  const match = (n: (typeof NODES)[number]) => !n.hidden && (!query || say(n.label).toLowerCase().includes(query) || n.label.en.toLowerCase().includes(query) || say(n.hint).toLowerCase().includes(query));
   return (
     <aside className={`cm-lib${wide ? ' wide' : ''}`} aria-label={t('cm.library')}>
       <div className="cm-lib-h">
@@ -718,6 +725,20 @@ function Flow({ path, graph, sel, onSelect, wideLibrary }: { path: string; graph
     [path],
   );
 
+  // ── Reroute dots ──
+  const lastEdgeTap = useRef<{ id: string; at: number } | null>(null);
+  const addReroute = (to: string, input: string, at: { x: number; y: number }) => {
+    const g = graphRef.current;
+    const link = g.links.find((l) => l.to === to && l.input === input);
+    if (!link) return;
+    const dot = newNode('reroute', Math.round(at.x - 7), Math.round(at.y - 7));
+    let next: MatGraph = { ...g, nodes: [...g.nodes, dot] };
+    next = connect(next, link.from, dot.id, 'in');
+    next = connect(next, dot.id, to, input);
+    setGraph(path, next, 'Add reroute');
+    onSelect([dot.id]);
+  };
+
   // ── Moving all of a node's outgoing wires to another node (Ctrl+drag from its output, or Rewire on touch) ──
   const moveWires = (from: string, to: string) => {
     const g0 = graphRef.current;
@@ -850,10 +871,16 @@ function Flow({ path, graph, sel, onSelect, wideLibrary }: { path: string; graph
         onConnect={onConnect}
         connectionRadius={30}
         onEdgeClick={(e, edge) => {
-          // Alt+click unplugs a wire.
-          if (!e.altKey) return;
           const [to, input] = edge.id.split(':') as [string, string];
-          setGraph(path, disconnect(graphRef.current, to, input), 'Unplug wire');
+          // Alt+click unplugs a wire.
+          if (e.altKey) return setGraph(path, disconnect(graphRef.current, to, input), 'Unplug wire');
+          // A double click or double tap drops a reroute dot on it.
+          const now = performance.now(), last = lastEdgeTap.current;
+          lastEdgeTap.current = { id: edge.id, at: now };
+          if (last && last.id === edge.id && now - last.at < 350) {
+            lastEdgeTap.current = null;
+            addReroute(to, input, rf.screenToFlowPosition({ x: e.clientX, y: e.clientY }));
+          }
         }}
         onNodeDragStart={(_, __, dragged) => startCarry(dragged)}
         onNodeDragStop={endCarry}

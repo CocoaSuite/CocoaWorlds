@@ -45,9 +45,11 @@ export interface NodeDef {
   role?: OutputRole;
   params: Param[];
   glsl: string;
+  /** Kept out of the add menu and the library (made another way, like reroute dots on wires). */
+  hidden?: boolean;
 }
 
-const l = (en: string, ru: string): L => ({ en, ru });
+const l = (en: string, ru: string = en): L => ({ en, ru });
 const seed: Param = { id: 'seed', label: l('Seed', 'Зерно'), kind: 'seed', default: 0 };
 const IN_GREY = (id = 'in', label = l('In', 'Вход'), fallback: [number, number, number] = [0, 0, 0]): Port => ({ id, label, kind: 'grey', fallback });
 const IN_COLOR = (id = 'in', label = l('In', 'Вход'), fallback: [number, number, number] = [0, 0, 0]): Port => ({ id, label, kind: 'color', fallback });
@@ -173,6 +175,7 @@ outColor = vec4(vec3(h), 1.);`,
       { id: 'sides', label: l('Sides', 'Сторон'), kind: 'int', min: 3, max: 12, default: 6 },
       { id: 'size', label: l('Size', 'Размер'), kind: 'number', min: 0, max: 1.5, default: 0.7 },
       { id: 'softness', label: l('Softness', 'Мягкость'), kind: 'number', min: 0, max: 1, default: 0.05 },
+      { id: 'edgeBlur', label: l('Edge blur'), kind: 'number', min: 0, max: 1, default: 0 },
       { id: 'tiles', label: l('Repeat', 'Повторов'), kind: 'int', min: 1, max: 32, default: 1 },
       { id: 'angle', label: l('Turn', 'Поворот'), kind: 'number', min: 0, max: 360, step: 1, default: 0 },
     ],
@@ -187,7 +190,10 @@ else {
   if (p_kind > 2.5) { float k = abs(fract(a / r) - 0.5) * 2.; d *= mix(1.6, 0.8, k); }
 }
 float s = max(p_softness * 0.5, 0.002);
-outColor = vec4(vec3(1. - smoothstep(p_size - s, p_size + s, d)), 1.);`,
+float v = 1. - smoothstep(p_size - s, p_size + s, d);
+// Edge blur: fades in from the outline (the inside stays solid), for blending into what is under it.
+if (p_edgeBlur > 0.) { float e = clamp((p_size - d) / max(p_edgeBlur * p_size, 1e-4), 0., 1.); v *= e * e * (3. - 2. * e); }
+outColor = vec4(vec3(v), 1.);`,
   },
   {
     type: 'gradient',
@@ -539,6 +545,17 @@ outColor = vec4(vec3(smoothstep(p_threshold, p_threshold + 0.05, e)), 1.);`,
   },
 
   // ── Combine ──
+  {
+    type: 'reroute',
+    group: 'combine',
+    label: l('Reroute'),
+    hint: l('A dot on a wire, to route it around other nodes. Passes its input through unchanged.'),
+    inputs: [IN_COLOR('in', l('In'))],
+    output: 'color',
+    params: [],
+    glsl: `outColor = vec4(inC_in(uv).rgb, 1.);`,
+    hidden: true,
+  },
   {
     type: 'blend',
     group: 'combine',

@@ -217,6 +217,17 @@ export function disconnect(g: MatGraph, to: string, input: string): MatGraph {
 /** Take nodes out, with their links. */
 export function removeNodes(g: MatGraph, ids: Iterable<string>): MatGraph {
   const gone = new Set(ids);
+  // A reroute dot going away keeps its wire: what it fed is plugged into what fed it.
+  for (const n of g.nodes) {
+    if (n.type !== 'reroute' || !gone.has(n.id)) continue;
+    let src = g.links.find((l) => l.to === n.id)?.from;
+    while (src && gone.has(src)) {
+      const up = g.nodes.find((x) => x.id === src);
+      src = up?.type === 'reroute' ? g.links.find((l) => l.to === up.id)?.from : undefined;
+    }
+    if (!src) continue;
+    for (const l of g.links.filter((x) => x.from === n.id && !gone.has(x.to))) g = connect(g, src, l.to, l.input);
+  }
   return { ...g, nodes: g.nodes.filter((n) => !gone.has(n.id)), links: g.links.filter((l) => !gone.has(l.from) && !gone.has(l.to)), ...(g.exposed ? { exposed: g.exposed.filter((e) => !gone.has(e.node)) } : {}) };
 }
 
