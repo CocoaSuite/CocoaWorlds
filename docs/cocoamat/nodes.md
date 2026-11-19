@@ -470,7 +470,7 @@ outColor = vec4(vec3(v), 1.);
 
 Copies of a picture scattered over the square, each a different size, turn and brightness: leaves, pebbles, bolts.
 
-Makes: color · hash `0b236b89`
+Makes: color · hash `f66d96c8`
 
 | Input | Reads as | Unlinked |
 |---|---|---|
@@ -485,6 +485,7 @@ Makes: color · hash `0b236b89`
 | `turn` (Turn varies) | number | 0 – 1 | `1` |
 | `brightRandom` (Brightness varies) | number | 0 – 1 | `0.3` |
 | `apart` (Keep apart) | bool |  | `false` |
+| `stack` (No clipping) | bool |  | `false` |
 | `margin` (Space between) | number | 0 – 0.5 | `0.05` |
 | `seed` (Seed) | seed | any whole number | `0` |
 
@@ -495,7 +496,11 @@ float k = max(N.x, N.y); vec2 dims = k / N;
 // Keep apart: each copy stays inside its own cell (its turned corners too, plus the space between), so none touch.
 float reach = p_turn > 0. ? 0.70711 : 0.5;
 float room = max(0., 1. - p_margin);
-for (int y = -1; y <= 1; y++) for (int x = -1; x <= 1; x++) {
+// No clipping: copies stack whole, one over another in a fixed random order, instead of mixing pixel by pixel.
+// Black counts as empty. Looks two cells out so big copies aren't cut off at cell edges.
+bool stk = p_stack > 0.5; float top = -1.;
+for (int y = -2; y <= 2; y++) for (int x = -2; x <= 2; x++) {
+  if (!stk && (abs(x) > 1 || abs(y) > 1)) continue;
   vec2 cc = c + vec2(float(x), float(y)); vec2 cm = mod(cc, N);
   if (p_apart > 0.5 && (x != 0 || y != 0)) continue;
   float s = p_size * (1. - p_sizeRandom * hash12(cm + o + 1.7));
@@ -507,7 +512,8 @@ for (int y = -1; y <= 1; y++) for (int x = -1; x <= 1; x++) {
   if (abs(d.x) < 0.5 && abs(d.y) < 0.5) {
     vec3 t = inC_in(d + 0.5).rgb * (1. - p_brightRandom * hash12(cm + o + 8.8));
     float g = dot(t, vec3(0.3333));
-    if (g > best) { best = g; col = t; }
+    if (stk) { float z = hash12(cm + o + 6.6); if (g > 0.004 && z > top) { top = z; col = t; } }
+    else if (g > best) { best = g; col = t; }
   }
 }
 outColor = vec4(col, 1.);
