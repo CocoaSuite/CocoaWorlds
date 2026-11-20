@@ -13,7 +13,7 @@ export type RampStop = { at: number; color: string };
 export type ParamValue = number | string | boolean | RampStop[];
 export type Kind = 'grey' | 'color';
 export type OutputRole = 'color' | 'height' | 'normal' | 'roughness' | 'metalness' | 'occlusion' | 'glow' | 'opacity' | 'wearColor' | 'wearRoughness' | 'wearMetal' | 'wearNoise';
-export type Group = 'make' | 'change' | 'combine' | 'colour' | 'surface' | 'output';
+export type Group = 'make' | 'change' | 'combine' | 'colour' | 'surface' | 'materialize' | 'output';
 
 export interface Port {
   id: string;
@@ -2398,6 +2398,152 @@ if (hit) { int m = int(p_mode + 0.5); col = m == 0 ? pic : m == 1 ? max(bg, pic)
 outColor = vec4(col, 1.);`,
   },
 
+  // ── Materialize: one node per map, made from a flat photo (like Materialize / Bitmap2Material) ──
+  {
+    type: 'matColor',
+    group: 'materialize',
+    label: l('Photo to colour'),
+    hint: l('The photo’s colour with the broad light and shadow taken out, so the material isn’t lit twice.'),
+    inputs: [IN_COLOR('in', l('Photo'), [0.5, 0.5, 0.5])],
+    output: 'color',
+    params: [
+      { id: 'shading', label: l('Remove shading'), kind: 'number', min: 0, max: 1, default: 0.7 },
+      { id: 'radius', label: l('Shading size'), kind: 'number', min: 0.02, max: 0.5, step: 0.005, default: 0.15 },
+      { id: 'saturation', label: l('Saturation'), kind: 'number', min: 0, max: 2, default: 1 },
+      { id: 'brightness', label: l('Brightness'), kind: 'number', min: 0, max: 2, default: 1 },
+    ],
+    glsl: `vec3 c = inC_in(uv).rgb;
+float m = 0.;
+for (int y = 0; y < 8; y++) for (int x = 0; x < 8; x++) m += inG_in((vec2(x, y) + 0.5) / 8.);
+m /= 64.;
+float b = 0.; float s = p_radius * 0.15;
+for (int i = 0; i < 32; i++) {
+  float a = float(i) * 2.39996; vec2 d = vec2(cos(a), sin(a)) * sqrt((float(i) + 0.5) / 32.) * p_radius;
+  b += inG_in(uv + d + vec2(s, 0.)) + inG_in(uv + d - vec2(s, 0.)) + inG_in(uv + d + vec2(0., s)) + inG_in(uv + d - vec2(0., s));
+}
+b /= 128.;
+c *= mix(1., m / max(b, 0.02), p_shading) * p_brightness;
+float g = dot(c, vec3(0.2126, 0.7152, 0.0722));
+outColor = vec4(clamp(mix(vec3(g), c, p_saturation), 0., 1.), 1.);`,
+  },
+  {
+    type: 'matHeight',
+    group: 'materialize',
+    label: l('Photo to height'),
+    hint: l('A height map guessed from a photo’s light and dark, split into fine detail, medium and large shapes.'),
+    inputs: [IN_COLOR('in', l('Photo'), [0.5, 0.5, 0.5])],
+    output: 'grey',
+    params: [
+      { id: 'fine', label: l('Fine detail'), kind: 'number', min: 0, max: 1, default: 0.4 },
+      { id: 'medium', label: l('Medium detail'), kind: 'number', min: 0, max: 1, default: 0.7 },
+      { id: 'large', label: l('Large shapes'), kind: 'number', min: 0, max: 1, default: 0.5 },
+      { id: 'size', label: l('Detail size'), kind: 'number', min: 0.25, max: 4, default: 1 },
+      { id: 'contrast', label: l('Contrast'), kind: 'number', min: 0, max: 4, default: 1 },
+      { id: 'invert', label: l('Dark is high'), kind: 'bool', default: false },
+    ],
+    glsl: `float l = inG_in(uv);
+float r1 = 0.004 * p_size, r2 = 0.02 * p_size, r3 = 0.08 * p_size;
+float b1 = 0., b2 = 0., b3 = 0.;
+for (int i = 0; i < 32; i++) {
+  float a = float(i) * 2.39996; vec2 d = vec2(cos(a), sin(a)) * sqrt((float(i) + 0.5) / 32.);
+  b1 += inG_in(uv + d * r1); b2 += inG_in(uv + d * r2);
+  b3 += inG_in(uv + d * r3 + vec2(r3 * 0.06, 0.)) + inG_in(uv + d * r3 - vec2(r3 * 0.06, 0.));
+}
+b1 /= 32.; b2 /= 32.; b3 /= 64.;
+float h = (l - b1) * p_fine * 2. + (b1 - b2) * p_medium + (b2 - b3) * p_large;
+if (p_invert > 0.5) h = -h;
+outColor = vec4(vec3(clamp(0.5 + h * p_contrast * 3., 0., 1.)), 1.);`,
+  },
+  {
+    type: 'matNormal',
+    group: 'materialize',
+    label: l('Photo to normal'),
+    hint: l('Bumps for lighting straight from a photo, from fine detail up to large shapes.'),
+    inputs: [IN_COLOR('in', l('Photo'), [0.5, 0.5, 0.5])],
+    output: 'color',
+    params: [
+      { id: 'strength', label: l('Strength'), kind: 'number', min: 0, max: 10, default: 2 },
+      { id: 'fine', label: l('Fine detail'), kind: 'number', min: 0, max: 1, default: 0.5 },
+      { id: 'medium', label: l('Medium detail'), kind: 'number', min: 0, max: 1, default: 0.7 },
+      { id: 'large', label: l('Large shapes'), kind: 'number', min: 0, max: 1, default: 0.4 },
+      { id: 'size', label: l('Detail size'), kind: 'number', min: 0.25, max: 4, default: 1 },
+      { id: 'invert', label: l('Dark is high'), kind: 'bool', default: false },
+      { id: 'flip', label: l('Flip green (DirectX)'), kind: 'bool', default: false },
+    ],
+    glsl: `vec2 g = vec2(0.);
+for (int k = 0; k < 3; k++) {
+  float d = (k == 0 ? 1. : k == 1 ? 4. : 16.) * u_px * p_size;
+  float w = k == 0 ? p_fine : k == 1 ? p_medium : p_large;
+  float tl = inG_in(uv + vec2(-d, -d)), t = inG_in(uv + vec2(0., -d)), tr = inG_in(uv + vec2(d, -d));
+  float ml = inG_in(uv + vec2(-d, 0.)), mr = inG_in(uv + vec2(d, 0.));
+  float bl = inG_in(uv + vec2(-d, d)), b = inG_in(uv + vec2(0., d)), br = inG_in(uv + vec2(d, d));
+  g += vec2((tr + 2. * mr + br) - (tl + 2. * ml + bl), (bl + 2. * b + br) - (tl + 2. * t + tr)) / 8. * w;
+}
+if (p_invert > 0.5) g = -g;
+vec3 n = normalize(vec3(-g * p_strength, 1.));
+if (p_flip > 0.5) n.y = -n.y;
+outColor = vec4(n * 0.5 + 0.5, 1.);`,
+  },
+  {
+    type: 'matRoughness',
+    group: 'materialize',
+    label: l('Photo to roughness'),
+    hint: l('Roughness from a photo: shinier where it is lighter (or darker) than its surroundings.'),
+    inputs: [IN_COLOR('in', l('Photo'), [0.5, 0.5, 0.5])],
+    output: 'grey',
+    params: [
+      { id: 'roughness', label: l('Roughness'), kind: 'number', min: 0, max: 1, default: 0.75 },
+      { id: 'variation', label: l('Variation'), kind: 'number', min: 0, max: 1, default: 0.5 },
+      { id: 'shiny', label: l('Shiny where'), kind: 'choice', options: [opt('light', 'Lighter', 'Lighter'), opt('dark', 'Darker', 'Darker')], default: 'light' },
+      { id: 'radius', label: l('Radius'), kind: 'number', min: 0.005, max: 0.2, step: 0.001, default: 0.04 },
+    ],
+    glsl: `float l = inG_in(uv); float b = 0.;
+for (int i = 0; i < 24; i++) {
+  float a = float(i) * 2.39996; vec2 d = vec2(cos(a), sin(a)) * sqrt((float(i) + 0.5) / 24.) * p_radius;
+  b += inG_in(uv + d);
+}
+b /= 24.;
+float v = p_roughness + (p_shiny < 0.5 ? -1. : 1.) * (l - b) * p_variation * 3.;
+outColor = vec4(vec3(clamp(v, 0., 1.)), 1.);`,
+  },
+  {
+    type: 'matOcclusion',
+    group: 'materialize',
+    label: l('Photo to occlusion'),
+    hint: l('Dark in a photo’s cracks and dips (the parts darker than around them), for the occlusion map.'),
+    inputs: [IN_COLOR('in', l('Photo'), [0.5, 0.5, 0.5])],
+    output: 'grey',
+    params: [
+      { id: 'radius', label: l('Radius'), kind: 'number', min: 0.002, max: 0.1, step: 0.001, default: 0.015 },
+      { id: 'strength', label: l('Strength'), kind: 'number', min: 0, max: 4, default: 1.5 },
+      { id: 'invert', label: l('Dark is high'), kind: 'bool', default: false },
+    ],
+    glsl: `float sg = p_invert > 0.5 ? -1. : 1.;
+float h = inG_in(uv) * sg; float s = 0.;
+for (int i = 0; i < 24; i++) {
+  float a = float(i) * 2.39996; vec2 d = vec2(cos(a), sin(a)) * sqrt((float(i) + 0.5) / 24.) * p_radius;
+  s += inG_in(uv + d) * sg;
+}
+s /= 24.;
+outColor = vec4(vec3(clamp(1. - max(s - h, 0.) * p_strength * 4., 0., 1.)), 1.);`,
+  },
+  {
+    type: 'matMetal',
+    group: 'materialize',
+    label: l('Photo to metal'),
+    hint: l('White where the photo is close to the metal’s colour: pick the colour of the bare metal in it.'),
+    inputs: [IN_COLOR('in', l('Photo'), [0.5, 0.5, 0.5])],
+    output: 'grey',
+    params: [
+      { id: 'color', label: l('Metal colour'), kind: 'color', default: '#d6dade' },
+      { id: 'range', label: l('Range'), kind: 'number', min: 0, max: 1, default: 0.03 },
+      { id: 'softness', label: l('Softness'), kind: 'number', min: 0, max: 1, default: 0.04 },
+      { id: 'amount', label: l('Amount'), kind: 'number', min: 0, max: 1, default: 1 },
+    ],
+    glsl: `float d = distance(inC_in(uv).rgb, p_color) / 1.732;
+outColor = vec4(vec3((1. - smoothstep(p_range, p_range + p_softness + 0.001, d)) * p_amount), 1.);`,
+  },
+
   // ── Outputs ──
   output('outColor', 'color', 'color', 'Colour', 'Цвет', 'The material’s colour.', 'Цвет материала.', [0.7, 0.7, 0.7]),
   output('outHeight', 'height', 'grey', 'Height', 'Высота', 'How high each spot is (white high): bumps when there is no normal map.', 'Высота каждой точки (белое — выше): рельеф, если нет карты нормалей.', [0.5, 0.5, 0.5]),
@@ -2422,6 +2568,7 @@ export const GROUPS: { id: Group; label: L }[] = [
   { id: 'combine', label: l('Combine', 'Совместить') },
   { id: 'colour', label: l('Colour', 'Цвет') },
   { id: 'surface', label: l('Surface', 'Поверхность') },
+  { id: 'materialize', label: l('Materialize') },
   { id: 'output', label: l('Outputs', 'Выходы') },
 ];
 

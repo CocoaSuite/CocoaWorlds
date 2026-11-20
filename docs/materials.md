@@ -142,6 +142,7 @@ The picture goes over **Background** (its second input) by **Cover**, **Lighter*
 | Combine | Blend (mix, add, subtract, multiply, screen, overlay, lighter, darker, difference, through a mask), Switch, Math (+ − × ÷, min, max, power, difference, average), Height blend (colour, height or mask), Combine channels, Pick channel, Colour to mask, Pick per cell (one of up to four pictures per cell or square) |
 | Colour | Gradient map, Hue / saturation / lightness, Colourise, Replace colour, Desaturate, Colour variation, Warm or cool, Colour balance (shadows, mid-tones, highlights), Rainbow palette |
 | Surface | Height to normal, Height to occlusion, Height to curvature, Combine normals, Adjust normals (strength, flip green), Edge wear, Dirt, Drips and streaks, Puddles, Settles on top (snow, dust, moss), Slope mask |
+| Materialize | Photo to colour (takes out broad light and shadow), Photo to height (fine, medium and large detail), Photo to normal, Photo to roughness, Photo to occlusion, Photo to metal (by the metal's colour). Each reads a flat photo, such as an Image node of a brick wall, and makes one map: wire each into its output to turn the photo into a full material. **Dark is high** flips which parts count as raised |
 | Outputs | Colour, Height, Normal, Roughness, Metal, Occlusion, Glow, Opacity |
 
 Everything tiles: the patterns repeat over their square, so the material never shows a seam. Random nodes

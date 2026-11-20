@@ -394,7 +394,7 @@ export function nodeIcons(size = 64): Map<string, string> {
       const id = `n_${def.type}`;
       g.nodes.push({ id, type: def.type, x: 0, y: 0, params: {} });
       // (Surface nodes read a height: bricks show them best.)
-      def.inputs.forEach((p, i) => g.links.push({ from: def.group === 'surface' || def.type === 'edges' || i > 0 ? bricks.id : feed.id, to: id, input: p.id }));
+      def.inputs.forEach((p, i) => g.links.push({ from: def.group === 'surface' || def.group === 'materialize' || def.type === 'edges' || i > 0 ? bricks.id : feed.id, to: id, input: p.id }));
     }
     ev.evaluate(g, 96);
     const c = document.createElement('canvas');

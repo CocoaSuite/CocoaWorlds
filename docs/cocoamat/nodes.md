@@ -3,7 +3,7 @@
 <!-- Written from packages/materials/src/catalog.ts. Do not edit by hand: run
      CW_WRITE_CATALOG=1 npx vitest run packages/materials/test/catalog.test.ts -->
 
-Catalog version 1, for graph format `cocoaworlds.material` version 1. 130 nodes.
+Catalog version 1, for graph format `cocoaworlds.material` version 1. 136 nodes.
 How a node is evaluated (uniforms, inputs, uv) is in [the format spec](../cocoamat-format.md), section 5;
 the same data as JSON, with the shared GLSL library, is in [nodes.json](nodes.json).
 
@@ -2994,6 +2994,188 @@ float s = clamp(length(g) * p_strength * 0.05, 0., 1.);
 float v = smoothstep(p_threshold - p_softness, p_threshold + p_softness + 1e-4, s);
 if (p_mode > 0.5) v = 1. - v;
 outColor = vec4(vec3(v), 1.);
+```
+
+## Materialize
+
+### Photo to colour — `matColor`
+
+The photo’s colour with the broad light and shadow taken out, so the material isn’t lit twice.
+
+Makes: color · hash `12bb2e17`
+
+| Input | Reads as | Unlinked |
+|---|---|---|
+| `in` (Photo) | color | 0.5, 0.5, 0.5 |
+
+| Setting | Kind | Range | Default |
+|---|---|---|---|
+| `shading` (Remove shading) | number | 0 – 1 | `0.7` |
+| `radius` (Shading size) | number | 0.02 – 0.5 (step 0.005) | `0.15` |
+| `saturation` (Saturation) | number | 0 – 2 | `1` |
+| `brightness` (Brightness) | number | 0 – 2 | `1` |
+
+```glsl
+vec3 c = inC_in(uv).rgb;
+float m = 0.;
+for (int y = 0; y < 8; y++) for (int x = 0; x < 8; x++) m += inG_in((vec2(x, y) + 0.5) / 8.);
+m /= 64.;
+float b = 0.; float s = p_radius * 0.15;
+for (int i = 0; i < 32; i++) {
+  float a = float(i) * 2.39996; vec2 d = vec2(cos(a), sin(a)) * sqrt((float(i) + 0.5) / 32.) * p_radius;
+  b += inG_in(uv + d + vec2(s, 0.)) + inG_in(uv + d - vec2(s, 0.)) + inG_in(uv + d + vec2(0., s)) + inG_in(uv + d - vec2(0., s));
+}
+b /= 128.;
+c *= mix(1., m / max(b, 0.02), p_shading) * p_brightness;
+float g = dot(c, vec3(0.2126, 0.7152, 0.0722));
+outColor = vec4(clamp(mix(vec3(g), c, p_saturation), 0., 1.), 1.);
+```
+
+### Photo to height — `matHeight`
+
+A height map guessed from a photo’s light and dark, split into fine detail, medium and large shapes.
+
+Makes: grey · hash `93fb3b3d`
+
+| Input | Reads as | Unlinked |
+|---|---|---|
+| `in` (Photo) | color | 0.5, 0.5, 0.5 |
+
+| Setting | Kind | Range | Default |
+|---|---|---|---|
+| `fine` (Fine detail) | number | 0 – 1 | `0.4` |
+| `medium` (Medium detail) | number | 0 – 1 | `0.7` |
+| `large` (Large shapes) | number | 0 – 1 | `0.5` |
+| `size` (Detail size) | number | 0.25 – 4 | `1` |
+| `contrast` (Contrast) | number | 0 – 4 | `1` |
+| `invert` (Dark is high) | bool |  | `false` |
+
+```glsl
+float l = inG_in(uv);
+float r1 = 0.004 * p_size, r2 = 0.02 * p_size, r3 = 0.08 * p_size;
+float b1 = 0., b2 = 0., b3 = 0.;
+for (int i = 0; i < 32; i++) {
+  float a = float(i) * 2.39996; vec2 d = vec2(cos(a), sin(a)) * sqrt((float(i) + 0.5) / 32.);
+  b1 += inG_in(uv + d * r1); b2 += inG_in(uv + d * r2);
+  b3 += inG_in(uv + d * r3 + vec2(r3 * 0.06, 0.)) + inG_in(uv + d * r3 - vec2(r3 * 0.06, 0.));
+}
+b1 /= 32.; b2 /= 32.; b3 /= 64.;
+float h = (l - b1) * p_fine * 2. + (b1 - b2) * p_medium + (b2 - b3) * p_large;
+if (p_invert > 0.5) h = -h;
+outColor = vec4(vec3(clamp(0.5 + h * p_contrast * 3., 0., 1.)), 1.);
+```
+
+### Photo to normal — `matNormal`
+
+Bumps for lighting straight from a photo, from fine detail up to large shapes.
+
+Makes: color · hash `afdd1441`
+
+| Input | Reads as | Unlinked |
+|---|---|---|
+| `in` (Photo) | color | 0.5, 0.5, 0.5 |
+
+| Setting | Kind | Range | Default |
+|---|---|---|---|
+| `strength` (Strength) | number | 0 – 10 | `2` |
+| `fine` (Fine detail) | number | 0 – 1 | `0.5` |
+| `medium` (Medium detail) | number | 0 – 1 | `0.7` |
+| `large` (Large shapes) | number | 0 – 1 | `0.4` |
+| `size` (Detail size) | number | 0.25 – 4 | `1` |
+| `invert` (Dark is high) | bool |  | `false` |
+| `flip` (Flip green (DirectX)) | bool |  | `false` |
+
+```glsl
+vec2 g = vec2(0.);
+for (int k = 0; k < 3; k++) {
+  float d = (k == 0 ? 1. : k == 1 ? 4. : 16.) * u_px * p_size;
+  float w = k == 0 ? p_fine : k == 1 ? p_medium : p_large;
+  float tl = inG_in(uv + vec2(-d, -d)), t = inG_in(uv + vec2(0., -d)), tr = inG_in(uv + vec2(d, -d));
+  float ml = inG_in(uv + vec2(-d, 0.)), mr = inG_in(uv + vec2(d, 0.));
+  float bl = inG_in(uv + vec2(-d, d)), b = inG_in(uv + vec2(0., d)), br = inG_in(uv + vec2(d, d));
+  g += vec2((tr + 2. * mr + br) - (tl + 2. * ml + bl), (bl + 2. * b + br) - (tl + 2. * t + tr)) / 8. * w;
+}
+if (p_invert > 0.5) g = -g;
+vec3 n = normalize(vec3(-g * p_strength, 1.));
+if (p_flip > 0.5) n.y = -n.y;
+outColor = vec4(n * 0.5 + 0.5, 1.);
+```
+
+### Photo to roughness — `matRoughness`
+
+Roughness from a photo: shinier where it is lighter (or darker) than its surroundings.
+
+Makes: grey · hash `f70a9cee`
+
+| Input | Reads as | Unlinked |
+|---|---|---|
+| `in` (Photo) | color | 0.5, 0.5, 0.5 |
+
+| Setting | Kind | Range | Default |
+|---|---|---|---|
+| `roughness` (Roughness) | number | 0 – 1 | `0.75` |
+| `variation` (Variation) | number | 0 – 1 | `0.5` |
+| `shiny` (Shiny where) | choice | 0 `light`, 1 `dark` | `light` |
+| `radius` (Radius) | number | 0.005 – 0.2 (step 0.001) | `0.04` |
+
+```glsl
+float l = inG_in(uv); float b = 0.;
+for (int i = 0; i < 24; i++) {
+  float a = float(i) * 2.39996; vec2 d = vec2(cos(a), sin(a)) * sqrt((float(i) + 0.5) / 24.) * p_radius;
+  b += inG_in(uv + d);
+}
+b /= 24.;
+float v = p_roughness + (p_shiny < 0.5 ? -1. : 1.) * (l - b) * p_variation * 3.;
+outColor = vec4(vec3(clamp(v, 0., 1.)), 1.);
+```
+
+### Photo to occlusion — `matOcclusion`
+
+Dark in a photo’s cracks and dips (the parts darker than around them), for the occlusion map.
+
+Makes: grey · hash `95bad94c`
+
+| Input | Reads as | Unlinked |
+|---|---|---|
+| `in` (Photo) | color | 0.5, 0.5, 0.5 |
+
+| Setting | Kind | Range | Default |
+|---|---|---|---|
+| `radius` (Radius) | number | 0.002 – 0.1 (step 0.001) | `0.015` |
+| `strength` (Strength) | number | 0 – 4 | `1.5` |
+| `invert` (Dark is high) | bool |  | `false` |
+
+```glsl
+float sg = p_invert > 0.5 ? -1. : 1.;
+float h = inG_in(uv) * sg; float s = 0.;
+for (int i = 0; i < 24; i++) {
+  float a = float(i) * 2.39996; vec2 d = vec2(cos(a), sin(a)) * sqrt((float(i) + 0.5) / 24.) * p_radius;
+  s += inG_in(uv + d) * sg;
+}
+s /= 24.;
+outColor = vec4(vec3(clamp(1. - max(s - h, 0.) * p_strength * 4., 0., 1.)), 1.);
+```
+
+### Photo to metal — `matMetal`
+
+White where the photo is close to the metal’s colour: pick the colour of the bare metal in it.
+
+Makes: grey · hash `f46d24f8`
+
+| Input | Reads as | Unlinked |
+|---|---|---|
+| `in` (Photo) | color | 0.5, 0.5, 0.5 |
+
+| Setting | Kind | Range | Default |
+|---|---|---|---|
+| `color` (Metal colour) | color |  | `#d6dade` |
+| `range` (Range) | number | 0 – 1 | `0.03` |
+| `softness` (Softness) | number | 0 – 1 | `0.04` |
+| `amount` (Amount) | number | 0 – 1 | `1` |
+
+```glsl
+float d = distance(inC_in(uv).rgb, p_color) / 1.732;
+outColor = vec4(vec3((1. - smoothstep(p_range, p_range + p_softness + 0.001, d)) * p_amount), 1.);
 ```
 
 ## Output

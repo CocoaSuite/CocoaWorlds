@@ -8861,6 +8861,513 @@
       "hash": "cde9c6d3"
     },
     {
+      "type": "matColor",
+      "group": "materialize",
+      "label": {
+        "en": "Photo to colour",
+        "ru": "Photo to colour"
+      },
+      "hint": {
+        "en": "The photo’s colour with the broad light and shadow taken out, so the material isn’t lit twice.",
+        "ru": "The photo’s colour with the broad light and shadow taken out, so the material isn’t lit twice."
+      },
+      "inputs": [
+        {
+          "id": "in",
+          "kind": "color",
+          "label": {
+            "en": "Photo",
+            "ru": "Photo"
+          },
+          "fallback": [
+            0.5,
+            0.5,
+            0.5
+          ]
+        }
+      ],
+      "output": "color",
+      "params": [
+        {
+          "id": "shading",
+          "kind": "number",
+          "label": {
+            "en": "Remove shading",
+            "ru": "Remove shading"
+          },
+          "default": 0.7,
+          "min": 0,
+          "max": 1
+        },
+        {
+          "id": "radius",
+          "kind": "number",
+          "label": {
+            "en": "Shading size",
+            "ru": "Shading size"
+          },
+          "default": 0.15,
+          "min": 0.02,
+          "max": 0.5,
+          "step": 0.005
+        },
+        {
+          "id": "saturation",
+          "kind": "number",
+          "label": {
+            "en": "Saturation",
+            "ru": "Saturation"
+          },
+          "default": 1,
+          "min": 0,
+          "max": 2
+        },
+        {
+          "id": "brightness",
+          "kind": "number",
+          "label": {
+            "en": "Brightness",
+            "ru": "Brightness"
+          },
+          "default": 1,
+          "min": 0,
+          "max": 2
+        }
+      ],
+      "glsl": "vec3 c = inC_in(uv).rgb;\nfloat m = 0.;\nfor (int y = 0; y < 8; y++) for (int x = 0; x < 8; x++) m += inG_in((vec2(x, y) + 0.5) / 8.);\nm /= 64.;\nfloat b = 0.; float s = p_radius * 0.15;\nfor (int i = 0; i < 32; i++) {\n  float a = float(i) * 2.39996; vec2 d = vec2(cos(a), sin(a)) * sqrt((float(i) + 0.5) / 32.) * p_radius;\n  b += inG_in(uv + d + vec2(s, 0.)) + inG_in(uv + d - vec2(s, 0.)) + inG_in(uv + d + vec2(0., s)) + inG_in(uv + d - vec2(0., s));\n}\nb /= 128.;\nc *= mix(1., m / max(b, 0.02), p_shading) * p_brightness;\nfloat g = dot(c, vec3(0.2126, 0.7152, 0.0722));\noutColor = vec4(clamp(mix(vec3(g), c, p_saturation), 0., 1.), 1.);",
+      "hash": "12bb2e17"
+    },
+    {
+      "type": "matHeight",
+      "group": "materialize",
+      "label": {
+        "en": "Photo to height",
+        "ru": "Photo to height"
+      },
+      "hint": {
+        "en": "A height map guessed from a photo’s light and dark, split into fine detail, medium and large shapes.",
+        "ru": "A height map guessed from a photo’s light and dark, split into fine detail, medium and large shapes."
+      },
+      "inputs": [
+        {
+          "id": "in",
+          "kind": "color",
+          "label": {
+            "en": "Photo",
+            "ru": "Photo"
+          },
+          "fallback": [
+            0.5,
+            0.5,
+            0.5
+          ]
+        }
+      ],
+      "output": "grey",
+      "params": [
+        {
+          "id": "fine",
+          "kind": "number",
+          "label": {
+            "en": "Fine detail",
+            "ru": "Fine detail"
+          },
+          "default": 0.4,
+          "min": 0,
+          "max": 1
+        },
+        {
+          "id": "medium",
+          "kind": "number",
+          "label": {
+            "en": "Medium detail",
+            "ru": "Medium detail"
+          },
+          "default": 0.7,
+          "min": 0,
+          "max": 1
+        },
+        {
+          "id": "large",
+          "kind": "number",
+          "label": {
+            "en": "Large shapes",
+            "ru": "Large shapes"
+          },
+          "default": 0.5,
+          "min": 0,
+          "max": 1
+        },
+        {
+          "id": "size",
+          "kind": "number",
+          "label": {
+            "en": "Detail size",
+            "ru": "Detail size"
+          },
+          "default": 1,
+          "min": 0.25,
+          "max": 4
+        },
+        {
+          "id": "contrast",
+          "kind": "number",
+          "label": {
+            "en": "Contrast",
+            "ru": "Contrast"
+          },
+          "default": 1,
+          "min": 0,
+          "max": 4
+        },
+        {
+          "id": "invert",
+          "kind": "bool",
+          "label": {
+            "en": "Dark is high",
+            "ru": "Dark is high"
+          },
+          "default": false
+        }
+      ],
+      "glsl": "float l = inG_in(uv);\nfloat r1 = 0.004 * p_size, r2 = 0.02 * p_size, r3 = 0.08 * p_size;\nfloat b1 = 0., b2 = 0., b3 = 0.;\nfor (int i = 0; i < 32; i++) {\n  float a = float(i) * 2.39996; vec2 d = vec2(cos(a), sin(a)) * sqrt((float(i) + 0.5) / 32.);\n  b1 += inG_in(uv + d * r1); b2 += inG_in(uv + d * r2);\n  b3 += inG_in(uv + d * r3 + vec2(r3 * 0.06, 0.)) + inG_in(uv + d * r3 - vec2(r3 * 0.06, 0.));\n}\nb1 /= 32.; b2 /= 32.; b3 /= 64.;\nfloat h = (l - b1) * p_fine * 2. + (b1 - b2) * p_medium + (b2 - b3) * p_large;\nif (p_invert > 0.5) h = -h;\noutColor = vec4(vec3(clamp(0.5 + h * p_contrast * 3., 0., 1.)), 1.);",
+      "hash": "93fb3b3d"
+    },
+    {
+      "type": "matNormal",
+      "group": "materialize",
+      "label": {
+        "en": "Photo to normal",
+        "ru": "Photo to normal"
+      },
+      "hint": {
+        "en": "Bumps for lighting straight from a photo, from fine detail up to large shapes.",
+        "ru": "Bumps for lighting straight from a photo, from fine detail up to large shapes."
+      },
+      "inputs": [
+        {
+          "id": "in",
+          "kind": "color",
+          "label": {
+            "en": "Photo",
+            "ru": "Photo"
+          },
+          "fallback": [
+            0.5,
+            0.5,
+            0.5
+          ]
+        }
+      ],
+      "output": "color",
+      "params": [
+        {
+          "id": "strength",
+          "kind": "number",
+          "label": {
+            "en": "Strength",
+            "ru": "Strength"
+          },
+          "default": 2,
+          "min": 0,
+          "max": 10
+        },
+        {
+          "id": "fine",
+          "kind": "number",
+          "label": {
+            "en": "Fine detail",
+            "ru": "Fine detail"
+          },
+          "default": 0.5,
+          "min": 0,
+          "max": 1
+        },
+        {
+          "id": "medium",
+          "kind": "number",
+          "label": {
+            "en": "Medium detail",
+            "ru": "Medium detail"
+          },
+          "default": 0.7,
+          "min": 0,
+          "max": 1
+        },
+        {
+          "id": "large",
+          "kind": "number",
+          "label": {
+            "en": "Large shapes",
+            "ru": "Large shapes"
+          },
+          "default": 0.4,
+          "min": 0,
+          "max": 1
+        },
+        {
+          "id": "size",
+          "kind": "number",
+          "label": {
+            "en": "Detail size",
+            "ru": "Detail size"
+          },
+          "default": 1,
+          "min": 0.25,
+          "max": 4
+        },
+        {
+          "id": "invert",
+          "kind": "bool",
+          "label": {
+            "en": "Dark is high",
+            "ru": "Dark is high"
+          },
+          "default": false
+        },
+        {
+          "id": "flip",
+          "kind": "bool",
+          "label": {
+            "en": "Flip green (DirectX)",
+            "ru": "Flip green (DirectX)"
+          },
+          "default": false
+        }
+      ],
+      "glsl": "vec2 g = vec2(0.);\nfor (int k = 0; k < 3; k++) {\n  float d = (k == 0 ? 1. : k == 1 ? 4. : 16.) * u_px * p_size;\n  float w = k == 0 ? p_fine : k == 1 ? p_medium : p_large;\n  float tl = inG_in(uv + vec2(-d, -d)), t = inG_in(uv + vec2(0., -d)), tr = inG_in(uv + vec2(d, -d));\n  float ml = inG_in(uv + vec2(-d, 0.)), mr = inG_in(uv + vec2(d, 0.));\n  float bl = inG_in(uv + vec2(-d, d)), b = inG_in(uv + vec2(0., d)), br = inG_in(uv + vec2(d, d));\n  g += vec2((tr + 2. * mr + br) - (tl + 2. * ml + bl), (bl + 2. * b + br) - (tl + 2. * t + tr)) / 8. * w;\n}\nif (p_invert > 0.5) g = -g;\nvec3 n = normalize(vec3(-g * p_strength, 1.));\nif (p_flip > 0.5) n.y = -n.y;\noutColor = vec4(n * 0.5 + 0.5, 1.);",
+      "hash": "afdd1441"
+    },
+    {
+      "type": "matRoughness",
+      "group": "materialize",
+      "label": {
+        "en": "Photo to roughness",
+        "ru": "Photo to roughness"
+      },
+      "hint": {
+        "en": "Roughness from a photo: shinier where it is lighter (or darker) than its surroundings.",
+        "ru": "Roughness from a photo: shinier where it is lighter (or darker) than its surroundings."
+      },
+      "inputs": [
+        {
+          "id": "in",
+          "kind": "color",
+          "label": {
+            "en": "Photo",
+            "ru": "Photo"
+          },
+          "fallback": [
+            0.5,
+            0.5,
+            0.5
+          ]
+        }
+      ],
+      "output": "grey",
+      "params": [
+        {
+          "id": "roughness",
+          "kind": "number",
+          "label": {
+            "en": "Roughness",
+            "ru": "Roughness"
+          },
+          "default": 0.75,
+          "min": 0,
+          "max": 1
+        },
+        {
+          "id": "variation",
+          "kind": "number",
+          "label": {
+            "en": "Variation",
+            "ru": "Variation"
+          },
+          "default": 0.5,
+          "min": 0,
+          "max": 1
+        },
+        {
+          "id": "shiny",
+          "kind": "choice",
+          "label": {
+            "en": "Shiny where",
+            "ru": "Shiny where"
+          },
+          "default": "light",
+          "options": [
+            {
+              "value": "light",
+              "label": {
+                "en": "Lighter",
+                "ru": "Lighter"
+              }
+            },
+            {
+              "value": "dark",
+              "label": {
+                "en": "Darker",
+                "ru": "Darker"
+              }
+            }
+          ]
+        },
+        {
+          "id": "radius",
+          "kind": "number",
+          "label": {
+            "en": "Radius",
+            "ru": "Radius"
+          },
+          "default": 0.04,
+          "min": 0.005,
+          "max": 0.2,
+          "step": 0.001
+        }
+      ],
+      "glsl": "float l = inG_in(uv); float b = 0.;\nfor (int i = 0; i < 24; i++) {\n  float a = float(i) * 2.39996; vec2 d = vec2(cos(a), sin(a)) * sqrt((float(i) + 0.5) / 24.) * p_radius;\n  b += inG_in(uv + d);\n}\nb /= 24.;\nfloat v = p_roughness + (p_shiny < 0.5 ? -1. : 1.) * (l - b) * p_variation * 3.;\noutColor = vec4(vec3(clamp(v, 0., 1.)), 1.);",
+      "hash": "f70a9cee"
+    },
+    {
+      "type": "matOcclusion",
+      "group": "materialize",
+      "label": {
+        "en": "Photo to occlusion",
+        "ru": "Photo to occlusion"
+      },
+      "hint": {
+        "en": "Dark in a photo’s cracks and dips (the parts darker than around them), for the occlusion map.",
+        "ru": "Dark in a photo’s cracks and dips (the parts darker than around them), for the occlusion map."
+      },
+      "inputs": [
+        {
+          "id": "in",
+          "kind": "color",
+          "label": {
+            "en": "Photo",
+            "ru": "Photo"
+          },
+          "fallback": [
+            0.5,
+            0.5,
+            0.5
+          ]
+        }
+      ],
+      "output": "grey",
+      "params": [
+        {
+          "id": "radius",
+          "kind": "number",
+          "label": {
+            "en": "Radius",
+            "ru": "Radius"
+          },
+          "default": 0.015,
+          "min": 0.002,
+          "max": 0.1,
+          "step": 0.001
+        },
+        {
+          "id": "strength",
+          "kind": "number",
+          "label": {
+            "en": "Strength",
+            "ru": "Strength"
+          },
+          "default": 1.5,
+          "min": 0,
+          "max": 4
+        },
+        {
+          "id": "invert",
+          "kind": "bool",
+          "label": {
+            "en": "Dark is high",
+            "ru": "Dark is high"
+          },
+          "default": false
+        }
+      ],
+      "glsl": "float sg = p_invert > 0.5 ? -1. : 1.;\nfloat h = inG_in(uv) * sg; float s = 0.;\nfor (int i = 0; i < 24; i++) {\n  float a = float(i) * 2.39996; vec2 d = vec2(cos(a), sin(a)) * sqrt((float(i) + 0.5) / 24.) * p_radius;\n  s += inG_in(uv + d) * sg;\n}\ns /= 24.;\noutColor = vec4(vec3(clamp(1. - max(s - h, 0.) * p_strength * 4., 0., 1.)), 1.);",
+      "hash": "95bad94c"
+    },
+    {
+      "type": "matMetal",
+      "group": "materialize",
+      "label": {
+        "en": "Photo to metal",
+        "ru": "Photo to metal"
+      },
+      "hint": {
+        "en": "White where the photo is close to the metal’s colour: pick the colour of the bare metal in it.",
+        "ru": "White where the photo is close to the metal’s colour: pick the colour of the bare metal in it."
+      },
+      "inputs": [
+        {
+          "id": "in",
+          "kind": "color",
+          "label": {
+            "en": "Photo",
+            "ru": "Photo"
+          },
+          "fallback": [
+            0.5,
+            0.5,
+            0.5
+          ]
+        }
+      ],
+      "output": "grey",
+      "params": [
+        {
+          "id": "color",
+          "kind": "color",
+          "label": {
+            "en": "Metal colour",
+            "ru": "Metal colour"
+          },
+          "default": "#d6dade"
+        },
+        {
+          "id": "range",
+          "kind": "number",
+          "label": {
+            "en": "Range",
+            "ru": "Range"
+          },
+          "default": 0.03,
+          "min": 0,
+          "max": 1
+        },
+        {
+          "id": "softness",
+          "kind": "number",
+          "label": {
+            "en": "Softness",
+            "ru": "Softness"
+          },
+          "default": 0.04,
+          "min": 0,
+          "max": 1
+        },
+        {
+          "id": "amount",
+          "kind": "number",
+          "label": {
+            "en": "Amount",
+            "ru": "Amount"
+          },
+          "default": 1,
+          "min": 0,
+          "max": 1
+        }
+      ],
+      "glsl": "float d = distance(inC_in(uv).rgb, p_color) / 1.732;\noutColor = vec4(vec3((1. - smoothstep(p_range, p_range + p_softness + 0.001, d)) * p_amount), 1.);",
+      "hash": "f46d24f8"
+    },
+    {
       "type": "outColor",
       "group": "output",
       "label": {
