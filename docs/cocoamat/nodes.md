@@ -117,7 +117,7 @@ outColor = vec4(vec3(h), 1.);
 
 A circle, square, polygon or star, repeated to tile.
 
-Makes: grey · hash `9cb8fe82`
+Makes: grey · hash `ebc88405`
 
 | Setting | Kind | Range | Default |
 |---|---|---|---|
@@ -126,10 +126,11 @@ Makes: grey · hash `9cb8fe82`
 | `size` (Size) | number | 0 – 1.5 | `0.7` |
 | `softness` (Softness) | number | 0 – 1 | `0.05` |
 | `tiles` (Repeat) | int | 1 – 32 | `1` |
-| `angle` (Turn) | number | 0 – 360 (step 1) | `0` |
+| `angle` (Turn) | number | 0 – 360 (step 0.1) | `0` |
+| `wrap` (Repeat past edges) | bool |  | `true` |
 
 ```glsl
-vec2 p = fract(uv * p_tiles) - 0.5;
+vec2 p = p_wrap > 0.5 ? fract(uv * p_tiles) - 0.5 : (uv - 0.5) * p_tiles;
 float a0 = radians(p_angle); p = mat2(cos(a0), -sin(a0), sin(a0), cos(a0)) * p;
 float d;
 if (p_kind < 0.5) d = length(p) * 2.;
@@ -145,18 +146,22 @@ outColor = vec4(vec3(1. - smoothstep(p_size - s, p_size + s, d)), 1.);
 
 ### Gradient — `gradient`
 
-Dark to light across the square. Linear doesn’t tile; mirrored and round do.
+Dark to light across the square, turned to any angle. Linear doesn’t tile; mirrored and round do (mirrored only at 0/90°). Turn off Repeat past edges for one gradient over the whole square.
 
-Makes: grey · hash `38b10291`
+Makes: grey · hash `eb6d2913`
 
 | Setting | Kind | Range | Default |
 |---|---|---|---|
 | `kind` (Kind) | choice | 0 `linear`, 1 `mirrored`, 2 `radial` | `mirrored` |
 | `direction` (Direction) | choice | 0 `across`, 1 `down` | `down` |
 | `tiles` (Repeat) | int | 1 – 32 | `1` |
+| `angle` (Turn) | number | -180 – 180 (step 0.1) | `0` |
+| `wrap` (Repeat past edges) | bool |  | `true` |
 
 ```glsl
-vec2 q = fract(uv * p_tiles); float t = p_direction < 0.5 ? q.x : q.y;
+vec2 q = p_wrap > 0.5 ? fract(uv * p_tiles) : (uv - 0.5) * p_tiles + 0.5;
+float a0 = radians(p_angle); vec2 d = p_direction < 0.5 ? vec2(cos(a0), sin(a0)) : vec2(-sin(a0), cos(a0));
+float t = clamp(dot(q - 0.5, d) / (abs(d.x) + abs(d.y)) + 0.5, 0., 1.);
 float v = p_kind < 0.5 ? t : p_kind < 1.5 ? 1. - abs(t * 2. - 1.) : 1. - clamp(length(q - 0.5) * 2., 0., 1.);
 outColor = vec4(vec3(v), 1.);
 ```
@@ -165,14 +170,16 @@ outColor = vec4(vec3(v), 1.);
 
 Black and white squares.
 
-Makes: grey · hash `637006f6`
+Makes: grey · hash `e2eb83a1`
 
 | Setting | Kind | Range | Default |
 |---|---|---|---|
 | `tiles` (Squares across) | int | 1 – 64 | `8` |
+| `angle` (Turn) | number | -180 – 180 (step 0.1) | `0` |
 
 ```glsl
-float v = mod(floor(uv.x * p_tiles) + floor(uv.y * p_tiles), 2.); outColor = vec4(vec3(v), 1.);
+float a0 = radians(p_angle); vec2 p = mat2(cos(a0), -sin(a0), sin(a0), cos(a0)) * (uv - 0.5) * p_tiles;
+float v = mod(floor(p.x) + floor(p.y), 2.); outColor = vec4(vec3(v), 1.);
 ```
 
 ### Scratches — `scratches`
@@ -186,7 +193,7 @@ Makes: grey · hash `66661f37`
 | `density` (How many) | int | 1 – 32 | `8` |
 | `length` (Length) | number | 0.05 – 1.5 | `0.6` |
 | `width` (Width) | number | 0.002 – 0.1 | `0.01` |
-| `angle` (Direction) | number | 0 – 180 (step 1) | `30` |
+| `angle` (Direction) | number | 0 – 180 (step 0.1) | `30` |
 | `spread` (Spread) | number | 0 – 1 | `0.3` |
 | `seed` (Seed) | seed | any whole number | `0` |
 
@@ -282,20 +289,21 @@ outColor = vec4(vec3(p_value), 1.);
 
 Repeating bands: soft waves, hard stripes, saw or zigzag-like ramps, optionally wobbly.
 
-Makes: grey · hash `f0b4de79`
+Makes: grey · hash `1d1badd3`
 
 | Setting | Kind | Range | Default |
 |---|---|---|---|
 | `kind` (Kind) | choice | 0 `sine`, 1 `stripes`, 2 `saw`, 3 `triangle` | `sine` |
 | `count` (Count) | int | 1 – 64 | `8` |
-| `direction` (Direction) | choice | 0 `across`, 1 `down`, 2 `diagonal` | `down` |
+| `direction` (Direction) | choice | 0 `across`, 1 `down`, 2 `diagonal`, 3 `custom` | `down` |
+| `angle` (Angle) | number | -180 – 180 (step 0.1) | `30` |
 | `sharpness` (Sharpness) | number | 0 – 1 | `0.5` |
 | `wobble` (Wobble) | number | 0 – 1 | `0` |
 | `wobbleScale` (Wobble size) | int | 1 – 16 | `3` |
 | `seed` (Seed) | seed | any whole number | `0` |
 
 ```glsl
-float t = p_direction < 0.5 ? uv.x : p_direction < 1.5 ? uv.y : uv.x + uv.y;
+float t = p_direction < 0.5 ? uv.x : p_direction < 1.5 ? uv.y : p_direction < 2.5 ? uv.x + uv.y : dot(uv - 0.5, vec2(cos(radians(p_angle)), sin(radians(p_angle))));
 t += (fbm(uv, p_wobbleScale, 4., 0.5, 0., p_seed) - 0.5) * p_wobble * 2. / max(p_count, 1.);
 float x = fract(t * p_count); int k = int(p_kind + 0.5); float v;
 if (k == 0) v = 0.5 + 0.5 * sin(x * 6.2831853);
@@ -1562,7 +1570,7 @@ Makes: color · hash `28ec67b1`
 |---|---|---|---|
 | `mode` (How) | choice | 0 `slope`, 1 `direction` | `slope` |
 | `amount` (Amount) | number | 0 – 1 | `0.2` |
-| `angle` (Direction) | number | 0 – 360 (step 1) | `0` |
+| `angle` (Direction) | number | 0 – 360 (step 0.1) | `0` |
 
 ```glsl
 vec2 off;
@@ -1584,7 +1592,7 @@ Makes: color · hash `aea628e0`
 
 | Setting | Kind | Range | Default |
 |---|---|---|---|
-| `angle` (Direction) | number | 0 – 360 (step 1) | `0` |
+| `angle` (Direction) | number | 0 – 360 (step 0.1) | `0` |
 | `amount` (Amount) | number | 0 – 1 | `0.15` |
 | `mode` (How) | choice | 0 `shift`, 1 `flow` | `shift` |
 | `centred` (Grey stays put) | bool |  | `true` |
@@ -1705,7 +1713,7 @@ Makes: grey · hash `a22f51e1`
 
 | Setting | Kind | Range | Default |
 |---|---|---|---|
-| `angle` (Angle) | number | 0 – 360 (step 1) | `0` |
+| `angle` (Angle) | number | 0 – 360 (step 0.1) | `0` |
 | `angleVar` (Angle variation) | number | 0 – 1 | `0` |
 | `slope` (Steepness) | number | 0.1 – 4 | `1` |
 | `slopeVar` (Steepness variation) | number | 0 – 1 | `0` |
@@ -1792,9 +1800,9 @@ outColor = vec4(vec3(v), 1.);
 
 ### Transform — `transform`
 
-Repeat, scale, slide or turn the picture (in quarter turns, so it still tiles; a scale other than 1 can break the tiling).
+Repeat, scale, slide or turn the picture (quarter turns keep it tiling; a fine turn or a scale other than 1 can break it — turn off Repeat past edges to show black instead of extra copies).
 
-Makes: color · hash `8101a589`
+Makes: color · hash `8457c18d`
 
 | Input | Reads as | Unlinked |
 |---|---|---|
@@ -1807,11 +1815,16 @@ Makes: color · hash `8101a589`
 | `x` (Slide across) | number | 0 – 1 | `0` |
 | `y` (Slide down) | number | 0 – 1 | `0` |
 | `turn` (Turn) | choice | 0 `0`, 1 `90`, 2 `180`, 3 `270` | `0` |
+| `angle` (Fine turn) | number | -180 – 180 (step 0.1) | `0` |
+| `wrap` (Repeat past edges) | bool |  | `true` |
 
 ```glsl
 vec2 q = uv - 0.5;
 if (p_turn > 0.5 && p_turn < 1.5) q = vec2(-q.y, q.x); else if (p_turn > 1.5 && p_turn < 2.5) q = -q; else if (p_turn > 2.5) q = vec2(q.y, -q.x);
-outColor = vec4(inC_in((q / max(p_scale, 1e-3) + 0.5) * p_tiles + vec2(p_x, p_y)).rgb, 1.);
+float a0 = radians(p_angle); q = mat2(cos(a0), -sin(a0), sin(a0), cos(a0)) * q;
+vec2 k = (q / max(p_scale, 1e-3) + 0.5) * p_tiles + vec2(p_x, p_y);
+bool out_ = p_wrap < 0.5 && (any(lessThan(k, vec2(0.))) || any(greaterThan(k, vec2(p_tiles))));
+outColor = vec4(out_ ? vec3(0.) : inC_in(k).rgb, 1.);
 ```
 
 ### Slope blur — `slopeBlur`
@@ -2063,7 +2076,7 @@ Makes: color · hash `5e6f8fca`
 
 | Setting | Kind | Range | Default |
 |---|---|---|---|
-| `angle` (Direction) | number | 0 – 360 (step 1) | `90` |
+| `angle` (Direction) | number | 0 – 360 (step 0.1) | `90` |
 | `length` (Length) | number | 0 – 0.25 (step 0.002) | `0.04` |
 
 ```glsl
@@ -2084,7 +2097,7 @@ Makes: grey · hash `02111cf6`
 
 | Setting | Kind | Range | Default |
 |---|---|---|---|
-| `angle` (Light from) | number | 0 – 360 (step 1) | `225` |
+| `angle` (Light from) | number | 0 – 360 (step 0.1) | `225` |
 | `elevation` (Light height) | number | 5 – 85 (step 1) | `40` |
 | `strength` (Strength) | number | 0 – 4 | `1` |
 
@@ -2297,7 +2310,7 @@ outColor = vec4(inC_in(q).rgb, 1.);
 
 Place a picture anywhere by hand: drag, turn and size it with the handles in the Flat preview (a bolt, a logo, a crack). One copy wraps around the edges so the square still tiles; or repeat it.
 
-Makes: color · hash `9ede9179`
+Makes: color · hash `cde9c6d3`
 
 | Input | Reads as | Unlinked |
 |---|---|---|
@@ -2312,6 +2325,7 @@ Makes: color · hash `9ede9179`
 | `w` (Width) | number | 0.01 – 4 (step 0.001) | `0.5` |
 | `h` (Height) | number | 0.01 – 4 (step 0.001) | `0.5` |
 | `repeat` (Repeat) | bool |  | `false` |
+| `wrap` (Wrap across edges) | bool |  | `true` |
 | `mode` (Over the background) | choice | 0 `replace`, 1 `max`, 2 `add`, 3 `min` | `replace` |
 
 ```glsl
@@ -2322,6 +2336,7 @@ if (p_repeat > 0.5) { pic = inC_in(r * (uv - vec2(p_x, p_y)) / size + 0.5).rgb; 
 else {
   // The copy and its neighbours one square away, so it wraps across the edges.
   for (int oy = -1; oy <= 1; oy++) for (int ox = -1; ox <= 1; ox++) {
+    if (p_wrap < 0.5 && (ox != 0 || oy != 0)) continue;
     vec2 q = r * (uv + vec2(float(ox), float(oy)) - vec2(p_x, p_y)) / size;
     if (!hit && abs(q.x) <= 0.5 && abs(q.y) <= 0.5) { pic = inC_in(q + 0.5).rgb; hit = true; }
   }

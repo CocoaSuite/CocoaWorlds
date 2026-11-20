@@ -415,11 +415,20 @@
           "default": 0,
           "min": 0,
           "max": 360,
-          "step": 1
+          "step": 0.1
+        },
+        {
+          "id": "wrap",
+          "kind": "bool",
+          "label": {
+            "en": "Repeat past edges",
+            "ru": "Повторять за краями"
+          },
+          "default": true
         }
       ],
-      "glsl": "vec2 p = fract(uv * p_tiles) - 0.5;\nfloat a0 = radians(p_angle); p = mat2(cos(a0), -sin(a0), sin(a0), cos(a0)) * p;\nfloat d;\nif (p_kind < 0.5) d = length(p) * 2.;\nelse if (p_kind < 1.5) d = max(abs(p.x), abs(p.y)) * 2.;\nelse {\n  float a = atan(p.x, -p.y) + PI; float r = 2. * PI / p_sides;\n  d = cos(floor(0.5 + a / r) * r - a) * length(p) * 2.;\n  if (p_kind > 2.5) { float k = abs(fract(a / r) - 0.5) * 2.; d *= mix(1.6, 0.8, k); }\n}\nfloat s = max(p_softness * 0.5, 0.002);\noutColor = vec4(vec3(1. - smoothstep(p_size - s, p_size + s, d)), 1.);",
-      "hash": "9cb8fe82"
+      "glsl": "vec2 p = p_wrap > 0.5 ? fract(uv * p_tiles) - 0.5 : (uv - 0.5) * p_tiles;\nfloat a0 = radians(p_angle); p = mat2(cos(a0), -sin(a0), sin(a0), cos(a0)) * p;\nfloat d;\nif (p_kind < 0.5) d = length(p) * 2.;\nelse if (p_kind < 1.5) d = max(abs(p.x), abs(p.y)) * 2.;\nelse {\n  float a = atan(p.x, -p.y) + PI; float r = 2. * PI / p_sides;\n  d = cos(floor(0.5 + a / r) * r - a) * length(p) * 2.;\n  if (p_kind > 2.5) { float k = abs(fract(a / r) - 0.5) * 2.; d *= mix(1.6, 0.8, k); }\n}\nfloat s = max(p_softness * 0.5, 0.002);\noutColor = vec4(vec3(1. - smoothstep(p_size - s, p_size + s, d)), 1.);",
+      "hash": "ebc88405"
     },
     {
       "type": "gradient",
@@ -429,7 +438,7 @@
         "ru": "Градиент"
       },
       "hint": {
-        "en": "Dark to light across the square. Linear doesn’t tile; mirrored and round do.",
+        "en": "Dark to light across the square, turned to any angle. Linear doesn’t tile; mirrored and round do (mirrored only at 0/90°). Turn off Repeat past edges for one gradient over the whole square.",
         "ru": "От тёмного к светлому. Линейный не стыкуется плиткой; зеркальный и круглый — да."
       },
       "inputs": [],
@@ -502,10 +511,31 @@
           "default": 1,
           "min": 1,
           "max": 32
+        },
+        {
+          "id": "angle",
+          "kind": "number",
+          "label": {
+            "en": "Turn",
+            "ru": "Поворот"
+          },
+          "default": 0,
+          "min": -180,
+          "max": 180,
+          "step": 0.1
+        },
+        {
+          "id": "wrap",
+          "kind": "bool",
+          "label": {
+            "en": "Repeat past edges",
+            "ru": "Повторять за краями"
+          },
+          "default": true
         }
       ],
-      "glsl": "vec2 q = fract(uv * p_tiles); float t = p_direction < 0.5 ? q.x : q.y;\nfloat v = p_kind < 0.5 ? t : p_kind < 1.5 ? 1. - abs(t * 2. - 1.) : 1. - clamp(length(q - 0.5) * 2., 0., 1.);\noutColor = vec4(vec3(v), 1.);",
-      "hash": "38b10291"
+      "glsl": "vec2 q = p_wrap > 0.5 ? fract(uv * p_tiles) : (uv - 0.5) * p_tiles + 0.5;\nfloat a0 = radians(p_angle); vec2 d = p_direction < 0.5 ? vec2(cos(a0), sin(a0)) : vec2(-sin(a0), cos(a0));\nfloat t = clamp(dot(q - 0.5, d) / (abs(d.x) + abs(d.y)) + 0.5, 0., 1.);\nfloat v = p_kind < 0.5 ? t : p_kind < 1.5 ? 1. - abs(t * 2. - 1.) : 1. - clamp(length(q - 0.5) * 2., 0., 1.);\noutColor = vec4(vec3(v), 1.);",
+      "hash": "eb6d2913"
     },
     {
       "type": "checker",
@@ -531,10 +561,22 @@
           "default": 8,
           "min": 1,
           "max": 64
+        },
+        {
+          "id": "angle",
+          "kind": "number",
+          "label": {
+            "en": "Turn",
+            "ru": "Поворот"
+          },
+          "default": 0,
+          "min": -180,
+          "max": 180,
+          "step": 0.1
         }
       ],
-      "glsl": "float v = mod(floor(uv.x * p_tiles) + floor(uv.y * p_tiles), 2.); outColor = vec4(vec3(v), 1.);",
-      "hash": "637006f6"
+      "glsl": "float a0 = radians(p_angle); vec2 p = mat2(cos(a0), -sin(a0), sin(a0), cos(a0)) * (uv - 0.5) * p_tiles;\nfloat v = mod(floor(p.x) + floor(p.y), 2.); outColor = vec4(vec3(v), 1.);",
+      "hash": "e2eb83a1"
     },
     {
       "type": "scratches",
@@ -593,7 +635,7 @@
           "default": 30,
           "min": 0,
           "max": 180,
-          "step": 1
+          "step": 0.1
         },
         {
           "id": "spread",
@@ -1407,7 +1449,7 @@
           "default": 0,
           "min": 0,
           "max": 360,
-          "step": 1
+          "step": 0.1
         }
       ],
       "glsl": "vec2 off;\nif (p_mode < 0.5) { float e = 1. / 256.; off = vec2(inG_by(uv + vec2(e, 0.)) - inG_by(uv - vec2(e, 0.)), inG_by(uv + vec2(0., e)) - inG_by(uv - vec2(0., e))) / (2. * e) * p_amount * 0.01; }\nelse off = vec2(cos(radians(p_angle)), sin(radians(p_angle))) * (inG_by(uv) - 0.5) * p_amount * 0.25;\noutColor = vec4(inC_in(uv + off).rgb, 1.);",
@@ -1464,7 +1506,7 @@
           "default": 0,
           "min": 0,
           "max": 360,
-          "step": 1
+          "step": 0.1
         },
         {
           "id": "amount",
@@ -1694,7 +1736,7 @@
           "default": 0,
           "min": 0,
           "max": 360,
-          "step": 1
+          "step": 0.1
         },
         {
           "id": "angleVar",
@@ -1793,7 +1835,7 @@
         "ru": "Трансформация"
       },
       "hint": {
-        "en": "Repeat, scale, slide or turn the picture (in quarter turns, so it still tiles; a scale other than 1 can break the tiling).",
+        "en": "Repeat, scale, slide or turn the picture (quarter turns keep it tiling; a fine turn or a scale other than 1 can break it — turn off Repeat past edges to show black instead of extra copies).",
         "ru": "Повторить, масштабировать, сдвинуть или повернуть картинку (на четверть оборота, чтобы стыковалась; масштаб не 1 может нарушить стыковку)."
       },
       "inputs": [
@@ -1896,10 +1938,31 @@
               }
             }
           ]
+        },
+        {
+          "id": "angle",
+          "kind": "number",
+          "label": {
+            "en": "Fine turn",
+            "ru": "Точный поворот"
+          },
+          "default": 0,
+          "min": -180,
+          "max": 180,
+          "step": 0.1
+        },
+        {
+          "id": "wrap",
+          "kind": "bool",
+          "label": {
+            "en": "Repeat past edges",
+            "ru": "Повторять за краями"
+          },
+          "default": true
         }
       ],
-      "glsl": "vec2 q = uv - 0.5;\nif (p_turn > 0.5 && p_turn < 1.5) q = vec2(-q.y, q.x); else if (p_turn > 1.5 && p_turn < 2.5) q = -q; else if (p_turn > 2.5) q = vec2(q.y, -q.x);\noutColor = vec4(inC_in((q / max(p_scale, 1e-3) + 0.5) * p_tiles + vec2(p_x, p_y)).rgb, 1.);",
-      "hash": "8101a589"
+      "glsl": "vec2 q = uv - 0.5;\nif (p_turn > 0.5 && p_turn < 1.5) q = vec2(-q.y, q.x); else if (p_turn > 1.5 && p_turn < 2.5) q = -q; else if (p_turn > 2.5) q = vec2(q.y, -q.x);\nfloat a0 = radians(p_angle); q = mat2(cos(a0), -sin(a0), sin(a0), cos(a0)) * q;\nvec2 k = (q / max(p_scale, 1e-3) + 0.5) * p_tiles + vec2(p_x, p_y);\nbool out_ = p_wrap < 0.5 && (any(lessThan(k, vec2(0.))) || any(greaterThan(k, vec2(p_tiles))));\noutColor = vec4(out_ ? vec3(0.) : inC_in(k).rgb, 1.);",
+      "hash": "8457c18d"
     },
     {
       "type": "slopeBlur",
@@ -2740,8 +2803,27 @@
                 "en": "Diagonal",
                 "ru": "По диагонали"
               }
+            },
+            {
+              "value": "custom",
+              "label": {
+                "en": "Custom angle",
+                "ru": "Свой угол"
+              }
             }
           ]
+        },
+        {
+          "id": "angle",
+          "kind": "number",
+          "label": {
+            "en": "Angle",
+            "ru": "Угол"
+          },
+          "default": 30,
+          "min": -180,
+          "max": 180,
+          "step": 0.1
         },
         {
           "id": "sharpness",
@@ -2786,8 +2868,8 @@
           "default": 0
         }
       ],
-      "glsl": "float t = p_direction < 0.5 ? uv.x : p_direction < 1.5 ? uv.y : uv.x + uv.y;\nt += (fbm(uv, p_wobbleScale, 4., 0.5, 0., p_seed) - 0.5) * p_wobble * 2. / max(p_count, 1.);\nfloat x = fract(t * p_count); int k = int(p_kind + 0.5); float v;\nif (k == 0) v = 0.5 + 0.5 * sin(x * 6.2831853);\nelse if (k == 1) v = 0.5 + 0.5 * sin(x * 6.2831853);\nelse if (k == 2) v = x;\nelse v = 1. - abs(x * 2. - 1.);\nfloat e = k == 1 ? (1. - p_sharpness) * 0.45 + 0.01 : (1. - p_sharpness) * 0.5 + 0.02;\nif (k == 1 || p_sharpness > 0.) v = mix(v, smoothstep(0.5 - e, 0.5 + e, v), k == 1 ? 1. : p_sharpness);\noutColor = vec4(vec3(v), 1.);",
-      "hash": "f0b4de79"
+      "glsl": "float t = p_direction < 0.5 ? uv.x : p_direction < 1.5 ? uv.y : p_direction < 2.5 ? uv.x + uv.y : dot(uv - 0.5, vec2(cos(radians(p_angle)), sin(radians(p_angle))));\nt += (fbm(uv, p_wobbleScale, 4., 0.5, 0., p_seed) - 0.5) * p_wobble * 2. / max(p_count, 1.);\nfloat x = fract(t * p_count); int k = int(p_kind + 0.5); float v;\nif (k == 0) v = 0.5 + 0.5 * sin(x * 6.2831853);\nelse if (k == 1) v = 0.5 + 0.5 * sin(x * 6.2831853);\nelse if (k == 2) v = x;\nelse v = 1. - abs(x * 2. - 1.);\nfloat e = k == 1 ? (1. - p_sharpness) * 0.45 + 0.01 : (1. - p_sharpness) * 0.5 + 0.02;\nif (k == 1 || p_sharpness > 0.) v = mix(v, smoothstep(0.5 - e, 0.5 + e, v), k == 1 ? 1. : p_sharpness);\noutColor = vec4(vec3(v), 1.);",
+      "hash": "1d1badd3"
     },
     {
       "type": "hexagons",
@@ -4048,7 +4130,7 @@
           "default": 90,
           "min": 0,
           "max": 360,
-          "step": 1
+          "step": 0.1
         },
         {
           "id": "length",
@@ -4104,7 +4186,7 @@
           "default": 225,
           "min": 0,
           "max": 360,
-          "step": 1
+          "step": 0.1
         },
         {
           "id": "elevation",
@@ -8727,6 +8809,15 @@
           "default": false
         },
         {
+          "id": "wrap",
+          "kind": "bool",
+          "label": {
+            "en": "Wrap across edges",
+            "ru": "Переносить через края"
+          },
+          "default": true
+        },
+        {
           "id": "mode",
           "kind": "choice",
           "label": {
@@ -8766,8 +8857,8 @@
           ]
         }
       ],
-      "glsl": "float a = radians(p_angle); mat2 r = mat2(cos(a), -sin(a), sin(a), cos(a));\nvec2 size = max(vec2(p_w, p_h), vec2(1e-4));\nvec3 bg = inC_bg(uv).rgb; vec3 col = bg; bool hit = false; vec3 pic = vec3(0.);\nif (p_repeat > 0.5) { pic = inC_in(r * (uv - vec2(p_x, p_y)) / size + 0.5).rgb; hit = true; }\nelse {\n  // The copy and its neighbours one square away, so it wraps across the edges.\n  for (int oy = -1; oy <= 1; oy++) for (int ox = -1; ox <= 1; ox++) {\n    vec2 q = r * (uv + vec2(float(ox), float(oy)) - vec2(p_x, p_y)) / size;\n    if (!hit && abs(q.x) <= 0.5 && abs(q.y) <= 0.5) { pic = inC_in(q + 0.5).rgb; hit = true; }\n  }\n}\nif (hit) { int m = int(p_mode + 0.5); col = m == 0 ? pic : m == 1 ? max(bg, pic) : m == 2 ? bg + pic : min(bg, pic); }\noutColor = vec4(col, 1.);",
-      "hash": "9ede9179"
+      "glsl": "float a = radians(p_angle); mat2 r = mat2(cos(a), -sin(a), sin(a), cos(a));\nvec2 size = max(vec2(p_w, p_h), vec2(1e-4));\nvec3 bg = inC_bg(uv).rgb; vec3 col = bg; bool hit = false; vec3 pic = vec3(0.);\nif (p_repeat > 0.5) { pic = inC_in(r * (uv - vec2(p_x, p_y)) / size + 0.5).rgb; hit = true; }\nelse {\n  // The copy and its neighbours one square away, so it wraps across the edges.\n  for (int oy = -1; oy <= 1; oy++) for (int ox = -1; ox <= 1; ox++) {\n    if (p_wrap < 0.5 && (ox != 0 || oy != 0)) continue;\n    vec2 q = r * (uv + vec2(float(ox), float(oy)) - vec2(p_x, p_y)) / size;\n    if (!hit && abs(q.x) <= 0.5 && abs(q.y) <= 0.5) { pic = inC_in(q + 0.5).rgb; hit = true; }\n  }\n}\nif (hit) { int m = int(p_mode + 0.5); col = m == 0 ? pic : m == 1 ? max(bg, pic) : m == 2 ? bg + pic : min(bg, pic); }\noutColor = vec4(col, 1.);",
+      "hash": "cde9c6d3"
     },
     {
       "type": "outColor",

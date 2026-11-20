@@ -214,9 +214,10 @@ outColor = vec4(vec3(h), 1.);`,
       { id: 'size', label: l('Size', 'Размер'), kind: 'number', min: 0, max: 1.5, default: 0.7 },
       { id: 'softness', label: l('Softness', 'Мягкость'), kind: 'number', min: 0, max: 1, default: 0.05 },
       { id: 'tiles', label: l('Repeat', 'Повторов'), kind: 'int', min: 1, max: 32, default: 1 },
-      { id: 'angle', label: l('Turn', 'Поворот'), kind: 'number', min: 0, max: 360, step: 1, default: 0 },
+      { id: 'angle', label: l('Turn', 'Поворот'), kind: 'number', min: 0, max: 360, step: 0.1, default: 0 },
+      { id: 'wrap', label: l('Repeat past edges', 'Повторять за краями'), kind: 'bool', default: true },
     ],
-    glsl: `vec2 p = fract(uv * p_tiles) - 0.5;
+    glsl: `vec2 p = p_wrap > 0.5 ? fract(uv * p_tiles) - 0.5 : (uv - 0.5) * p_tiles;
 float a0 = radians(p_angle); p = mat2(cos(a0), -sin(a0), sin(a0), cos(a0)) * p;
 float d;
 if (p_kind < 0.5) d = length(p) * 2.;
@@ -233,15 +234,19 @@ outColor = vec4(vec3(1. - smoothstep(p_size - s, p_size + s, d)), 1.);`,
     type: 'gradient',
     group: 'make',
     label: l('Gradient', 'Градиент'),
-    hint: l('Dark to light across the square. Linear doesn’t tile; mirrored and round do.', 'От тёмного к светлому. Линейный не стыкуется плиткой; зеркальный и круглый — да.'),
+    hint: l('Dark to light across the square, turned to any angle. Linear doesn’t tile; mirrored and round do (mirrored only at 0/90°). Turn off Repeat past edges for one gradient over the whole square.', 'От тёмного к светлому. Линейный не стыкуется плиткой; зеркальный и круглый — да.'),
     inputs: [],
     output: 'grey',
     params: [
       { id: 'kind', label: l('Kind', 'Вид'), kind: 'choice', options: [opt('linear', 'Linear', 'Линейный'), opt('mirrored', 'Mirrored', 'Зеркальный'), opt('radial', 'Round', 'Круглый')], default: 'mirrored' },
       { id: 'direction', label: l('Direction', 'Направление'), kind: 'choice', options: [opt('across', 'Across', 'Поперёк'), opt('down', 'Down', 'Вниз')], default: 'down' },
       { id: 'tiles', label: l('Repeat', 'Повторов'), kind: 'int', min: 1, max: 32, default: 1 },
+      { id: 'angle', label: l('Turn', 'Поворот'), kind: 'number', min: -180, max: 180, step: 0.1, default: 0 },
+      { id: 'wrap', label: l('Repeat past edges', 'Повторять за краями'), kind: 'bool', default: true },
     ],
-    glsl: `vec2 q = fract(uv * p_tiles); float t = p_direction < 0.5 ? q.x : q.y;
+    glsl: `vec2 q = p_wrap > 0.5 ? fract(uv * p_tiles) : (uv - 0.5) * p_tiles + 0.5;
+float a0 = radians(p_angle); vec2 d = p_direction < 0.5 ? vec2(cos(a0), sin(a0)) : vec2(-sin(a0), cos(a0));
+float t = clamp(dot(q - 0.5, d) / (abs(d.x) + abs(d.y)) + 0.5, 0., 1.);
 float v = p_kind < 0.5 ? t : p_kind < 1.5 ? 1. - abs(t * 2. - 1.) : 1. - clamp(length(q - 0.5) * 2., 0., 1.);
 outColor = vec4(vec3(v), 1.);`,
   },
@@ -252,8 +257,12 @@ outColor = vec4(vec3(v), 1.);`,
     hint: l('Black and white squares.', 'Чёрные и белые клетки.'),
     inputs: [],
     output: 'grey',
-    params: [{ id: 'tiles', label: l('Squares across', 'Клеток в ряд'), kind: 'int', min: 1, max: 64, default: 8 }],
-    glsl: 'float v = mod(floor(uv.x * p_tiles) + floor(uv.y * p_tiles), 2.); outColor = vec4(vec3(v), 1.);',
+    params: [
+      { id: 'tiles', label: l('Squares across', 'Клеток в ряд'), kind: 'int', min: 1, max: 64, default: 8 },
+      { id: 'angle', label: l('Turn', 'Поворот'), kind: 'number', min: -180, max: 180, step: 0.1, default: 0 },
+    ],
+    glsl: `float a0 = radians(p_angle); vec2 p = mat2(cos(a0), -sin(a0), sin(a0), cos(a0)) * (uv - 0.5) * p_tiles;
+float v = mod(floor(p.x) + floor(p.y), 2.); outColor = vec4(vec3(v), 1.);`,
   },
   {
     type: 'scratches',
@@ -266,7 +275,7 @@ outColor = vec4(vec3(v), 1.);`,
       { id: 'density', label: l('How many', 'Сколько'), kind: 'int', min: 1, max: 32, default: 8 },
       { id: 'length', label: l('Length', 'Длина'), kind: 'number', min: 0.05, max: 1.5, default: 0.6 },
       { id: 'width', label: l('Width', 'Толщина'), kind: 'number', min: 0.002, max: 0.1, default: 0.01 },
-      { id: 'angle', label: l('Direction', 'Направление'), kind: 'number', min: 0, max: 180, step: 1, default: 30 },
+      { id: 'angle', label: l('Direction', 'Направление'), kind: 'number', min: 0, max: 180, step: 0.1, default: 30 },
       { id: 'spread', label: l('Spread', 'Разброс'), kind: 'number', min: 0, max: 1, default: 0.3 },
       seed,
     ],
@@ -485,7 +494,7 @@ outColor = vec4(s / w, 1.);`,
     params: [
       { id: 'mode', label: l('How', 'Как'), kind: 'choice', options: [opt('slope', 'Along slopes', 'Вдоль склонов'), opt('direction', 'One way', 'В одну сторону')], default: 'slope' },
       { id: 'amount', label: l('Amount', 'Сила'), kind: 'number', min: 0, max: 1, default: 0.2 },
-      { id: 'angle', label: l('Direction', 'Направление'), kind: 'number', min: 0, max: 360, step: 1, default: 0 },
+      { id: 'angle', label: l('Direction', 'Направление'), kind: 'number', min: 0, max: 360, step: 0.1, default: 0 },
     ],
     glsl: `vec2 off;
 if (p_mode < 0.5) { float e = 1. / 256.; off = vec2(inG_by(uv + vec2(e, 0.)) - inG_by(uv - vec2(e, 0.)), inG_by(uv + vec2(0., e)) - inG_by(uv - vec2(0., e))) / (2. * e) * p_amount * 0.01; }
@@ -500,7 +509,7 @@ outColor = vec4(inC_in(uv + off).rgb, 1.);`,
     inputs: [IN_COLOR(), IN_GREY('by', l('Intensity', 'Сила'), [0.5, 0.5, 0.5])],
     output: 'color',
     params: [
-      { id: 'angle', label: l('Direction', 'Направление'), kind: 'number', min: 0, max: 360, step: 1, default: 0 },
+      { id: 'angle', label: l('Direction', 'Направление'), kind: 'number', min: 0, max: 360, step: 0.1, default: 0 },
       { id: 'amount', label: l('Amount', 'Сила'), kind: 'number', min: 0, max: 1, default: 0.15 },
       { id: 'mode', label: l('How', 'Как'), kind: 'choice', options: [opt('shift', 'Shift', 'Сдвиг'), opt('flow', 'Flow', 'Течение')], default: 'shift' },
       { id: 'centred', label: l('Grey stays put', 'Серое на месте'), kind: 'bool', default: true },
@@ -615,7 +624,7 @@ outColor = vec4(c, 1.);`,
     inputs: [IN_GREY('in', l('Mask'), [1, 1, 1])],
     output: 'grey',
     params: [
-      { id: 'angle', label: l('Angle'), kind: 'number', min: 0, max: 360, step: 1, default: 0 },
+      { id: 'angle', label: l('Angle'), kind: 'number', min: 0, max: 360, step: 0.1, default: 0 },
       { id: 'angleVar', label: l('Angle variation'), kind: 'number', min: 0, max: 1, default: 0 },
       { id: 'slope', label: l('Steepness'), kind: 'number', min: 0.1, max: 4, default: 1 },
       { id: 'slopeVar', label: l('Steepness variation'), kind: 'number', min: 0, max: 1, default: 0 },
@@ -702,7 +711,7 @@ outColor = vec4(vec3(v), 1.);`,
     type: 'transform',
     group: 'change',
     label: l('Transform', 'Трансформация'),
-    hint: l('Repeat, scale, slide or turn the picture (in quarter turns, so it still tiles; a scale other than 1 can break the tiling).', 'Повторить, масштабировать, сдвинуть или повернуть картинку (на четверть оборота, чтобы стыковалась; масштаб не 1 может нарушить стыковку).'),
+    hint: l('Repeat, scale, slide or turn the picture (quarter turns keep it tiling; a fine turn or a scale other than 1 can break it — turn off Repeat past edges to show black instead of extra copies).', 'Повторить, масштабировать, сдвинуть или повернуть картинку (на четверть оборота, чтобы стыковалась; масштаб не 1 может нарушить стыковку).'),
     inputs: [IN_COLOR()],
     output: 'color',
     params: [
@@ -711,10 +720,15 @@ outColor = vec4(vec3(v), 1.);`,
       { id: 'x', label: l('Slide across', 'Сдвиг поперёк'), kind: 'number', min: 0, max: 1, default: 0 },
       { id: 'y', label: l('Slide down', 'Сдвиг вниз'), kind: 'number', min: 0, max: 1, default: 0 },
       { id: 'turn', label: l('Turn', 'Поворот'), kind: 'choice', options: [opt('0', 'None', 'Нет'), opt('90', '90°', '90°'), opt('180', '180°', '180°'), opt('270', '270°', '270°')], default: '0' },
+      { id: 'angle', label: l('Fine turn', 'Точный поворот'), kind: 'number', min: -180, max: 180, step: 0.1, default: 0 },
+      { id: 'wrap', label: l('Repeat past edges', 'Повторять за краями'), kind: 'bool', default: true },
     ],
     glsl: `vec2 q = uv - 0.5;
 if (p_turn > 0.5 && p_turn < 1.5) q = vec2(-q.y, q.x); else if (p_turn > 1.5 && p_turn < 2.5) q = -q; else if (p_turn > 2.5) q = vec2(q.y, -q.x);
-outColor = vec4(inC_in((q / max(p_scale, 1e-3) + 0.5) * p_tiles + vec2(p_x, p_y)).rgb, 1.);`,
+float a0 = radians(p_angle); q = mat2(cos(a0), -sin(a0), sin(a0), cos(a0)) * q;
+vec2 k = (q / max(p_scale, 1e-3) + 0.5) * p_tiles + vec2(p_x, p_y);
+bool out_ = p_wrap < 0.5 && (any(lessThan(k, vec2(0.))) || any(greaterThan(k, vec2(p_tiles))));
+outColor = vec4(out_ ? vec3(0.) : inC_in(k).rgb, 1.);`,
   },
   {
     type: 'slopeBlur',
@@ -939,13 +953,14 @@ outColor = vec4(vec3(clamp(0.5 + lap * p_strength, 0., 1.)), 1.);`,
     params: [
       { id: 'kind', label: l('Kind', 'Вид'), kind: 'choice', options: [opt('sine', 'Waves', 'Волны'), opt('stripes', 'Stripes', 'Полосы'), opt('saw', 'Saw', 'Пила'), opt('triangle', 'Triangle', 'Треугольник')], default: 'sine' },
       { id: 'count', label: l('Count', 'Количество'), kind: 'int', min: 1, max: 64, default: 8 },
-      { id: 'direction', label: l('Direction', 'Направление'), kind: 'choice', options: [opt('across', 'Across', 'Поперёк'), opt('down', 'Down', 'Вниз'), opt('diagonal', 'Diagonal', 'По диагонали')], default: 'down' },
+      { id: 'direction', label: l('Direction', 'Направление'), kind: 'choice', options: [opt('across', 'Across', 'Поперёк'), opt('down', 'Down', 'Вниз'), opt('diagonal', 'Diagonal', 'По диагонали'), opt('custom', 'Custom angle', 'Свой угол')], default: 'down' },
+      { id: 'angle', label: l('Angle', 'Угол'), kind: 'number', min: -180, max: 180, step: 0.1, default: 30 },
       { id: 'sharpness', label: l('Sharpness', 'Чёткость'), kind: 'number', min: 0, max: 1, default: 0.5 },
       { id: 'wobble', label: l('Wobble', 'Волнистость'), kind: 'number', min: 0, max: 1, default: 0 },
       { id: 'wobbleScale', label: l('Wobble size', 'Размер волнистости'), kind: 'int', min: 1, max: 16, default: 3 },
       seed,
     ],
-    glsl: `float t = p_direction < 0.5 ? uv.x : p_direction < 1.5 ? uv.y : uv.x + uv.y;
+    glsl: `float t = p_direction < 0.5 ? uv.x : p_direction < 1.5 ? uv.y : p_direction < 2.5 ? uv.x + uv.y : dot(uv - 0.5, vec2(cos(radians(p_angle)), sin(radians(p_angle))));
 t += (fbm(uv, p_wobbleScale, 4., 0.5, 0., p_seed) - 0.5) * p_wobble * 2. / max(p_count, 1.);
 float x = fract(t * p_count); int k = int(p_kind + 0.5); float v;
 if (k == 0) v = 0.5 + 0.5 * sin(x * 6.2831853);
@@ -1319,7 +1334,7 @@ outColor = vec4(vec3(clamp(length(vec2(gx, gy)) * p_strength, 0., 1.)), 1.);`,
     inputs: [IN_COLOR()],
     output: 'color',
     params: [
-      { id: 'angle', label: l('Direction', 'Направление'), kind: 'number', min: 0, max: 360, step: 1, default: 90 },
+      { id: 'angle', label: l('Direction', 'Направление'), kind: 'number', min: 0, max: 360, step: 0.1, default: 90 },
       { id: 'length', label: l('Length', 'Длина'), kind: 'number', min: 0, max: 0.25, step: 0.002, default: 0.04 },
     ],
     glsl: `vec2 dir = vec2(cos(radians(p_angle)), sin(radians(p_angle))) * p_length;
@@ -1334,7 +1349,7 @@ outColor = vec4(s / 17., 1.);`,
     inputs: [IN_GREY('in', l('Height', 'Высота'))],
     output: 'grey',
     params: [
-      { id: 'angle', label: l('Light from', 'Свет с'), kind: 'number', min: 0, max: 360, step: 1, default: 225 },
+      { id: 'angle', label: l('Light from', 'Свет с'), kind: 'number', min: 0, max: 360, step: 0.1, default: 225 },
       { id: 'elevation', label: l('Light height', 'Высота света'), kind: 'number', min: 5, max: 85, step: 1, default: 40 },
       { id: 'strength', label: l('Strength', 'Сила'), kind: 'number', min: 0, max: 4, default: 1 },
     ],
@@ -2364,6 +2379,7 @@ v = v * 0.6 + fbm(uv, max(1., floor(p_scale / 5.)), 4., 0.5, 0., p_seed + 4.) * 
       { id: 'w', label: l('Width', 'Ширина'), kind: 'number', min: 0.01, max: 4, step: 0.001, default: 0.5 },
       { id: 'h', label: l('Height', 'Высота'), kind: 'number', min: 0.01, max: 4, step: 0.001, default: 0.5 },
       { id: 'repeat', label: l('Repeat', 'Повторять'), kind: 'bool', default: false },
+      { id: 'wrap', label: l('Wrap across edges', 'Переносить через края'), kind: 'bool', default: true },
       { id: 'mode', label: l('Over the background', 'Поверх фона'), kind: 'choice', options: [opt('replace', 'Cover', 'Закрыть'), opt('max', 'Lighter', 'Светлее'), opt('add', 'Add', 'Сложить'), opt('min', 'Darker', 'Темнее')], default: 'replace' },
     ],
     glsl: `float a = radians(p_angle); mat2 r = mat2(cos(a), -sin(a), sin(a), cos(a));
@@ -2373,6 +2389,7 @@ if (p_repeat > 0.5) { pic = inC_in(r * (uv - vec2(p_x, p_y)) / size + 0.5).rgb; 
 else {
   // The copy and its neighbours one square away, so it wraps across the edges.
   for (int oy = -1; oy <= 1; oy++) for (int ox = -1; ox <= 1; ox++) {
+    if (p_wrap < 0.5 && (ox != 0 || oy != 0)) continue;
     vec2 q = r * (uv + vec2(float(ox), float(oy)) - vec2(p_x, p_y)) / size;
     if (!hit && abs(q.x) <= 0.5 && abs(q.y) <= 0.5) { pic = inC_in(q + 0.5).rgb; hit = true; }
   }
