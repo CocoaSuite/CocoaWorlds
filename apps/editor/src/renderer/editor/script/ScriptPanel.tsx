@@ -44,11 +44,13 @@ import {
   type StatementKind,
   type VariableDef,
   emptyScript,
+  readCaptionFile,
+  type Caption,
 } from '@cocoaworlds/scripting';
 import { CREATURE_MOMENTS, LENS_PRESETS, UI_SCRIPT_OWNER, uiOf, type GameValue } from '@cocoaworlds/core';
 import { Button, ContextMenu, IconButton, type MenuEntry } from '@cocoaworlds/ui';
 import { Picker, type PickGroup, type PickItem } from './Picker';
-import { Fragment, createContext, useContext, useEffect, useMemo, useState, type KeyboardEvent, type ReactNode } from 'react';
+import { Fragment, createContext, useContext, useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { getLang, t } from '../../i18n';
 import { useEditor } from '../../store';
 import { sceneInfo } from './scene-info';
@@ -1205,6 +1207,16 @@ function statementWords(s: Statement, set: (patch: Record<string, unknown>, merg
           </select>
         </>
       );
+    case 'playVoice':
+      return (
+        <>
+          {w('playVoice')} <SoundSlot value={s.sound} onChange={(sound) => set({ sound })} /> {w('volume')}{' '}
+          <ExprSlot expr={s.volume} type="number" label={`${w('playVoice')} ${w('volume')}`} />{' '}
+          <CaptionSlot count={s.captions.length} onImport={(captions, sound) => set(s.sound || !sound ? { captions } : { captions, sound })} />
+        </>
+      );
+    case 'stopVoice':
+      return w('stopVoice');
     case 'stopSound':
       return (
         <>
@@ -1517,6 +1529,45 @@ function SoundSlot({ value, onChange }: { value: string; onChange: (v: string) =
         </option>
       ))}
     </select>
+  );
+}
+
+/**
+ * A voice-over's captions: imported from a `.captions.json` file made with the caption timing tool. When the
+ * block has no sound yet, the project sound the file was timed against (by name) is picked too.
+ */
+function CaptionSlot({ count, onImport }: { count: number; onImport: (captions: Caption[], sound: string) => void }) {
+  const sounds = useEditor((s) => s.assets.sounds);
+  const ref = useRef<HTMLInputElement>(null);
+  const read = async (file: File) => {
+    let parsed: ReturnType<typeof readCaptionFile> = null;
+    try {
+      parsed = readCaptionFile(JSON.parse(await file.text()));
+    } catch {
+      parsed = null;
+    }
+    if (!parsed || !parsed.captions.length) return useEditor.getState().notify(w('captionsBad'));
+    const stem = (p: string) => p.split('/').pop()!.replace(/\.[^.]+$/, '').toLowerCase().replace(/[^\w-]+/g, '_');
+    const want = parsed.sound ? stem(parsed.sound) : '';
+    onImport(parsed.captions, (want && sounds.find((x) => stem(x.path) === want)?.path) || '');
+  };
+  return (
+    <>
+      <button type="button" className="cw-input cw-mini" onClick={() => ref.current?.click()}>
+        {count ? `${count} ${w('captions')}` : w('noCaptions')}
+      </button>
+      <input
+        ref={ref}
+        type="file"
+        hidden
+        accept=".json"
+        onChange={(e) => {
+          const f = e.currentTarget.files?.[0];
+          e.currentTarget.value = '';
+          if (f) void read(f);
+        }}
+      />
+    </>
   );
 }
 

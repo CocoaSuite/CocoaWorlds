@@ -67,7 +67,7 @@ import {
   uiShown, LENS_PRESETS, lensOf, type LensSettings,
 } from '@cocoaworlds/core';
 import { EventBus } from './events';
-import { DIRECTIONS, LENS_PROPS, ScriptRunner, compileScript, type LensProp, type LookMode, type PlayerMoveKind, type PlayerStateKind, type ScriptSave, type ActionName, type GameValueDef, type Problem, type Program, type SceneInfo, type Script, type Value } from '@cocoaworlds/scripting';
+import { DIRECTIONS, LENS_PROPS, ScriptRunner, compileScript, type LensProp, type LookMode, type PlayerMoveKind, type PlayerStateKind, type ScriptSave, type ActionName, type GameValueDef, type Problem, type Program, type SceneInfo, type Script, type Value, type Caption } from '@cocoaworlds/scripting';
 import { scriptTargets } from './script-targets';
 import { PLAYER, Player, fallDamage, type PlayerInput } from './player';
 import { Weapons, type V3 } from './weapons';
@@ -1513,6 +1513,7 @@ export class GameWorld {
         const at = this.placePoint(place);
         if (at) this.hint(this.v3(at), spread, sure, as);
       },
+      playVoice: (sound, volume, captions) => this.playVoice(sound, volume, captions),
       stopSound: (target) => {
         if (this.doc.get(this.copyOf.get(target) ?? target)?.components.sound) this.stoppedSounds.add(target);
         this.loudSounds.delete(target);
@@ -3033,6 +3034,7 @@ export class GameWorld {
       this.started = true;
       this.restoreAfterStart();
     }
+    this.voiceCaptions();
     while (this.accumulator >= STEP) {
       this.rememberPoses();
       this.applyTweens(this.time + STEP);
@@ -4364,6 +4366,51 @@ export class GameWorld {
   say(text: string, seconds: number, from = ''): void {
     this.messages.push({ text, until: this.time + seconds, from });
     if (this.messages.length > 8) this.messages.shift();
+  }
+
+  // ── Voice-over ──
+
+  /** The voice-over playing now: its captions, when it began (world time), the next caption, and whether its sound has started. */
+  private voice: { sound: string; captions: Caption[]; t0: number; next: number; started: boolean } | null = null;
+
+  /** Play a voice-over everywhere, cutting off the one playing; '' stops it. Its captions are on-screen messages. */
+  playVoice(sound: string, volume: number, captions: Caption[]): void {
+    this.messages = this.messages.filter((m) => m.from !== '@voice');
+    if (!sound) {
+      this.voice = null;
+      this.bus.emit({ type: 'voice.stop', time: this.time });
+      return;
+    }
+    this.voice = { sound, captions, t0: this.time, next: 0, started: false };
+    this.bus.emit({ type: 'voice', sound, volume, time: this.time });
+  }
+
+  /** The voice-over's sound has really started (it took a moment to load): its captions count from now. */
+  voiceBegan(sound: string): void {
+    const v = this.voice;
+    if (v && v.sound === sound && !v.started) {
+      v.started = true;
+      v.t0 = this.time;
+    }
+  }
+
+  /** Show the voice-over's captions that are due (if its sound never starts, they show anyway after a moment). */
+  private voiceCaptions(): void {
+    const v = this.voice;
+    if (!v) return;
+    if (!v.started && this.time - v.t0 >= 1.5) {
+      v.started = true;
+      v.t0 = this.time;
+    }
+    if (!v.started) return;
+    const t = this.time - v.t0;
+    while (v.next < v.captions.length && v.captions[v.next]!.at <= t) {
+      const c = v.captions[v.next++]!;
+      // (A caption still showing gives way to the next one.)
+      this.messages = this.messages.filter((m) => m.from !== '@voice');
+      this.say(c.text, Math.max(0.1, c.until - t), '@voice');
+    }
+    if (v.next >= v.captions.length) this.voice = null;
   }
 
   /** The messages on screen now, oldest first. */

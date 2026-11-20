@@ -406,6 +406,10 @@ export class PlaySession {
       }
     });
     this.world.bus.on('sound.stop', (e) => this.stopSounds(e.source));
+    this.world.bus.on('voice', (e) => void this.startVoice(e.sound, e.volume));
+    this.world.bus.on('voice.stop', () => this.stopVoice());
+    // (A level change cuts the voice-over off at once, not when the next scene has loaded.)
+    this.world.bus.on('travel', () => this.stopVoice());
     this.world.bus.on('break', (e) => void this.notes.push(`${this.info.names.get(e.target.split('#')[0]!) ?? 'Something'} broke`));
     this.world.bus.on('score', (e) => void this.notes.push(`Score: ${e.score} (${e.by > 0 ? '+' : ''}${e.by})`));
   }
@@ -728,6 +732,57 @@ export class PlaySession {
       shot.busy = false;
       this.voices--;
     }
+  }
+
+  // ── Voice-over ──
+
+  /** The voice-over playing now: straight to the speakers, past screen fades, silence and Sound areas. */
+  private voice: { source: AudioBufferSourceNode; gain: GainNode } | null = null;
+  /** Counts voice-overs started, so one that finishes loading after a newer one began doesn't play. */
+  private voiceSeq = 0;
+
+  private async startVoice(sound: string, volume: number): Promise<void> {
+    this.stopVoice();
+    const listener = this.listener;
+    if (!listener || this.disposed) return;
+    const seq = ++this.voiceSeq;
+    let buffer: AudioBuffer;
+    try {
+      buffer = await PlaySession.load(sound);
+    } catch {
+      this.notes.push(`Could not play ${sound}`);
+      return;
+    }
+    if (seq !== this.voiceSeq || this.disposed) return;
+    const ctx = listener.context;
+    const gain = ctx.createGain();
+    gain.gain.value = volume;
+    gain.connect(ctx.destination);
+    const source = ctx.createBufferSource();
+    source.buffer = buffer;
+    source.connect(gain);
+    const v = (this.voice = { source, gain });
+    source.onended = () => {
+      if (this.voice === v) this.stopVoice();
+    };
+    source.start();
+    this.world.voiceBegan(sound);
+  }
+
+  /** Cut the voice-over off (a new one, a block, a level change, the end of Play). */
+  private stopVoice(): void {
+    this.voiceSeq++;
+    const v = this.voice;
+    if (!v) return;
+    this.voice = null;
+    v.source.onended = null;
+    try {
+      v.source.stop();
+    } catch {
+      /* already ended */
+    }
+    v.source.disconnect();
+    v.gain.disconnect();
   }
 
   /** How much of the screen is covered in white or black now (screen fade blocks). */
@@ -1690,6 +1745,7 @@ export class PlaySession {
       if (s.audio.isPlaying) s.audio.stop();
       this.dropSound(s);
     }
+    this.stopVoice();
     for (const s of this.shots) {
       if (s.audio.isPlaying) s.audio.stop();
       s.audio.removeFromParent();

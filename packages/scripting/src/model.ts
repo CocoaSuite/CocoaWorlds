@@ -108,6 +108,34 @@ export type Axis = 'up' | 'north' | 'east';
 export type WhenCase = { id: string; match: Expr; body: Statement[] };
 
 /** `and`: it starts along with the block above, and the next block waits for both. */
+/** One caption of a voice-over: shown from `at` to `until` (seconds from the start of the recording). */
+export type Caption = { at: number; until: number; text: string };
+
+/** Captions made safe to play: numbers that make sense, text kept, in order of when they show. */
+export function cleanCaptions(list: unknown): Caption[] {
+  if (!Array.isArray(list)) return [];
+  const out: Caption[] = [];
+  for (const c of list) {
+    if (!c || typeof c !== 'object') continue;
+    const { at, until, text } = c as Record<string, unknown>;
+    if (typeof text !== 'string' || !text.trim() || typeof at !== 'number' || !Number.isFinite(at)) continue;
+    const a = Math.max(0, at);
+    const u = typeof until === 'number' && Number.isFinite(until) && until > a ? until : a + 3;
+    out.push({ at: Math.round(a * 1000) / 1000, until: Math.round(u * 1000) / 1000, text: text.trim().slice(0, 500) });
+  }
+  return out.sort((x, y) => x.at - y.at).slice(0, 2000);
+}
+
+/**
+ * A captions file from the caption timing tool (`*.captions.json`): `{ format: 'cocoaworlds-captions', sound,
+ * captions: [{ at, until, text }] }`. Also takes a bare list. Null if it isn't one.
+ */
+export function readCaptionFile(json: unknown): { sound: string; captions: Caption[] } | null {
+  const o = Array.isArray(json) ? { captions: json } : json && typeof json === 'object' ? (json as Record<string, unknown>) : null;
+  if (!o || !Array.isArray(o.captions)) return null;
+  return { sound: typeof o.sound === 'string' ? o.sound : '', captions: cleanCaptions(o.captions) };
+}
+
 export type Statement = StatementKind_ & { and?: boolean };
 
 type StatementKind_ =
@@ -223,6 +251,13 @@ type StatementKind_ =
   | { id: string; kind: 'hint'; at: Place; spread: Expr; sure: Expr; as: 'sound' | 'sighting' | 'event' }
   /** Stop the sounds an object is making (its Sound component and what its scripts played). */
   | { id: string; kind: 'stopSound'; target: Ref }
+  /**
+   * Play a voice-over everywhere, with its captions shown as on-screen messages. Heard over screen fades and
+   * silence; a new voice-over or a level change cuts it off.
+   */
+  | { id: string; kind: 'playVoice'; sound: string; volume: Expr; captions: Caption[] }
+  /** Stop the voice-over playing now (and its captions). */
+  | { id: string; kind: 'stopVoice' }
   /** Play one of a model's animations by name, looping or once. */
   | { id: string; kind: 'playAnim'; target: Ref; name: string; loop: boolean }
   /** Change a light's brightness, reach, cone or colour, over some seconds (0: at once). */

@@ -3,7 +3,7 @@
  * the compiler turns each handler into a flat list of instructions for the VM. A handler with an error is
  * reported and left out, so one broken script never stops the rest of the game.
  */
-import { LENS_PROPS, PLAYER_MOVE_KINDS, PLAYER_NUMBERS, PLAYER_WAYS, PLAYER_YES_NO, type Direction, type LensProp, type LookMode, type Expr, type LightProp, type Handler, type Place, type PlayerMoveKind, type PlayerStateKind, type Ref, type Script, type Statement, type ValueType } from './model';
+import { LENS_PROPS, PLAYER_MOVE_KINDS, PLAYER_NUMBERS, PLAYER_WAYS, PLAYER_YES_NO, type Direction, type LensProp, type LookMode, type Expr, type LightProp, type Handler, type Place, type PlayerMoveKind, type PlayerStateKind, type Ref, type Script, type Statement, type ValueType, type Caption, cleanCaptions } from './model';
 
 /** What the checker needs to know about the scene. */
 export interface SceneInfo {
@@ -85,6 +85,9 @@ export type Op =
   | { op: 'varof'; name: string }
   /** Pops loudness, volume, then the place (null: everywhere): play `sound`. */
   | { op: 'sound'; sound: string }
+  /** Pops volume: play a voice-over with its captions. */
+  | { op: 'voice'; sound: string; captions: Caption[] }
+  | { op: 'stopvoice' }
   /** Pops the place: play an effect there. */
   | { op: 'vfx'; effect: string; follow: boolean }
   /** Pops loudness, then the place: a noise. */
@@ -957,6 +960,14 @@ class HandlerCompiler {
       case 'stopSound':
         this.actTarget(s.target, s.id);
         this.emit({ op: 'stopsound' });
+        break;
+      case 'playVoice':
+        if (!s.sound) this.problem(s.id, 'Pick a voice-over sound (import sounds in the Assets tab).');
+        this.expect(s.volume, 'number', 'The volume must be a number (1 is normal).');
+        this.emit({ op: 'voice', sound: s.sound, captions: cleanCaptions(s.captions) });
+        break;
+      case 'stopVoice':
+        this.emit({ op: 'stopvoice' });
         break;
       case 'setLight':
         this.lightTarget(s.target, s.id);

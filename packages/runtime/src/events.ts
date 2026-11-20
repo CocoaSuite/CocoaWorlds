@@ -50,6 +50,10 @@ export type GameEvent =
   /** Something hit something: `source` is what moved, `surface` what it sounds like (volume 0–1; `hard`: a big hit). */
   | { type: 'hit'; source: string; surface: string; at: [number, number, number]; volume: number; hard: boolean; time: number }
   | { type: 'sound.stop'; source: string; time: number }
+  /** A voice-over starts (everywhere, heard over screen fades and silence; a new one or a level change cuts it off). */
+  | { type: 'voice'; sound: string; volume: number; time: number }
+  /** The voice-over playing is cut off. */
+  | { type: 'voice.stop'; time: number }
   /** An effect from the VFX workspace plays at a place (`follow`: a moving body it travels with, or 'player'). */
   | { type: 'vfx'; effect: string; at: [number, number, number]; follow: string | null; time: number }
   /** Play an animation of an object's model (the game world has no models; whoever draws them plays it). */

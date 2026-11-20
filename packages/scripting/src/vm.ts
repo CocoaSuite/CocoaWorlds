@@ -9,7 +9,7 @@
  *  - A failing action or a division by zero stops only that thread, with a message pointing at the block.
  */
 import type { ActionName, CompiledHandler, GameAction, GameValue, Op, Program, Value } from './compile';
-import type { LensProp, LightProp, LookMode, PlayerMoveKind, PlayerStateKind, Ref } from './model';
+import type { Caption, LensProp, LightProp, LookMode, PlayerMoveKind, PlayerStateKind, Ref } from './model';
 
 export const STEP_BUDGET = 10_000;
 
@@ -71,6 +71,8 @@ export interface ScriptHost {
   hint?(place: Value, spread: number, sure: number, as: 'sound' | 'sighting' | 'event'): void;
   /** Stop the sounds an object is making. */
   stopSound?(target: string): void;
+  /** Play a voice-over (cutting off the one playing) with its captions; '' stops it. */
+  playVoice?(sound: string, volume: number, captions: Caption[]): void;
   /** Play an animation of an object's model. */
   playAnimation?(target: string, name: string, loop: boolean): void;
   /** Show or hide a screen, or one element of a screen. */
@@ -804,6 +806,14 @@ export class ScriptRunner {
           if (target && typeof target === 'object') this.host.playAnimation?.(target.ref, op.name, op.loop);
           break;
         }
+        case 'voice': {
+          const volume = Math.max(0, num(s.pop() ?? 1));
+          if (op.sound) this.host.playVoice?.(op.sound, volume, op.captions);
+          break;
+        }
+        case 'stopvoice':
+          this.host.playVoice?.('', 0, []);
+          break;
         case 'stopsound': {
           const target = s.pop();
           if (target && typeof target === 'object') this.host.stopSound?.(target.ref);
