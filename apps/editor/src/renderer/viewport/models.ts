@@ -2,14 +2,18 @@
  * glTF/GLB models from the project: loaded once per file, then cloned (skinned meshes properly) for each object
  * that shows them, in the editor and in Play.
  */
-import type { ModelData } from '@cocoaworlds/core';
-import * as THREE from 'three';
-import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
-import { clone as cloneSkinned } from 'three/examples/jsm/utils/SkeletonUtils.js';
-import { computeMikkTSpaceTangents } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import * as MikkTSpace from 'three/examples/jsm/libs/mikktspace.module.js';
-import { assetUrl } from '../assets';
-import { projectMaterial, releaseMaterial } from './project-materials';
+import type { ModelData, ModelMapKind, ModelMaps } from "@cocoaworlds/core";
+import * as THREE from "three";
+import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
+import { clone as cloneSkinned } from "three/examples/jsm/utils/SkeletonUtils.js";
+import { computeMikkTSpaceTangents } from "three/examples/jsm/utils/BufferGeometryUtils.js";
+import * as MikkTSpace from "three/examples/jsm/libs/mikktspace.module.js";
+import { assetUrl } from "../assets";
+import {
+  loadImage,
+  projectMaterial,
+  releaseMaterial,
+} from "./project-materials";
 
 /** Units per metre (as in the runtime; not imported from it so the editor doesn't load physics up front). */
 export const UNITS_PER_METRE = 39.37;
@@ -36,33 +40,55 @@ const EXACT_NAME = /^(collision|hitbox|col)_?mesh/i;
 
 const chain = (o: THREE.Object3D, root: THREE.Object3D): THREE.Object3D[] => {
   const out: THREE.Object3D[] = [];
-  for (let x: THREE.Object3D | null = o; x && x !== root; x = x.parent) out.push(x);
+  for (let x: THREE.Object3D | null = o; x && x !== root; x = x.parent)
+    out.push(x);
   return out;
 };
 
 /** Takes the meshes named collision, hitbox or col_ (or under a node named so) out of a model's scene. */
-export function splitCollision(scene: THREE.Object3D, animations: THREE.AnimationClip[]): CollisionPart[] {
+export function splitCollision(
+  scene: THREE.Object3D,
+  animations: THREE.AnimationClip[],
+): CollisionPart[] {
   scene.updateMatrixWorld(true);
-  const animated = new Set(animations.flatMap((a) => a.tracks.map((t) => THREE.PropertyBinding.parseTrackName(t.name).nodeName)));
+  const animated = new Set(
+    animations.flatMap((a) =>
+      a.tracks.map(
+        (t) => THREE.PropertyBinding.parseTrackName(t.name).nodeName,
+      ),
+    ),
+  );
   const found: THREE.Mesh[] = [];
   scene.traverse((o) => {
-    if ((o as THREE.Mesh).isMesh && chain(o, scene).some((x) => COLLISION_NAME.test(x.name))) found.push(o as THREE.Mesh);
+    if (
+      (o as THREE.Mesh).isMesh &&
+      chain(o, scene).some((x) => COLLISION_NAME.test(x.name))
+    )
+      found.push(o as THREE.Mesh);
   });
   const parts = found.map((mesh) => {
     const names = chain(mesh, scene);
-    const g = mesh.geometry, p = g.attributes.position!;
+    const g = mesh.geometry,
+      p = g.attributes.position!;
     const positions = new Float32Array(p.count * 3);
     const v = new THREE.Vector3();
     for (let i = 0; i < p.count; i++) {
       v.fromBufferAttribute(p, i).applyMatrix4(mesh.matrixWorld);
       positions.set([v.x, v.y, v.z], i * 3);
     }
-    const indices = g.index ? Uint32Array.from({ length: g.index.count }, (_, i) => g.index!.getX(i)) : Uint32Array.from({ length: p.count }, (_, i) => i);
+    const indices = g.index
+      ? Uint32Array.from({ length: g.index.count }, (_, i) => g.index!.getX(i))
+      : Uint32Array.from({ length: p.count }, (_, i) => i);
     return {
       positions,
       indices,
       exact: names.some((x) => EXACT_NAME.test(x.name)),
-      moves: names.some((x) => (x as THREE.Bone).isBone || animated.has(x.name) || animated.has(x.uuid)),
+      moves: names.some(
+        (x) =>
+          (x as THREE.Bone).isBone ||
+          animated.has(x.name) ||
+          animated.has(x.uuid),
+      ),
       rest: mesh.matrixWorld.clone(),
       path: [] as number[],
     };
@@ -81,15 +107,23 @@ export function splitCollision(scene: THREE.Object3D, animations: THREE.Animatio
     return stand;
   });
   stands.forEach((stand, i) => {
-    for (let x: THREE.Object3D = stand; x !== scene; x = x.parent!) parts[i]!.path.unshift(x.parent!.children.indexOf(x));
+    for (let x: THREE.Object3D = stand; x !== scene; x = x.parent!)
+      parts[i]!.path.unshift(x.parent!.children.indexOf(x));
   });
   return parts.filter((p) => p.indices.length >= 3);
 }
 
-const follow = (root: THREE.Object3D, path: number[]): THREE.Object3D | null => path.reduce<THREE.Object3D | null>((o, i) => o?.children[i] ?? null, root);
+const follow = (root: THREE.Object3D, path: number[]): THREE.Object3D | null =>
+  path.reduce<THREE.Object3D | null>((o, i) => o?.children[i] ?? null, root);
 
 /** Drawn over collision meshes when View › Show collisions is on. */
-const wireMaterial = new THREE.LineBasicMaterial({ color: 0x4fd1c5, depthTest: false, transparent: true, opacity: 0.85, visible: false });
+const wireMaterial = new THREE.LineBasicMaterial({
+  color: 0x4fd1c5,
+  depthTest: false,
+  transparent: true,
+  opacity: 0.85,
+  visible: false,
+});
 
 /** Show collision meshes as outlines on every model, or not (View menu). */
 export function setCollisionsVisible(v: boolean): void {
@@ -107,9 +141,20 @@ async function addTangents(scene: THREE.Object3D): Promise<void> {
   const meshes: THREE.Mesh[] = [];
   scene.traverse((o) => {
     const mesh = o as THREE.Mesh;
-    const mats = mesh.isMesh ? (Array.isArray(mesh.material) ? mesh.material : [mesh.material]) : [];
+    const mats = mesh.isMesh
+      ? Array.isArray(mesh.material)
+        ? mesh.material
+        : [mesh.material]
+      : [];
     const g = mesh.geometry;
-    if (mats.some((m) => (m as THREE.MeshStandardMaterial).normalMap) && g && !g.attributes.tangent && g.attributes.normal && g.attributes.uv) meshes.push(mesh);
+    if (
+      mats.some((m) => (m as THREE.MeshStandardMaterial).normalMap) &&
+      g &&
+      !g.attributes.tangent &&
+      g.attributes.normal &&
+      g.attributes.uv
+    )
+      meshes.push(mesh);
   });
   if (!meshes.length) return;
   await MikkTSpace.ready;
@@ -117,7 +162,9 @@ async function addTangents(scene: THREE.Object3D): Promise<void> {
   for (const mesh of meshes) {
     computeMikkTSpaceTangents(mesh.geometry, MikkTSpace);
     // The loader flips the normal map's green for its own guessed tangents; real ones don't want that.
-    for (const m of Array.isArray(mesh.material) ? mesh.material : [mesh.material]) {
+    for (const m of Array.isArray(mesh.material)
+      ? mesh.material
+      : [mesh.material]) {
       const s = m as THREE.MeshStandardMaterial;
       if (s.normalMap && !flipped.has(m)) {
         flipped.add(m);
@@ -135,14 +182,16 @@ export function loadModel(path: string): Promise<LoadedModel> {
     p = (async () => {
       const url = await assetUrl(path);
       const bytes = await (await fetch(url)).arrayBuffer();
-      const gltf = await loader.parseAsync(bytes, '');
+      const gltf = await loader.parseAsync(bytes, "");
       await addTangents(gltf.scene);
       // Models step back a hair in depth: where one touches a level face flush (a pillar under a beam), the level
       // face is drawn instead of the two flickering. (Blender exports two-sided, so a cap seen from below fights too.)
       gltf.scene.traverse((o) => {
         const mesh = o as THREE.Mesh;
         if (!mesh.isMesh) return;
-        for (const m of Array.isArray(mesh.material) ? mesh.material : [mesh.material]) {
+        for (const m of Array.isArray(mesh.material)
+          ? mesh.material
+          : [mesh.material]) {
           m.polygonOffset = true;
           m.polygonOffsetFactor = 1;
           m.polygonOffsetUnits = 1;
@@ -157,7 +206,11 @@ export function loadModel(path: string): Promise<LoadedModel> {
           }
         }
       });
-      return { scene: gltf.scene, animations: gltf.animations, collision: splitCollision(gltf.scene, gltf.animations) };
+      return {
+        scene: gltf.scene,
+        animations: gltf.animations,
+        collision: splitCollision(gltf.scene, gltf.animations),
+      };
     })();
     p.catch(() => cache.delete(path));
     cache.set(path, p);
@@ -173,7 +226,8 @@ export async function modelGeometry(path: string): Promise<ModelGeometry> {
   const m = await loadModel(path);
   const hit = geometryCache.get(m);
   if (hit) return hit;
-  const pos: number[] = [], idx: number[] = [];
+  const pos: number[] = [],
+    idx: number[] = [];
   m.scene.updateMatrixWorld(true);
   const v = new THREE.Vector3();
   m.scene.traverse((o) => {
@@ -186,15 +240,34 @@ export async function modelGeometry(path: string): Promise<ModelGeometry> {
       v.fromBufferAttribute(p, i).applyMatrix4(mesh.matrixWorld);
       pos.push(v.x, v.y, v.z);
     }
-    if (g.index) for (let i = 0; i < g.index.count; i++) idx.push(base + g.index.getX(i));
+    if (g.index)
+      for (let i = 0; i < g.index.count; i++) idx.push(base + g.index.getX(i));
     else for (let i = 0; i < p.count; i++) idx.push(base + i);
   });
-  const parts = m.collision.map(({ positions, indices, exact, moves }) => ({ positions, indices, exact, moves }));
-  const out = { positions: new Float32Array(pos), indices: new Uint32Array(idx), parts };
+  const parts = m.collision.map(({ positions, indices, exact, moves }) => ({
+    positions,
+    indices,
+    exact,
+    moves,
+  }));
+  const out = {
+    positions: new Float32Array(pos),
+    indices: new Uint32Array(idx),
+    parts,
+  };
   geometryCache.set(m, out);
   return out;
 }
-type ModelGeometry = { positions: Float32Array; indices: Uint32Array; parts: { positions: Float32Array; indices: Uint32Array; exact: boolean; moves: boolean }[] };
+type ModelGeometry = {
+  positions: Float32Array;
+  indices: Uint32Array;
+  parts: {
+    positions: Float32Array;
+    indices: Uint32Array;
+    exact: boolean;
+    moves: boolean;
+  }[];
+};
 const geometryCache = new WeakMap<LoadedModel, ModelGeometry>();
 
 /**
@@ -209,10 +282,13 @@ export function slotsOf(m: LoadedModel): Map<THREE.Material, string> {
   m.scene.traverse((o) => {
     const mesh = o as THREE.Mesh;
     if (!mesh.isMesh) return;
-    for (const mat of Array.isArray(mesh.material) ? mesh.material : [mesh.material]) {
+    for (const mat of Array.isArray(mesh.material)
+      ? mesh.material
+      : [mesh.material]) {
       if (out!.has(mat)) continue;
       let name = mat.name.trim() || `Material ${out!.size + 1}`;
-      for (let i = 2; taken.has(name); i++) name = `${mat.name.trim() || 'Material'} ${i}`;
+      for (let i = 2; taken.has(name); i++)
+        name = `${mat.name.trim() || "Material"} ${i}`;
       taken.add(name);
       out!.set(mat, name);
     }
@@ -256,9 +332,9 @@ export interface ModelInstance {
 export async function modelInstance(data: ModelData): Promise<ModelInstance> {
   const m = await loadModel(data.model);
   const root = new THREE.Group();
-  root.name = 'model';
+  root.name = "model";
   const inner = cloneSkinned(m.scene) as THREE.Group;
-  const k = data.units === 'units' ? 1 : UNITS_PER_METRE;
+  const k = data.units === "units" ? 1 : UNITS_PER_METRE;
   inner.scale.setScalar(k);
   inner.traverse((o) => {
     if ((o as THREE.Mesh).isMesh) {
@@ -272,7 +348,12 @@ export async function modelInstance(data: ModelData): Promise<ModelInstance> {
   const given = new Map<string, THREE.Material>();
   const swaps = data.materials ?? {};
   // A tint: the file's own materials are copied for this object, with the tint multiplied into their colour.
-  const tint = data.tint && /^#[0-9a-f]{6}$/i.test(data.tint) && data.tint.toLowerCase() !== '#ffffff' ? data.tint : undefined;
+  const tint =
+    data.tint &&
+    /^#[0-9a-f]{6}$/i.test(data.tint) &&
+    data.tint.toLowerCase() !== "#ffffff"
+      ? data.tint
+      : undefined;
   const tinted = new Map<THREE.Material, THREE.Material>();
   const ownTinted = (mat: THREE.Material): THREE.Material => {
     const c = (mat as THREE.MeshStandardMaterial).color;
@@ -285,20 +366,45 @@ export async function modelInstance(data: ModelData): Promise<ModelInstance> {
     }
     return t;
   };
+  // Swapped texture maps: the file's own material is copied for this object with the project textures put in.
+  const maps = await slotMaps(data.maps);
+  const remapped = new Map<THREE.Material, THREE.Material>();
+  const own = (
+    mat: THREE.Material,
+    slot: string | undefined,
+  ): THREE.Material => {
+    const base = ownTinted(mat);
+    const set = slot ? maps.get(slot) : undefined;
+    if (!set || !(base as THREE.MeshStandardMaterial).isMeshStandardMaterial)
+      return base;
+    let r = remapped.get(mat);
+    if (!r) {
+      r = base === mat ? mat.clone() : base;
+      applyMaps(r as THREE.MeshStandardMaterial, set);
+      remapped.set(mat, r);
+    }
+    return r;
+  };
   const swap = (mat: THREE.Material): THREE.Material => {
     const slot = slots.get(mat);
     const id = slot ? swaps[slot] : undefined;
-    if (!slot || !id) return ownTinted(mat);
+    if (!slot || !id) return own(mat, slot);
     let pm = given.get(slot);
-    if (!pm) given.set(slot, (pm = projectMaterial(id, () => redraw(), { modelUv: true, tint })));
+    if (!pm)
+      given.set(
+        slot,
+        (pm = projectMaterial(id, () => redraw(), { modelUv: true, tint })),
+      );
     return pm;
   };
   inner.traverse((o) => {
     const mesh = o as THREE.Mesh;
     if (!mesh.isMesh) return;
     const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
-    mesh.userData.slots = mats.map((x) => slots.get(x) ?? '');
-    mesh.material = Array.isArray(mesh.material) ? mats.map(swap) : swap(mesh.material);
+    mesh.userData.slots = mats.map((x) => slots.get(x) ?? "");
+    mesh.material = Array.isArray(mesh.material)
+      ? mats.map(swap)
+      : swap(mesh.material);
   });
   root.add(inner);
   // (Skinned meshes are measured through their bones, so the bones' world matrices must be up to date first.)
@@ -309,20 +415,41 @@ export async function modelInstance(data: ModelData): Promise<ModelInstance> {
     const node = follow(inner, p.path);
     if (node) {
       const local = new THREE.Matrix4().copy(p.rest).invert();
-      const geo = new THREE.BufferGeometry().setAttribute('position', new THREE.BufferAttribute(p.positions.slice(), 3)).setIndex(new THREE.BufferAttribute(p.indices, 1));
+      const geo = new THREE.BufferGeometry()
+        .setAttribute(
+          "position",
+          new THREE.BufferAttribute(p.positions.slice(), 3),
+        )
+        .setIndex(new THREE.BufferAttribute(p.indices, 1));
       geo.applyMatrix4(local);
-      const wire = new THREE.LineSegments(new THREE.EdgesGeometry(geo, 20), wireMaterial);
+      const wire = new THREE.LineSegments(
+        new THREE.EdgesGeometry(geo, 20),
+        wireMaterial,
+      );
       geo.dispose();
       wire.renderOrder = 999;
       wire.raycast = () => {};
       node.add(wire);
     }
-    return p.moves && node ? [{ part, node, restInv: new THREE.Matrix4().copy(p.rest).invert(), last: [] as number[] }] : [];
+    return p.moves && node
+      ? [
+          {
+            part,
+            node,
+            restInv: new THREE.Matrix4().copy(p.rest).invert(),
+            last: [] as number[],
+          },
+        ]
+      : [];
   });
   const movedParts = () =>
     moving.flatMap((x) => {
       rel.identity();
-      for (let o: THREE.Object3D | null = x.node; o && o !== inner; o = o.parent) {
+      for (
+        let o: THREE.Object3D | null = x.node;
+        o && o !== inner;
+        o = o.parent
+      ) {
         o.updateMatrix();
         rel.premultiply(o.matrix);
       }
@@ -343,7 +470,10 @@ export async function modelInstance(data: ModelData): Promise<ModelInstance> {
     // (Everything older than the one fading out stops now.)
     for (const a of played) if (a !== from && a !== action) a.stop();
     played.add(action);
-    action.setLoop(loop ? THREE.LoopRepeat : THREE.LoopOnce, loop ? Infinity : 1);
+    action.setLoop(
+      loop ? THREE.LoopRepeat : THREE.LoopOnce,
+      loop ? Infinity : 1,
+    );
     action.clampWhenFinished = !loop;
     action.reset();
     action.setEffectiveWeight(1);
@@ -362,6 +492,113 @@ export async function modelInstance(data: ModelData): Promise<ModelInstance> {
     // (Copies share the file's textures: only the copies themselves go.)
     for (const t of tinted.values()) t.dispose();
     tinted.clear();
+    for (const r of remapped.values()) {
+      r.dispose();
+      for (const tex of Object.values(ownMapsOf(r))) tex.dispose();
+    }
+    remapped.clear();
   };
-  return { object: root, mixer, play, dispose, movedParts, size: box.isEmpty() ? new THREE.Vector3(16, 16, 16) : box.getSize(new THREE.Vector3()), center: box.isEmpty() ? new THREE.Vector3() : box.getCenter(new THREE.Vector3()) };
+  return {
+    object: root,
+    mixer,
+    play,
+    dispose,
+    movedParts,
+    size: box.isEmpty()
+      ? new THREE.Vector3(16, 16, 16)
+      : box.getSize(new THREE.Vector3()),
+    center: box.isEmpty()
+      ? new THREE.Vector3()
+      : box.getCenter(new THREE.Vector3()),
+  };
+}
+
+const MAP_FIELD: Record<
+  ModelMapKind,
+  | "map"
+  | "normalMap"
+  | "roughnessMap"
+  | "metalnessMap"
+  | "aoMap"
+  | "emissiveMap"
+> = {
+  color: "map",
+  normal: "normalMap",
+  roughness: "roughnessMap",
+  metalness: "metalnessMap",
+  ao: "aoMap",
+  emissive: "emissiveMap",
+};
+const OWN_MAPS = Symbol("ownMaps");
+
+/** The project textures for each slot's swapped maps, loaded (a map that can't be loaded is left as in the file). */
+async function slotMaps(
+  maps: Record<string, ModelMaps> | undefined,
+): Promise<Map<string, Partial<Record<ModelMapKind, THREE.Texture>>>> {
+  const out = new Map<string, Partial<Record<ModelMapKind, THREE.Texture>>>();
+  for (const [slot, set] of Object.entries(maps ?? {})) {
+    const got: Partial<Record<ModelMapKind, THREE.Texture>> = {};
+    await Promise.all(
+      Object.entries(set ?? {}).map(async ([kind, path]) => {
+        if (!path || !(kind in MAP_FIELD)) return;
+        try {
+          // (A copy of the shared image: glTF textures aren't flipped, and colour maps are sRGB.)
+          const t = (await loadImage(path)).clone();
+          t.flipY = false;
+          t.colorSpace =
+            kind === "color" || kind === "emissive"
+              ? THREE.SRGBColorSpace
+              : THREE.NoColorSpace;
+          t.wrapS = t.wrapT = THREE.RepeatWrapping;
+          t.anisotropy = 4;
+          t.needsUpdate = true;
+          got[kind as ModelMapKind] = t;
+        } catch {
+          /* missing file: the file's own map stays */
+        }
+      }),
+    );
+    if (Object.keys(got).length) out.set(slot, got);
+  }
+  return out;
+}
+
+/** Put swapped maps into a (copied) material. */
+function applyMaps(
+  m: THREE.MeshStandardMaterial,
+  set: Partial<Record<ModelMapKind, THREE.Texture>>,
+): void {
+  for (const [kind, tex] of Object.entries(set) as [
+    ModelMapKind,
+    THREE.Texture,
+  ][]) {
+    const field = MAP_FIELD[kind];
+    // The file's own transform for that map (texture offset/repeat in glTF) carries over.
+    const before = m[field];
+    if (before) {
+      tex.offset.copy(before.offset);
+      tex.repeat.copy(before.repeat);
+      tex.rotation = before.rotation;
+      tex.channel = before.channel;
+    }
+    m[field] = tex;
+    // (Without the file's own tangents, a glTF normal map wants its green flipped, as the loader does.)
+    if (kind === "normal" && !before) m.normalScale.set(1, -1);
+    if (kind === "roughness" && !before) m.roughness = 1;
+    if (kind === "metalness" && !before) m.metalness = 1;
+    if (kind === "emissive" && m.emissive.getHex() === 0)
+      m.emissive.set(0xffffff);
+  }
+  (m as unknown as Record<symbol, unknown>)[OWN_MAPS] = set;
+  m.needsUpdate = true;
+}
+
+function ownMapsOf(
+  m: THREE.Material,
+): Partial<Record<ModelMapKind, THREE.Texture>> {
+  return (
+    ((m as unknown as Record<symbol, unknown>)[OWN_MAPS] as Partial<
+      Record<ModelMapKind, THREE.Texture>
+    >) ?? {}
+  );
 }

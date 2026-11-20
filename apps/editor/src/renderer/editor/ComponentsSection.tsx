@@ -2,53 +2,128 @@
  * The Inspector's components: one section per component with fields drawn from its definition, a remove
  * button, and an "Add component" menu listing only what fits this object.
  */
-import { shown, stored, type AxisKind } from '../axes';
-import type { Vec3 } from '@cocoaworlds/core';
-import { TerrainImport } from './TerrainImport';
-import { addableComponents, componentDef, readComponent, type EntityData, type FieldDef } from '@cocoaworlds/core';
-import { Button, ColorField, IconButton, NumberField, Section, Segmented, Switch } from '@cocoaworlds/ui';
-import { Fragment, useEffect, useRef, useState } from 'react';
-import { modelSlots } from '../viewport/models';
-import { getLang, t } from '../i18n';
-import { useEditor } from '../store';
+import { shown, stored, type AxisKind } from "../axes";
+import {
+  MODEL_MAP_KINDS,
+  type ModelMapKind,
+  type ModelMaps,
+  type Vec3,
+} from "@cocoaworlds/core";
+import { TerrainImport } from "./TerrainImport";
+import {
+  addableComponents,
+  componentDef,
+  readComponent,
+  type EntityData,
+  type FieldDef,
+} from "@cocoaworlds/core";
+import {
+  Button,
+  ColorField,
+  IconButton,
+  NumberField,
+  Section,
+  Segmented,
+  Switch,
+} from "@cocoaworlds/ui";
+import { Fragment, useEffect, useRef, useState } from "react";
+import { modelSlots } from "../viewport/models";
+import { getLang, t } from "../i18n";
+import { useEditor } from "../store";
 
 export function ComponentsSection({ e }: { e: EntityData }) {
   const s = useEditor.getState();
   const lang = getLang();
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
   const isBrush = !!e.components.brush;
-  const shown = Object.keys(e.components).filter((n) => !componentDef(n)?.internal);
+  const shown = Object.keys(e.components).filter(
+    (n) => !componentDef(n)?.internal,
+  );
   const addable = addableComponents(e.components, isBrush);
 
   return (
     <>
       {shown.map((name) => {
         const def = componentDef(name);
-        if (!def) return <UnknownComponent key={name} name={name} data={e.components[name]!} />;
+        if (!def)
+          return (
+            <UnknownComponent
+              key={name}
+              name={name}
+              data={e.components[name]!}
+            />
+          );
         const data = readComponent(name, e.components[name]);
         return (
           <Section
             key={name}
             title={def.label[lang]}
-            action={<IconButton icon="close" label={`${t('comp.remove')} ${def.label[lang]}`} className="cw-sec-btn" onClick={() => s.removeComponent(e.id, name)} />}
+            action={
+              <IconButton
+                icon="close"
+                label={`${t("comp.remove")} ${def.label[lang]}`}
+                className="cw-sec-btn"
+                onClick={() => s.removeComponent(e.id, name)}
+              />
+            }
           >
-            <div className="cw-comp-fields" role="group" aria-label={def.label[lang]}>
-              {grouped(def.fields.filter((f) => !f.when || f.when.is.includes(data[f.when.key])), lang).map(([head, list]) => (
-                <Fragment key={head || '-'}>
+            <div
+              className="cw-comp-fields"
+              role="group"
+              aria-label={def.label[lang]}
+            >
+              {grouped(
+                def.fields.filter(
+                  (f) => !f.when || f.when.is.includes(data[f.when.key]),
+                ),
+                lang,
+              ).map(([head, list]) => (
+                <Fragment key={head || "-"}>
                   {head && <div className="cw-comp-group">{head}</div>}
                   {list.map((f) => (
-                    <FieldEditor key={f.key} entity={e.id} component={name} field={f} value={data[f.key]} />
+                    <FieldEditor
+                      key={f.key}
+                      entity={e.id}
+                      component={name}
+                      field={f}
+                      value={data[f.key]}
+                    />
                   ))}
                 </Fragment>
               ))}
-              {!def.fields.length && <p className="cw-hint">{def.description[lang]}</p>}
-              {name === 'model' && typeof data.model === 'string' && data.model && <ModelMaterials entity={e.id} path={data.model} value={(data.materials ?? {}) as Record<string, string>} />}
-              {name === 'terrain' && typeof data.file === 'string' && data.file && <TerrainImport file={data.file} />}
-              {name === 'script' && (
+              {!def.fields.length && (
+                <p className="cw-hint">{def.description[lang]}</p>
+              )}
+              {name === "model" &&
+                typeof data.model === "string" &&
+                data.model && (
+                  <ModelMaterials
+                    entity={e.id}
+                    path={data.model}
+                    value={(data.materials ?? {}) as Record<string, string>}
+                    maps={(data.maps ?? {}) as Record<string, ModelMaps>}
+                  />
+                )}
+              {name === "terrain" &&
+                typeof data.file === "string" &&
+                data.file && <TerrainImport file={data.file} />}
+              {name === "script" && (
                 <div className="cw-row">
-                  <span className="cw-muted">{t('script.stacks').replace('{n}', String(((e.components.script as { handlers?: unknown[] }).handlers ?? []).length))}</span>
+                  <span className="cw-muted">
+                    {t("script.stacks").replace(
+                      "{n}",
+                      String(
+                        (
+                          (e.components.script as { handlers?: unknown[] })
+                            .handlers ?? []
+                        ).length,
+                      ),
+                    )}
+                  </span>
                   <span className="cw-sp" />
-                  <Button onClick={() => s.setBottomTab('script')}>{t('script.edit')}</Button>
+                  <Button onClick={() => s.setBottomTab("script")}>
+                    {t("script.edit")}
+                  </Button>
                 </div>
               )}
             </div>
@@ -63,36 +138,68 @@ export function ComponentsSection({ e }: { e: EntityData }) {
             setMenu({ x: r.left, y: r.bottom + 4 });
           }}
         >
-          {t('comp.add')}
+          {t("comp.add")}
         </Button>
-        <Button onClick={() => s.openDialog('recipes')}>{t('recipe.open')}</Button>
+        <Button onClick={() => s.openDialog("recipes")}>
+          {t("recipe.open")}
+        </Button>
       </div>
-      {menu && <AddMenu x={menu.x} y={menu.y} onClose={() => setMenu(null)} items={addable.map((c) => ({ name: c.label[lang], about: c.description[lang], pick: () => s.addComponent(e.id, c.name) }))} />}
+      {menu && (
+        <AddMenu
+          x={menu.x}
+          y={menu.y}
+          onClose={() => setMenu(null)}
+          items={addable.map((c) => ({
+            name: c.label[lang],
+            about: c.description[lang],
+            pick: () => s.addComponent(e.id, c.name),
+          }))}
+        />
+      )}
     </>
   );
 }
 
 /** Fields under their headings, each heading where its first field is. */
-function grouped(fields: FieldDef[], lang: 'en' | 'ru'): [string, FieldDef[]][] {
+function grouped(
+  fields: FieldDef[],
+  lang: "en" | "ru",
+): [string, FieldDef[]][] {
   const out = new Map<string, FieldDef[]>();
   for (const f of fields) {
-    const h = f.group?.[lang] ?? '';
+    const h = f.group?.[lang] ?? "";
     out.set(h, [...(out.get(h) ?? []), f]);
   }
   return [...out];
 }
 
 /** Add component: a menu with a search box (type to narrow it, Enter adds the first, Esc closes). */
-function AddMenu({ x, y, items, onClose }: { x: number; y: number; items: { name: string; about: string; pick: () => void }[]; onClose: () => void }) {
-  const [q, setQ] = useState('');
+function AddMenu({
+  x,
+  y,
+  items,
+  onClose,
+}: {
+  x: number;
+  y: number;
+  items: { name: string; about: string; pick: () => void }[];
+  onClose: () => void;
+}) {
+  const [q, setQ] = useState("");
   const box = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    const away = (ev: PointerEvent) => !box.current?.contains(ev.target as Node) && onClose();
-    window.addEventListener('pointerdown', away, true);
-    return () => window.removeEventListener('pointerdown', away, true);
+    const away = (ev: PointerEvent) =>
+      !box.current?.contains(ev.target as Node) && onClose();
+    window.addEventListener("pointerdown", away, true);
+    return () => window.removeEventListener("pointerdown", away, true);
   }, [onClose]);
   const needle = q.trim().toLowerCase();
-  const shown = items.filter((i) => !needle || i.name.toLowerCase().includes(needle) || i.about.toLowerCase().includes(needle));
+  const shown = items.filter(
+    (i) =>
+      !needle ||
+      i.name.toLowerCase().includes(needle) ||
+      i.about.toLowerCase().includes(needle),
+  );
   const left = Math.max(8, Math.min(x, window.innerWidth - 372));
   const top = Math.min(y, window.innerHeight - 420);
   return (
@@ -101,20 +208,20 @@ function AddMenu({ x, y, items, onClose }: { x: number; y: number; items: { name
         className="cw-input"
         type="search"
         autoFocus
-        placeholder={t('comp.search')}
-        aria-label={t('comp.search')}
+        placeholder={t("comp.search")}
+        aria-label={t("comp.search")}
         value={q}
         onChange={(ev) => setQ(ev.currentTarget.value)}
         onKeyDown={(ev) => {
           ev.stopPropagation();
-          if (ev.key === 'Escape') onClose();
-          if (ev.key === 'Enter' && shown[0]) {
+          if (ev.key === "Escape") onClose();
+          if (ev.key === "Enter" && shown[0]) {
             shown[0].pick();
             onClose();
           }
         }}
       />
-      <div role="menu" aria-label={t('comp.add')} className="cw-add-list">
+      <div role="menu" aria-label={t("comp.add")} className="cw-add-list">
         {shown.map((i) => (
           <button
             key={i.name}
@@ -130,27 +237,45 @@ function AddMenu({ x, y, items, onClose }: { x: number; y: number; items: { name
             <span>{i.about}</span>
           </button>
         ))}
-        {!shown.length && <span className="cw-muted">{t('comp.none')}</span>}
+        {!shown.length && <span className="cw-muted">{t("comp.none")}</span>}
       </div>
     </div>
   );
 }
 
-function FieldEditor({ entity, component, field, value }: { entity: string; component: string; field: FieldDef; value: unknown }) {
+function FieldEditor({
+  entity,
+  component,
+  field,
+  value,
+}: {
+  entity: string;
+  component: string;
+  field: FieldDef;
+  value: unknown;
+}) {
   const s = useEditor.getState();
   const assets = useEditor((st) => st.assets);
   const lang = getLang();
   const label = field.label[lang];
-  const set = (v: unknown, live = false) => s.setComponentField(entity, component, field.key, v, live ? `${entity}-${component}-${field.key}` : undefined);
+  const set = (v: unknown, live = false) =>
+    s.setComponentField(
+      entity,
+      component,
+      field.key,
+      v,
+      live ? `${entity}-${component}-${field.key}` : undefined,
+    );
   const begin = () => s.begin(label);
   const done = () => s.commit();
   const ty = field.type;
   let input;
-  if (ty.kind === 'number') {
-    const clamp = (v: number) => Math.min(ty.max ?? Infinity, Math.max(ty.min ?? -Infinity, v));
+  if (ty.kind === "number") {
+    const clamp = (v: number) =>
+      Math.min(ty.max ?? Infinity, Math.max(ty.min ?? -Infinity, v));
     input = (
       <NumberField
-        label={ty.unit ?? '#'}
+        label={ty.unit ?? "#"}
         ariaLabel={label}
         value={Number(value)}
         step={ty.step ?? 1}
@@ -162,22 +287,53 @@ function FieldEditor({ entity, component, field, value }: { entity: string; comp
         }}
       />
     );
-  } else if (ty.kind === 'boolean') {
+  } else if (ty.kind === "boolean") {
     input = <Switch label={label} checked={!!value} onChange={(v) => set(v)} />;
-  } else if (ty.kind === 'effect') {
-    input = <EffectSelect label={label} value={String(value ?? '')} onChange={(v) => set(v)} />;
-  } else if (ty.kind === 'plant') {
-    input = <PlantSelect label={label} value={String(value ?? '')} onChange={(v) => set(v)} />;
-  } else if (ty.kind === 'material') {
-    input = <MaterialSelect label={label} value={String(value ?? '')} onChange={(v) => set(v)} />;
-  } else if (ty.kind === 'enum') {
-    const options = ty.options.map((o) => ({ value: o.value, label: o.label[lang] }));
+  } else if (ty.kind === "effect") {
+    input = (
+      <EffectSelect
+        label={label}
+        value={String(value ?? "")}
+        onChange={(v) => set(v)}
+      />
+    );
+  } else if (ty.kind === "plant") {
+    input = (
+      <PlantSelect
+        label={label}
+        value={String(value ?? "")}
+        onChange={(v) => set(v)}
+      />
+    );
+  } else if (ty.kind === "material") {
+    input = (
+      <MaterialSelect
+        label={label}
+        value={String(value ?? "")}
+        onChange={(v) => set(v)}
+      />
+    );
+  } else if (ty.kind === "enum") {
+    const options = ty.options.map((o) => ({
+      value: o.value,
+      label: o.label[lang],
+    }));
     // Short choices fit as segmented buttons; longer ones become a dropdown so the Inspector never overflows.
     const fits = options.reduce((n, o) => n + o.label.length, 0) <= 14;
     input = fits ? (
-      <Segmented<string> label={label} value={String(value)} onChange={(v) => set(v)} options={options} />
+      <Segmented<string>
+        label={label}
+        value={String(value)}
+        onChange={(v) => set(v)}
+        options={options}
+      />
     ) : (
-      <select className="cw-input cw-select" aria-label={label} value={String(value)} onChange={(ev) => set(ev.target.value)}>
+      <select
+        className="cw-input cw-select"
+        aria-label={label}
+        value={String(value)}
+        onChange={(ev) => set(ev.target.value)}
+      >
         {options.map((o) => (
           <option key={o.value} value={o.value}>
             {o.label}
@@ -185,21 +341,29 @@ function FieldEditor({ entity, component, field, value }: { entity: string; comp
         ))}
       </select>
     );
-  } else if (ty.kind === 'color') {
-    input = <ColorField label={label} value={String(value)} onChange={(v) => set(v, true)} />;
-  } else if (ty.kind === 'vec3') {
+  } else if (ty.kind === "color") {
+    input = (
+      <ColorField
+        label={label}
+        value={String(value)}
+        onChange={(v) => set(v, true)}
+      />
+    );
+  } else if (ty.kind === "vec3") {
     const raw = (Array.isArray(value) ? value : [0, 0, 0]) as Vec3;
     const min = ty.min ?? -Infinity;
     // (Shown Z-up when set; kept Y-up. A field with a lower limit is a size: its axes swap without a sign.)
-    const kind: AxisKind = ty.min !== undefined && ty.min >= 0 ? 'size' : 'point';
+    const kind: AxisKind =
+      ty.min !== undefined && ty.min >= 0 ? "size" : "point";
     const zUp = useEditor.getState().zUp;
     const v = shown(raw, kind, zUp) as number[];
-    const set3 = (n: number[], live: boolean) => set(stored(n as Vec3, kind, zUp), live);
+    const set3 = (n: number[], live: boolean) =>
+      set(stored(n as Vec3, kind, zUp), live);
     return (
       <>
         <div className="cw-f3">
           <span>{label}</span>
-          {(['x', 'y', 'z'] as const).map((a, i) => (
+          {(["x", "y", "z"] as const).map((a, i) => (
             <NumberField
               key={a}
               axis={a}
@@ -208,9 +372,17 @@ function FieldEditor({ entity, component, field, value }: { entity: string; comp
               value={v[i]!}
               step={ty.step ?? 1}
               onBegin={begin}
-              onChange={(n) => set3(v.map((x, j) => (j === i ? Math.max(min, n) : x)), true)}
+              onChange={(n) =>
+                set3(
+                  v.map((x, j) => (j === i ? Math.max(min, n) : x)),
+                  true,
+                )
+              }
               onCommit={(n) => {
-                set3(v.map((x, j) => (j === i ? Math.max(min, n) : x)), true);
+                set3(
+                  v.map((x, j) => (j === i ? Math.max(min, n) : x)),
+                  true,
+                );
                 done();
               }}
             />
@@ -219,13 +391,20 @@ function FieldEditor({ entity, component, field, value }: { entity: string; comp
         {field.hint && <p className="cw-hint">{field.hint[lang]}</p>}
       </>
     );
-  } else if (ty.kind === 'asset') {
+  } else if (ty.kind === "asset") {
     const list = assets[ty.asset];
-    const v = String(value ?? '');
+    const v = String(value ?? "");
     input = (
-      <select className="cw-input cw-select" aria-label={label} value={v} onChange={(ev) => set(ev.target.value)}>
-        <option value="">{t('assets.pick')}</option>
-        {v && !list.some((a) => a.path === v) && <option value={v}>{v} ?</option>}
+      <select
+        className="cw-input cw-select"
+        aria-label={label}
+        value={v}
+        onChange={(ev) => set(ev.target.value)}
+      >
+        <option value="">{t("assets.pick")}</option>
+        {v && !list.some((a) => a.path === v) && (
+          <option value={v}>{v} ?</option>
+        )}
         {list.map((a) => (
           <option key={a.path} value={a.path}>
             {a.name}
@@ -233,12 +412,23 @@ function FieldEditor({ entity, component, field, value }: { entity: string; comp
         ))}
       </select>
     );
-  } else if (ty.kind === 'scene') {
-    const v = String(value ?? '');
-    const names = (useEditor.getState().session?.project.scenes ?? []).map((p) => p.split('/').pop()!.replace(/\.cwscene$/, ''));
+  } else if (ty.kind === "scene") {
+    const v = String(value ?? "");
+    const names = (useEditor.getState().session?.project.scenes ?? []).map(
+      (p) =>
+        p
+          .split("/")
+          .pop()!
+          .replace(/\.cwscene$/, ""),
+    );
     input = (
-      <select className="cw-input cw-select" aria-label={label} value={v} onChange={(ev) => set(ev.target.value)}>
-        <option value="">{t('insp.noObject')}</option>
+      <select
+        className="cw-input cw-select"
+        aria-label={label}
+        value={v}
+        onChange={(ev) => set(ev.target.value)}
+      >
+        <option value="">{t("insp.noObject")}</option>
         {v && !names.includes(v) && <option value={v}>{v} ?</option>}
         {names.map((n) => (
           <option key={n} value={n}>
@@ -247,14 +437,23 @@ function FieldEditor({ entity, component, field, value }: { entity: string; comp
         ))}
       </select>
     );
-  } else if (ty.kind === 'object') {
-    const v = String(value ?? '');
+  } else if (ty.kind === "object") {
+    const v = String(value ?? "");
     const doc = useEditor.getState().doc;
-    const list = (doc?.entities ?? []).filter((x) => !ty.component || x.components[ty.component] !== undefined);
+    const list = (doc?.entities ?? []).filter(
+      (x) => !ty.component || x.components[ty.component] !== undefined,
+    );
     input = (
-      <select className="cw-input cw-select" aria-label={label} value={v} onChange={(ev) => set(ev.target.value)}>
-        <option value="">{t('insp.noObject')}</option>
-        {v && !list.some((x) => x.id === v) && <option value={v}>{t('insp.missingObject')}</option>}
+      <select
+        className="cw-input cw-select"
+        aria-label={label}
+        value={v}
+        onChange={(ev) => set(ev.target.value)}
+      >
+        <option value="">{t("insp.noObject")}</option>
+        {v && !list.some((x) => x.id === v) && (
+          <option value={v}>{t("insp.missingObject")}</option>
+        )}
         {list.map((x) => (
           <option key={x.id} value={x.id}>
             {x.name}
@@ -267,11 +466,11 @@ function FieldEditor({ entity, component, field, value }: { entity: string; comp
       <input
         className="cw-input"
         aria-label={label}
-        defaultValue={String(value ?? '')}
-        key={String(value ?? '')}
+        defaultValue={String(value ?? "")}
+        key={String(value ?? "")}
         onKeyDown={(ev) => {
           ev.stopPropagation();
-          if (ev.key === 'Enter') ev.currentTarget.blur();
+          if (ev.key === "Enter") ev.currentTarget.blur();
         }}
         onBlur={(ev) => set(ev.currentTarget.value)}
       />
@@ -289,13 +488,19 @@ function FieldEditor({ entity, component, field, value }: { entity: string; comp
 }
 
 /** Data the editor has no definition for (from a newer version or a hand edit): shown read-only. */
-function UnknownComponent({ name, data }: { name: string; data: Record<string, unknown> }) {
+function UnknownComponent({
+  name,
+  data,
+}: {
+  name: string;
+  data: Record<string, unknown>;
+}) {
   return (
     <Section title={name}>
       {Object.entries(data).map(([k, v]) => (
         <div key={k} className="cw-f">
           <span>{k}</span>
-          <code>{typeof v === 'object' ? JSON.stringify(v) : String(v)}</code>
+          <code>{typeof v === "object" ? JSON.stringify(v) : String(v)}</code>
         </div>
       ))}
     </Section>
@@ -306,9 +511,22 @@ function UnknownComponent({ name, data }: { name: string; data: Record<string, u
  * A model's material slots, each painted with the file's own material or a project material (the parts of a
  * chicken: feathers, beak, comb …). The Paint tool can do the same by clicking a part of the model.
  */
-function ModelMaterials({ entity, path, value }: { entity: string; path: string; value: Record<string, string> }) {
+function ModelMaterials({
+  entity,
+  path,
+  value,
+  maps,
+}: {
+  entity: string;
+  path: string;
+  value: Record<string, string>;
+  maps: Record<string, ModelMaps>;
+}) {
   const [slots, setSlots] = useState<string[] | null>(null);
-  const materials = useEditor((st) => st.session?.project.settings.materials) ?? [];
+  const [open, setOpen] = useState<string | null>(null);
+  const textures = useEditor((st) => st.assets.textures);
+  const materials =
+    useEditor((st) => st.session?.project.settings.materials) ?? [];
   useEffect(() => {
     let live = true;
     setSlots(null);
@@ -325,42 +543,145 @@ function ModelMaterials({ entity, path, value }: { entity: string; path: string;
     const next = { ...value };
     if (id) next[slot] = id;
     else delete next[slot];
-    useEditor.getState().setComponentField(entity, 'model', 'materials', Object.keys(next).length ? next : undefined);
+    useEditor
+      .getState()
+      .setComponentField(
+        entity,
+        "model",
+        "materials",
+        Object.keys(next).length ? next : undefined,
+      );
+  };
+  const setMap = (slot: string, kind: ModelMapKind, path: string) => {
+    const one: ModelMaps = { ...maps[slot] };
+    if (path) one[kind] = path;
+    else delete one[kind];
+    const next = { ...maps };
+    if (Object.keys(one).length) next[slot] = one;
+    else delete next[slot];
+    useEditor
+      .getState()
+      .setComponentField(
+        entity,
+        "model",
+        "maps",
+        Object.keys(next).length ? next : undefined,
+      );
   };
   return (
-    <div className="cw-model-mats" role="group" aria-label={t('model.materials')}>
-      <div className="cw-model-mats-h">{t('model.materials')}</div>
+    <div
+      className="cw-model-mats"
+      role="group"
+      aria-label={t("model.materials")}
+    >
+      <div className="cw-model-mats-h">{t("model.materials")}</div>
       {slots.map((slot) => {
-        const v = value[slot] ?? '';
+        const v = value[slot] ?? "";
+        const own = maps[slot] ?? {};
+        const count = Object.keys(own).length;
         return (
-          <div className="cw-f" key={slot}>
-            <span title={slot}>{slot}</span>
-            <select className="cw-input cw-select" aria-label={`${t('model.material')} ${slot}`} value={v} onChange={(ev) => set(slot, ev.target.value)}>
-              <option value="">{t('model.asInFile')}</option>
-              {v && !materials.some((m) => m.id === v) && <option value={v}>{t('model.missing')}</option>}
-              {materials.map((m) => (
-                <option key={m.id} value={m.id}>
-                  {m.name}
-                </option>
-              ))}
-            </select>
-          </div>
+          <Fragment key={slot}>
+            <div className="cw-f">
+              <span title={slot}>{slot}</span>
+              <select
+                className="cw-input cw-select"
+                aria-label={`${t("model.material")} ${slot}`}
+                value={v}
+                onChange={(ev) => set(slot, ev.target.value)}
+              >
+                <option value="">{t("model.asInFile")}</option>
+                {v && !materials.some((m) => m.id === v) && (
+                  <option value={v}>{t("model.missing")}</option>
+                )}
+                {materials.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.name}
+                  </option>
+                ))}
+              </select>
+              {!v && (
+                <button
+                  type="button"
+                  className={`cw-model-maps-btn${open === slot ? " on" : ""}`}
+                  aria-expanded={open === slot}
+                  onClick={() => setOpen(open === slot ? null : slot)}
+                >
+                  {count ? `${t("model.maps")} ${count}` : t("model.maps")}
+                </button>
+              )}
+            </div>
+            {!v && open === slot && (
+              <div
+                className="cw-model-maps"
+                role="group"
+                aria-label={`${t("model.maps")}: ${slot}`}
+              >
+                {MODEL_MAP_KINDS.map((kind) => {
+                  const p = own[kind] ?? "";
+                  return (
+                    <div className="cw-f" key={kind}>
+                      <span>{t(`model.map.${kind}`)}</span>
+                      <select
+                        className="cw-input cw-select"
+                        aria-label={`${t(`model.map.${kind}`)} ${slot}`}
+                        value={p}
+                        onChange={(ev) => setMap(slot, kind, ev.target.value)}
+                      >
+                        <option value="">{t("model.asInFile")}</option>
+                        {p && !textures.some((x) => x.path === p) && (
+                          <option value={p}>{t("model.missing")}</option>
+                        )}
+                        {textures.map((x) => (
+                          <option key={x.path} value={x.path}>
+                            {x.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  );
+                })}
+                <p className="cw-hint">
+                  {textures.length
+                    ? t("model.mapsHint")
+                    : t("model.noTextures")}
+                </p>
+              </div>
+            )}
+          </Fragment>
         );
       })}
-      <p className="cw-hint">{materials.length ? t('model.materialsHint') : t('model.noMaterials')}</p>
+      <p className="cw-hint">
+        {materials.length ? t("model.materialsHint") : t("model.noMaterials")}
+      </p>
     </div>
   );
 }
 
 /** A project material or texture, or none: a compact dropdown (the full picker is in the Paint tool). */
-export function MaterialSelect({ label, value, onChange, none }: { label: string; value: string; onChange: (v: string) => void; none?: string }) {
-  const materials = useEditor((s) => s.session?.project.settings.materials) ?? [];
+export function MaterialSelect({
+  label,
+  value,
+  onChange,
+  none,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  none?: string;
+}) {
+  const materials =
+    useEditor((s) => s.session?.project.settings.materials) ?? [];
   const textures = useEditor((s) => s.assets.textures);
   return (
-    <select className="cw-input cw-select" aria-label={label} value={value} onChange={(ev) => onChange(ev.target.value)}>
-      <option value="">{none ?? t('field.none')}</option>
+    <select
+      className="cw-input cw-select"
+      aria-label={label}
+      value={value}
+      onChange={(ev) => onChange(ev.target.value)}
+    >
+      <option value="">{none ?? t("field.none")}</option>
       {materials.length > 0 && (
-        <optgroup label={t('assets.materials')}>
+        <optgroup label={t("assets.materials")}>
           {materials.map((m) => (
             <option key={m.id} value={m.id}>
               {m.name}
@@ -369,7 +690,7 @@ export function MaterialSelect({ label, value, onChange, none }: { label: string
         </optgroup>
       )}
       {textures.length > 0 && (
-        <optgroup label={t('assets.textures')}>
+        <optgroup label={t("assets.textures")}>
           {textures.map((x) => (
             <option key={x.path} value={x.path}>
               {x.name}
@@ -382,31 +703,60 @@ export function MaterialSelect({ label, value, onChange, none }: { label: string
 }
 
 /** A project effect (VFX workspace), or none. */
-function EffectSelect({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
+function EffectSelect({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+}) {
   const effects = useEditor((s) => s.session?.project.settings.effects) ?? [];
   return (
     <span className="cw-row-pick">
-      <select className="cw-input cw-select" aria-label={label} value={value} onChange={(ev) => onChange(ev.target.value)}>
-        <option value="">{t('field.none')}</option>
+      <select
+        className="cw-input cw-select"
+        aria-label={label}
+        value={value}
+        onChange={(ev) => onChange(ev.target.value)}
+      >
+        <option value="">{t("field.none")}</option>
         {effects.map((x) => (
           <option key={x.id} value={x.id}>
             {x.name}
           </option>
         ))}
       </select>
-      <Button size="sm" onClick={() => useEditor.getState().setWorkspace('vfx')}>
-        {getLang() === 'ru' ? 'Изменить' : 'Edit'}
+      <Button
+        size="sm"
+        onClick={() => useEditor.getState().setWorkspace("vfx")}
+      >
+        {getLang() === "ru" ? "Изменить" : "Edit"}
       </Button>
     </span>
   );
 }
 
 /** A project plant, or none. */
-function PlantSelect({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
+function PlantSelect({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+}) {
   const plants = useEditor((s) => s.session?.project.settings.plants) ?? [];
   return (
-    <select className="cw-input cw-select" aria-label={label} value={value} onChange={(ev) => onChange(ev.target.value)}>
-      <option value="">{t('field.none')}</option>
+    <select
+      className="cw-input cw-select"
+      aria-label={label}
+      value={value}
+      onChange={(ev) => onChange(ev.target.value)}
+    >
+      <option value="">{t("field.none")}</option>
       {plants.map((p) => (
         <option key={p.id} value={p.id}>
           {p.name}
@@ -415,4 +765,3 @@ function PlantSelect({ label, value, onChange }: { label: string; value: string;
     </select>
   );
 }
-

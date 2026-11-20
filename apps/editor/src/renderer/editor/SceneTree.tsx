@@ -71,6 +71,7 @@ export function SceneTree() {
     { label: t('edit.rename'), shortcut: 'F2', disabled: selection.length !== 1, onSelect: () => s.startRename(selection[0]!) },
     { label: t('edit.duplicate'), disabled: !selection.length, onSelect: s.duplicateSelection },
     { label: t('view.frame'), disabled: !selection.length, onSelect: s.frameSelection },
+    { label: t('prefab.make'), disabled: !selection.length, onSelect: () => s.openDialog('makePrefab') },
     { label: t('glb.export'), disabled: !selection.length, onSelect: () => s.openDialog('exportGlb') },
     'separator',
     { label: t('edit.delete'), disabled: !selection.length, onSelect: s.deleteSelection },

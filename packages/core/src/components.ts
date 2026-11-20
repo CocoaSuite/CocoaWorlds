@@ -29,7 +29,13 @@ export type ModelData = {
   materials?: Record<string, string>;
   /** `#rrggbb` multiplied into every material's colour (white: none). */
   tint?: string;
+  /** Texture maps in place of those in the file, by material slot (project texture paths). */
+  maps?: Record<string, ModelMaps>;
 };
+/** The texture maps of a model's material slot that can be swapped for project textures. */
+export type ModelMapKind = 'color' | 'normal' | 'roughness' | 'metalness' | 'ao' | 'emissive';
+export const MODEL_MAP_KINDS: ModelMapKind[] = ['color', 'normal', 'roughness', 'metalness', 'ao', 'emissive'];
+export type ModelMaps = Partial<Record<ModelMapKind, string>>;
 export type ConveyorData = { speed: number; direction: 'north' | 'south' | 'east' | 'west' };
 export type BreakableData = { health: number };
 

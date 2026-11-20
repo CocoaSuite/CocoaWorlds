@@ -133,7 +133,7 @@ const loader = new THREE.TextureLoader();
 const images = new Map<string, Promise<THREE.Texture>>();
 
 /** A project image, loaded once; each material gets its own copy (its own repeat and scroll). */
-function loadImage(path: string): Promise<THREE.Texture> {
+export function loadImage(path: string): Promise<THREE.Texture> {
   let p = images.get(path);
   if (!p) {
     p = assetUrl(path).then((url) => loader.loadAsync(url));
