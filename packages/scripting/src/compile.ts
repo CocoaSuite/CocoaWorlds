@@ -3,7 +3,7 @@
  * the compiler turns each handler into a flat list of instructions for the VM. A handler with an error is
  * reported and left out, so one broken script never stops the rest of the game.
  */
-import { PLAYER_MOVE_KINDS, PLAYER_NUMBERS, PLAYER_WAYS, PLAYER_YES_NO, type Direction, type Expr, type LightProp, type Handler, type Place, type PlayerMoveKind, type PlayerStateKind, type Ref, type Script, type Statement, type ValueType } from './model';
+import { LENS_PROPS, PLAYER_MOVE_KINDS, PLAYER_NUMBERS, PLAYER_WAYS, PLAYER_YES_NO, type Direction, type LensProp, type LookMode, type Expr, type LightProp, type Handler, type Place, type PlayerMoveKind, type PlayerStateKind, type Ref, type Script, type Statement, type ValueType } from './model';
 
 /** What the checker needs to know about the scene. */
 export interface SceneInfo {
@@ -143,6 +143,10 @@ export type Op =
   | { op: 'lit' }
   /** Pushes something about the player's body or movement. */
   | { op: 'pstate'; what: PlayerStateKind }
+  /** Pushes a camera lens setting as it is now. */
+  | { op: 'lens'; prop: LensProp }
+  /** Pops reach, then an object; pushes whether the player looks at it. */
+  | { op: 'looking'; mode: LookMode }
   | { op: 'halt' };
 
 /** How far (units) “When the player uses this” reaches unless it says otherwise. */
@@ -151,7 +155,7 @@ export const USE_REACH = 96;
 export type GameAction = 'hurt' | 'heal' | 'addScore' | 'giveArmour';
 export type GameValue = 'health' | 'score' | 'armour';
 
-export type ActionName = 'move' | 'turn' | 'turnTo' | 'return' | 'show' | 'hide' | 'turnOn' | 'turnOff' | 'startTrain' | 'stopTrain' | 'walkTo' | 'runAway' | 'wander' | 'setSide' | 'freeze' | 'unfreeze' | 'viewFrom' | 'remove' | 'scale' | 'physical' | 'push' | 'moveTo' | 'teleport' | 'damage' | 'place' | 'pickUp' | 'drop' | 'unhide' | 'silence' | 'unsilence' | 'playerSize' | 'playerSpeed' | 'playerJump' | 'playerGravity' | 'playerMoves' | 'playerWay' | 'playerNormal';
+export type ActionName = 'move' | 'turn' | 'turnTo' | 'return' | 'show' | 'hide' | 'turnOn' | 'turnOff' | 'startTrain' | 'stopTrain' | 'walkTo' | 'runAway' | 'wander' | 'setSide' | 'freeze' | 'unfreeze' | 'viewFrom' | 'remove' | 'scale' | 'physical' | 'push' | 'moveTo' | 'teleport' | 'damage' | 'place' | 'pickUp' | 'drop' | 'unhide' | 'silence' | 'unsilence' | 'playerSize' | 'playerSpeed' | 'playerJump' | 'playerGravity' | 'playerMoves' | 'playerWay' | 'playerNormal' | 'lensSet' | 'lensLook' | 'lensFocus' | 'lensReset';
 
 export type CompiledEvent =
   | { kind: 'start' }
@@ -161,6 +165,7 @@ export type CompiledEvent =
   | { kind: 'useHolding'; item: string | null; reach: number }
   | { kind: 'die' }
   | { kind: 'playerMove'; what: PlayerMoveKind }
+  | { kind: 'looks' | 'looksAway'; mode: LookMode; reach: number }
   | { kind: 'breaks' }
   | { kind: 'printed' }
   | { kind: 'hit' }
@@ -290,6 +295,11 @@ class HandlerCompiler {
     else if (ev.kind === 'playerMove') {
       if (!PLAYER_MOVE_KINDS.includes(ev.what)) this.problem(ev.id, 'Pick what the player does.');
       else event = { kind: 'playerMove', what: ev.what };
+    }
+    else if (ev.kind === 'looks' || ev.kind === 'looksAway') {
+      const reach = this.reachOf(ev.reach);
+      if (ev.mode !== 'aim' && ev.mode !== 'view') this.problem(ev.id, 'Pick how the player looks: with the crosshair, or anywhere in view.');
+      else if (reach !== null) event = { kind: ev.kind, mode: ev.mode, reach };
     }
     else if (ev.kind === 'breaks') event = { kind: 'breaks' };
     else if (ev.kind === 'printed') event = { kind: 'printed' };
@@ -810,6 +820,32 @@ class HandlerCompiler {
         this.emit({ op: 'ref', ref: { player: true } });
         this.emit({ op: 'act', name: 'playerNormal', argc: 0 });
         break;
+      case 'setLens':
+        if (!LENS_PROPS.includes(s.prop)) this.problem(s.id, 'Pick a camera setting.');
+        this.emit({ op: 'ref', ref: { player: true } });
+        this.emit({ op: 'push', v: s.prop });
+        this.expect(s.value, 'number', 'This must be a number.');
+        this.expect(s.seconds, 'number', 'The time must be a number of seconds.');
+        this.emit({ op: 'act', name: 'lensSet', argc: 3 });
+        break;
+      case 'lensLook':
+        if (!s.look) this.problem(s.id, 'Pick a look.');
+        this.emit({ op: 'ref', ref: { player: true } });
+        this.emit({ op: 'push', v: s.look });
+        this.expect(s.seconds, 'number', 'The time must be a number of seconds.');
+        this.emit({ op: 'act', name: 'lensLook', argc: 2 });
+        break;
+      case 'lensFocus':
+        this.emit({ op: 'ref', ref: { player: true } });
+        if (s.at === null) this.emit({ op: 'push', v: null });
+        else this.pushPlace(s.at, s.id);
+        this.emit({ op: 'act', name: 'lensFocus', argc: 1 });
+        break;
+      case 'lensReset':
+        this.emit({ op: 'ref', ref: { player: true } });
+        this.expect(s.seconds, 'number', 'The time must be a number of seconds.');
+        this.emit({ op: 'act', name: 'lensReset', argc: 1 });
+        break;
       case 'viewFrom':
         this.actTarget(s.target, s.id);
         this.expect(s.seconds, 'number', 'The time must be a number of seconds.');
@@ -1051,6 +1087,16 @@ class HandlerCompiler {
       case 'lightOn':
         this.lightTarget(e.target, e.id);
         this.emit({ op: 'lit' });
+        return 'boolean';
+      case 'lensValue':
+        if (!LENS_PROPS.includes(e.prop)) this.problem(e.id, 'Pick a camera setting.');
+        this.emit({ op: 'lens', prop: e.prop });
+        return 'number';
+      case 'looking':
+        if ('player' in e.target) this.problem(e.id, 'Pick an object to look at.');
+        this.pushRef(e.target, e.id);
+        this.expect(e.reach, 'number', 'The distance must be a number of units.');
+        this.emit({ op: 'looking', mode: e.mode === 'view' ? 'view' : 'aim' });
         return 'boolean';
       case 'playerState':
         if (PLAYER_NUMBERS.includes(e.what)) {

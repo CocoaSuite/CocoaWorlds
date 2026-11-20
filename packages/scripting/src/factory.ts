@@ -64,6 +64,9 @@ export function newEvent(kind: EventKind, zone: Ref = self): EventBlock {
       return { id: id(), kind, what: '' };
     case 'playerMove':
       return { id: id(), kind, what: 'start' };
+    case 'looks':
+    case 'looksAway':
+      return { id: id(), kind, mode: 'aim', reach: num(2048) };
   }
 }
 
@@ -215,6 +218,14 @@ export function newStatement(kind: StatementKind, opts: { target?: Ref; variable
       return { id: id(), kind, way: 'jump', on: false };
     case 'playerNormal':
       return { id: id(), kind };
+    case 'setLens':
+      return { id: id(), kind, prop: 'vignette', value: num(0.8), seconds: num(0.2) };
+    case 'lensLook':
+      return { id: id(), kind, look: 'vhs', seconds: num(1) };
+    case 'lensFocus':
+      return { id: id(), kind, at: target };
+    case 'lensReset':
+      return { id: id(), kind, seconds: num(1) };
   }
 }
 
@@ -272,5 +283,9 @@ export function newExpr(kind: ExprKind, opts: { variable?: string } = {}): Expr 
       return { id: id(), kind };
     case 'playerState':
       return { id: id(), kind, what: 'moving' };
+    case 'lensValue':
+      return { id: id(), kind, prop: 'vignette' };
+    case 'looking':
+      return { id: id(), kind, target: self, mode: 'aim', reach: num(2048) };
   }
 }

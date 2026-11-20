@@ -1897,12 +1897,14 @@ export class ViewportEngine {
 
   /** Whether Play's frames are drawn through occlusion and bloom's render target (shaders are compiled to match). */
   private drawsViaTarget(): boolean {
-    return (this.ao ??= new AoRenderer(this.renderer)).active(this.doc?.settings);
+    return !!this.play?.usesLens || (this.ao ??= new AoRenderer(this.renderer)).active(this.doc?.settings);
   }
 
   private renderAo(cam: THREE.Camera): boolean {
     if (!(this.play || this.gameLighting)) return false;
-    return (this.ao ??= new AoRenderer(this.renderer)).render(this.scene, cam, this.doc?.settings);
+    // (In Play, with the lens as blocks have set it.)
+    const settings = this.play && this.doc ? this.play.drawSettings(this.doc.settings) : this.doc?.settings;
+    return (this.ao ??= new AoRenderer(this.renderer)).render(this.scene, cam, settings, !!this.play?.usesLens);
   }
 
   /** The session whose shaders are compiled: it plays (ticks and is drawn) from then on. */

@@ -64,10 +64,10 @@ import {
   expandRepeats,
   workInternal,
   parkAssets,
-  uiShown,
+  uiShown, LENS_PRESETS, lensOf, type LensSettings,
 } from '@cocoaworlds/core';
 import { EventBus } from './events';
-import { DIRECTIONS, ScriptRunner, compileScript, type PlayerMoveKind, type PlayerStateKind, type ScriptSave, type ActionName, type GameValueDef, type Problem, type Program, type SceneInfo, type Script, type Value } from '@cocoaworlds/scripting';
+import { DIRECTIONS, LENS_PROPS, ScriptRunner, compileScript, type LensProp, type LookMode, type PlayerMoveKind, type PlayerStateKind, type ScriptSave, type ActionName, type GameValueDef, type Problem, type Program, type SceneInfo, type Script, type Value } from '@cocoaworlds/scripting';
 import { scriptTargets } from './script-targets';
 import { PLAYER, Player, fallDamage, type PlayerInput } from './player';
 import { Weapons, type V3 } from './weapons';
@@ -200,6 +200,8 @@ export interface SavedScene {
   stoppedSounds?: string[];
   /** The world silenced; the save menu blocked by scripts. */
   silent?: boolean;
+  /** Camera lens settings blocks set (where their fades were going), their switches, and what is kept in focus. */
+  lens?: { set: Record<string, number>; flags?: { dof?: boolean; autoFocus?: boolean; grainColor?: boolean }; focus?: Value };
   noSaving?: boolean;
 }
 
@@ -325,6 +327,30 @@ const rgbOf = (c: string): number[] => {
   return [(n >> 16) & 255, (n >> 8) & 255, n & 255].map((v) => v / 255);
 };
 type Quat = { x: number; y: number; z: number; w: number };
+
+/** “Looks at it (anywhere in view)”: within this many degrees of where the player looks. */
+export const VIEW_ANGLE = 30;
+
+/** Lens numbers kept in their ranges (as the Inspector keeps them). */
+function clampLens(k: LensProp, v: number): number {
+  const c = (lo: number, hi: number) => Math.max(lo, Math.min(hi, Number.isFinite(v) ? v : 0));
+  switch (k) {
+    case 'distortion':
+      return c(-1, 1);
+    case 'focus':
+      return c(1, 1e6);
+    case 'focusRange':
+      return c(0, 1e6);
+    case 'grainSize':
+      return c(1, 8);
+    case 'grainSpeed':
+      return c(0, 60);
+    case 'scanlineSize':
+      return c(2, 16);
+    default:
+      return c(0, 1);
+  }
+}
 
 /** The heaviest thing the player can pick up (kg). */
 const MAX_CARRY = 50;
@@ -868,6 +894,15 @@ export class GameWorld {
     if (this.stoppedSounds.size) out.stoppedSounds = [...this.stoppedSounds];
     if (this.silent) out.silent = true;
     if (this.savingBlocked) out.noSaving = true;
+    this.lensNow();
+    if (this.lensFades.size || this.lensFocus !== undefined || Object.keys(this.lensFlags).length) {
+      // (A fade back to the scene's look is saved as there.)
+      if (this.lensResetAt < 0) {
+        const set: Record<string, number> = {};
+        for (const [k, f] of this.lensFades) set[k] = r(f.to[0]!, 1e4);
+        out.lens = { set, flags: { ...this.lensFlags }, ...(this.lensFocus !== undefined ? { focus: this.lensFocus } : {}) };
+      }
+    }
     return out;
   }
 
@@ -960,6 +995,18 @@ export class GameWorld {
     this.stoppedSounds = new Set(Array.isArray(save.stoppedSounds) ? save.stoppedSounds.filter((x): x is string => typeof x === 'string') : []);
     this.silent = save.silent === true;
     this.savingBlocked = save.noSaving === true;
+    this.lensFades.clear();
+    this.lensFlags = {};
+    this.lensFocus = undefined;
+    this.lensResetAt = -1;
+    if (save.lens && typeof save.lens === 'object') {
+      for (const [k, v] of Object.entries(save.lens.set ?? {}))
+        if ((LENS_PROPS as string[]).includes(k) && typeof v === 'number' && Number.isFinite(v)) this.lensFades.set(k as LensProp, { from: null, to: [clampLens(k as LensProp, v)], t0: 0, t1: 0 });
+      const f = save.lens.flags ?? {};
+      for (const k of ['dof', 'autoFocus', 'grainColor'] as const) if (typeof f[k] === 'boolean') this.lensFlags[k] = f[k];
+      const at = save.lens.focus;
+      if (at === null || at === 'aim' || (at && typeof at === 'object' && typeof (at as { ref?: unknown }).ref === 'string')) this.lensFocus = at;
+    }
     if (typeof save.hour === 'number' && Number.isFinite(save.hour)) this.dayHour = ((save.hour % 24) + 24) % 24;
     const pl = save.player, p = this.player, at = v3(pl?.at);
     if (withPlayer && p && pl && at) {
@@ -1365,6 +1412,8 @@ export class GameWorld {
       },
       read: (name) => (name === 'health' ? this.health : name === 'armour' ? this.armour : this.score),
       player: (what) => this.playerState(what),
+      lens: (prop) => Math.round((this.lensNow()[prop] as number) * 1000) / 1000,
+      looking: (target, mode, reach) => this.lookingAt(target, mode, reach),
       getGlobal: (name) => this.globals.get(name) ?? null,
       setGlobal: (name, value) => void this.globals.set(name, value),
       say: (text, seconds, from) => this.say(text, seconds, from),
@@ -2900,6 +2949,7 @@ export class GameWorld {
         this.player.speedScale = (1 - WEAK.slow * this.weakness()) * (1 + (this.mine?.stat('moveSpeed') ?? 0)) * (this.mine?.moveScale() ?? 1) * this.dev.speed;
         this.player.step(STEP);
         this.movementEvents();
+        this.lookEvents();
         this.playerNoise();
         if (this.player.landingSpeed) {
           // (No fall damage in the mine.)
@@ -3666,6 +3716,160 @@ export class GameWorld {
     }
   }
 
+  // ── Camera lens (blocks) ──
+
+  /** Lens settings blocks are fading (over the scene's own), switches they set, and what the camera focuses on. */
+  private lensFades = new Map<LensProp, Fade>();
+  private lensFlags: { dof?: boolean; autoFocus?: boolean; grainColor?: boolean } = {};
+  /** A place to keep in focus (an object, the player, 'aim'), null for the middle of the screen, undefined: as the scene says. */
+  private lensFocus: Value | undefined = undefined;
+  /** When a “back to the scene's look” fade ends (then the blocks' settings are forgotten). */
+  private lensResetAt = -1;
+
+  /** The scene's own lens settings as shown (the main switch off: no effects at all). */
+  private lensBase(): LensSettings {
+    const b = lensOf(this.doc.settings);
+    return b.enabled ? b : { ...b, enabled: true, dof: false, distortion: 0, aberration: 0, vignette: 0, grain: 0, scanlines: 0, flicker: 0 };
+  }
+
+  /** The lens settings to draw with now: the scene's, with what blocks set over them. */
+  lensNow(): LensSettings {
+    if (this.lensResetAt >= 0 && this.time >= this.lensResetAt) {
+      this.lensFades.clear();
+      this.lensFlags = {};
+      this.lensFocus = undefined;
+      this.lensResetAt = -1;
+    }
+    const base = lensOf(this.doc.settings);
+    if (!this.lensFades.size && this.lensFocus === undefined && !Object.keys(this.lensFlags).length) return base;
+    const out: LensSettings = { ...this.lensBase(), ...this.lensFlags };
+    for (const [k, f] of this.lensFades) out[k] = fadeAt(f, this.time)[0]!;
+    if (this.lensFocus !== undefined && this.lensFocus !== null && this.player) {
+      const at = this.placePoint(this.lensFocus);
+      if (at) {
+        const e = this.player.eye();
+        out.autoFocus = false;
+        out.focus = Math.max(1, Math.hypot(at[0] - e[0], at[1] - e[1], at[2] - e[2]));
+      }
+    }
+    return out;
+  }
+
+  /** Fade one lens setting to `value` over `seconds` (0: at once). */
+  private setLens(prop: LensProp, value: number, seconds: number): void {
+    if (!LENS_PROPS.includes(prop)) throw new Error('Pick a camera setting.');
+    const now = this.lensNow();
+    this.lensResetAt = -1;
+    let from = now[prop] as number;
+    if (prop === 'blur') {
+      // (Depth of field comes on for it, from no blur.)
+      if (!now.dof) from = 0;
+      this.lensFlags.dof = true;
+    }
+    if (prop === 'focus') {
+      this.lensFlags.autoFocus = false;
+      this.lensFocus = undefined;
+    }
+    this.lensFades.set(prop, { from: [from], to: [clampLens(prop, value)], t0: this.time, t1: this.time + seconds });
+  }
+
+  /** Fade to a ready-made look. */
+  private lensLook(id: string, seconds: number): void {
+    const p = LENS_PRESETS.find((x) => x.id === id);
+    if (!p) throw new Error(`There is no camera look called “${id}”.`);
+    const now = this.lensNow();
+    const look: Partial<LensSettings> = p.lens;
+    for (const k of LENS_PROPS) {
+      let to = look[k] as number | undefined;
+      if (k === 'blur') to = look.dof ? (look.blur ?? now.blur) : 0;
+      if (to === undefined || k === 'focus') continue;
+      const from = k === 'blur' && !now.dof ? 0 : (now[k] as number);
+      this.lensFades.set(k, { from: [from], to: [clampLens(k, to)], t0: this.time, t1: this.time + seconds });
+    }
+    this.lensFlags.dof = now.dof || !!look.dof;
+    if (look.autoFocus !== undefined) this.lensFlags.autoFocus = look.autoFocus;
+    if (look.grainColor !== undefined) this.lensFlags.grainColor = look.grainColor;
+    this.lensResetAt = -1;
+  }
+
+  /** Fade back to the scene's own look; once there, blocks' settings are forgotten. */
+  private lensReset(seconds: number): void {
+    const now = this.lensNow(), base = this.lensBase();
+    for (const k of [...this.lensFades.keys()]) {
+      const to = k === 'blur' && !base.dof ? 0 : (base[k] as number);
+      this.lensFades.set(k, { from: [now[k] as number], to: [to], t0: this.time, t1: this.time + seconds });
+    }
+    this.lensFocus = undefined;
+    if (base.autoFocus !== now.autoFocus) this.lensFlags.autoFocus = base.autoFocus;
+    this.lensResetAt = this.time + seconds;
+    if (!(seconds > 0)) this.lensNow();
+  }
+
+  // ── Looking at things ──
+
+  /** “When the player looks at / away from this”: whether each was looked at last step. */
+  private looked = new Map<string, boolean>();
+
+  /** Start the stacks for objects the player starts or stops looking at. */
+  private lookEvents(): void {
+    const ws = this.runner.lookWatchers();
+    // (Not on the very first step: until physics has stepped once, its queries can't see anything.)
+    if (!ws.length || this.time <= 0) return;
+    let aim: ReturnType<GameWorld['lookHit']> | undefined;
+    for (const w of ws) {
+      const key = `${w.target}\n${w.mode}\n${w.reach}`;
+      let on: boolean;
+      if (w.mode === 'aim') {
+        aim ??= this.lookHit(Math.max(...ws.filter((x) => x.mode === 'aim').map((x) => x.reach)));
+        on = !!aim?.id && aim.distance <= w.reach && this.withParents(aim.id).includes(w.target) && this.seen(w.target);
+      } else on = this.inView(w.target, w.reach);
+      if (on === (this.looked.get(key) ?? false)) continue;
+      this.looked.set(key, on);
+      this.runner.dispatch({ type: on ? 'looks' : 'looksAway', target: w.target, mode: w.mode, reach: w.reach });
+    }
+  }
+
+  /** Whether the player looks at an object now (the value block). */
+  private lookingAt(target: string, mode: LookMode, reach: number): boolean {
+    if (!this.player || target === 'player') return false;
+    if (mode === 'view') return this.inView(target, reach);
+    const aim = this.lookHit(reach);
+    return !!aim?.id && aim.distance <= reach && this.withParents(aim.id).includes(target) && this.seen(target);
+  }
+
+  /** (Tests.) */
+  lookingAtForTest(target: string, mode: LookMode, reach: number): boolean {
+    return this.lookingAt(target, mode, reach);
+  }
+
+  /** Not hidden by a block, nor taken out of the game. */
+  private seen(id: string): boolean {
+    if (this.gone.has(id)) return false;
+    const b = this.bodies.get(id);
+    return !b || b.info.id !== id || b.visible;
+  }
+
+  /**
+   * In view: its pivot within VIEW_ANGLE of where the player looks, within `reach`, and the first thing between the
+   * eyes and it is it (or part of it), or nothing.
+   */
+  private inView(id: string, reach: number): boolean {
+    const p = this.player;
+    if (!p || !this.seen(id)) return false;
+    const at = this.placePoint({ ref: id });
+    if (!at) return false;
+    const e = p.eye(), d = p.lookDirection();
+    const to = [at[0] - e[0], at[1] - e[1], at[2] - e[2]] as P3;
+    const dist = Math.hypot(...to);
+    if (dist > reach) return false;
+    if (dist < 1) return true;
+    if ((to[0] * d[0] + to[1] * d[1] + to[2] * d[2]) / dist < Math.cos((VIEW_ANGLE * Math.PI) / 180)) return false;
+    const hit = this.world.castRay(new RAPIER.Ray({ x: e[0], y: e[1], z: e[2] }, { x: to[0] / dist, y: to[1] / dist, z: to[2] / dist }), dist, true, RAPIER.QueryFilterFlags.EXCLUDE_SENSORS, 0xffffffff, p.collider, undefined, (c) => !this.isHeld(c));
+    if (!hit || hit.timeOfImpact >= dist - 4) return true;
+    const owner = this.owner.get(hit.collider.handle);
+    return !!owner && this.withParents(owner).includes(id);
+  }
+
   /** The camera for the player's view, smoothed between physics steps. */
   playerView(): { eye: [number, number, number]; yaw: number; pitch: number; thirdPerson: boolean; feet: [number, number, number] } | null {
     const p = this.player;
@@ -4164,6 +4368,15 @@ export class GameWorld {
       return null;
     }
     if (name === 'playerNormal') return p.resetBody(), null;
+    if (name === 'lensSet') return this.setLens(args[0] as LensProp, n(args[1] ?? 0), Math.max(0, n(args[2] ?? 0))), null;
+    if (name === 'lensLook') return this.lensLook(String(args[0] ?? ''), Math.max(0, n(args[1] ?? 0))), null;
+    if (name === 'lensReset') return this.lensReset(Math.max(0, n(args[0] ?? 0))), null;
+    if (name === 'lensFocus') {
+      const at = args[0] ?? null;
+      this.lensFocus = at === null ? null : at;
+      if (at === null) this.lensFlags.autoFocus = true;
+      return null;
+    }
     if (name === 'playerWay') {
       const way = args[0];
       if (way === 'forward' || way === 'back' || way === 'left' || way === 'right' || way === 'jump' || way === 'crouch') p.moves = { ...p.moves, [way]: args[1] !== false };

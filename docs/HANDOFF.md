@@ -620,3 +620,17 @@ Next, if wanted: blocks to change lens settings while playing (blur when hurt, g
 in the editor too, so with Lighting: Game a click lands where the undistorted picture would be (switch to Preview
 to edit precisely); lens dirt and flares.
 
+### 35. Camera lens blocks; “When the player looks at / away from this” (2026-11-20)
+
+Status: done. Blocks fade the lens settings of #34 while playing (`setLens`, `lensLook`, `lensFocus`, `lensReset`,
+value `lensValue`), over the scene's own (`GameWorld.lensNow`: fades by game time, `lensFlags`, `lensFocus`; the
+renderer draws with `PlaySession.drawSettings`; `usesLens` sends frames through the composer from the start, via
+`AoRenderer.render(..., always)`). Events `looks` / `looksAway` with `mode` aim (crosshair: `lookHit`) or view
+(pivot within `VIEW_ANGLE` 30° and a clear line of sight: `inView`) and a reach; `ScriptRunner.lookWatchers` (cached,
+reset when scripts come or go) tells the world what to check each step (not on the first step); value `looking`.
+Saved: `SavedScene.lens`. Docs: `docs/scripting.md` (The camera's look; Looking at things). Tests:
+`packages/runtime/test/lens-look.test.ts`.
+
+Next, if wanted: an e2e test that builds these blocks in the panel; “anywhere in view” by the real camera (third
+person, field of view) and by the object's bounds rather than its pivot.
+

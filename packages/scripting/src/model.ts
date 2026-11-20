@@ -63,7 +63,11 @@ export type Expr =
   /** Whether today is day `a`. */
   | { id: string; kind: 'isDay'; a: Expr }
   /** Something about the player's body or movement (size, speed now, units walked, on the ground …). */
-  | { id: string; kind: 'playerState'; what: PlayerStateKind };
+  | { id: string; kind: 'playerState'; what: PlayerStateKind }
+  /** A camera lens or noise setting as it is now (the scene's, or what a block set). */
+  | { id: string; kind: 'lensValue'; prop: LensProp }
+  /** Whether the player is looking at an object now (as “When the player looks at this” judges it). */
+  | { id: string; kind: 'looking'; target: Ref; mode: LookMode; reach: Expr };
 
 export type LightProp = 'intensity' | 'range' | 'angle' | 'color';
 
@@ -87,6 +91,15 @@ export type PlayerFactor = 'speed' | 'jump' | 'gravity';
 /** Ways of moving scripts can allow or take away. */
 export type PlayerWay = 'forward' | 'back' | 'left' | 'right' | 'jump' | 'crouch';
 export const PLAYER_WAYS: PlayerWay[] = ['forward', 'back', 'left', 'right', 'jump', 'crouch'];
+
+/** Camera lens and noise settings scripts can fade (numbers; see LensSettings in core). */
+export type LensProp =
+  | 'blur' | 'focus' | 'focusRange' | 'distortion' | 'aberration' | 'vignette' | 'vignetteSoftness'
+  | 'grain' | 'grainSize' | 'grainSpeed' | 'grainShadows' | 'scanlines' | 'scanlineSize' | 'flicker';
+export const LENS_PROPS: LensProp[] = ['blur', 'focus', 'focusRange', 'distortion', 'aberration', 'vignette', 'vignetteSoftness', 'grain', 'grainSize', 'grainSpeed', 'grainShadows', 'scanlines', 'scanlineSize', 'flicker'];
+
+/** How “looks at” is judged: the crosshair is on it (`aim`), or it is in view and not hidden behind anything (`view`). */
+export type LookMode = 'aim' | 'view';
 
 export type Direction = 'up' | 'down' | 'north' | 'south' | 'east' | 'west';
 export type Axis = 'up' | 'north' | 'east';
@@ -160,6 +173,14 @@ type StatementKind_ =
   | { id: string; kind: 'playerWay'; way: PlayerWay; on: boolean }
   /** The player's size, speed, jump, gravity and ways of moving back to normal. */
   | { id: string; kind: 'playerNormal' }
+  /** Fade a camera lens or noise setting to a value over some seconds (0: at once). */
+  | { id: string; kind: 'setLens'; prop: LensProp; value: Expr; seconds: Expr }
+  /** Fade the camera to a ready-made look (a LENS_PRESETS id: 'vhs', 'film' …) over some seconds. */
+  | { id: string; kind: 'lensLook'; look: string; seconds: Expr }
+  /** Focus the camera on a place (an object, the player, where the player looks), or on the middle again (null). */
+  | { id: string; kind: 'lensFocus'; at: Place | null }
+  /** Fade the camera back to the scene's own lens settings. */
+  | { id: string; kind: 'lensReset'; seconds: Expr }
   /** Background sound and Sound components fall silent (footsteps, hits and sounds blocks play stay). */
   | { id: string; kind: 'silence' }
   | { id: string; kind: 'unsilence' }
@@ -265,6 +286,11 @@ export type EventBlock = { limit?: EventLimit } & (
   | { id: string; kind: 'die' }
   /** The player moved: started, kept moving, stopped, jumped, landed, crouched … (see PlayerMoveKind). */
   | { id: string; kind: 'playerMove'; what: PlayerMoveKind }
+  /**
+   * The player starts looking at this object (or anything inside it), within `reach` units, or stops. `aim`: the
+   * crosshair is on it; `view`: it is in view (near the middle of the screen) and not hidden behind anything.
+   */
+  | { id: string; kind: 'looks' | 'looksAway'; mode: LookMode; reach: Expr }
   /** This 3D printer finished a print (“the thing that entered” is the printed copy). */
   | { id: string; kind: 'printed' }
   /** This breakable object's health reached 0 (it is removed after this starts). */
@@ -348,7 +374,7 @@ export function blockId(): string {
 export function* walk(script: Script): Generator<{ id: string; kind: string }> {
   function* expr(e: Expr): Generator<{ id: string; kind: string }> {
     yield e;
-    for (const k of ['a', 'b', 'min', 'max'] as const) {
+    for (const k of ['a', 'b', 'min', 'max', 'reach'] as const) {
       const sub = (e as Record<string, unknown>)[k] as Expr | undefined;
       if (sub && typeof sub === 'object' && 'kind' in sub) yield* expr(sub);
     }
@@ -370,7 +396,7 @@ export function* walk(script: Script): Generator<{ id: string; kind: string }> {
     if (h.event.kind === 'atHour') yield* expr(h.event.hour);
     if (h.event.kind === 'dayStarts') yield* expr(h.event.day);
     if (h.event.kind === 'near' || h.event.kind === 'far') yield* expr(h.event.distance);
-    if ((h.event.kind === 'use' || h.event.kind === 'useHolding' || h.event.kind === 'press') && h.event.reach) yield* expr(h.event.reach);
+    if ((h.event.kind === 'use' || h.event.kind === 'useHolding' || h.event.kind === 'press' || h.event.kind === 'looks' || h.event.kind === 'looksAway') && h.event.reach) yield* expr(h.event.reach);
     yield* stmts(h.body);
   }
 }

@@ -6,7 +6,7 @@
  * preview watched with the free camera.
  */
 import { navInWorkers } from './nav-pool';
-import { SceneDoc, expandRepeats, workInternal, parkAssets, posterOf, readComponent, type ParticlesData, type VfxData, type ColliderData, type GameRules, type GameValue, type EntityData, type GooglyEyesData, type ModelData, type PrinterData, type SceneFile, type SignData, type TerrainData } from '@cocoaworlds/core';
+import { SceneDoc, expandRepeats, workInternal, parkAssets, posterOf, readComponent, type ParticlesData, type VfxData, type ColliderData, type GameRules, type GameValue, type EntityData, type GooglyEyesData, type LensSettings, type ModelData, type PrinterData, type SceneFile, type SignData, type TerrainData } from '@cocoaworlds/core';
 import { buildMesh, isInvisibleMaterial, type Brush, type VoxelField, type WorldBrush } from '@cocoaworlds/geometry';
 import { GameWorld, initPhysics, runDevCommand, POSE, AT, NPC, type AcousticVoice, type BuildPrompt, type FrameSnapshot, type Hearing, type NavGrid, type BodyInfo, type ModelMesh, type SavedProgress, type Travel, type UiState, type PlayerInput, type PlayerStatus, type ScriptLog, type TriggerEvent } from '@cocoaworlds/runtime';
 
@@ -212,6 +212,7 @@ export class PlaySession {
     // Models of objects without a body of their own: still, or carried by the moving object they are inside.
     // Still ones of the same model are drawn together (A2c); the rest one by one.
     const scripted = JSON.stringify(doc.entities.filter((x) => x.components.script).map((x) => x.components.script)) + JSON.stringify(doc.settings.ui ?? '');
+    this.usesLens = /"kind":"(setLens|lensLook|lensFocus)"/.test(scripted);
     const stillModels = new Map<string, { data: ModelData; copies: { id: string; matrix: THREE.Matrix4 }[] }>();
     for (const e of doc.entities) {
       // (Creatures draw their own model, where they walk.)
@@ -1411,6 +1412,14 @@ export class PlaySession {
   get day(): number {
     return this.world.day;
   }
+  /** Scripts change the camera lens: frames go through the post-processing target from the start (shaders compiled for it). */
+  usesLens = false;
+
+  /** The scene's settings with the lens as blocks have set it now, for drawing. */
+  drawSettings<T extends object>(settings: T): T & { lens: Partial<LensSettings> } {
+    return { ...settings, lens: this.world.lensNow() };
+  }
+
   /** The time of day (hours). */
   get dayHour(): number {
     return this.world.dayHour;

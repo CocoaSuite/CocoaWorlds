@@ -49,13 +49,14 @@ export class AoRenderer {
   }
 
   /** Draw `scene` from `cam` with occlusion, bloom and lens effects, if any is on. False: nothing drawn (draw it plainly). */
-  render(scene: THREE.Scene, cam: THREE.Camera, settings: Look | undefined): boolean {
+  /** `always`: through the target even with everything off (scripts may turn a lens effect on while playing). */
+  render(scene: THREE.Scene, cam: THREE.Camera, settings: Look | undefined, always = false): boolean {
     const s = aoOf(settings);
     const b = bloomOf(settings);
     const l = lensOf(settings);
     const aoOn = s.enabled && s.strength > 0 && !this.software;
     const bloomOn = b.enabled && b.strength > 0;
-    if (!aoOn && !bloomOn && !lensOn(l)) return false;
+    if (!always && !aoOn && !bloomOn && !lensOn(l)) return false;
     const size = this.r.getSize(new THREE.Vector2());
     if (!this.c || this.c.cam !== cam || this.c.scene !== scene) {
       this.dispose();

@@ -22,6 +22,9 @@ import {
   freshIds,
   innerLists,
   PLAYER_MOVE_KINDS,
+  LENS_PROPS,
+  type LensProp,
+  type LookMode,
   PLAYER_NUMBERS,
   PLAYER_WAYS,
   PLAYER_YES_NO,
@@ -42,14 +45,14 @@ import {
   type VariableDef,
   emptyScript,
 } from '@cocoaworlds/scripting';
-import { CREATURE_MOMENTS, UI_SCRIPT_OWNER, uiOf, type GameValue } from '@cocoaworlds/core';
+import { CREATURE_MOMENTS, LENS_PRESETS, UI_SCRIPT_OWNER, uiOf, type GameValue } from '@cocoaworlds/core';
 import { Button, ContextMenu, IconButton, type MenuEntry } from '@cocoaworlds/ui';
 import { Picker, type PickGroup, type PickItem } from './Picker';
 import { Fragment, createContext, useContext, useEffect, useMemo, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { getLang, t } from '../../i18n';
 import { useEditor } from '../../store';
 import { sceneInfo } from './scene-info';
-import { EVENT_GROUPS, PLAYER_MOVE_WORD, PLAYER_STATE_WORD, PLAYER_WAY_WORD, STATEMENT_GROUPS, VALUES_FOR, axisLabel, directionLabel, eventName, groupTitle, statementName, valueName, w } from './words';
+import { EVENT_GROUPS, LENS_PROP_WORD, PLAYER_MOVE_WORD, PLAYER_STATE_WORD, PLAYER_WAY_WORD, STATEMENT_GROUPS, VALUES_FOR, axisLabel, directionLabel, eventName, groupTitle, statementName, valueName, w } from './words';
 
 interface Ctx {
   owner: string;
@@ -451,6 +454,17 @@ function EventRow({ ev, onRemove, onCopy, pick }: { ev: EventBlock; onRemove: ()
       </>
     );
   else if (ev.kind === 'die') content = w('die');
+  else if (ev.kind === 'looks' || ev.kind === 'looksAway')
+    content = (
+      <>
+        {w(ev.kind)}{' '}
+        <select className="cw-input cw-mini" aria-label={`${w(ev.kind)}: ${w('lookAim')} / ${w('lookView')}`} value={ev.mode} onChange={(e) => set({ mode: e.target.value as LookMode } as Partial<EventBlock>)}>
+          <option value="aim">{w('lookAim')}</option>
+          <option value="view">{w('lookView')}</option>
+        </select>
+        , {w('within')} <ReachSlot value={ev.reach} fallback={2048} label={`${w(ev.kind)} ${w('within')}`} onChange={(reach) => set({ reach } as Partial<EventBlock>)} /> {w('units')}
+      </>
+    );
   else if (ev.kind === 'playerMove')
     content = (
       <>
@@ -995,6 +1009,47 @@ function statementWords(s: Statement, set: (patch: Record<string, unknown>, merg
       );
     case 'playerNormal':
       return w('playerNormal');
+    case 'setLens':
+      return (
+        <>
+          {w('setLens')}{' '}
+          <select className="cw-input cw-mini" aria-label={statementName('setLens')} value={s.prop} onChange={(e) => set({ prop: e.target.value as LensProp })}>
+            {LENS_PROPS.map((p) => (
+              <option key={p} value={p}>
+                {w(LENS_PROP_WORD[p]!)}
+              </option>
+            ))}
+          </select>{' '}
+          {w('setTo')} <ExprSlot expr={s.value} type="number" label={`${statementName('setLens')} ${w('setTo')}`} /> {w('over')}{' '}
+          <ExprSlot expr={s.seconds} type="number" label={`${statementName('setLens')} ${w('over')}`} /> {w('seconds')}
+        </>
+      );
+    case 'lensLook':
+      return (
+        <>
+          {w('lensLook')}{' '}
+          <select className="cw-input cw-mini" aria-label={statementName('lensLook')} value={s.look} onChange={(e) => set({ look: e.target.value })}>
+            {LENS_PRESETS.map((p) => (
+              <option key={p.id} value={p.id}>
+                {getLang() === 'ru' ? p.ru : p.en}
+              </option>
+            ))}
+          </select>{' '}
+          {w('over')} <ExprSlot expr={s.seconds} type="number" label={`${statementName('lensLook')} ${w('over')}`} /> {w('seconds')}
+        </>
+      );
+    case 'lensFocus':
+      return (
+        <>
+          {w('lensFocus')} <RefSlot value={s.at} allowNone allowPlayer allowAim noneLabel={w('lensMiddle')} onChange={(at) => set({ at })} label={statementName('lensFocus')} />
+        </>
+      );
+    case 'lensReset':
+      return (
+        <>
+          {w('lensReset')} <ExprSlot expr={s.seconds} type="number" label={statementName('lensReset')} /> {w('seconds')}
+        </>
+      );
     case 'freezePlayer':
     case 'unfreezePlayer':
     case 'unhide':
@@ -1518,6 +1573,32 @@ function ExprSlot({ expr, type, label }: { expr: Expr; type: 'number' | 'boolean
     case 'score':
     case 'copy':
       body = <span className="cw-pill-text">{w(expr.kind)}</span>;
+      break;
+    case 'lensValue':
+      body = (
+        <>
+          {w('lensValue')}{' '}
+          <select className="cw-input cw-mini" aria-label={`${label} ${w('lensValue')}`} value={expr.prop} onChange={(e) => set({ prop: e.target.value })}>
+            {LENS_PROPS.map((p) => (
+              <option key={p} value={p}>
+                {w(LENS_PROP_WORD[p]!)}
+              </option>
+            ))}
+          </select>
+        </>
+      );
+      break;
+    case 'looking':
+      body = (
+        <>
+          {w('looking')} <RefSlot value={expr.target} onChange={(target) => target && set({ target })} label={`${label} ${w('looking')}`} />{' '}
+          <select className="cw-input cw-mini" aria-label={`${label} ${w('lookAim')} / ${w('lookView')}`} value={expr.mode} onChange={(e) => set({ mode: e.target.value })}>
+            <option value="aim">{w('lookAim')}</option>
+            <option value="view">{w('lookView')}</option>
+          </select>
+          , {w('within')} <ExprSlot expr={expr.reach} type="number" label={`${label} ${w('within')}`} /> {w('units')}
+        </>
+      );
       break;
     case 'playerState': {
       const kinds = type === 'boolean' ? PLAYER_YES_NO : type === 'number' ? PLAYER_NUMBERS : [...PLAYER_NUMBERS, ...PLAYER_YES_NO];

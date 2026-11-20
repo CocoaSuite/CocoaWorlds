@@ -283,6 +283,33 @@ const W = {
   stCanRight: ['can go right', 'может идти вправо'],
   stCanJump: ['can jump', 'может прыгать'],
   stCanCrouch: ['can crouch', 'может приседать'],
+  // the camera lens
+  setLens: ['Set the camera’s', 'Сделать у камеры'],
+  lensLook: ['Change the camera to the look', 'Перевести камеру в вид'],
+  lensFocus: ['Focus the camera on', 'Навести фокус камеры на'],
+  lensMiddle: ['the middle of the screen', 'центр экрана'],
+  lensReset: ['Put the camera back to the scene’s look over', 'Вернуть камере вид сцены за'],
+  lensValue: ['the camera’s', 'у камеры:'],
+  lpBlur: ['blur (depth of field)', 'размытие (глубина резкости)'],
+  lpFocus: ['focus distance', 'расстояние фокуса'],
+  lpFocusRange: ['sharp range', 'резкую зону'],
+  lpDistortion: ['distortion', 'искажение'],
+  lpAberration: ['colour fringes', 'цветные края'],
+  lpVignette: ['vignette', 'виньетку'],
+  lpVignetteSoftness: ['vignette softness', 'мягкость виньетки'],
+  lpGrain: ['film grain', 'зерно'],
+  lpGrainSize: ['grain size', 'размер зерна'],
+  lpGrainSpeed: ['grain changes per second', 'смену зерна в секунду'],
+  lpGrainShadows: ['grain in shadows', 'зерно в тенях'],
+  lpScanlines: ['scanlines', 'строки развёртки'],
+  lpScanlineSize: ['scanline size', 'размер строк'],
+  lpFlicker: ['flicker', 'мерцание'],
+  // looking
+  looks: ['When the player looks at this', 'Когда игрок смотрит на это'],
+  looksAway: ['When the player looks away from this', 'Когда игрок отводит взгляд от этого'],
+  lookAim: ['with the crosshair', 'прицелом'],
+  lookView: ['anywhere in view', 'в поле зрения'],
+  looking: ['the player looks at', 'игрок смотрит на'],
 } satisfies Record<string, Pair>;
 
 export const w = (k: keyof typeof W) => pick(W[k] as Pair);
@@ -332,6 +359,8 @@ const PALETTE_EVENT: Record<EventKind, Pair> = {
   far: ['When the player goes away from this', 'Когда игрок уходит от этого'],
   useHolding: ['When the player uses this while holding something', 'Когда игрок использует это, держа что-то'],
   playerMove: ['When the player moves, stops, jumps, lands …', 'Когда игрок идёт, останавливается, прыгает, приземляется …'],
+  looks: ['When the player looks at this', 'Когда игрок смотрит на это'],
+  looksAway: ['When the player looks away from this', 'Когда игрок отводит взгляд от этого'],
 };
 export const eventName = (k: EventKind) => pick(PALETTE_EVENT[k]);
 
@@ -353,6 +382,10 @@ const PALETTE_STMT: Record<StatementKind, Pair> = {
   playerMoves: ['Let the player move only some ways', 'Разрешить игроку только некоторые движения'],
   playerWay: ['Allow or stop one way of moving', 'Разрешить или запретить одно движение'],
   playerNormal: ['Player back to normal (size, speed, moves)', 'Игрок снова обычный (размер, скорость, движения)'],
+  setLens: ['Set a camera effect (blur, vignette, grain …)', 'Эффект камеры (размытие, виньетка, зерно …)'],
+  lensLook: ['Change the camera to a look (VHS, old film …)', 'Вид камеры (видеокассета, плёнка …)'],
+  lensFocus: ['Focus the camera on something', 'Навести фокус камеры'],
+  lensReset: ['Camera back to the scene’s look', 'Камера снова как в сцене'],
   silence: ['Silence the world', 'Тишина в мире'],
   unsilence: ['Bring the world’s sounds back', 'Вернуть звуки мира'],
   unfreezePlayer: ['Let the player move again', 'Снова дать игроку двигаться'],
@@ -425,6 +458,7 @@ export const EVENT_GROUPS: { title: Pair; kinds: EventKind[] }[] = [
   { title: ['Game', 'Игра'], kinds: ['start', 'every', 'die'] },
   { title: ['Player actions', 'Действия игрока'], kinds: ['use', 'press', 'useHolding', 'key', 'useItem'] },
   { title: ['Player movement', 'Движение игрока'], kinds: ['playerMove'] },
+  { title: ['Looking', 'Взгляд'], kinds: ['looks', 'looksAway'] },
   { title: ['Distance and zones', 'Расстояние и зоны'], kinds: ['near', 'far', 'enter', 'leave'] },
   { title: ['Time', 'Время'], kinds: ['newDay', 'dayStarts', 'atHour'] },
   { title: ['Messages', 'Сообщения'], kinds: ['message', 'messageStop'] },
@@ -445,6 +479,7 @@ export const STATEMENT_GROUPS: { title: Pair; kinds: StatementKind[] }[] = [
   { title: ['Sound', 'Звук'], kinds: ['playSound', 'stopSound', 'silence', 'unsilence'] },
   { title: ['Player', 'Игрок'], kinds: ['teleport', 'hurt', 'heal', 'giveArmour', 'freezePlayer', 'unfreezePlayer', 'unhide', 'viewFrom', 'changeScene'] },
   { title: ['Player body and movement', 'Тело и движение игрока'], kinds: ['playerSize', 'playerSet', 'playerMoves', 'playerWay', 'playerNormal'] },
+  { title: ['Camera', 'Камера'], kinds: ['setLens', 'lensLook', 'lensFocus', 'lensReset'] },
   { title: ['Score and items', 'Счёт и предметы'], kinds: ['addScore', 'giveItem', 'takeItem'] },
   { title: ['Creatures', 'Существа'], kinds: ['walkTo', 'setSide', 'runAway', 'wander', 'noise', 'hint'] },
   { title: ['Screen and signs', 'Экран и таблички'], kinds: ['say', 'showScreen', 'hideScreen', 'toggleScreen', 'showUi', 'hideUi', 'setUiText', 'addRow', 'removeRow', 'clearList', 'setText'] },
@@ -482,15 +517,17 @@ const VALUE: Record<ExprKind, Pair> = {
   day: ['The day', 'День'],
   isDay: ['Today is day …', 'Сегодня день …'],
   playerState: ['The player’s size, speed, moving …', 'Размер, скорость, движение игрока …'],
+  lensValue: ['A camera effect (blur, vignette …)', 'Эффект камеры (размытие, виньетка …)'],
+  looking: ['The player looks at …', 'Игрок смотрит на …'],
 };
 export const valueName = (k: ExprKind) => pick(VALUE[k]);
 
 /** Which value blocks fit a slot of a given type. */
 export const VALUES_FOR: Record<'number' | 'boolean' | 'text' | 'any', ExprKind[]> = {
-  number: ['number', 'variable', 'varOf', 'maths', 'random', 'distance', 'time', 'timeOfDay', 'day', 'clock', 'health', 'armour', 'score', 'itemCount', 'playerState'],
-  boolean: ['boolean', 'inside', 'holds', 'hiding', 'lightOn', 'isDay', 'variable', 'varOf', 'compare', 'logic', 'not', 'playerState'],
-  text: ['text', 'variable', 'varOf', 'join', 'number', 'object', 'day', 'score', 'itemCount', 'selectedItem', 'pickedRow', 'playerState'],
-  any: ['number', 'text', 'boolean', 'variable', 'varOf', 'maths', 'compare', 'logic', 'not', 'inside', 'holds', 'hiding', 'lightOn', 'isDay', 'random', 'distance', 'join', 'time', 'timeOfDay', 'day', 'clock', 'health', 'armour', 'score', 'itemCount', 'selectedItem', 'pickedRow', 'object', 'copy', 'playerState'],
+  number: ['number', 'variable', 'varOf', 'maths', 'random', 'distance', 'time', 'timeOfDay', 'day', 'clock', 'health', 'armour', 'score', 'itemCount', 'playerState', 'lensValue'],
+  boolean: ['boolean', 'inside', 'holds', 'hiding', 'lightOn', 'isDay', 'variable', 'varOf', 'compare', 'logic', 'not', 'playerState', 'looking'],
+  text: ['text', 'variable', 'varOf', 'join', 'number', 'object', 'day', 'score', 'itemCount', 'selectedItem', 'pickedRow', 'playerState', 'lensValue'],
+  any: ['number', 'text', 'boolean', 'variable', 'varOf', 'maths', 'compare', 'logic', 'not', 'inside', 'holds', 'hiding', 'lightOn', 'isDay', 'random', 'distance', 'join', 'time', 'timeOfDay', 'day', 'clock', 'health', 'armour', 'score', 'itemCount', 'selectedItem', 'pickedRow', 'object', 'copy', 'playerState', 'lensValue', 'looking'],
 };
 
 /** Labels for the player's movement events, ways of moving and what can be read about the player. */
@@ -504,4 +541,9 @@ export const PLAYER_STATE_WORD: Record<string, keyof typeof W> = {
   size: 'stSize', speed: 'stSpeed', jump: 'stJump', gravity: 'stGravity', speedNow: 'stSpeedNow', walked: 'stWalked', fallSpeed: 'stFallSpeed', landSpeed: 'stLandSpeed',
   moving: 'stMoving', onGround: 'stOnGround', crouching: 'stCrouching', swimming: 'stSwimming', climbing: 'stClimbing',
   canForward: 'stCanForward', canBack: 'stCanBack', canLeft: 'stCanLeft', canRight: 'stCanRight', canJump: 'stCanJump', canCrouch: 'stCanCrouch',
+};
+export const LENS_PROP_WORD: Record<string, keyof typeof W> = {
+  blur: 'lpBlur', focus: 'lpFocus', focusRange: 'lpFocusRange', distortion: 'lpDistortion', aberration: 'lpAberration', vignette: 'lpVignette',
+  vignetteSoftness: 'lpVignetteSoftness', grain: 'lpGrain', grainSize: 'lpGrainSize', grainSpeed: 'lpGrainSpeed', grainShadows: 'lpGrainShadows',
+  scanlines: 'lpScanlines', scanlineSize: 'lpScanlineSize', flicker: 'lpFlicker',
 };

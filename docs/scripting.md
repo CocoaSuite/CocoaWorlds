@@ -135,6 +135,41 @@ the size (a resize under way is saved finished), the three settings, the ways of
 Code: `Player.resize`, `scriptSpeed`, `scriptJump`, `scriptGravity`, `moves`, `moving`, `walked` (`player.ts`);
 `GameWorld.movementEvents`, `playerState` (`world.ts`). Tests: `packages/runtime/test/player-body.test.ts`.
 
+## The camera's look
+
+Blocks under **Camera** change the scene's **Camera lens and noise** settings ([rendering.md](rendering.md#camera-lens-and-noise))
+while playing, on top of the scene's own.
+
+| Block | What it does |
+|---|---|
+| Set the camera's *blur / focus distance / sharp range / distortion / colour fringes / vignette / vignette softness / film grain / grain size / grain changes per second / grain in shadows / scanlines / scanline size / flicker* to *n* over *s* seconds | Fades from what it is now (0 seconds: at once); kept in the Inspector's ranges. Blur turns depth of field on; a focus distance turns focusing on the middle off. Shows even when the scene's lens is switched off |
+| Change the camera to the look *Cinematic / Old film / VHS tape / …* over *s* seconds | Fades every setting the look has |
+| Focus the camera on *an object / the player / where the player looks / the middle of the screen* | Keeps that in focus as it moves (depth of field must be on: set a blur) |
+| Put the camera back to the scene's look over *s* seconds | Fades back, then forgets what blocks set |
+| the camera's *setting* (value) | As it is now, mid-fade included |
+
+A damage flash: *When the player … → set the camera's vignette to 0.8 over 0.1 s, set colour fringes to 0.6 over 0.1 s,
+wait 0.4, put the camera back to the scene's look over 1 s*. A kept world keeps what blocks set (fades saved
+finished; a fade back saved as the scene's look) and what is kept in focus. Scenes whose scripts use these blocks
+are drawn through the post-processing target from the start, so the first change doesn't stall to compile shaders.
+Code: `GameWorld.lensNow`, `setLens`, `lensLook`, `lensReset` (`world.ts`); `PlaySession.drawSettings`.
+
+## Looking at things
+
+**When the player looks at this** / **When the player looks away from this**, *with the crosshair* or *anywhere in
+view*, within *n* units (an event on the object; it counts for anything inside it too):
+
+- *With the crosshair*: the first thing under the crosshair is this object (or part of it), within reach.
+- *Anywhere in view*: the object's pivot is within 30° of where the player looks (`VIEW_ANGLE`) and within reach,
+  and nothing solid is between the eyes and it (or what is in the way is part of it).
+- Each starts once when it changes: looking at it, then away. Hidden or removed objects aren't looked at. The
+  player's eyes count, not a third-person camera.
+- The value **the player looks at *object* (crosshair / anywhere in view) within *n* u** asks the same thing now.
+
+Something the player hasn't looked at yet is also “not looked at”, but *looks away* starts only after a *looks at*.
+Code: `GameWorld.lookEvents`, `inView` (`world.ts`); `ScriptRunner.lookWatchers` (`vm.ts`).
+Tests: `packages/runtime/test/lens-look.test.ts`.
+
 ## Game values, messages and signs
 
 **Game values** are shared by every script in the project: Cash, Gems, Round. Add them with **+ Game value**

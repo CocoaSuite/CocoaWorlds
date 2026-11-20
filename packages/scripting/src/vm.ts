@@ -9,7 +9,7 @@
  *  - A failing action or a division by zero stops only that thread, with a message pointing at the block.
  */
 import type { ActionName, CompiledHandler, GameAction, GameValue, Op, Program, Value } from './compile';
-import type { LightProp, PlayerMoveKind, PlayerStateKind, Ref } from './model';
+import type { LensProp, LightProp, LookMode, PlayerMoveKind, PlayerStateKind, Ref } from './model';
 
 export const STEP_BUDGET = 10_000;
 
@@ -36,6 +36,10 @@ export interface ScriptHost {
   read?(name: GameValue): number;
   /** Something about the player's body or movement. */
   player?(what: PlayerStateKind): Value;
+  /** A camera lens setting as it is now. */
+  lens?(prop: LensProp): number;
+  /** Whether the player looks at an object (and what it is inside), within `reach`. */
+  looking?(target: string, mode: LookMode, reach: number): boolean;
   /** Game values shared by all scripts. */
   getGlobal?(name: string): Value;
   setGlobal?(name: string, value: Value): void;
@@ -183,6 +187,8 @@ export type RunnerEvent =
   | { type: 'die' }
   /** The player moved: started, kept moving, stopped, jumped, landed … */
   | { type: 'player'; what: PlayerMoveKind }
+  /** The player started looking at `target` (or stopped), judged as `mode` within `reach`. */
+  | { type: 'looks' | 'looksAway'; target: string; mode: LookMode; reach: number }
   /** A breakable object's health reached 0. */
   | { type: 'breaks'; target: string }
   /** A 3D printer finished printing `copy`. */
@@ -241,6 +247,7 @@ export class ScriptRunner {
       spent: new Map(),
     };
     this.instances.push(inst);
+    this.watchers = null;
     if (this.started) for (const h of program.handlers) if (h.event.kind === 'start') this.spawn(inst, h, null);
     const later = this.savedLater.get(program.owner);
     if (later) {
@@ -308,6 +315,7 @@ export class ScriptRunner {
   removeOwners(ids: Set<string>): void {
     for (const t of this.threads.filter((t) => ids.has(t.inst.program.owner))) this.finish(t);
     this.instances = this.instances.filter((i) => !ids.has(i.program.owner));
+    this.watchers = null;
   }
 
   /**
@@ -363,6 +371,20 @@ export class ScriptRunner {
     this.runAll();
   }
 
+  /** The objects with “When the player looks at / away from this” stacks: how each is judged, and how far. */
+  lookWatchers(): { target: string; mode: LookMode; reach: number }[] {
+    if (this.watchers) return this.watchers;
+    const out = new Map<string, { target: string; mode: LookMode; reach: number }>();
+    for (const inst of this.instances)
+      for (const h of inst.program.handlers) {
+        const ev = h.event;
+        if (ev.kind === 'looks' || ev.kind === 'looksAway') out.set(`${inst.program.owner}\n${ev.mode}\n${ev.reach}`, { target: inst.program.owner, mode: ev.mode, reach: ev.reach });
+      }
+    return (this.watchers = [...out.values()]);
+  }
+  /** (Worked out again when scripts come or go.) */
+  private watchers: { target: string; mode: LookMode; reach: number }[] | null = null;
+
   /** Something happened in the game: start the stacks that listen for it (they run on the next tick). */
   dispatch(e: RunnerEvent): void {
     if (e.type === 'message') return this.deliver(e.message, e.to);
@@ -397,6 +419,8 @@ export class ScriptRunner {
           if (ev.kind === 'atHour' && Math.floor((e.to - ev.hour) / 24) > Math.floor((e.from - ev.hour) / 24)) this.spawn(inst, h, null);
         } else if (e.type === 'die') {
           if (ev.kind === 'die') this.spawn(inst, h, null);
+        } else if (e.type === 'looks' || e.type === 'looksAway') {
+          if (ev.kind === e.type && inst.program.owner === e.target && ev.mode === e.mode && ev.reach === e.reach) this.spawn(inst, h, null);
         } else if (e.type === 'player') {
           if (ev.kind === 'playerMove' && ev.what === e.what) this.spawn(inst, h, null);
         } else if (e.type === 'use') {
@@ -682,6 +706,15 @@ export class ScriptRunner {
         case 'pstate':
           s.push(this.host.player?.(op.what) ?? 0);
           break;
+        case 'lens':
+          s.push(this.host.lens?.(op.prop) ?? 0);
+          break;
+        case 'looking': {
+          const reach = num(s.pop() ?? 0);
+          const target = s.pop();
+          s.push(!!target && typeof target === 'object' && (this.host.looking?.(target.ref, op.mode, reach) ?? false));
+          break;
+        }
         case 'gvar':
           s.push(this.host.getGlobal?.(op.name) ?? null);
           break;
