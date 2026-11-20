@@ -552,6 +552,8 @@ export class GameWorld {
   /** Zones by collider: `inside` is what scripts were told entered; `present` is everything in it now. */
   private triggers = new Map<number, { id: string; data: TriggerData; fired: boolean; inside: Set<string>; present: Set<string> }>();
   private pending: TriggerEvent[] = [];
+  /** Zones inside something that moves (a scripted group, a physics prop, a train): zone id → the body carrying it. */
+  private ridingZones = new Map<string, string>();
   private accumulator = 0;
   private disposed = false;
   time = 0;
@@ -1380,6 +1382,8 @@ export class GameWorld {
       this.pathPoints.set(e.id, { p: [m[12]!, m[13]!, m[14]!], data: readComponent<PathPointData>('pathPoint', e.components.pathPoint) });
     }
     for (const id of trainIds) this.addTrain(id, readComponent<TrainData>('train', doc.get(id)!.components.train));
+    // Zones inside something that moves go with it.
+    for (const z of [...this.triggers.values()]) this.rideZone(z.id);
 
     // Creatures, where they stand, facing the way they face.
     for (const e of this.npcEntities) {
@@ -2977,6 +2981,39 @@ export class GameWorld {
     this.stats.triggers++;
   }
 
+  /** Let the zone `id` ride the nearest moving body it is inside (if it isn't moved by scripts itself). */
+  private rideZone(id: string): void {
+    if (this.bodies.has(id)) return;
+    let carrier: string | undefined;
+    for (let p = this.parentOf.get(id); p && !carrier; p = this.parentOf.get(p)) {
+      const b = this.bodies.get(p);
+      carrier = b && b.info.kind !== 'zone' ? p : this.unitOf.get(p);
+      if (carrier && !this.bodies.has(carrier)) carrier = undefined;
+    }
+    if (!carrier) return;
+    let body: RAPIER.RigidBody | null = null;
+    for (const [h, z] of this.triggers) if (z.id === id) body = this.world.getCollider(h)?.parent() ?? null;
+    if (!body) return;
+    body.setBodyType(RAPIER.RigidBodyType.KinematicPositionBased, true);
+    this.track(id, 'zone', 'kinematic', body);
+    this.ridingZones.set(id, carrier);
+  }
+
+  /** Carry riding zones to where their carriers will be after this step. */
+  private moveRidingZones(): void {
+    for (const [id, carrier] of this.ridingZones) {
+      const z = this.bodies.get(id), c = this.bodies.get(carrier);
+      if (!z || !c) continue;
+      const kin = c.body.isKinematic();
+      const t = kin ? c.body.nextTranslation() : c.body.translation();
+      const q = kin ? c.body.nextRotation() : c.body.rotation();
+      const zs = z.start;
+      const m = multiply(multiply(poseFrom(t.x, t.y, t.z, q.x, q.y, q.z, q.w), c.startInverse), poseFrom(zs.p[0], zs.p[1], zs.p[2], zs.q.x, zs.q.y, zs.q.z, zs.q.w));
+      z.body.setNextKinematicTranslation({ x: m[12]!, y: m[13]!, z: m[14]! });
+      z.body.setNextKinematicRotation(quatFromMatrix(m));
+    }
+  }
+
   /** Advance by `dt` seconds of real time, in fixed physics steps. Returns the number of steps taken. */
   step(dt: number): number {
     // (Once a level change has begun, this scene is over.)
@@ -3035,6 +3072,7 @@ export class GameWorld {
       this.carryOnBelts();
       this.syncStandIns();
       this.noteVelocities();
+      this.moveRidingZones();
       this.world.step(this.events);
       this.listenForHits();
       if (this.held) this.stickHeld();
@@ -4711,6 +4749,7 @@ export class GameWorld {
         }
       }
     }
+    for (const e of parts) if (e.components.trigger) this.rideZone(ids.get(e.id)!);
     for (const id of ids.values()) {
       const b = this.bodies.get(id);
       if (b && b.info.kind !== 'zone') {

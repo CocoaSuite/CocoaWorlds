@@ -95,6 +95,21 @@ describe('GameWorld', () => {
     w.dispose();
   });
 
+  it('a trigger zone inside something that moves goes with it', () => {
+    const crate = brush('crate', [300, 0, -16], [332, 32, 16], { rigidBody: { motion: 'dynamic' } });
+    const lift = brush('lift', [-32, 100, -32], [32, 116, 32], { rigidBody: { motion: 'kinematic' } });
+    const zone = brush('zone', [-64, 0, -64], [64, 100, 64], { trigger: { detects: 'physics' } });
+    zone.parent = lift.id;
+    const w = GameWorld.create(scene(floor(), crate, lift, zone));
+    run(w, 1);
+    expect(w.drainEvents()).toEqual([]);
+    w.moveKinematic(lift.id, [316, 108, 0]);
+    run(w, 0.2);
+    const ev = w.drainEvents();
+    expect(ev.map((e) => [e.kind, e.trigger, e.other])).toEqual([['enter', zone.id, crate.id]]);
+    w.dispose();
+  });
+
   it('trigger filters: a player-only zone ignores crates', () => {
     const crate = brush('crate', [-16, 400, -16], [16, 432, 16], { rigidBody: { motion: 'dynamic' } });
     const zone = brush('zone', [-64, 100, -64], [64, 200, 64], { trigger: { detects: 'player' } });
