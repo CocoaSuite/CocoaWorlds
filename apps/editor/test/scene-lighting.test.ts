@@ -74,4 +74,26 @@ describe('scene lighting', () => {
     expect(spot.intensity).toBe(0);
     expect(spot.parent).toBe(l.group);
   });
+
+  it("the sun's shadow box reaches the whole level from wherever the camera is (no sunlight through walls)", () => {
+    const doc = setup();
+    const l = new SceneLighting();
+    const scene = new THREE.Scene();
+    const box = new THREE.Box3(new THREE.Vector3(-96, -16, -144), new THREE.Vector3(224, 192, 128));
+    l.update(doc, (id) => doc.worldMatrix(id), box, scene);
+    const sun = l.group.children.find((o) => (o as THREE.DirectionalLight).isDirectionalLight) as THREE.DirectionalLight;
+    for (const at of [new THREE.Vector3(-60, 64, 95), new THREE.Vector3(190, 64, -110), new THREE.Vector3(64, 64, -8)]) {
+      l.follow(at);
+      sun.updateMatrixWorld();
+      sun.shadow.updateMatrices(sun);
+      const m = sun.shadow.matrix;
+      for (let i = 0; i < 8; i++) {
+        const c = new THREE.Vector3(i & 1 ? box.max.x : box.min.x, i & 2 ? box.max.y : box.min.y, i & 4 ? box.max.z : box.min.z).applyMatrix4(m);
+        for (const v of [c.x, c.y, c.z]) {
+          expect(v).toBeGreaterThan(0);
+          expect(v).toBeLessThan(1);
+        }
+      }
+    }
+  });
 });

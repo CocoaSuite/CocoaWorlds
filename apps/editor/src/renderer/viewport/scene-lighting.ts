@@ -130,6 +130,7 @@ export class SceneLighting {
     const center = levelBounds.isEmpty() ? new THREE.Vector3() : levelBounds.getCenter(new THREE.Vector3());
     const radius = levelBounds.isEmpty() ? 1024 : Math.max(256, levelBounds.getSize(new THREE.Vector3()).length() / 2);
     this.shadowRadius = radius;
+    this.levelBox.copy(levelBounds);
     for (const e of lights) {
       const l = readComponent<LightData>('light', e.light as Record<string, unknown>);
       const m = new THREE.Matrix4().fromArray(e.matrix);
@@ -234,31 +235,56 @@ export class SceneLighting {
   private anyShadows = false;
 
   private shadowRadius = 1024;
+  /** The level's extent (what the sun's shadows must reach). */
+  private levelBox = new THREE.Box3();
 
   /**
    * Sun shadows cover only the area around `at` (half-size `extent`), so the shadow map stays sharp in big levels.
-   * Snapped to whole shadow texels so the edges don't crawl as the view moves.
+   * Snapped to whole shadow texels so the edges don't crawl as the view moves. The box is centred on `at`, not on
+   * the level, so it's sized to reach the level's far side from there (the level's own radius is only enough from
+   * its middle): whatever lies outside the box gets no shadow at all, and sunlight would show through walls.
    */
   follow(at: THREE.Vector3, extent = 1400): void {
     for (const sun of this.suns) {
       if (!sun.castShadow) continue;
-      const half = Math.min(extent, this.shadowRadius);
       const from = sun === this.day?.sun ? this.day.center : sun.target.position;
       const dir = sun.position.clone().sub(from).normalize();
       const up = Math.abs(dir.y) > 0.99 ? Z_AXIS : Y_AXIS;
       const q = new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().lookAt(dir, ORIGIN, up));
+      const inv = q.clone().invert();
+      const a = at.clone().applyQuaternion(inv);
+      // How far the level reaches from `at`, across the sun's view (x, y) and along it (z, + toward the sun).
+      let reach = this.shadowRadius;
+      let toSun = this.shadowRadius;
+      let away = this.shadowRadius;
+      const b = this.levelBox;
+      if (!b.isEmpty()) {
+        reach = toSun = away = 0;
+        for (let i = 0; i < 8; i++) {
+          CORNER.set(i & 1 ? b.max.x : b.min.x, i & 2 ? b.max.y : b.min.y, i & 4 ? b.max.z : b.min.z).applyQuaternion(inv).sub(a);
+          reach = Math.max(reach, Math.abs(CORNER.x), Math.abs(CORNER.y));
+          toSun = Math.max(toSun, CORNER.z);
+          away = Math.max(away, -CORNER.z);
+        }
+      }
+      // (In steps, so the texel size, and with it the shadow's edges, doesn't change with every step taken.)
+      const half = Math.min(extent, Math.max(64, Math.ceil((reach + 16) / 64) * 64));
+      const back = Math.ceil((toSun + 64) / 64) * 64;
+      const depth = back + Math.ceil((away + 64) / 64) * 64;
       const texel = (half * 2) / sun.shadow.mapSize.x;
-      const p = at.clone().applyQuaternion(q.clone().invert());
+      const p = a.clone();
       p.x = Math.round(p.x / texel) * texel;
       p.y = Math.round(p.y / texel) * texel;
       p.applyQuaternion(q);
       sun.target.position.copy(p);
       sun.target.updateMatrixWorld();
-      sun.position.copy(p).addScaledVector(dir, this.shadowRadius * 2);
+      sun.position.copy(p).addScaledVector(dir, back);
       const cam = sun.shadow.camera;
-      if (cam.right !== half) {
+      if (cam.right !== half || cam.far !== depth) {
         cam.left = cam.bottom = -half;
         cam.right = cam.top = half;
+        cam.near = 1;
+        cam.far = depth;
         cam.updateProjectionMatrix();
         sunBias(sun, half);
       }
@@ -353,14 +379,18 @@ export class SceneLighting {
   }
 }
 
-// Shadow bias that grows with the shadow-map texel, so big scenes don't get acne.
+// Shadow bias that grows with the shadow-map texel, so big scenes don't get acne. The depth bias is kept in units
+// (about half a unit, more with big texels): as a share of the shadow box's depth it would grow with the level, and
+// in a big level push surfaces right through thin walls into the light.
 function sunBias(sun: THREE.DirectionalLight, radius: number): void {
   const texel = (radius * 2) / sun.shadow.mapSize.x;
-  sun.shadow.bias = -0.0005;
+  const cam = sun.shadow.camera;
+  sun.shadow.bias = -Math.max(0.5, texel * 0.5) / Math.max(1, cam.far - cam.near);
   // (Wide enough for the soft-shadow filter's reach, a few texels.)
   sun.shadow.normalBias = Math.max(1.5, texel * 3);
 }
 
+const CORNER = new THREE.Vector3();
 const ORIGIN = new THREE.Vector3();
 const Y_AXIS = new THREE.Vector3(0, 1, 0);
 const Z_AXIS = new THREE.Vector3(0, 0, 1);
