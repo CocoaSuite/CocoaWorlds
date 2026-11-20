@@ -691,6 +691,34 @@ function StatementRow({ s, listKey }: { s: Statement; listKey: string }) {
           {w('addChoice')}
         </button>
       </>
+    ) : s.kind === 'when' ? (
+      <>
+        {s.cases.map((k, i) => (
+          <Fragment key={k.id}>
+            <div className="cw-blk-else">
+              {w('whenIs')} <ExprSlot expr={k.match} type="any" label={w('whenIs')} />
+              <IconButton icon="close" label={t('script.removeChoice')} onClick={() => set({ cases: s.cases.filter((_, j) => j !== i) })} />
+            </div>
+            <List listKey={`${s.id}:c${i}`} list={k.body} />
+          </Fragment>
+        ))}
+        <button type="button" className="cw-add-blk" onClick={() => set({ cases: [...s.cases, { id: blockId(), match: newExpr('number'), body: [] }] })}>
+          {w('addCase')}
+        </button>
+        {s.otherwise ? (
+          <>
+            <div className="cw-blk-else">
+              {w('otherwise')}
+              <IconButton icon="close" label={t('script.removeOtherwise')} onClick={() => set({ otherwise: null })} />
+            </div>
+            <List listKey={`${s.id}:otherwise`} list={s.otherwise} />
+          </>
+        ) : (
+          <button type="button" className="cw-add-blk" onClick={() => c.update((sc) => editList(sc, `${s.id}:otherwise`, () => []), 'Add otherwise')}>
+            {w('addOtherwise')}
+          </button>
+        )}
+      </>
     ) : s.kind === 'repeat' || s.kind === 'forever' || s.kind === 'while' ? (
       <List listKey={`${s.id}:body`} list={s.body} />
     ) : null;
@@ -724,7 +752,7 @@ function StatementRow({ s, listKey }: { s: Statement; listKey: string }) {
   void listKey;
 }
 
-const kindClass = (k: StatementKind) => (k === 'if' || k === 'oneOf' || k === 'repeat' || k === 'forever' || k === 'while' || k === 'wait' || k === 'stop' ? 'control' : k === 'set' || k === 'change' ? 'data' : 'action');
+const kindClass = (k: StatementKind) => (k === 'if' || k === 'when' || k === 'oneOf' || k === 'repeat' || k === 'forever' || k === 'while' || k === 'wait' || k === 'stop' ? 'control' : k === 'set' || k === 'change' ? 'data' : 'action');
 
 function statementWords(s: Statement, set: (patch: Record<string, unknown>, mergeKey?: string) => void): ReactNode {
   switch (s.kind) {
@@ -836,6 +864,12 @@ function statementWords(s: Statement, set: (patch: Record<string, unknown>, merg
       return w('forever');
     case 'oneOf':
       return w('oneOf');
+    case 'when':
+      return (
+        <>
+          {w('when')} <ExprSlot expr={s.value} type="any" label={w('when')} /> {w('whenIsDots')}
+        </>
+      );
     case 'forgetProgress':
       return w('forgetProgress');
     case 'saveGame':

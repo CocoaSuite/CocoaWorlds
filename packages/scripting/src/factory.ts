@@ -103,6 +103,14 @@ export function newStatement(kind: StatementKind, opts: { target?: Ref; variable
       return { id: id(), kind, times: num(3), body: [] };
     case 'oneOf':
       return { id: id(), kind, options: [[], []] };
+    case 'when':
+      return {
+        id: id(),
+        kind,
+        value: opts.variable ? variable(opts.variable) : num(0),
+        cases: [{ id: id(), match: num(1), body: [] }, { id: id(), match: num(2), body: [] }],
+        otherwise: null,
+      };
     case 'forever':
       return { id: id(), kind, body: [] };
     case 'while':

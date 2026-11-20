@@ -618,6 +618,31 @@ class HandlerCompiler {
         for (const j of ends) (this.code[j] as { to: number }).to = this.code.length;
         break;
       }
+      case 'when': {
+        if (!s.cases.length && !s.otherwise) {
+          this.problem(s.id, 'Add at least one case.');
+          break;
+        }
+        const slot = this.temps++;
+        const kind = this.value(s.value);
+        this.emit({ op: 'settemp', slot });
+        const ends: number[] = [];
+        for (const c of s.cases) {
+          this.stmt = s.id;
+          this.emit({ op: 'temp', slot });
+          const m = this.value(c.match);
+          if (kind !== 'unknown' && m !== 'unknown' && kind !== m) this.problem(c.match.id, 'This can never match: it is a different kind of value.', 'warning');
+          this.emit({ op: 'compare', f: '=' });
+          const jf = this.emit({ op: 'jmpf', to: -1 });
+          this.statements(c.body);
+          this.stmt = s.id;
+          ends.push(this.emit({ op: 'jmp', to: -1 }));
+          (this.code[jf] as { to: number }).to = this.code.length;
+        }
+        if (s.otherwise) this.statements(s.otherwise);
+        for (const j of ends) (this.code[j] as { to: number }).to = this.code.length;
+        break;
+      }
       case 'repeat': {
         const count = this.temps++, i = this.temps++;
         this.expect(s.times, 'number', 'Repeat needs a number of times.');

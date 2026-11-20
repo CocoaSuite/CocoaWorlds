@@ -89,6 +89,10 @@ const W = {
   oneOf: ['Do one of these at random', 'Сделать одно из этого наугад'],
   orElse: ['or', 'или'],
   addChoice: ['+ Another choice', '+ Ещё вариант'],
+  when: ['When', 'When'],
+  whenIs: ['is', 'is'],
+  whenIsDots: ['is …', 'is …'],
+  addCase: ['+ Another case', '+ Another case'],
   repeat: ['Repeat', 'Повторить'],
   times: ['times', 'раз'],
   forever: ['Repeat forever', 'Повторять всегда'],
@@ -451,6 +455,7 @@ const PALETTE_STMT: Record<StatementKind, Pair> = {
   setTime: ['Set the time of day', 'Задать время суток'],
   setDay: ['Set the day', 'Задать день'],
   oneOf: ['Do one of these at random', 'Сделать одно из этого наугад'],
+  when: ['When a value is … (pick by value)', 'When a value is … (pick by value)'],
 };
 export const statementName = (k: StatementKind) => pick(PALETTE_STMT[k]);
 
@@ -469,7 +474,7 @@ export const EVENT_GROUPS: { title: Pair; kinds: EventKind[] }[] = [
 ];
 
 export const STATEMENT_GROUPS: { title: Pair; kinds: StatementKind[] }[] = [
-  { title: ['Control', 'Управление'], kinds: ['wait', 'if', 'oneOf', 'repeat', 'while', 'forever', 'stop', 'send', 'log'] },
+  { title: ['Control', 'Управление'], kinds: ['wait', 'if', 'when', 'oneOf', 'repeat', 'while', 'forever', 'stop', 'send', 'log'] },
   { title: ['Variables', 'Переменные'], kinds: ['set', 'change', 'saveGame', 'blockSaving', 'allowSaving', 'forgetProgress'] },
   { title: ['Move', 'Движение'], kinds: ['move', 'turn', 'turnTo', 'return', 'moveTo', 'scale', 'push', 'physical'] },
   { title: ['Show and switch', 'Показ и включение'], kinds: ['show', 'hide', 'turnOn', 'turnOff', 'startTrain', 'stopTrain'] },

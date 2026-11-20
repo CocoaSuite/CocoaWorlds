@@ -490,6 +490,32 @@ describe('do one of these at random', () => {
   });
 });
 
+describe('when a value is …', () => {
+  const log = (t: string) => ({ id: t, kind: 'log', text: text(t) }) as Statement;
+  const when = (v: number, otherwise: Statement[] | null): Statement => ({
+    id: 'w',
+    kind: 'when',
+    value: { id: 'v', kind: 'number', value: v },
+    cases: [
+      { id: 'c1', match: { id: 'm1', kind: 'number', value: 1 }, body: [log('one')] },
+      { id: 'c2', match: { id: 'm2', kind: 'number', value: 2 }, body: [log('two')] },
+    ],
+    otherwise,
+  });
+  const logged = (st: Statement) => {
+    const { host, runFor } = run([['me', script([handler(newEvent('start'), st, log('after'))])]]);
+    runFor(0.2);
+    return host.log.map((l) => l.split(' ')[1]);
+  };
+  it('runs the matching case only, then carries on', () => {
+    expect(logged(when(2, [log('other')]))).toEqual(['two', 'after']);
+  });
+  it('runs otherwise when nothing matches, or nothing without it', () => {
+    expect(logged(when(5, [log('other')]))).toEqual(['other', 'after']);
+    expect(logged(when(5, null))).toEqual(['after']);
+  });
+});
+
 describe('“only once” Use stacks', () => {
   it('run the first time, then stop listening and showing their prompt', () => {
     const s = script([handler({ ...newEvent('use'), prompt: 'Open', once: true } as Handler['event'], { ...newStatement('log'), text: text('opened') } as Statement)]);

@@ -104,6 +104,9 @@ export type LookMode = 'aim' | 'view';
 export type Direction = 'up' | 'down' | 'north' | 'south' | 'east' | 'west';
 export type Axis = 'up' | 'north' | 'east';
 
+/** One case of a When block: the blocks run when the value equals `match`. */
+export type WhenCase = { id: string; match: Expr; body: Statement[] };
+
 /** `and`: it starts along with the block above, and the next block waits for both. */
 export type Statement = StatementKind_ & { and?: boolean };
 
@@ -130,6 +133,8 @@ type StatementKind_ =
   | { id: string; kind: 'forever'; body: Statement[] }
   /** Run one of the lists, picked at random (each as likely). */
   | { id: string; kind: 'oneOf'; options: Statement[][] }
+  /** Compare a value with each case in turn and run the first that equals it; `otherwise` when none does. */
+  | { id: string; kind: 'when'; value: Expr; cases: WhenCase[]; otherwise: Statement[] | null }
   /** Run the blocks inside again and again while the condition holds (once per frame at most). */
   | { id: string; kind: 'while'; condition: Expr; body: Statement[] }
   | { id: string; kind: 'stop' }
@@ -386,6 +391,7 @@ export function* walk(script: Script): Generator<{ id: string; kind: string }> {
         const sub = (s as Record<string, unknown>)[k] as Expr | undefined;
         if (sub && typeof sub === 'object' && 'kind' in sub) yield* expr(sub);
       }
+      if (s.kind === 'when') for (const c of s.cases) yield* expr(c.match);
       for (const [, list] of innerLists(s)) yield* stmts(list);
     }
   }
@@ -406,6 +412,7 @@ export function innerLists(s: Statement): [string, Statement[]][] {
   if (s.kind === 'if') return s.otherwise ? [['then', s.then], ['otherwise', s.otherwise]] : [['then', s.then]];
   if (s.kind === 'repeat' || s.kind === 'forever' || s.kind === 'while') return [['body', s.body]];
   if (s.kind === 'oneOf') return s.options.map((l, i) => [`o${i}`, l]);
+  if (s.kind === 'when') return [...s.cases.map((c, i): [string, Statement[]] => [`c${i}`, c.body]), ...(s.otherwise ? [['otherwise', s.otherwise] as [string, Statement[]]] : [])];
   return [];
 }
 
