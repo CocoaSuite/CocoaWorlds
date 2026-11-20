@@ -149,6 +149,11 @@ function registerExport(): void {
     }
     const folder = path.join(parent, `${gameFileName(project.name)} (${TARGET_LABEL[target]})`);
     const rendererDir = path.join(__dirname, '../renderer');
+    // Running from source (npm run dev): the player in dist/renderer is from the last full build, so build it now.
+    if (process.env.CW_DEV_URL) {
+      say('Building the game player from the current source…');
+      await buildPlayer(path.join(__dirname, '../..'));
+    }
     let result;
     if (target === 'web') {
       say('Writing the web game…');
@@ -277,3 +282,15 @@ app.whenReady().then(() => {
 app.on('window-all-closed', () => {
   if (!isMac) app.quit();
 });
+
+/** Build the renderer (editor and game player pages) into dist/renderer: `npm run build:renderer` in the app folder. */
+function buildPlayer(appDir: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    let out = '';
+    const child = spawn(process.platform === 'win32' ? 'npm.cmd' : 'npm', ['run', 'build:renderer'], { cwd: appDir, shell: process.platform === 'win32' });
+    child.stdout?.on('data', (d) => (out += d));
+    child.stderr?.on('data', (d) => (out += d));
+    child.on('error', reject);
+    child.on('exit', (code) => (code === 0 ? resolve() : reject(new Error(`Building the game player failed:\n${out.slice(-2000)}`))));
+  });
+}
