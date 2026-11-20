@@ -706,6 +706,15 @@ function Flow({ path, graph, sel, onSelect, wideLibrary }: { path: string; graph
   };
   addRef.current = add;
 
+  /** Image files dropped from the desktop: imported into the project, one Image node each. */
+  const dropImages = async (files: File[], at: { x: number; y: number }) => {
+    const paths = await useEditor.getState().importAssets('textures', files);
+    if (!paths.length) return;
+    const made = paths.map((image, i) => newNode('image', Math.round(at.x - 66 + i * 24), Math.round(at.y - 20 + i * 24), { image }));
+    setGraph(path, { ...graphRef.current, nodes: [...graphRef.current.nodes, ...made] }, made.length === 1 ? 'Import image' : 'Import images');
+    onSelect(made.map((n) => n.id));
+  };
+
   /** Where a node clicked in the library goes: the middle of the view, a little further each time. */
   const stagger = useRef(0);
   /** A node dragged from the library by touch, let go at a point on screen (ignored outside the graph). */
@@ -1042,11 +1051,18 @@ function Flow({ path, graph, sel, onSelect, wideLibrary }: { path: string; graph
         if (still && (e.target as HTMLElement).closest('.react-flow__pane')) openMenu(e.clientX, e.clientY);
       }}
       onDragOver={(e) => {
-        if (!e.dataTransfer.types.includes(NODE_DRAG)) return;
+        if (!e.dataTransfer.types.includes(NODE_DRAG) && !e.dataTransfer.types.includes('Files')) return;
         e.preventDefault();
         e.dataTransfer.dropEffect = 'copy';
       }}
       onDrop={(e) => {
+        const images = [...e.dataTransfer.files].filter((f) => f.type.startsWith('image/'));
+        if (images.length) {
+          e.preventDefault();
+          const p = rf.screenToFlowPosition({ x: e.clientX, y: e.clientY });
+          void dropImages(images, p);
+          return;
+        }
         const type = e.dataTransfer.getData(NODE_DRAG);
         if (!type || !nodeDef(type)) return;
         e.preventDefault();

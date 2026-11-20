@@ -598,6 +598,7 @@ const en = {
   'mat.image': 'Image',
   'mat.noImage': 'None',
   'mat.missing': 'missing',
+  'mat.importImage': 'Import image…',
   'mat.scale': 'Image size',
   'mat.cutout': 'Cut out see-through pixels',
   'mat.cutoutHint': 'Pixels of the image that are mostly transparent leave holes (fences, grilles, leaves).',

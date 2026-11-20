@@ -495,18 +495,45 @@ export function BarSlider({ label, value, min = 0, max = 1, step = 0.01, digits,
 }
 
 export function ImagePick({ label, value, textures, onChange }: { label: string; value: string | undefined; textures: { path: string; name: string }[]; onChange: (v: string | undefined) => void }) {
+  const file = useRef<HTMLInputElement>(null);
   return (
-    <select className="cw-input" aria-label={label} value={value ?? ''} onChange={(e) => onChange(e.currentTarget.value || undefined)}>
-      <option value="">{t('mat.noImage')}</option>
-      {textures.map((x) => (
-        <option key={x.path} value={x.path}>
-          {x.name}
-        </option>
-      ))}
-      {value && !textures.some((x) => x.path === value) && <option value={value}>{value.split('/').pop()} ({t('mat.missing')})</option>}
-    </select>
+    <>
+      <select
+        className="cw-input"
+        aria-label={label}
+        value={value ?? ''}
+        onChange={(e) => {
+          const v = e.currentTarget.value;
+          if (v === IMPORT_IMAGE) return file.current?.click();
+          onChange(v || undefined);
+        }}
+      >
+        <option value="">{t('mat.noImage')}</option>
+        {textures.map((x) => (
+          <option key={x.path} value={x.path}>
+            {x.name}
+          </option>
+        ))}
+        {value && !textures.some((x) => x.path === value) && <option value={value}>{value.split('/').pop()} ({t('mat.missing')})</option>}
+        <option value={IMPORT_IMAGE}>{t('mat.importImage')}</option>
+      </select>
+      <input
+        ref={file}
+        type="file"
+        accept="image/*"
+        hidden
+        onChange={async (e) => {
+          const f = e.currentTarget.files?.[0];
+          e.currentTarget.value = '';
+          if (!f) return;
+          const [p] = await useEditor.getState().importAssets('textures', [f]);
+          if (p) onChange(p);
+        }}
+      />
+    </>
   );
 }
+const IMPORT_IMAGE = '\u0000import';
 
 function MaterialProps({
   m,
