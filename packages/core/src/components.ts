@@ -88,6 +88,15 @@ export type PosterData = {
   hungAtStart: boolean;
 };
 /**
+ * A decal (component `decal`): a picture laid flat on the surface behind it, facing +Z. Nothing collides with it
+ * and it casts no shadow; its shape comes from the material (one with an opacity map cuts it out).
+ */
+export type DecalData = {
+  picture: string;
+  width: number;
+  height: number;
+};
+/**
  * A 3D printer (component `printer`): “Print” blocks make copies of objects on it, layer by layer. Its Model is the
  * printer (Add › 3D printer brings the ready-made one), with the parts named here moved by the print.
  */
@@ -775,6 +784,21 @@ export const COMPONENTS: ComponentDef[] = [
       { key: 'frame', label: e('Frame / back', 'Рамка / оборот'), hint: e('The colour of the edges, the back and the rolled scroll.', 'Цвет краёв, оборота и свёрнутого свитка.'), type: { kind: 'color' }, default: '#e8e2d4' },
       { key: 'mass', label: e('Weight', 'Вес'), type: { kind: 'number', min: 0.01, max: 50, step: 0.5, unit: 'kg' }, default: 0.5 },
       { key: 'hungAtStart', label: e('Hung at start', 'Повешена в начале'), hint: e('Starts flat and fixed where it is placed (put it against a wall, picture out).', 'Начинает плоской и неподвижной на своём месте (поставьте у стены, картинкой наружу).'), type: { kind: 'boolean' }, default: false },
+    ],
+  },
+  {
+    name: 'decal',
+    label: e('Decal', 'Декаль'),
+    description: e(
+      'A picture laid flat on a floor, wall or ceiling: stains, cracks, graffiti, signs. It faces +Z (Add puts it on the floor; turn it to put it on a wall) and sits just in front of the surface. Nothing collides with it. Use a material with an opacity map to cut out its shape.',
+      'Картинка, лежащая на полу, стене или потолке: пятна, трещины, граффити, знаки. Смотрит по +Z («Добавить» кладёт её на пол; поверните, чтобы повесить на стену) и лежит чуть перед поверхностью. Ни с чем не сталкивается. Материал с картой прозрачности вырезает её форму.',
+    ),
+    appliesTo: 'point',
+    conflicts: ['poster', 'sign', 'npc'],
+    fields: [
+      { key: 'picture', label: e('Picture', 'Изображение'), type: { kind: 'material' }, default: '' },
+      { key: 'width', label: e('Width', 'Ширина'), type: { kind: 'number', min: 1, step: 4, unit: 'u' }, default: 32 },
+      { key: 'height', label: e('Height', 'Высота'), type: { kind: 'number', min: 1, step: 4, unit: 'u' }, default: 32 },
     ],
   },
   {

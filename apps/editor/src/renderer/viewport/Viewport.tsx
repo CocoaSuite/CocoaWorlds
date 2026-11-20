@@ -303,6 +303,7 @@ export function Viewport() {
         { label: t('add.sign'), onSelect: () => s.add('sign', ctx?.ground ?? undefined) },
         { label: t('add.poster'), onSelect: () => s.add('poster', ctx?.ground ?? undefined) },
         { label: t('add.painting'), onSelect: () => s.add('painting', ctx?.ground ?? undefined) },
+        { label: t('add.decal'), onSelect: () => s.add('decal', ctx?.ground ?? undefined) },
         { label: t('add.stake'), onSelect: () => s.add('stake', ctx?.ground ?? undefined) },
         { label: t('add.junk'), onSelect: () => s.add('junk', ctx?.ground ?? undefined) },
         { label: t('add.carpet'), onSelect: () => s.add('carpet', ctx?.ground ?? undefined) },

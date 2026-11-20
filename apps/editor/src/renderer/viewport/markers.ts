@@ -2,7 +2,7 @@
  * Editor-only visuals for entities that have no geometry of their own yet (spawn points, lights, empties).
  * Each marker has an invisible pick volume so it can be clicked.
  */
-import { posterOf, posterScrollRadius, readComponent, type EmptyClass, type EntityData, type GooglyEyesData, type ModelData, type SignData } from '@cocoaworlds/core';
+import { posterOf, posterScrollRadius, readComponent, type DecalData, type EmptyClass, type EntityData, type GooglyEyesData, type ModelData, type SignData } from '@cocoaworlds/core';
 import { modelInstance, onModelMaterialChange } from './models';
 
 /** Called when a marker's model has loaded (the view needs a redraw). */
@@ -15,6 +15,7 @@ export function onMarkerLoaded(fn: () => void): void {
 import * as THREE from 'three';
 import { buildSign } from './sign';
 import { buildPoster } from './poster';
+import { buildDecal } from './decal';
 import { buildGooglyEyes, type GooglyEyes } from './googly-eyes';
 import pointIcon from '../assets/empty/PathPoint.png';
 import spawnIcon from '../assets/empty/Finish.png';
@@ -53,7 +54,7 @@ function iconSprite(c: EmptyClass): THREE.Sprite {
 /** An object with nothing to draw of its own (it can be given a class icon). */
 export function isPlainEmpty(e: EntityData): boolean {
   const c = e.components;
-  return !c.brush && !c.poster && !c.sign && !c.npc && !c.reflectionProbe && !c.playerSpawn && !c.light && !(c.model as { model?: string } | undefined)?.model;
+  return !c.brush && !c.poster && !c.decal && !c.sign && !c.npc && !c.reflectionProbe && !c.playerSpawn && !c.light && !(c.model as { model?: string } | undefined)?.model;
 }
 
 export const COLORS = {
@@ -147,6 +148,14 @@ export function buildMarker(e: EntityData): Marker {
     lines.push(segs([[-6, 0, 0], [6, 0, 0], [0, -6, 0], [0, 6, 0], [0, 0, 0], [0, 0, 8]], baseColor));
     const d = poster.flat.layers.isEnabled(0) ? data.thickness : posterScrollRadius(data) * 2;
     pick = new THREE.Mesh(new THREE.BoxGeometry(Math.max(8, data.width), Math.max(8, poster.flat.layers.isEnabled(0) ? data.height : d), Math.max(8, d)), pickMat);
+  } else if (e.components.decal) {
+    // The decal, plus a small cross at its origin (pointing out along +Z) for selection colour.
+    const data = readComponent<DecalData>('decal', e.components.decal);
+    const decal = buildDecal(data, () => markerLoaded());
+    group.add(decal.object);
+    group.userData.dispose = decal.dispose;
+    lines.push(segs([[-6, 0, 0], [6, 0, 0], [0, -6, 0], [0, 6, 0], [0, 0, 0], [0, 0, 8]], baseColor));
+    pick = new THREE.Mesh(new THREE.BoxGeometry(Math.max(8, data.width), Math.max(8, data.height), 2), pickMat);
   } else if (model?.model) {
     // The model itself (once loaded), a small cross at the origin for selection colour, and a pick box that
     // grows to fit the model.
@@ -319,7 +328,7 @@ export function disposeMarker(m: Marker): void {
   m.eyes?.dispose();
   m.group.traverse((o) => {
     // (Signs dispose of themselves; googly eyes share one dome and dispose of their own materials.)
-    if (o.name === 'sign' || o.name === 'googly-eye') return;
+    if (o.name === 'sign' || o.name === 'googly-eye' || o.name === 'decal') return;
     for (let x: THREE.Object3D | null = o; x; x = x.parent) if (x.name === 'poster') return;
     // (Model meshes share geometry with the loaded file; only the clone's tree is dropped.)
     for (let x: THREE.Object3D | null = o; x; x = x.parent) if (x.name === 'model') return;
@@ -334,5 +343,5 @@ export function disposeMarker(m: Marker): void {
 
 /** Stable key for "does this marker need rebuilding" (shape-affecting data only). */
 export function markerKey(e: EntityData): string {
-  return JSON.stringify([e.components.light ?? null, !!e.components.playerSpawn, e.components.sign ?? null, e.components.poster ?? null, e.components.model ?? null, (e.components.npc as { side?: string } | undefined)?.side ?? null, e.components.reflectionProbe ?? null, e.components.googlyEyes ?? null, e.emptyClass ?? null, e.components.outlet ? 1 : 0, e.components.powerSource ? 1 : 0, e.components.extender ? 1 : 0, e.components.stringLights ?? null, e.components.collider ?? null]);
+  return JSON.stringify([e.components.light ?? null, !!e.components.playerSpawn, e.components.sign ?? null, e.components.poster ?? null, e.components.decal ?? null, e.components.model ?? null, (e.components.npc as { side?: string } | undefined)?.side ?? null, e.components.reflectionProbe ?? null, e.components.googlyEyes ?? null, e.emptyClass ?? null, e.components.outlet ? 1 : 0, e.components.powerSource ? 1 : 0, e.components.extender ? 1 : 0, e.components.stringLights ?? null, e.components.collider ?? null]);
 }

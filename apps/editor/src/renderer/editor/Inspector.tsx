@@ -172,6 +172,7 @@ function componentLabel(e: EntityData): string {
   if (e.components.powerSource) return t(e.components.model ? 'add.lightSwitch' : 'add.generator');
   if (e.components.junk) return t(/carpet|rug|ковёр|ковер/i.test(e.name) ? 'add.carpet' : 'add.junk');
   if (e.components.printer) return t('add.printer');
+  if (e.components.decal) return t('add.decal');
   if (e.components.poster) return t((e.components.poster as { rolls?: boolean }).rolls === false ? 'add.painting' : 'add.poster');
   if (isGroupEntity(e)) return t('insp.group');
   return 'Object';

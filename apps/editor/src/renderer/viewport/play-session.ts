@@ -6,7 +6,7 @@
  * preview watched with the free camera.
  */
 import { navInWorkers } from './nav-pool';
-import { SceneDoc, expandRepeats, workInternal, parkAssets, posterOf, readComponent, type ParticlesData, type VfxData, type ColliderData, type GameRules, type GameValue, type EntityData, type GooglyEyesData, type LensSettings, type ModelData, type PrinterData, type SceneFile, type SignData, type TerrainData } from '@cocoaworlds/core';
+import { SceneDoc, expandRepeats, workInternal, parkAssets, posterOf, readComponent, type ParticlesData, type VfxData, type ColliderData, type DecalData, type GameRules, type GameValue, type EntityData, type GooglyEyesData, type LensSettings, type ModelData, type PrinterData, type SceneFile, type SignData, type TerrainData } from '@cocoaworlds/core';
 import { buildMesh, isInvisibleMaterial, type Brush, type VoxelField, type WorldBrush } from '@cocoaworlds/geometry';
 import { GameWorld, initPhysics, runDevCommand, POSE, AT, NPC, type AcousticVoice, type BuildPrompt, type FrameSnapshot, type Hearing, type NavGrid, type BodyInfo, type ModelMesh, type SavedProgress, type Travel, type UiState, type PlayerInput, type PlayerStatus, type ScriptLog, type TriggerEvent } from '@cocoaworlds/runtime';
 
@@ -26,6 +26,7 @@ import { BATCH_MIN, ModelBatches, batchKey } from './model-batches';
 import { WEAR_RING, buildLevel } from './world-build';
 import { toGeometry } from './world-render';
 import { buildSign, type SignObject } from './sign';
+import { buildDecal, type DecalObject } from './decal';
 import { buildPoster, type PosterObject } from './poster';
 import { PrinterRig } from './printer';
 import { renderShopPreview } from './shop-preview';
@@ -94,6 +95,7 @@ export class PlaySession {
   private notes: string[] = [];
   private signs = new Map<string, { holder: THREE.Group; sign: SignObject; data: SignData }>();
   private signVersion = 0;
+  private decals: DecalObject[] = [];
 
   static async start(scene: SceneFile, material: (name: string, tint?: string) => THREE.Material, rules?: GameRules, values?: GameValue[], saved?: SavedProgress | null, arrive?: Travel | null): Promise<PlaySession> {
     await initPhysics();
@@ -320,6 +322,12 @@ export class PlaySession {
       if (!e.components.sign || !shown(e.id)) continue;
       const data = readComponent<SignData>('sign', e.components.sign);
       this.addSign(e.id, data, doc.worldMatrix(e.id));
+    }
+
+    // Decals, where they lie (on something that moves they go with it).
+    for (const e of doc.entities) {
+      if (!e.components.decal || !shown(e.id)) continue;
+      this.addDecal(e.id, readComponent<DecalData>('decal', e.components.decal), doc.worldMatrix(e.id));
     }
 
     // 3D printers: their model's parts are found once it has loaded (without a model, prints are still cut).
@@ -936,6 +944,27 @@ export class PlaySession {
     const sign = buildSign(data);
     holder.add(sign.object);
     this.signs.set(id, { holder, sign, data });
+    const body = this.world.bodyOf(id);
+    if (body) this.movers.push({ id: body, i: this.world.drawn(body), obj: holder, base: holder.matrix.clone() });
+  }
+
+  /** A decal where it lies; its picture is made ready to draw once loaded, as posters' are. */
+  private addDecal(id: string, data: DecalData, matrix: number[]): void {
+    const holder = new THREE.Group();
+    holder.matrixAutoUpdate = false;
+    holder.matrix.fromArray(matrix);
+    this.group.add(holder);
+    let queued = false;
+    const decal = buildDecal(data, () => {
+      if (queued) return;
+      queued = true;
+      queueMicrotask(() => {
+        queued = false;
+        if (!this.disposed) void this.warm(decal.object).catch(() => {});
+      });
+    });
+    holder.add(decal.object);
+    this.decals.push(decal);
     const body = this.world.bodyOf(id);
     if (body) this.movers.push({ id: body, i: this.world.drawn(body), obj: holder, base: holder.matrix.clone() });
   }
@@ -1643,12 +1672,13 @@ export class PlaySession {
     this.listener?.removeFromParent();
     this.world.dispose();
     for (const s of this.signs.values()) s.sign.dispose();
+    for (const d of this.decals) d.dispose();
     for (const p of this.posterViews) p.view.dispose();
     for (const p of this.printers) p.rig?.dispose();
     for (const { eyes } of this.eyes) eyes.dispose();
     this.group.traverse((o) => {
       // (Googly eyes share one dome.)
-      if (o instanceof THREE.Mesh && o.name !== 'sign' && o.name !== 'googly-eye') o.geometry.dispose();
+      if (o instanceof THREE.Mesh && o.name !== 'sign' && o.name !== 'googly-eye' && o.name !== 'decal') o.geometry.dispose();
     });
     this.shapeMat.dispose();
   }

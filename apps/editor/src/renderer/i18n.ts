@@ -196,6 +196,7 @@ const en = {
   'add.poster': 'Poster',
   'add.printer': '3D printer',
   'add.painting': 'Painting',
+  'add.decal': 'Decal',
   'add.stake': 'Ground prop',
   'add.junk': 'Junk',
   'add.carpet': 'Carpet',

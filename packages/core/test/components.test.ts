@@ -27,8 +27,8 @@ describe('component registry', () => {
     expect(names({ ...brush, soundArea: {} }, true)).toEqual(['breakable', 'charger', 'scatter', 'script', 'shopItem', 'sound', 'trigger', 'vfx']);
     expect(names({ ...brush, rigidBody: {} }, true)).toEqual(['breakable', 'charger', 'computer', 'powerSource', 'scatter', 'script', 'seat', 'shopItem', 'sound', 'vfx']);
     expect(names({ ...brush, water: {} }, true)).toEqual(['breakable', 'charger', 'scatter', 'script', 'shopItem', 'sound', 'vfx']);
-    expect(names({}, false)).toEqual(['breakable', 'charger', 'collider', 'computer', 'extender', 'googlyEyes', 'hidingSpot', 'landmark', 'light', 'model', 'npc', 'outlet', 'particles', 'pathPoint', 'plant', 'playerSpawn', 'poster', 'powerSource', 'printer', 'reflectionProbe', 'repeat', 'rigidBody', 'script', 'seat', 'shelf', 'shopItem', 'sign', 'sound', 'stake', 'stringLights', 'train', 'vfx']);
-    expect(names({ light: {} }, false)).toEqual(['breakable', 'charger', 'collider', 'computer', 'extender', 'googlyEyes', 'hidingSpot', 'landmark', 'model', 'npc', 'outlet', 'particles', 'pathPoint', 'plant', 'playerSpawn', 'powerSource', 'printer', 'reflectionProbe', 'repeat', 'rigidBody', 'script', 'seat', 'shelf', 'shopItem', 'sign', 'sound', 'stake', 'stringLights', 'train', 'vfx']);
+    expect(names({}, false)).toEqual(['breakable', 'charger', 'collider', 'computer', 'decal', 'extender', 'googlyEyes', 'hidingSpot', 'landmark', 'light', 'model', 'npc', 'outlet', 'particles', 'pathPoint', 'plant', 'playerSpawn', 'poster', 'powerSource', 'printer', 'reflectionProbe', 'repeat', 'rigidBody', 'script', 'seat', 'shelf', 'shopItem', 'sign', 'sound', 'stake', 'stringLights', 'train', 'vfx']);
+    expect(names({ light: {} }, false)).toEqual(['breakable', 'charger', 'collider', 'computer', 'decal', 'extender', 'googlyEyes', 'hidingSpot', 'landmark', 'model', 'npc', 'outlet', 'particles', 'pathPoint', 'plant', 'playerSpawn', 'powerSource', 'printer', 'reflectionProbe', 'repeat', 'rigidBody', 'script', 'seat', 'shelf', 'shopItem', 'sign', 'sound', 'stake', 'stringLights', 'train', 'vfx']);
     expect(componentDef('group')?.internal).toBe(true);
   });
 });

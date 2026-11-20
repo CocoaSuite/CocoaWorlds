@@ -151,6 +151,7 @@ export function SceneTree() {
             { label: t('add.sign'), onSelect: () => s.add('sign') },
             { label: t('add.poster'), onSelect: () => s.add('poster') },
             { label: t('add.painting'), onSelect: () => s.add('painting') },
+            { label: t('add.decal'), onSelect: () => s.add('decal') },
             { label: t('add.stake'), onSelect: () => s.add('stake') },
             { label: t('add.junk'), onSelect: () => s.add('junk') },
             { label: t('add.carpet'), onSelect: () => s.add('carpet') },
