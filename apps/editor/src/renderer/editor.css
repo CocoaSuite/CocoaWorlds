@@ -529,7 +529,7 @@ code { font: var(--fs-m) var(--mono); color: var(--fg); }
 /* The node library, left of the graph. */
 .cm-graph { flex: 1; min-height: 0; display: flex; gap: 8px; }
 .cm-graph > .cm-flow { flex: 1; min-width: 0; }
-.cm-lib { flex: none; width: 200px; display: flex; flex-direction: column; gap: 6px; min-height: 0; padding: 8px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-m); }
+.cm-lib { position: relative; flex: none; width: 200px; display: flex; flex-direction: column; gap: 6px; min-height: 0; padding: 8px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-m); }
 .cm-lib-h { display: flex; align-items: center; justify-content: space-between; font-size: var(--fs-s); font-weight: 700; color: var(--mute); text-transform: uppercase; letter-spacing: 0.04em; }
 .cm-lib-list { flex: 1; min-height: 0; overflow: auto; display: flex; flex-direction: column; gap: 2px; margin: 0 -4px; padding: 0 4px; }
 .cm-lib-g { display: flex; align-items: center; width: 100%; padding: 6px 4px; border: 0; background: none; color: var(--fg); font: inherit; font-size: var(--fs-m); font-weight: 700; cursor: pointer; text-align: left; }
@@ -542,6 +542,13 @@ code { font: var(--fs-m) var(--mono); color: var(--fg); }
 .cm-lib-ph { display: block; opacity: 0.6; }
 .cm-lib-ph.g-make { background: #8fb04a; } .cm-lib-ph.g-change { background: #4b9cff; } .cm-lib-ph.g-combine { background: #f0a442; }
 .cm-lib-ph.g-colour { background: #d46bc0; } .cm-lib-ph.g-surface { background: #4ad0c4; } .cm-lib-ph.g-output { background: #cfcfcf; }
+.cm-lib-grip { position: absolute; top: 0; bottom: 0; right: -6px; width: 10px; cursor: ew-resize; touch-action: none; z-index: 2; }
+.cm-lib-grip::after { content: ""; position: absolute; top: 50%; left: 4px; width: 2px; height: 32px; margin-top: -16px; border-radius: 1px; background: var(--line); opacity: 0; transition: opacity 0.12s; }
+.cm-lib-grip:hover::after, .cm-lib-grip:active::after { opacity: 1; }
+@media (pointer: coarse) { .cm-lib-grip { right: -10px; width: 20px; } .cm-lib-grip::after { left: 9px; opacity: 1; } }
+.cm-lib-item { -webkit-touch-callout: none; user-select: none; -webkit-user-select: none; }
+.cm-lib-ghost { position: fixed; z-index: 1000; pointer-events: none; display: flex; align-items: center; gap: 8px; padding: 4px 10px 4px 4px; transform: translate(-50%, -120%); background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-m); box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35); font-size: var(--fs-m); color: var(--fg); }
+.cm-lib-ghost img, .cm-lib-ghost .cm-lib-ph { width: 32px; height: 32px; border-radius: var(--r-s); }
 .cm-lib-show { flex: none; width: 22px; border: 1px solid var(--line); border-radius: var(--r-m); background: var(--panel); color: var(--mute); cursor: pointer; font-size: var(--fs-l); }
 .cm-lib-show:hover { color: var(--fg); background: var(--panel2); }
 

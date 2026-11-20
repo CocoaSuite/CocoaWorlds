@@ -543,6 +543,7 @@ const en = {
   'cm.loading': "Opening the graph…",
   'cm.library': "Library",
   'cm.hideLibrary': "Hide the library",
+  'cm.resizeLibrary': "Resize the library",
   'cm.showLibrary': "Show the node library",
   'cm.searchLibrary': "Search the library",
   'cm.libraryHint': "Click to add it in the middle of the graph, or drag it where you want it.",

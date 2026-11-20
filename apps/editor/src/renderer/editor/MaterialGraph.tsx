@@ -293,14 +293,107 @@ function AddMenu({ at, onPick, onClose }: { at: { x: number; y: number }; onPick
 }
 
 /** The node library (left of the graph, as in Substance Designer): search, groups, a picture of each node. */
-function NodeLibrary({ onAdd, onHide, wide }: { onAdd: (type: string) => void; onHide: () => void; wide: boolean }) {
+function NodeLibrary({ onAdd, onDropAt, onHide, wide }: { onAdd: (type: string) => void; onDropAt: (type: string, x: number, y: number) => void; onHide: () => void; wide: boolean }) {
   const [q, setQ] = useState('');
+  // Width: dragged by the right edge, kept between visits (grid of pictures once it is wide enough).
+  const [width, setWidth] = useState<number | null>(() => {
+    try {
+      const v = Number(localStorage.getItem('cw-cm-library-w'));
+      return v > 0 ? v : null;
+    } catch {
+      return null;
+    }
+  });
+  const w = width ?? (wide ? 360 : 200);
+  const resize = (e: React.PointerEvent) => {
+    e.preventDefault();
+    const x0 = e.clientX, w0 = w;
+    let last = w0;
+    const move = (ev: PointerEvent) => {
+      last = Math.round(Math.min(560, Math.max(150, w0 + ev.clientX - x0)));
+      setWidth(last);
+    };
+    const up = () => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+      window.removeEventListener('pointercancel', up);
+      try {
+        localStorage.setItem('cw-cm-library-w', String(last));
+      } catch {
+        /* storage off */
+      }
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+    window.addEventListener('pointercancel', up);
+  };
+  // Touch: hold a node for a moment (or slide it sideways) to drag it onto the graph.
+  const listRef = useRef<HTMLDivElement>(null);
+  const [ghost, setGhost] = useState<{ type: string; x: number; y: number } | null>(null);
+  const touch = useRef<{ type: string; x: number; y: number; at: number; dragging: boolean; timer: number } | null>(null);
+  const dropped = useRef(0);
+  useEffect(() => {
+    const el = listRef.current;
+    if (!el) return;
+    const start = (e: TouchEvent) => {
+      const item = (e.target as HTMLElement).closest<HTMLElement>('[data-node-type]');
+      const t0 = e.touches[0];
+      if (!item || !t0 || e.touches.length !== 1) return;
+      const type = item.dataset.nodeType!;
+      const cur = { type, x: t0.clientX, y: t0.clientY, at: performance.now(), dragging: false, timer: 0 };
+      cur.timer = window.setTimeout(() => {
+        if (touch.current !== cur) return;
+        cur.dragging = true;
+        setGhost({ type, x: cur.x, y: cur.y });
+      }, 280);
+      touch.current = cur;
+    };
+    const move = (e: TouchEvent) => {
+      const cur = touch.current;
+      const t0 = e.touches[0];
+      if (!cur || !t0) return;
+      const dx = t0.clientX - cur.x, dy = t0.clientY - cur.y;
+      if (!cur.dragging) {
+        if (Math.abs(dx) > 14 && Math.abs(dx) > Math.abs(dy) * 1.5) cur.dragging = true;
+        else if (Math.hypot(dx, dy) > 10) {
+          // A scroll of the list.
+          clearTimeout(cur.timer);
+          touch.current = null;
+          return;
+        } else return;
+      }
+      e.preventDefault();
+      setGhost({ type: cur.type, x: t0.clientX, y: t0.clientY });
+    };
+    const end = (e: TouchEvent) => {
+      const cur = touch.current;
+      touch.current = null;
+      if (!cur) return;
+      clearTimeout(cur.timer);
+      if (!cur.dragging) return;
+      const t0 = e.changedTouches[0];
+      setGhost(null);
+      dropped.current = performance.now();
+      if (t0 && e.type === 'touchend') onDropAt(cur.type, t0.clientX, t0.clientY);
+    };
+    el.addEventListener('touchstart', start, { passive: true });
+    el.addEventListener('touchmove', move, { passive: false });
+    el.addEventListener('touchend', end);
+    el.addEventListener('touchcancel', end);
+    return () => {
+      el.removeEventListener('touchstart', start);
+      el.removeEventListener('touchmove', move);
+      el.removeEventListener('touchend', end);
+      el.removeEventListener('touchcancel', end);
+    };
+  }, [onDropAt]);
   const [shut, setShut] = useState<Set<string>>(new Set());
   const icons = useMemo(() => nodeIcons(), []);
   const query = q.trim().toLowerCase();
   const match = (n: (typeof NODES)[number]) => !n.hidden && (!query || say(n.label).toLowerCase().includes(query) || n.label.en.toLowerCase().includes(query) || say(n.hint).toLowerCase().includes(query));
   return (
-    <aside className={`cm-lib${wide ? ' wide' : ''}`} aria-label={t('cm.library')}>
+    <aside className={`cm-lib${w >= 300 ? ' wide' : ''}`} style={{ width: w }} aria-label={t('cm.library')}>
+      <div className="cm-lib-grip" role="separator" aria-orientation="vertical" aria-label={t('cm.resizeLibrary')} onPointerDown={resize} onDoubleClick={() => { setWidth(null); try { localStorage.removeItem('cw-cm-library-w'); } catch { /* storage off */ } }} />
       <div className="cm-lib-h">
         <span>{t('cm.library')}</span>
         <button type="button" className="cw-iconbtn" aria-label={t('cm.hideLibrary')} title={t('cm.hideLibrary')} onClick={onHide}>
@@ -308,7 +401,7 @@ function NodeLibrary({ onAdd, onHide, wide }: { onAdd: (type: string) => void; o
         </button>
       </div>
       <input className="cw-input" placeholder={t('cm.search')} aria-label={t('cm.searchLibrary')} value={q} onChange={(e) => setQ(e.currentTarget.value)} onKeyDown={(e) => e.stopPropagation()} />
-      <div className="cm-lib-list">
+      <div className="cm-lib-list" ref={listRef}>
         {GROUPS.map((g) => {
           const items = NODES.filter((n) => n.group === g.id && match(n));
           if (!items.length) return null;
@@ -339,12 +432,14 @@ function NodeLibrary({ onAdd, onHide, wide }: { onAdd: (type: string) => void; o
                       type="button"
                       className="cm-lib-item"
                       draggable
+                      data-node-type={n.type}
                       aria-label={say(n.label)}
                       onDragStart={(e) => {
                         e.dataTransfer.setData(NODE_DRAG, n.type);
                         e.dataTransfer.effectAllowed = 'copy';
                       }}
-                      onClick={() => onAdd(n.type)}
+                      onClick={() => performance.now() - dropped.current > 400 && onAdd(n.type)}
+                      onContextMenu={(e) => e.preventDefault()}
                     >
                       {icons.get(n.type) ? <img src={icons.get(n.type)} alt="" width={40} height={40} /> : <i className={`cm-lib-ph g-${n.group}`} />}
                       <span>{say(n.label)}</span>
@@ -357,6 +452,12 @@ function NodeLibrary({ onAdd, onHide, wide }: { onAdd: (type: string) => void; o
         })}
         {!NODES.some(match) && <div className="cw-muted cm-add-none">{t('cm.noMatch')}</div>}
       </div>
+      {ghost && (
+        <div className="cm-lib-ghost" style={{ left: ghost.x, top: ghost.y }} aria-hidden>
+          {icons.get(ghost.type) ? <img src={icons.get(ghost.type)} alt="" width={40} height={40} /> : <i className={`cm-lib-ph g-${nodeDef(ghost.type)?.group}`} />}
+          <span>{say(nodeDef(ghost.type)!.label)}</span>
+        </div>
+      )}
     </aside>
   );
 }
@@ -595,6 +696,7 @@ function Flow({ path, graph, sel, onSelect, wideLibrary }: { path: string; graph
     [path],
   );
 
+  const addRef = useRef<(type: string, at: { x: number; y: number }) => void>(() => {});
   const add = (type: string, at: { x: number; y: number }) => {
     const n = newNode(type, Math.round(at.x), Math.round(at.y));
     noteRecent(type);
@@ -602,9 +704,20 @@ function Flow({ path, graph, sel, onSelect, wideLibrary }: { path: string; graph
     onSelect([n.id]);
     setMenu(null);
   };
+  addRef.current = add;
 
   /** Where a node clicked in the library goes: the middle of the view, a little further each time. */
   const stagger = useRef(0);
+  /** A node dragged from the library by touch, let go at a point on screen (ignored outside the graph). */
+  const dropAt = useCallback(
+    (type: string, x: number, y: number) => {
+      const b = host.current?.getBoundingClientRect();
+      if (!b || x < b.left || x > b.right || y < b.top || y > b.bottom || !nodeDef(type)) return;
+      const p = rf.screenToFlowPosition({ x, y });
+      addRef.current(type, { x: p.x - 66, y: p.y - 20 });
+    },
+    [rf],
+  );
   const addInView = (type: string) => {
     const box = host.current!.getBoundingClientRect();
     const k = (stagger.current = (stagger.current + 1) % 6);
@@ -880,7 +993,7 @@ function Flow({ path, graph, sel, onSelect, wideLibrary }: { path: string; graph
   return (
     <GraphCtx.Provider value={{ ...ctx, lift, editSection }}>
     <div className="cm-graph">
-    {showLib ? <NodeLibrary onAdd={addInView} onHide={() => toggleLib(false)} wide={wideLibrary} /> : (
+    {showLib ? <NodeLibrary onAdd={addInView} onDropAt={dropAt} onHide={() => toggleLib(false)} wide={wideLibrary} /> : (
       <button type="button" className="cm-lib-show" aria-label={t('cm.showLibrary')} title={t('cm.showLibrary')} onClick={() => toggleLib(true)}>
         ›
       </button>
