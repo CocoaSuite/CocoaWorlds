@@ -61,4 +61,21 @@ describe('voice-over', () => {
     expect(w.screenMessages()).toEqual([]);
     w.dispose();
   });
+
+  it('“wait for the voice-over” holds the stack until the sound ends', () => {
+    const t = newEntity('t', {});
+    t.components.script = { version: 1, variables: [], handlers: [{ id: blockId(), event: newEvent('start') as EventBlock, body: [st('playVoice', { sound: 'assets/sounds/a.wav' }), st('waitVoice'), st('say', { text: { kind: 'text', value: 'after' } })] }] } as never;
+    const s = newScene('v');
+    s.entities = [floor(), t, newEntity('start', { playerSpawn: {} })];
+    const w = GameWorld.create(s);
+    expect(w.scriptProblems).toEqual([]);
+    run(w, 0.1);
+    w.voiceBegan('assets/sounds/a.wav');
+    run(w, 3);
+    expect(w.screenMessages()).toEqual([]);
+    w.voiceEnded();
+    run(w, 0.1);
+    expect(w.screenMessages()).toEqual(['after']);
+    w.dispose();
+  });
 });

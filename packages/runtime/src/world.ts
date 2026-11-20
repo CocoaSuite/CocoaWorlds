@@ -4372,15 +4372,25 @@ export class GameWorld {
 
   /** The voice-over playing now: its captions, when it began (world time), the next caption, and whether its sound has started. */
   private voice: { sound: string; captions: Caption[]; t0: number; next: number; started: boolean } | null = null;
+  /**
+   * A voice-over is playing: until its sound ends (voiceEnded), it is cut off, or, when no sound ever started
+   * it (it failed to load, or nothing plays sound), its last caption is over.
+   */
+  voicePlaying = false;
+  private voiceHeard = false;
+  private voiceUntil = 0;
 
   /** Play a voice-over everywhere, cutting off the one playing; '' stops it. Its captions are on-screen messages. */
   playVoice(sound: string, volume: number, captions: Caption[]): void {
     this.messages = this.messages.filter((m) => m.from !== '@voice');
+    this.voiceHeard = false;
+    this.voicePlaying = !!sound;
     if (!sound) {
       this.voice = null;
       this.bus.emit({ type: 'voice.stop', time: this.time });
       return;
     }
+    this.voiceUntil = 0;
     this.voice = { sound, captions, t0: this.time, next: 0, started: false };
     this.bus.emit({ type: 'voice', sound, volume, time: this.time });
   }
@@ -4392,15 +4402,23 @@ export class GameWorld {
       v.started = true;
       v.t0 = this.time;
     }
+    if (this.voicePlaying) this.voiceHeard = true;
+  }
+
+  /** The voice-over's sound has played to its end. */
+  voiceEnded(): void {
+    this.voicePlaying = false;
   }
 
   /** Show the voice-over's captions that are due (if its sound never starts, they show anyway after a moment). */
   private voiceCaptions(): void {
+    if (this.voicePlaying && !this.voiceHeard && this.voiceUntil && this.time >= this.voiceUntil) this.voicePlaying = false;
     const v = this.voice;
     if (!v) return;
     if (!v.started && this.time - v.t0 >= 1.5) {
       v.started = true;
       v.t0 = this.time;
+      this.voiceUntil = this.time + v.captions.reduce((m, c) => Math.max(m, c.until), 0);
     }
     if (!v.started) return;
     const t = this.time - v.t0;
@@ -4606,6 +4624,7 @@ export class GameWorld {
       this.frozen = name === 'freeze';
       return null;
     }
+    if (name === 'waitVoice') return this.voicePlaying ? () => !this.voicePlaying : null;
     if (name === 'silence' || name === 'unsilence') {
       this.silent = name === 'silence';
       return null;

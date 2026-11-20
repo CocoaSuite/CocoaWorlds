@@ -258,6 +258,8 @@ type StatementKind_ =
   | { id: string; kind: 'playVoice'; sound: string; volume: Expr; captions: Caption[] }
   /** Stop the voice-over playing now (and its captions). */
   | { id: string; kind: 'stopVoice' }
+  /** Wait until the voice-over playing now has finished (or been cut off); goes on at once if none is playing. */
+  | { id: string; kind: 'waitVoice' }
   /** Play one of a model's animations by name, looping or once. */
   | { id: string; kind: 'playAnim'; target: Ref; name: string; loop: boolean }
   /** Change a light's brightness, reach, cone or colour, over some seconds (0: at once). */

@@ -1216,7 +1216,8 @@ function statementWords(s: Statement, set: (patch: Record<string, unknown>, merg
         </>
       );
     case 'stopVoice':
-      return w('stopVoice');
+    case 'waitVoice':
+      return w(s.kind);
     case 'stopSound':
       return (
         <>

@@ -751,6 +751,7 @@ export class PlaySession {
       buffer = await PlaySession.load(sound);
     } catch {
       this.notes.push(`Could not play ${sound}`);
+      if (seq === this.voiceSeq) this.world.voiceEnded();
       return;
     }
     if (seq !== this.voiceSeq || this.disposed) return;
@@ -763,7 +764,9 @@ export class PlaySession {
     source.connect(gain);
     const v = (this.voice = { source, gain });
     source.onended = () => {
-      if (this.voice === v) this.stopVoice();
+      if (this.voice !== v) return;
+      this.stopVoice();
+      this.world.voiceEnded();
     };
     source.start();
     this.world.voiceBegan(sound);

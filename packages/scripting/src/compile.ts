@@ -158,7 +158,7 @@ export const USE_REACH = 96;
 export type GameAction = 'hurt' | 'heal' | 'addScore' | 'giveArmour';
 export type GameValue = 'health' | 'score' | 'armour';
 
-export type ActionName = 'move' | 'turn' | 'turnTo' | 'return' | 'show' | 'hide' | 'turnOn' | 'turnOff' | 'startTrain' | 'stopTrain' | 'walkTo' | 'runAway' | 'wander' | 'setSide' | 'freeze' | 'unfreeze' | 'viewFrom' | 'remove' | 'scale' | 'physical' | 'push' | 'moveTo' | 'teleport' | 'damage' | 'place' | 'pickUp' | 'drop' | 'unhide' | 'silence' | 'unsilence' | 'playerSize' | 'playerSpeed' | 'playerJump' | 'playerGravity' | 'playerMoves' | 'playerWay' | 'playerNormal' | 'lensSet' | 'lensLook' | 'lensFocus' | 'lensReset' | 'screenWhite' | 'screenBlack' | 'screenBack';
+export type ActionName = 'move' | 'turn' | 'turnTo' | 'return' | 'show' | 'hide' | 'turnOn' | 'turnOff' | 'startTrain' | 'stopTrain' | 'walkTo' | 'runAway' | 'wander' | 'setSide' | 'freeze' | 'unfreeze' | 'viewFrom' | 'remove' | 'scale' | 'physical' | 'push' | 'moveTo' | 'teleport' | 'damage' | 'place' | 'pickUp' | 'drop' | 'unhide' | 'silence' | 'unsilence' | 'playerSize' | 'playerSpeed' | 'playerJump' | 'playerGravity' | 'playerMoves' | 'playerWay' | 'playerNormal' | 'lensSet' | 'lensLook' | 'lensFocus' | 'lensReset' | 'screenWhite' | 'screenBlack' | 'screenBack' | 'waitVoice';
 
 export type CompiledEvent =
   | { kind: 'start' }
@@ -968,6 +968,10 @@ class HandlerCompiler {
         break;
       case 'stopVoice':
         this.emit({ op: 'stopvoice' });
+        break;
+      case 'waitVoice':
+        this.emit({ op: 'ref', ref: { player: true } });
+        this.emit({ op: 'act', name: 'waitVoice', argc: 0 });
         break;
       case 'setLight':
         this.lightTarget(s.target, s.id);

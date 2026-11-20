@@ -179,6 +179,7 @@ export function newStatement(kind: StatementKind, opts: { target?: Ref; variable
     case 'playVoice':
       return { id: id(), kind, sound: '', volume: num(1), captions: [] };
     case 'stopVoice':
+    case 'waitVoice':
       return { id: id(), kind };
     case 'setLight':
       return { id: id(), kind, target, prop: 'intensity', value: num(1), seconds: num(0) };
