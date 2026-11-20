@@ -97,6 +97,8 @@ const Thumb = memo(function Thumb({ id, size = 116 }: { id: string; size?: numbe
 
 function CmNodeView({ id, data, selected }: NodeProps<CmNode>) {
   const def = nodeDef(data.node.type)!;
+  // (Before the early return: hooks run in the same order every time.)
+  const { errors, lift, viewed, toggleView } = useContext(GraphCtx);
   if (def.type === 'reroute')
     return (
       <div className={`cm-reroute${selected ? ' on' : ''}`} data-node-type="reroute" aria-label={say(def.label)}>
@@ -104,7 +106,6 @@ function CmNodeView({ id, data, selected }: NodeProps<CmNode>) {
         <Handle type="source" position={Position.Right} id="out" className="cm-h color" />
       </div>
     );
-  const { errors, lift, viewed, toggleView } = useContext(GraphCtx);
   const err = errors.get(id);
   const shown = viewed === id;
   return (
@@ -1538,13 +1539,16 @@ export function GraphWorkspace({
     live.run(withOverrides(graph, m.overrides), size);
     setErrors(new Map(live.errors));
   }, [graph, live, size, imagesIn, m.overrides]);
-  // The material's own settings changed (an edit or Undo): bake again. (Not on opening.)
-  const lastOverrides = useRef(m.overrides);
+  // The material's own settings or its baked size changed (an edit or Undo): bake again. (Not on opening it,
+  // nor on switching to another material.)
+  const lastBake = useRef({ id: m.id, overrides: m.overrides, size: m.bakeSize });
   useEffect(() => {
-    if (lastOverrides.current === m.overrides) return;
-    lastOverrides.current = m.overrides;
-    bakeLater(path);
-  }, [m.overrides, path]);
+    const was = lastBake.current;
+    lastBake.current = { id: m.id, overrides: m.overrides, size: m.bakeSize };
+    if (was.id !== m.id) return;
+    if (was.size !== m.bakeSize) void bakeNow(path);
+    else if (was.overrides !== m.overrides) bakeLater(path);
+  }, [m.id, m.overrides, m.bakeSize, path]);
   useEffect(() => endGraphGesture, []);
 
   const node = sel.length === 1 ? graph?.nodes.find((n) => n.id === sel[0]) : undefined;

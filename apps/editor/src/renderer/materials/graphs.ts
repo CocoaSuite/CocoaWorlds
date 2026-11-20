@@ -315,7 +315,11 @@ async function bakeOnce(path: string): Promise<void> {
   const g = useGraphs.getState().graphs[path];
   if (!dir || !g) return;
   const users = materialsOf(st.session!.project.settings).filter((m) => m.graph === path);
-  if (!users.length) return;
+  // (No material uses it yet, e.g. a copy still being added: nothing to bake, so don't stay “waiting”.)
+  if (!users.length) {
+    useGraphs.setState((s) => ({ baking: { ...s.baking, [path]: bakeTimers.has(path) ? 'waiting' : 'done' } }));
+    return;
+  }
   useGraphs.setState((s) => ({ baking: { ...s.baking, [path]: 'baking' } }));
   const stem = path.slice('materials/'.length, -'.cwmat'.length);
   try {
@@ -327,28 +331,32 @@ async function bakeOnce(path: string): Promise<void> {
       const gm = withOverrides(g, m.overrides);
       const name = users.length === 1 ? stem : `${stem}_${m.id.slice(4, 10)}`;
       const ev = new GraphEvaluator(context(), { loadImage: loadBitmap });
-      ev.evaluate(gm, size);
-      // (Images arrive a moment after they are asked for.)
-      await new Promise((r) => setTimeout(r, 0));
-      ev.evaluate(gm, size);
       const patch: Partial<MaterialDef> = {};
-      const outs = outputNodes(gm);
-      for (const role of OUTPUT_ROLES) {
-        const n = outs.get(role);
-        const field = MAP_FIELDS[role];
-        if (!n) {
-          (patch as Record<string, unknown>)[field] = undefined;
-          continue;
+      // (Freed even when writing a map fails part way.)
+      try {
+        ev.evaluate(gm, size);
+        // (Images arrive a moment after they are asked for.)
+        await new Promise((r) => setTimeout(r, 0));
+        ev.evaluate(gm, size);
+        const outs = outputNodes(gm);
+        for (const role of OUTPUT_ROLES) {
+          const n = outs.get(role);
+          const field = MAP_FIELDS[role];
+          if (!n) {
+            (patch as Record<string, unknown>)[field] = undefined;
+            continue;
+          }
+          const px = ev.read(n.id);
+          if (!px) continue;
+          const r = await window.cocoa.projects.writeGenerated(dir, `${name}_${role}.png`, await pngBytes(px, size));
+          if (!r.ok) throw new Error(r.error);
+          forgetAsset(r.value);
+          forgetMaterialImage(r.value);
+          (patch as Record<string, unknown>)[field] = r.value;
         }
-        const px = ev.read(n.id);
-        if (!px) continue;
-        const r = await window.cocoa.projects.writeGenerated(dir, `${name}_${role}.png`, await pngBytes(px, size));
-        if (!r.ok) throw new Error(r.error);
-        forgetAsset(r.value);
-        forgetMaterialImage(r.value);
-        (patch as Record<string, unknown>)[field] = r.value;
+      } finally {
+        ev.dispose();
       }
-      ev.dispose();
       if (useEditor.getState().session?.dir !== dir) return;
       useEditor.getState().patchMaterialQuietly(m.id, patch);
     }

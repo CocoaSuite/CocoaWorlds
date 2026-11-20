@@ -186,6 +186,8 @@ export function MaterialsPanel() {
     }
     const { id, graph } = made;
     add({ ...src, id, name, graph, map: undefined, normalMap: undefined, roughnessMap: undefined, metalnessMap: undefined, occlusionMap: undefined, glowMap: undefined, heightMap: undefined, opacityMap: undefined }, `Duplicate material ${src.name}`);
+    // (The bake queued when the graph file was made may have run before the copy was in the project.)
+    bakeLater(graph!);
   };
   const useRow = mat ? (
     <div className="cw-mats-use">
@@ -393,7 +395,14 @@ export function Row({ label, children }: { label: string; children: React.ReactN
 export function Slider({ label, value, min = 0, max = 1, step = 0.01, digits, onChange }: { label: string; value: number; min?: number; max?: number; step?: number; digits?: number; onChange: (v: number) => void }) {
   const d = digits ?? (step >= 1 ? 0 : step >= 0.1 ? 1 : step >= 0.01 ? 2 : 3);
   const [text, setText] = useState<string | null>(null);
+  // (Escape blurs the box too: the blur must not set what was typed.)
+  const cancelled = useRef(false);
   const commit = () => {
+    if (cancelled.current) {
+      cancelled.current = false;
+      setText(null);
+      return;
+    }
     if (text === null) return;
     const v = Number(text.replace(',', '.'));
     setText(null);
@@ -417,7 +426,7 @@ export function Slider({ label, value, min = 0, max = 1, step = 0.01, digits, on
           e.stopPropagation();
           if (e.key === 'Enter') e.currentTarget.blur();
           if (e.key === 'Escape') {
-            setText(null);
+            cancelled.current = true;
             e.currentTarget.blur();
           }
         }}
@@ -684,6 +693,20 @@ export function MaterialPreview({ id, shape }: { id: string; shape: Shape }) {
       /* ignore */
     }
   };
+  /** What is being typed in the tile box (set on Enter or leaving it, so 0.5 can be typed past “0”). */
+  const [tilesText, setTilesText] = useState<string | null>(null);
+  const tilesCancelled = useRef(false);
+  const commitTiles = () => {
+    if (tilesCancelled.current) {
+      tilesCancelled.current = false;
+      setTilesText(null);
+      return;
+    }
+    if (tilesText === null) return;
+    const v = Number(tilesText.replace(',', '.'));
+    setTilesText(null);
+    if (Number.isFinite(v) && v > 0) setTiles(v);
+  };
   const [full, setFull] = useState(false);
   useEffect(() => {
     if (!full) return;
@@ -831,6 +854,9 @@ export function MaterialPreview({ id, shape }: { id: string; shape: Shape }) {
       releaseMaterial(material);
       material.dispose();
       r.dispose();
+      // (Rebuilt on every shape, tile or material change: let the context go now rather than at garbage
+      // collection, or the browser's limit drops the oldest one — the level's or the graph's.)
+      r.forceContextLoss();
       r.domElement.remove();
     };
   }, [id, geometry, shape, tiles]);
@@ -848,17 +874,27 @@ export function MaterialPreview({ id, shape }: { id: string; shape: Shape }) {
         <label className="cw-mats-tiles">
           <span>{t('mat.tiles')}</span>
           <input
-            type="number"
             inputMode="decimal"
-            min={0.25}
-            max={16}
-            step={0.25}
-            value={tiles}
+            value={tilesText ?? String(tiles)}
             aria-label={t('mat.tiles')}
-            onKeyDown={(e) => e.stopPropagation()}
-            onChange={(e) => {
-              const v = Number(e.currentTarget.value);
-              if (Number.isFinite(v) && v > 0) setTiles(v);
+            onFocus={(e) => {
+              setTilesText(String(tiles));
+              e.currentTarget.select();
+            }}
+            onChange={(e) => setTilesText(e.currentTarget.value)}
+            onBlur={commitTiles}
+            onKeyDown={(e) => {
+              e.stopPropagation();
+              if (e.key === 'Enter') e.currentTarget.blur();
+              else if (e.key === 'Escape') {
+                tilesCancelled.current = true;
+                e.currentTarget.blur();
+              } else if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+                e.preventDefault();
+                const n = Math.min(16, Math.max(0.25, tiles + (e.key === 'ArrowUp' ? 0.25 : -0.25)));
+                setTiles(n);
+                setTilesText(String(n));
+              }
             }}
           />
         </label>
