@@ -2,7 +2,7 @@
  * Ambient occlusion (GTAO, screen space): corners, creases and the ground under things darken. Drawn through a
  * composer for one camera at a time; used by the editor (Lighting: Game), Play and exported games alike.
  */
-import { aoOf, bloomOf, type AoSettings, type BloomSettings } from '@cocoaworlds/core';
+import { aoOf, bloomOf, lensOf, lensOn, type AoSettings, type BloomSettings, type LensSettings } from '@cocoaworlds/core';
 import * as THREE from 'three';
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
 import { GTAOPass } from 'three/examples/jsm/postprocessing/GTAOPass.js';
@@ -10,6 +10,9 @@ import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
+import { LensPasses } from './lens';
+
+type Look = { ao?: AoSettings; bloom?: BloomSettings; lens?: Partial<LensSettings> };
 
 /** Every pixel finite and in range: NaN and infinity become black, the rest is capped. */
 const FINITE = {
@@ -26,7 +29,7 @@ void main() {
 };
 
 export class AoRenderer {
-  private c: { composer: EffectComposer; pass: GTAOPass; bloom: UnrealBloomPass; scene: THREE.Scene; cam: THREE.Camera; w: number; h: number } | null = null;
+  private c: { composer: EffectComposer; pass: GTAOPass; bloom: UnrealBloomPass; lens: LensPasses; scene: THREE.Scene; cam: THREE.Camera; w: number; h: number } | null = null;
 
   /** Software rendering (no graphics card): occlusion would slow everything down, so it is left out. */
   readonly software: boolean;
@@ -38,27 +41,36 @@ export class AoRenderer {
     this.software = /swiftshader|llvmpipe|software/i.test(name);
   }
 
-  /** Whether `render` draws the scene into a render target (occlusion or bloom on), not straight to the screen. */
-  active(settings: { ao?: AoSettings; bloom?: BloomSettings } | undefined): boolean {
+  /** Whether `render` draws the scene into a render target (occlusion, bloom or a lens effect on), not straight to the screen. */
+  active(settings: Look | undefined): boolean {
     const s = aoOf(settings);
     const b = bloomOf(settings);
-    return (s.enabled && s.strength > 0 && !this.software) || (b.enabled && b.strength > 0);
+    return (s.enabled && s.strength > 0 && !this.software) || (b.enabled && b.strength > 0) || lensOn(lensOf(settings));
   }
 
-  /** Draw `scene` from `cam` with occlusion and bloom, if either is on. False: nothing drawn (draw it plainly). */
-  render(scene: THREE.Scene, cam: THREE.Camera, settings: { ao?: AoSettings; bloom?: BloomSettings } | undefined): boolean {
+  /** Draw `scene` from `cam` with occlusion, bloom and lens effects, if any is on. False: nothing drawn (draw it plainly). */
+  render(scene: THREE.Scene, cam: THREE.Camera, settings: Look | undefined): boolean {
     const s = aoOf(settings);
     const b = bloomOf(settings);
+    const l = lensOf(settings);
     const aoOn = s.enabled && s.strength > 0 && !this.software;
     const bloomOn = b.enabled && b.strength > 0;
-    if (!aoOn && !bloomOn) return false;
+    if (!aoOn && !bloomOn && !lensOn(l)) return false;
     const size = this.r.getSize(new THREE.Vector2());
     if (!this.c || this.c.cam !== cam || this.c.scene !== scene) {
       this.dispose();
       // (The picture keeps its depth, so occlusion can be left off wherever grass or a plant is in front.)
       const target = new THREE.WebGLRenderTarget(Math.max(1, size.x), Math.max(1, size.y), { type: THREE.HalfFloatType, depthTexture: new THREE.DepthTexture(1, 1) });
       const composer = new EffectComposer(this.r, target);
-      composer.addPass(new RenderPass(scene, cam));
+      const lens = new LensPasses();
+      const scenePass = new RenderPass(scene, cam);
+      // (The composer's two targets take turns: depth of field reads the depth of whichever one the scene went into.)
+      const drawScene = scenePass.render.bind(scenePass);
+      scenePass.render = (r, write, read, dt, mask) => {
+        lens.depth = read.depthTexture;
+        drawScene(r, write, read, dt, mask);
+      };
+      composer.addPass(scenePass);
       const pass = new GTAOPass(scene, cam, size.x, size.y);
       // Objects marked `noAo` (grass) are left out of what the occlusion is measured from, so they get only the
       // little the ground under them gets: barely any.
@@ -135,12 +147,20 @@ void main() {
       // Clean-up before bloom: a single NaN or overflowed pixel (a broken normal, a light right against a surface going
       // past half-float's range) is blurred by bloom over the whole screen and greys it out for as long as it is in
       // view. Such pixels become black, and anything absurdly bright is capped.
-      composer.addPass(new ShaderPass(FINITE));
+      // (Full-screen passes leave depth alone: depth of field reads the depth the scene was drawn with.)
+      const finite = new ShaderPass(FINITE);
+      finite.material.depthTest = finite.material.depthWrite = false;
+      composer.addPass(finite);
+      // Depth of field before bloom (so a blurred lamp still glows), lens distortion, fringes and vignette after it,
+      // grain and scanlines last, over the picture as it will be shown (lens.ts).
+      composer.addPass(lens.dof);
       // Bloom: bright parts, blurred down a few halvings and added back (cheap: it starts at half size).
       const bloom = new UnrealBloomPass(new THREE.Vector2(size.x, size.y), b.strength, b.radius, b.threshold);
       composer.addPass(bloom);
+      composer.addPass(lens.lens);
       composer.addPass(new OutputPass());
-      this.c = { composer, pass, bloom, scene, cam, w: 0, h: 0 };
+      composer.addPass(lens.noise);
+      this.c = { composer, pass, bloom, lens, scene, cam, w: 0, h: 0 };
     }
     const c = this.c;
     if (c.w !== size.x || c.h !== size.y) {
@@ -156,6 +176,8 @@ void main() {
     c.bloom.threshold = Math.max(0, b.threshold);
     c.pass.blendIntensity = Math.min(2, s.strength);
     c.pass.updateGtaoMaterial({ radius: s.radius, thickness: s.radius * 0.5, distanceExponent: 1.5, scale: 1, samples: 16 });
+    const ratio = this.r.getPixelRatio();
+    c.lens.update(l, cam, size.x * ratio, size.y * ratio, ratio, performance.now() / 1000);
     c.composer.render();
     return true;
   }
@@ -164,6 +186,7 @@ void main() {
     this.c?.composer.dispose();
     this.c?.pass.dispose();
     this.c?.bloom.dispose();
+    this.c?.lens.dispose();
     this.c = null;
   }
 }

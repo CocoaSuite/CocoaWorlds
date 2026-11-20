@@ -600,3 +600,23 @@ body, footstep strides and level zones follow the size. Editor: `words.ts`, `Scr
 Next, if wanted: reach scaling with size (an option); a “size” for creatures; an e2e test of the blocks in the
 editor.
 
+### 34. Camera lens effects and noise overlay (2026-11-20)
+
+Status: done. Scene settings › **Camera lens and noise**: depth of field (auto-focus on the middle of the screen or
+a set distance, sharp range, blur), distortion (bulge or pinch, edges kept filled), colour fringes, vignette and
+softness; noise overlay: film grain (size, changes per second, colour, more in shadows), scanlines, flicker; a
+**Look** menu of presets. All off by default (older scenes unchanged). Docs: `docs/rendering.md` (Camera lens and noise).
+
+Code: `packages/core/src/schema.ts` (`LensSettings`, `DEFAULT_LENS`, `lensOf`, `lensOn`, `LENS_PRESETS`);
+`apps/editor/src/renderer/viewport/lens.ts` (`LensPasses`, `DofPass`); `viewport/ao.ts` (the composer: the scene
+pass records which target's depth it drew into; `active` counts the lens so shaders warm up for the target; the
+FINITE clean-up pass no longer writes depth); `editor/Inspector.tsx`, `i18n.ts`. Checked by eye in Chrome
+(SwiftShader) with every preset, and in the editor (e2e screenshots). Pitfall found: a depth-of-field ShaderPass
+drawing into the composer's other target hit a WebGL feedback loop on alternate frames, and on the very first frame
+the depth isn't known when settings are applied: `DofPass` blurs into its own target and reads the depth at render
+time. Tests: `apps/editor/test/lens.test.ts`, e2e `test-e2e/lens.test.mjs` (passed with Electron under xvfb).
+
+Next, if wanted: blocks to change lens settings while playing (blur when hurt, grain at night); distortion is drawn
+in the editor too, so with Lighting: Game a click lands where the undistorted picture would be (switch to Preview
+to edit precisely); lens dirt and flares.
+

@@ -151,6 +151,8 @@ export interface SceneSettings {
   ao?: AoSettings;
   /** Glow around very bright things: lamps, glowing materials, the sun's glare (missing: on). */
   bloom?: BloomSettings;
+  /** Camera lens effects and a noise overlay: depth of field, distortion, colour fringes, vignette, grain, scanlines (missing: all off). */
+  lens?: Partial<LensSettings>;
   /** Day and night: the sun goes round, the sky and light change with it (missing: off). */
   day?: DayCycle;
   /** The map's background sound (wind, birds, a hum), looping and heard everywhere while playing (missing: none). */
@@ -193,6 +195,77 @@ export interface BloomSettings {
 }
 export const DEFAULT_BLOOM: BloomSettings = { enabled: true, strength: 0.6, threshold: 1, radius: 0.4 };
 export const bloomOf = (s: { bloom?: BloomSettings } | undefined): BloomSettings => ({ ...DEFAULT_BLOOM, ...(s?.bloom ?? {}) });
+
+/**
+ * Camera lens effects and a noise overlay, drawn over the finished picture (Lighting: Game, Play and exported games).
+ * Every amount is 0 (off) by default; `enabled` switches the whole set off without losing the numbers.
+ */
+export interface LensSettings {
+  enabled: boolean;
+  /** Depth of field: things nearer or further than the focus blur. */
+  dof: boolean;
+  /** Focus on whatever is in the middle of the screen (else at `focus` units from the camera). */
+  autoFocus: boolean;
+  focus: number;
+  /** Units around the focus that stay sharp. */
+  focusRange: number;
+  /** 0–1: how blurry what is out of focus gets (1: about 16 pixels). */
+  blur: number;
+  /** -1–1: lens distortion (above 0 bulges like a wide or fisheye lens, below 0 pinches). */
+  distortion: number;
+  /** 0–1: colour fringes towards the edges (chromatic aberration). */
+  aberration: number;
+  /** 0–1: how dark the corners get; `vignetteSoftness` 0–1 how gradually. */
+  vignette: number;
+  vignetteSoftness: number;
+  /** 0–1: film grain over the picture; size in pixels (1–8), changes per second (0: still), in colour or grey. */
+  grain: number;
+  grainSize: number;
+  grainSpeed: number;
+  grainColor: boolean;
+  /** 0–1: grain mostly in the dark parts (as film and camera sensors do) rather than everywhere alike. */
+  grainShadows: number;
+  /** 0–1: dark lines across the screen (an old monitor or a security camera); `scanlineSize` pixels per line (2–16). */
+  scanlines: number;
+  scanlineSize: number;
+  /** 0–1: the brightness flickers (old film). */
+  flicker: number;
+}
+export const DEFAULT_LENS: LensSettings = {
+  enabled: true,
+  dof: false,
+  autoFocus: true,
+  focus: 256,
+  focusRange: 128,
+  blur: 0.4,
+  distortion: 0,
+  aberration: 0,
+  vignette: 0,
+  vignetteSoftness: 0.5,
+  grain: 0,
+  grainSize: 1,
+  grainSpeed: 24,
+  grainColor: false,
+  grainShadows: 0.5,
+  scanlines: 0,
+  scanlineSize: 3,
+  flicker: 0,
+};
+export const lensOf = (s: { lens?: Partial<LensSettings> } | undefined): LensSettings => ({ ...DEFAULT_LENS, ...(s?.lens ?? {}) });
+/** Whether any lens effect or noise is showing. */
+export const lensOn = (l: LensSettings): boolean =>
+  l.enabled && ((l.dof && l.blur > 0) || l.distortion !== 0 || l.aberration > 0 || l.vignette > 0 || l.grain > 0 || l.scanlines > 0 || l.flicker > 0);
+
+/** Ready-made looks for the lens settings (the editor's Look menu). */
+export const LENS_PRESETS: { id: string; en: string; ru: string; lens: Partial<LensSettings> }[] = [
+  { id: 'none', en: 'Clean (all off)', ru: 'Чисто (всё выкл.)', lens: { dof: false, distortion: 0, aberration: 0, vignette: 0, grain: 0, scanlines: 0, flicker: 0 } },
+  { id: 'cinematic', en: 'Cinematic', ru: 'Кино', lens: { dof: true, autoFocus: true, focusRange: 160, blur: 0.35, distortion: 0.04, aberration: 0.15, vignette: 0.35, vignetteSoftness: 0.6, grain: 0.12, grainSize: 1, grainSpeed: 24, grainColor: false, grainShadows: 0.6, scanlines: 0, flicker: 0 } },
+  { id: 'film', en: 'Old film', ru: 'Старая плёнка', lens: { dof: false, distortion: 0.08, aberration: 0.05, vignette: 0.7, vignetteSoftness: 0.7, grain: 0.3, grainSize: 2, grainSpeed: 18, grainColor: false, grainShadows: 0.3, scanlines: 0, flicker: 0.5 } },
+  { id: 'vhs', en: 'VHS tape', ru: 'Видеокассета', lens: { dof: false, distortion: 0.12, aberration: 0.7, vignette: 0.3, vignetteSoftness: 0.5, grain: 0.3, grainSize: 2, grainSpeed: 30, grainColor: true, grainShadows: 0.2, scanlines: 0.35, scanlineSize: 3, flicker: 0.15 } },
+  { id: 'security', en: 'Security camera', ru: 'Камера наблюдения', lens: { dof: false, distortion: 0.55, aberration: 0.2, vignette: 0.55, vignetteSoftness: 0.4, grain: 0.35, grainSize: 1, grainSpeed: 15, grainColor: false, grainShadows: 0.5, scanlines: 0.25, scanlineSize: 2, flicker: 0.05 } },
+  { id: 'dream', en: 'Dreamy', ru: 'Сон', lens: { dof: true, autoFocus: true, focusRange: 64, blur: 0.8, distortion: -0.05, aberration: 0.3, vignette: 0.45, vignetteSoftness: 0.9, grain: 0.05, grainColor: true, scanlines: 0, flicker: 0 } },
+  { id: 'tiny', en: 'Tiny world (tilt-shift)', ru: 'Игрушечный мир', lens: { dof: true, autoFocus: true, focusRange: 24, blur: 1, distortion: 0, aberration: 0, vignette: 0.2, vignetteSoftness: 0.8, grain: 0, scanlines: 0, flicker: 0 } },
+];
 export interface DayCycle {
   enabled: boolean;
   /** Real minutes for a whole day (0: time stands still unless a block changes it). */

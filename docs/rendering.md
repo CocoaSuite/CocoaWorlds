@@ -55,6 +55,30 @@ glows), **strength** and **spread** how much. It is Three.js's `UnrealBloomPass`
 occlusion (`viewport/ao.ts`): it starts at half size and blurs a few halvings, so it is cheap. Shown with
 Lighting: Game, in Play and in exported games.
 
+## Camera lens and noise
+
+**Camera lens and noise** (Scene settings) are effects over the finished picture, all off until set. Shown with
+Lighting: Game, in Play and in exported games. **Look** fills them in at once: Clean (all off), Cinematic, Old film,
+VHS tape, Security camera, Dreamy, Tiny world (tilt-shift); change any number after. **Lens effects** switches the
+whole set off without losing the numbers.
+
+- **Depth of field**: what is nearer or further than the focus blurs. **Focus on the middle** focuses on whatever
+  is in the middle of the screen (else at **Focus distance**); **Sharp range** is how many units around the focus
+  stay sharp; **Blur** (0–1) how blurry the rest gets (1: about 16 pixels). Before bloom, so a blurred lamp still glows.
+- **Distortion** (−1–1): above 0 bulges like a wide or fisheye lens (zooming in so the edges stay filled), below 0
+  pinches. **Colour fringes** (0–1): red and blue part towards the edges. **Vignette** (0–1) darkens the corners,
+  **Vignette softness** how gradually.
+- **Noise overlay**: **Film grain** (0–1) in cells of **Grain size** pixels, a new pattern **Grain changes** times a
+  second (0: still), grey or **Colour grain**, **More in shadows** (0–1) as film and camera sensors have it;
+  **Scanlines** (0–1) every **Line size** pixels; **Flicker** (0–1) of the brightness. Drawn last, over the picture as
+  it is shown, so it looks the same whatever the lighting.
+
+Code: `viewport/lens.ts` (`LensPasses`: a depth-of-field pass that blurs into a target of its own, since the
+composer's two targets take turns and the one holding the scene's depth can be the one a pass would write to; lens;
+noise), in the composer of `viewport/ao.ts` (render → occlusion → clean-up → depth of field → bloom → lens → output
+→ noise; full-screen passes never write depth). Settings: `SceneSettings.lens`, `lensOf`, `lensOn`, `LENS_PRESETS`
+(`packages/core/src/schema.ts`). Tests: `apps/editor/test/lens.test.ts`, e2e `test-e2e/lens.test.mjs`.
+
 ## Ambient occlusion
 
 **Ambient occlusion** (Scene settings, on by default) darkens corners, creases and the ground under things, so

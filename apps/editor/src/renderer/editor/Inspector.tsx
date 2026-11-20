@@ -3,11 +3,11 @@ import { SurfaceSoundsEditor } from './SurfaceSounds';
 import { PaintPanel } from '../viewport/PaintPanel';
 import { useState } from 'react';
 import { shown, stored, type AxisKind } from '../axes';
-import { PIVOT, aoOf, bloomOf, dayOf, backgroundSoundOf, gameRules, pivotOf, sceneSettings, worldBoundsOf, type EmptyClass, type EntityData, type SceneSettings as SceneSettingsData, type Transform, type Vec3 } from '@cocoaworlds/core';
+import { LENS_PRESETS, PIVOT, aoOf, bloomOf, lensOf, type LensSettings, dayOf, backgroundSoundOf, gameRules, pivotOf, sceneSettings, worldBoundsOf, type EmptyClass, type EntityData, type SceneSettings as SceneSettingsData, type Transform, type Vec3 } from '@cocoaworlds/core';
 import { brushBounds, brushOf } from '../brush/brushes';
 import { Button, ColorField, Field, NumberField, PanelHeader, Section, Switch } from '@cocoaworlds/ui';
 import { storeProgress } from '../game/progress';
-import { t } from '../i18n';
+import { getLang, t } from '../i18n';
 import { BrushInspector, MultiBrushActions } from './BrushInspector';
 import { FaceInspector } from './FaceInspector';
 import { buildingCatalog } from '@cocoaworlds/runtime';
@@ -184,6 +184,9 @@ function SceneSettings() {
   const cur = sceneSettings(doc.settings);
   const ao = aoOf(doc.settings);
   const bloom = bloomOf(doc.settings);
+  const lens = lensOf(doc.settings);
+  const setLens = (patch: Partial<LensSettings>, label: string, mergeKey?: string) => set({ lens: { ...lens, ...patch } }, label, mergeKey);
+  const unit = (v: number) => Math.max(0, Math.min(1, v));
   const day = dayOf(doc.settings);
   const set = (patch: Partial<SceneSettingsData>, label: string, mergeKey?: string) => st.setSceneSettings(patch, label, mergeKey);
   const sky = cur.sky!;
@@ -235,6 +238,70 @@ function SceneSettings() {
         <Field label={t('insp.background')}>
           <ColorField label={t('insp.background')} value={cur.backgroundColor} onChange={(v) => set({ backgroundColor: v }, 'Background', 'scene-bg')} />
         </Field>
+      </Fold>
+      <Fold id="lens" title={t('insp.lens')}>
+        <Field label={t('insp.lensLook')}>
+          <select
+            className="cw-input cw-select"
+            aria-label={t('insp.lensLook')}
+            value=""
+            onChange={(ev) => {
+              const p = LENS_PRESETS.find((x) => x.id === ev.target.value);
+              if (p) set({ lens: { ...lens, ...p.lens, enabled: true } }, `Lens look: ${p.en}`);
+            }}
+          >
+            <option value="">{t('insp.lensLookPick')}</option>
+            {LENS_PRESETS.map((p) => (
+              <option key={p.id} value={p.id}>
+                {getLang() === 'ru' ? p.ru : p.en}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label={t('insp.lensOn')}>
+          <Switch label={t('insp.lensOn')} checked={lens.enabled} onChange={(v) => setLens({ enabled: v }, v ? 'Lens effects on' : 'Lens effects off')} />
+        </Field>
+        {lens.enabled && (
+          <>
+            <Field label={t('insp.dof')}>
+              <Switch label={t('insp.dof')} checked={lens.dof} onChange={(v) => setLens({ dof: v }, v ? 'Depth of field on' : 'Depth of field off')} />
+            </Field>
+            {lens.dof && (
+              <>
+                <Field label={t('insp.autoFocus')}>
+                  <Switch label={t('insp.autoFocus')} checked={lens.autoFocus} onChange={(v) => setLens({ autoFocus: v }, v ? 'Auto-focus on' : 'Auto-focus off')} />
+                </Field>
+                {!lens.autoFocus && <Field label={t('insp.focus')}>{num(t('insp.focus'), lens.focus, 16, (v) => setLens({ focus: Math.max(1, v) }, 'Focus distance', 'scene-lens-f'), 'u')}</Field>}
+                <Field label={t('insp.focusRange')}>{num(t('insp.focusRange'), lens.focusRange, 16, (v) => setLens({ focusRange: Math.max(0, v) }, 'Sharp range', 'scene-lens-fr'), 'u')}</Field>
+                <Field label={t('insp.blur')}>{num(t('insp.blur'), lens.blur, 0.05, (v) => setLens({ blur: unit(v) }, 'Blur', 'scene-lens-b'))}</Field>
+              </>
+            )}
+            <Field label={t('insp.distortion')}>{num(t('insp.distortion'), lens.distortion, 0.05, (v) => setLens({ distortion: Math.max(-1, Math.min(1, v)) }, 'Lens distortion', 'scene-lens-d'))}</Field>
+            <Field label={t('insp.aberration')}>{num(t('insp.aberration'), lens.aberration, 0.05, (v) => setLens({ aberration: unit(v) }, 'Colour fringes', 'scene-lens-a'))}</Field>
+            <Field label={t('insp.vignette')}>{num(t('insp.vignette'), lens.vignette, 0.05, (v) => setLens({ vignette: unit(v) }, 'Vignette', 'scene-lens-v'))}</Field>
+            {lens.vignette > 0 && (
+              <Field label={t('insp.vignetteSoftness')}>{num(t('insp.vignetteSoftness'), lens.vignetteSoftness, 0.05, (v) => setLens({ vignetteSoftness: unit(v) }, 'Vignette softness', 'scene-lens-vs'))}</Field>
+            )}
+            <p className="cw-hint">{t('insp.noise')}</p>
+            <Field label={t('insp.grain')}>{num(t('insp.grain'), lens.grain, 0.05, (v) => setLens({ grain: unit(v) }, 'Film grain', 'scene-lens-g'))}</Field>
+            {lens.grain > 0 && (
+              <>
+                <Field label={t('insp.grainSize')}>{num(t('insp.grainSize'), lens.grainSize, 1, (v) => setLens({ grainSize: Math.max(1, Math.min(8, Math.round(v))) }, 'Grain size', 'scene-lens-gs'), 'px')}</Field>
+                <Field label={t('insp.grainSpeed')}>{num(t('insp.grainSpeed'), lens.grainSpeed, 1, (v) => setLens({ grainSpeed: Math.max(0, Math.min(60, v)) }, 'Grain changes', 'scene-lens-gv'), '/s')}</Field>
+                <Field label={t('insp.grainColor')}>
+                  <Switch label={t('insp.grainColor')} checked={lens.grainColor} onChange={(v) => setLens({ grainColor: v }, v ? 'Colour grain' : 'Grey grain')} />
+                </Field>
+                <Field label={t('insp.grainShadows')}>{num(t('insp.grainShadows'), lens.grainShadows, 0.05, (v) => setLens({ grainShadows: unit(v) }, 'Grain in shadows', 'scene-lens-gd'))}</Field>
+              </>
+            )}
+            <Field label={t('insp.scanlines')}>{num(t('insp.scanlines'), lens.scanlines, 0.05, (v) => setLens({ scanlines: unit(v) }, 'Scanlines', 'scene-lens-s'))}</Field>
+            {lens.scanlines > 0 && (
+              <Field label={t('insp.scanlineSize')}>{num(t('insp.scanlineSize'), lens.scanlineSize, 1, (v) => setLens({ scanlineSize: Math.max(2, Math.min(16, Math.round(v))) }, 'Scanline size', 'scene-lens-ss'), 'px')}</Field>
+            )}
+            <Field label={t('insp.flicker')}>{num(t('insp.flicker'), lens.flicker, 0.05, (v) => setLens({ flicker: unit(v) }, 'Flicker', 'scene-lens-fl'))}</Field>
+            <p className="cw-hint">{t('insp.lensHint')}</p>
+          </>
+        )}
       </Fold>
       <Fold id="sky" title={t('insp.sky')}>
         <Field label={t('insp.skyOn')}>
