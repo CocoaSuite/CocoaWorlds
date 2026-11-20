@@ -623,6 +623,18 @@ code { font: var(--fs-m) var(--mono); color: var(--fg); }
 /* The screens' own blocks, under the screen in the Screens workspace. */
 .cw-screens-script { flex: none; height: 38%; min-height: 160px; overflow: auto; border: 1px solid var(--line); border-radius: var(--r-m); background: var(--panel); padding: 8px 10px; }
 /* A setting with a button beside it (expose, reset). */
+/* The material editor's slider: name inside the bar, value on the right, filled to the value with a white edge. */
+.cw-screens-row.bare { grid-template-columns: 1fr; }
+.cw-bar-slider { position: relative; display: block; flex: none; width: 100%; min-width: 0; height: 26px; border-radius: var(--r-s); background: var(--cbg); overflow: hidden; }
+.cw-bar-fill { position: absolute; inset: 0 auto 0 0; width: calc(var(--at) * 100%); background: var(--menuhover); pointer-events: none; }
+.cw-bar-slider:hover .cw-bar-fill { background: var(--acc); }
+.cw-bar-edge { position: absolute; top: 3px; bottom: 3px; left: calc(var(--at) * (100% - 2px)); width: 2px; border-radius: 1px; background: var(--pri); pointer-events: none; }
+.cw-bar-label { position: absolute; left: 8px; right: 64px; top: 0; line-height: 26px; font-size: var(--fs-l); color: var(--mute); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; pointer-events: none; }
+.cw-bar-range { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: ew-resize; touch-action: none; }
+.cw-bar-slider:has(.cw-bar-range:focus-visible) { box-shadow: 0 0 0 1px var(--sel); }
+.cw-bar-num { position: absolute; right: 4px; top: 3px; height: 20px; width: 58px; padding: 0 4px; border: 1px solid transparent; border-radius: 3px; background: transparent; font-family: var(--mono); font-size: var(--fs-l); color: var(--fg); text-align: right; cursor: text; }
+.cw-bar-num:hover { border-color: var(--line); }
+.cw-bar-num:focus { border-color: var(--sel); background: var(--bg); outline: none; }
 .cm-param { display: flex; align-items: center; gap: 6px; width: 100%; min-width: 0; }
 .cm-param > :first-child { flex: 1; min-width: 0; }
 .cm-expose.on { color: var(--cw-brand-hi); border-color: var(--cw-brand); }

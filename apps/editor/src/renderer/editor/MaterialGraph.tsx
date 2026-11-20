@@ -60,7 +60,7 @@ import { createContext, memo, useCallback, useContext, useEffect, useMemo, useRe
 import { getLang, t } from '../i18n';
 import { LiveGraph, bakeLater, bakeNow, endGraphGesture, loadGraph, nodeIcons, setGraph, setGraphLive, useGraphs } from '../materials/graphs';
 import { useEditor } from '../store';
-import { ImagePick, MaterialPreview, Row, Slider, WearSettings, type Shape } from './MaterialsPanel';
+import { BarSlider, ImagePick, MaterialPreview, Row, WearSettings, type Shape } from './MaterialsPanel';
 
 const say = (x: L) => (getLang() === 'ru' ? x.ru : x.en);
 /** The live picture size: the baked size, but no more than 512 while editing. */
@@ -1057,7 +1057,7 @@ function RampField({ value, onChange }: { value: RampStop[]; onChange: (v: RampS
       {value.map((s, i) => (
         <div className="cm-ramp-row" key={i}>
           <ColorField label={`${t('cm.stop')} ${i + 1}`} value={s.color} onChange={(c) => onChange(value.map((x, j) => (j === i ? { ...x, color: c } : x)), `ramp-c-${i}`)} />
-          <Slider label={`${t('cm.stopAt')} ${i + 1}`} value={s.at} onChange={(v) => onChange(value.map((x, j) => (j === i ? { ...x, at: v } : x)), `ramp-a-${i}`)} />
+          <BarSlider label={`${t('cm.stopAt')} ${i + 1}`} value={s.at} onChange={(v) => onChange(value.map((x, j) => (j === i ? { ...x, at: v } : x)), `ramp-a-${i}`)} />
           <button type="button" className="cw-iconbtn" aria-label={`${t('cm.removeStop')} ${i + 1}`} disabled={value.length < 2} onClick={() => onChange(value.filter((_, j) => j !== i), 'ramp-del')}>
             ×
           </button>
@@ -1084,13 +1084,18 @@ function RampField({ value, onChange }: { value: RampStop[]; onChange: (v: RampS
   );
 }
 
+/** A settings row for a control that names itself (a slider): the whole width, no label column. */
+function BareRow({ children }: { label: string; children: React.ReactNode }) {
+  return <div className="cw-screens-row bare">{children}</div>;
+}
+
 function ParamField({ p, value, onChange, textures, label: named }: { p: Param; value: ParamValue; onChange: (v: ParamValue, key?: string) => void; textures: { path: string; name: string }[]; label?: string }) {
   const label = named ?? say(p.label);
   switch (p.kind) {
     case 'number':
-      return <Slider label={label} value={Number(value)} max={p.max} min={p.min} step={p.step ?? (p.max - p.min > 20 ? 1 : 0.01)} onChange={(v) => onChange(v, p.id)} />;
+      return <BarSlider label={label} value={Number(value)} max={p.max} min={p.min} step={p.step ?? (p.max - p.min > 20 ? 1 : 0.01)} onChange={(v) => onChange(v, p.id)} />;
     case 'int':
-      return <Slider label={label} value={Number(value)} max={p.max} min={p.min} step={1} digits={0} onChange={(v) => onChange(Math.round(v), p.id)} />;
+      return <BarSlider label={label} value={Number(value)} max={p.max} min={p.min} step={1} digits={0} onChange={(v) => onChange(Math.round(v), p.id)} />;
     case 'seed':
       return (
         <span className="cw-screens-pair">
@@ -1143,8 +1148,10 @@ function NodeProps({ path, graph, node, onSelect }: { path: string; graph: MatGr
       {errors.get(node.id) && <p className="cw-screens-note cm-bad">{errors.get(node.id)}</p>}
       {def.params.map((p) => {
         const shown = (graph.exposed ?? []).some((e) => e.node === node.id && e.param === p.id);
+        // (Sliders carry their own name.)
+        const Wrap = p.kind === 'number' || p.kind === 'int' ? BareRow : Row;
         return (
-          <Row key={p.id} label={say(p.label)}>
+          <Wrap key={p.id} label={say(p.label)}>
             <span className="cm-param">
               <ParamField p={p} value={params[p.id]!} textures={textures} onChange={(v, key) => change(p.id, v, key)} />
               <button
@@ -1163,7 +1170,7 @@ function NodeProps({ path, graph, node, onSelect }: { path: string; graph: MatGr
                 {shown ? '◆' : '◇'}
               </button>
             </span>
-          </Row>
+          </Wrap>
         );
       })}
       {!def.params.length && <p className="cw-muted cw-screens-note">{t('cm.noSettings')}</p>}
@@ -1254,6 +1261,7 @@ function GraphMaterialProps({
             const n = graph!.nodes.find((x) => x.id === e.node)!;
             const p = nodeDef(n.type)!.params.find((x) => x.id === e.param)!;
             const value = own[e.id] ?? paramsOf(n)[e.param]!;
+            const Wrap = p.kind === 'number' || p.kind === 'int' ? BareRow : Row;
             const set = (v: ParamValue | undefined, key?: string) => {
               const next = { ...own };
               if (v === undefined) delete next[e.id];
@@ -1261,14 +1269,14 @@ function GraphMaterialProps({
               edit({ overrides: Object.keys(next).length ? next : undefined }, `Material setting ${e.label}`, key ? `mat-own-${m.id}-${e.id}` : undefined);
             };
             return (
-              <Row key={e.id} label={e.label}>
+              <Wrap key={e.id} label={e.label}>
                 <span className="cm-param">
                   <ParamField p={p} value={value} textures={textures} label={e.label} onChange={(v, key) => set(v, key)} />
                   <button type="button" className="cw-iconbtn" aria-label={`${t('cm.resetOwn')} ${e.label}`} title={t('cm.resetOwn')} disabled={own[e.id] === undefined} onClick={() => set(undefined)}>
                     ↺
                   </button>
                 </span>
-              </Row>
+              </Wrap>
             );
           })}
           <p className="cw-muted cw-screens-note">{t('cm.ownHint')}</p>
@@ -1295,18 +1303,10 @@ function GraphMaterialProps({
           ))}
         </select>
       </Row>
-      <Row label={t('mat.bumps')}>
-        <Slider label={t('mat.bumps')} value={m.normalStrength ?? 1} max={2} onChange={(v) => edit({ normalStrength: v === 1 ? undefined : v }, 'Bump strength', `mat-bumps-${m.id}`)} />
-      </Row>
-      <Row label={t('mat.glowStrength')}>
-        <Slider label={t('mat.glowStrength')} value={m.emissiveStrength ?? 1} max={10} step={0.1} onChange={(v) => edit({ emissiveStrength: v === 1 ? undefined : v }, 'Glow strength', `mat-glow-i-${m.id}`)} />
-      </Row>
-      <Row label={t('mat.opacity')}>
-        <Slider label={t('mat.opacity')} value={m.opacity ?? 1} onChange={(v) => edit({ opacity: v >= 1 ? undefined : v }, 'Material opacity', `mat-opacity-${m.id}`)} />
-      </Row>
-      <Row label={t('mat.refraction')}>
-        <Slider label={t('mat.refraction')} value={m.refraction ?? 0} onChange={(v) => edit({ refraction: v > 0 ? v : undefined }, 'Glass', `mat-glass-${m.id}`)} />
-      </Row>
+      <BarSlider label={t('mat.bumps')} value={m.normalStrength ?? 1} max={2} onChange={(v) => edit({ normalStrength: v === 1 ? undefined : v }, 'Bump strength', `mat-bumps-${m.id}`)} />
+      <BarSlider label={t('mat.glowStrength')} value={m.emissiveStrength ?? 1} max={10} step={0.1} onChange={(v) => edit({ emissiveStrength: v === 1 ? undefined : v }, 'Glow strength', `mat-glow-i-${m.id}`)} />
+      <BarSlider label={t('mat.opacity')} value={m.opacity ?? 1} onChange={(v) => edit({ opacity: v >= 1 ? undefined : v }, 'Material opacity', `mat-opacity-${m.id}`)} />
+      <BarSlider label={t('mat.refraction')} value={m.refraction ?? 0} onChange={(v) => edit({ refraction: v > 0 ? v : undefined }, 'Glass', `mat-glass-${m.id}`)} />
       {(m.refraction ?? 0) > 0 && (
         <>
           <Row label={t('mat.ior')}>
@@ -1318,20 +1318,12 @@ function GraphMaterialProps({
           <p className="cw-muted cw-screens-note">{t('mat.glassHint')}</p>
         </>
       )}
-      <Row label={t('mat.bevel')}>
-        <Slider label={t('mat.bevel')} value={m.bevel ?? 0} min={0} max={32} step={1} digits={0} onChange={(v) => edit({ bevel: v > 0 ? v : undefined }, 'Bevel edges', `mat-bevel-${m.id}`)} />
-      </Row>
-      <Row label={t('mat.blend')}>
-        <Slider label={t('mat.blend')} value={m.blend ?? 0} min={0} max={64} step={1} digits={0} onChange={(v) => edit({ blend: v > 0 ? v : undefined }, 'Blend into ground', `mat-blend-${m.id}`)} />
-      </Row>
+      <BarSlider label={t('mat.bevel')} value={m.bevel ?? 0} min={0} max={32} step={1} digits={0} onChange={(v) => edit({ bevel: v > 0 ? v : undefined }, 'Bevel edges', `mat-bevel-${m.id}`)} />
+      <BarSlider label={t('mat.blend')} value={m.blend ?? 0} min={0} max={64} step={1} digits={0} onChange={(v) => edit({ blend: v > 0 ? v : undefined }, 'Blend into ground', `mat-blend-${m.id}`)} />
       {(m.blend ?? 0) > 0 && (
         <>
-          <Row label={t('mat.blendNoise')}>
-            <Slider label={t('mat.blendNoise')} value={m.blendNoise ?? 0.5} min={0} max={1} step={0.05} onChange={(v) => edit({ blendNoise: v }, 'Blend edge', `mat-blendn-${m.id}`)} />
-          </Row>
-          <Row label={t('mat.blendSize')}>
-            <Slider label={t('mat.blendSize')} value={m.blendSize ?? 24} min={2} max={128} step={1} digits={0} onChange={(v) => edit({ blendSize: v }, 'Blend edge', `mat-blends-${m.id}`)} />
-          </Row>
+          <BarSlider label={t('mat.blendNoise')} value={m.blendNoise ?? 0.5} min={0} max={1} step={0.05} onChange={(v) => edit({ blendNoise: v }, 'Blend edge', `mat-blendn-${m.id}`)} />
+          <BarSlider label={t('mat.blendSize')} value={m.blendSize ?? 24} min={2} max={128} step={1} digits={0} onChange={(v) => edit({ blendSize: v }, 'Blend edge', `mat-blends-${m.id}`)} />
         </>
       )}
       <WearSettings m={m} edit={edit} />

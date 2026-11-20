@@ -435,6 +435,65 @@ export function Slider({ label, value, min = 0, max = 1, step = 0.01, digits, on
   );
 }
 
+/**
+ * The material editor's slider: one bar with its name inside on the left and its value on the right, filled up
+ * to the value with a white edge. Dragging or clicking anywhere sets it (a range input laid over the bar, so
+ * keys, touch and screen readers work as usual); clicking the number lets it be typed (Enter sets it, Escape
+ * leaves it). `percent` shows 0–1 as 0–100%.
+ */
+export function BarSlider({ label, value, min = 0, max = 1, step = 0.01, digits, percent, onChange }: { label: string; value: number; min?: number; max?: number; step?: number; digits?: number; percent?: boolean; onChange: (v: number) => void }) {
+  const k = percent ? 100 : 1;
+  const d = digits ?? (percent ? 0 : step >= 1 ? 0 : step >= 0.1 ? 1 : step >= 0.01 ? 2 : 3);
+  const shown = `${(value * k).toFixed(d)}${percent ? '%' : ''}`;
+  const [text, setText] = useState<string | null>(null);
+  // (Escape blurs the box too: the blur must not set what was typed.)
+  const cancelled = useRef(false);
+  const commit = () => {
+    const typed = text;
+    setText(null);
+    if (cancelled.current) {
+      cancelled.current = false;
+      return;
+    }
+    if (typed === null) return;
+    const v = Number(typed.replace(',', '.').replace('%', '').trim()) / k;
+    if (Number.isFinite(v) && v !== value) onChange(Math.min(max, Math.max(min, v)));
+  };
+  const at = max > min ? Math.min(1, Math.max(0, (value - min) / (max - min))) : 0;
+  return (
+    <span className="cw-bar-slider" style={{ '--at': at } as React.CSSProperties}>
+      <span className="cw-bar-fill" aria-hidden />
+      <span className="cw-bar-edge" aria-hidden />
+      <span className="cw-bar-label" aria-hidden>
+        {label}
+      </span>
+      <input type="range" className="cw-bar-range" aria-label={label} min={min} max={max} step={step} value={value} onChange={(e) => onChange(Number(e.currentTarget.value))} />
+      <input
+        className="cw-bar-num"
+        inputMode="decimal"
+        aria-label={`${label} (number)`}
+        value={text ?? shown}
+        onFocus={(e) => {
+          setText((value * k).toFixed(d));
+          // (After the box shows the plain number, or the new text would land beside the selection.)
+          const el = e.currentTarget;
+          requestAnimationFrame(() => document.activeElement === el && el.select());
+        }}
+        onChange={(e) => setText(e.currentTarget.value)}
+        onBlur={commit}
+        onKeyDown={(e) => {
+          e.stopPropagation();
+          if (e.key === 'Enter') e.currentTarget.blur();
+          if (e.key === 'Escape') {
+            cancelled.current = true;
+            e.currentTarget.blur();
+          }
+        }}
+      />
+    </span>
+  );
+}
+
 export function ImagePick({ label, value, textures, onChange }: { label: string; value: string | undefined; textures: { path: string; name: string }[]; onChange: (v: string | undefined) => void }) {
   return (
     <select className="cw-input" aria-label={label} value={value ?? ''} onChange={(e) => onChange(e.currentTarget.value || undefined)}>
@@ -544,19 +603,11 @@ function MaterialProps({
         <ImagePick label={t('mat.normal')} value={m.normalMap} textures={textures} onChange={(v) => edit({ normalMap: v, normalStrength: v ? m.normalStrength : undefined }, 'Material surface map')} />
       </Row>
       {m.normalMap && (
-        <Row label={t('mat.bumps')}>
-          <Slider label={t('mat.bumps')} value={m.normalStrength ?? 1} max={2} onChange={(v) => edit({ normalStrength: v === 1 ? undefined : v }, 'Bump strength', `mat-bumps-${m.id}`)} />
-        </Row>
+        <BarSlider label={t('mat.bumps')} value={m.normalStrength ?? 1} max={2} onChange={(v) => edit({ normalStrength: v === 1 ? undefined : v }, 'Bump strength', `mat-bumps-${m.id}`)} />
       )}
-      <Row label={t('mat.roughness')}>
-        <Slider label={t('mat.roughness')} value={m.roughness} onChange={(v) => edit({ roughness: v }, 'Material roughness', `mat-rough-${m.id}`)} />
-      </Row>
-      <Row label={t('mat.metalness')}>
-        <Slider label={t('mat.metalness')} value={m.metalness} onChange={(v) => edit({ metalness: v }, 'Material metalness', `mat-metal-${m.id}`)} />
-      </Row>
-      <Row label={t('mat.opacity')}>
-        <Slider label={t('mat.opacity')} value={m.opacity ?? 1} onChange={(v) => edit({ opacity: v >= 1 ? undefined : v }, 'Material opacity', `mat-opacity-${m.id}`)} />
-      </Row>
+      <BarSlider label={t('mat.roughness')} value={m.roughness} onChange={(v) => edit({ roughness: v }, 'Material roughness', `mat-rough-${m.id}`)} />
+      <BarSlider label={t('mat.metalness')} value={m.metalness} onChange={(v) => edit({ metalness: v }, 'Material metalness', `mat-metal-${m.id}`)} />
+      <BarSlider percent label={t('mat.opacity')} value={m.opacity ?? 1} onChange={(v) => edit({ opacity: v >= 1 ? undefined : v }, 'Material opacity', `mat-opacity-${m.id}`)} />
       <label className="cw-screens-sw">
         <Switch label={t('mat.glows')} checked={glows} onChange={(v) => edit({ emissive: v ? m.color : undefined, emissiveStrength: v ? 1 : undefined }, v ? 'Material glows' : 'Material stops glowing')} />
         {t('mat.glows')}
@@ -569,14 +620,10 @@ function MaterialProps({
           <Row label={t('mat.glowColor')}>
             <ColorField label={t('mat.glowColor')} value={m.emissive!} onChange={(v) => edit({ emissive: v }, 'Glow colour', `mat-glow-${m.id}`)} />
           </Row>
-          <Row label={t('mat.glowStrength')}>
-            <Slider label={t('mat.glowStrength')} value={m.emissiveStrength ?? 1} max={10} step={0.1} onChange={(v) => edit({ emissiveStrength: v }, 'Glow strength', `mat-glow-i-${m.id}`)} />
-          </Row>
+          <BarSlider label={t('mat.glowStrength')} value={m.emissiveStrength ?? 1} max={10} step={0.1} onChange={(v) => edit({ emissiveStrength: v }, 'Glow strength', `mat-glow-i-${m.id}`)} />
         </>
       )}
-      <Row label={t('mat.refraction')}>
-        <Slider label={t('mat.refraction')} value={m.refraction ?? 0} onChange={(v) => edit({ refraction: v > 0 ? v : undefined }, 'Glass', `mat-glass-${m.id}`)} />
-      </Row>
+      <BarSlider label={t('mat.refraction')} value={m.refraction ?? 0} onChange={(v) => edit({ refraction: v > 0 ? v : undefined }, 'Glass', `mat-glass-${m.id}`)} />
       {(m.refraction ?? 0) > 0 && (
         <>
           <Row label={t('mat.ior')}>
@@ -588,20 +635,12 @@ function MaterialProps({
           <p className="cw-muted cw-screens-note">{t('mat.glassHint')}</p>
         </>
       )}
-      <Row label={t('mat.bevel')}>
-        <Slider label={t('mat.bevel')} value={m.bevel ?? 0} min={0} max={32} step={1} digits={0} onChange={(v) => edit({ bevel: v > 0 ? v : undefined }, 'Bevel edges', `mat-bevel-${m.id}`)} />
-      </Row>
-      <Row label={t('mat.blend')}>
-        <Slider label={t('mat.blend')} value={m.blend ?? 0} min={0} max={64} step={1} digits={0} onChange={(v) => edit({ blend: v > 0 ? v : undefined }, 'Blend into ground', `mat-blend-${m.id}`)} />
-      </Row>
+      <BarSlider label={t('mat.bevel')} value={m.bevel ?? 0} min={0} max={32} step={1} digits={0} onChange={(v) => edit({ bevel: v > 0 ? v : undefined }, 'Bevel edges', `mat-bevel-${m.id}`)} />
+      <BarSlider label={t('mat.blend')} value={m.blend ?? 0} min={0} max={64} step={1} digits={0} onChange={(v) => edit({ blend: v > 0 ? v : undefined }, 'Blend into ground', `mat-blend-${m.id}`)} />
       {(m.blend ?? 0) > 0 && (
         <>
-          <Row label={t('mat.blendNoise')}>
-            <Slider label={t('mat.blendNoise')} value={m.blendNoise ?? 0.5} min={0} max={1} step={0.05} onChange={(v) => edit({ blendNoise: v }, 'Blend edge', `mat-blendn-${m.id}`)} />
-          </Row>
-          <Row label={t('mat.blendSize')}>
-            <Slider label={t('mat.blendSize')} value={m.blendSize ?? 24} min={2} max={128} step={1} digits={0} onChange={(v) => edit({ blendSize: v }, 'Blend edge', `mat-blends-${m.id}`)} />
-          </Row>
+          <BarSlider label={t('mat.blendNoise')} value={m.blendNoise ?? 0.5} min={0} max={1} step={0.05} onChange={(v) => edit({ blendNoise: v }, 'Blend edge', `mat-blendn-${m.id}`)} />
+          <BarSlider label={t('mat.blendSize')} value={m.blendSize ?? 24} min={2} max={128} step={1} digits={0} onChange={(v) => edit({ blendSize: v }, 'Blend edge', `mat-blends-${m.id}`)} />
         </>
       )}
       <WearSettings m={m} edit={edit} />
@@ -927,30 +966,16 @@ export function WearSettings({ m, edit }: { m: MaterialDef; edit: (patch: Partia
       </label>
       {w && (
         <>
-          <Row label={t('wear.edge')}>
-            <Slider label={t('wear.edge')} value={w.edge} onChange={(v) => set({ edge: v }, 'Wear on edges', 'edge')} />
-          </Row>
-          <Row label={t('wear.crease')}>
-            <Slider label={t('wear.crease')} value={w.crease} onChange={(v) => set({ crease: v }, 'Wear in creases', 'crease')} />
-          </Row>
-          <Row label={t('wear.up')}>
-            <Slider label={t('wear.up')} value={w.up} onChange={(v) => set({ up: v }, 'Wear on top', 'up')} />
-          </Row>
-          <Row label={t('wear.width')}>
-            <Slider label={t('wear.width')} value={w.width} min={0.5} max={32} step={0.5} onChange={(v) => set({ width: v }, 'Wear width', 'width')} />
-          </Row>
-          <Row label={t('wear.noise')}>
-            <Slider label={t('wear.noise')} value={w.noise} onChange={(v) => set({ noise: v }, 'Wear noise', 'noise')} />
-          </Row>
+          <BarSlider label={t('wear.edge')} value={w.edge} onChange={(v) => set({ edge: v }, 'Wear on edges', 'edge')} />
+          <BarSlider label={t('wear.crease')} value={w.crease} onChange={(v) => set({ crease: v }, 'Wear in creases', 'crease')} />
+          <BarSlider label={t('wear.up')} value={w.up} onChange={(v) => set({ up: v }, 'Wear on top', 'up')} />
+          <BarSlider label={t('wear.width')} value={w.width} min={0.5} max={32} step={0.5} onChange={(v) => set({ width: v }, 'Wear width', 'width')} />
+          <BarSlider label={t('wear.noise')} value={w.noise} onChange={(v) => set({ noise: v }, 'Wear noise', 'noise')} />
           <Row label={t('wear.color')}>
             <ColorField label={t('wear.color')} value={w.color} onChange={(v) => set({ color: v }, 'Wear colour', 'color')} />
           </Row>
-          <Row label={t('wear.roughness')}>
-            <Slider label={t('wear.roughness')} value={w.roughness} onChange={(v) => set({ roughness: v }, 'Wear roughness', 'rough')} />
-          </Row>
-          <Row label={t('wear.metalness')}>
-            <Slider label={t('wear.metalness')} value={w.metalness} onChange={(v) => set({ metalness: v }, 'Wear metal', 'metal')} />
-          </Row>
+          <BarSlider label={t('wear.roughness')} value={w.roughness} onChange={(v) => set({ roughness: v }, 'Wear roughness', 'rough')} />
+          <BarSlider label={t('wear.metalness')} value={w.metalness} onChange={(v) => set({ metalness: v }, 'Wear metal', 'metal')} />
           <p className="cw-muted cw-screens-note">{t(m.graph ? 'wear.graphHint' : 'wear.hint')}</p>
         </>
       )}
