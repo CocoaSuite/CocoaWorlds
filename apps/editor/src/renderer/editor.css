@@ -229,6 +229,8 @@ code { font: var(--fs-m) var(--mono); color: var(--fg); }
 .cw-cover.black { background: #000; }
 .cw-cover.white { background: #fff; }
 .cw-ov.cw-hud-messages { z-index: 6; }
+.cw-ov.cw-hud-caption { left: 50%; bottom: 14%; transform: translateX(-50%); max-width: 70%; pointer-events: none; z-index: 6; text-align: center; }
+.cw-hud-caption-text { display: inline-block; background: rgba(0, 0, 0, 0.55); color: #fff; font-size: 20px; line-height: 1.35; padding: 4px 12px; border-radius: 4px; white-space: pre-line; }
 .cw-hurt { position: absolute; inset: 0; pointer-events: none; box-shadow: inset 0 0 80px 20px rgba(220, 30, 20, 0.55); }
 @media (prefers-reduced-motion: reduce) { .cw-hud-bar > span { transition: none; } }
 @media (prefers-reduced-motion: reduce) { .cw-playing .cw-side, .cw-playing .cw-tbar { transition: none; } }

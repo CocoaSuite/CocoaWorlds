@@ -48,16 +48,17 @@ describe('voice-over', () => {
     expect(events[0]).toMatchObject({ type: 'voice', sound: 'assets/sounds/a.wav', volume: 0.8 });
     // (No sound started it: the captions wait a moment, then show anyway.)
     run(w, 1.5);
-    expect(w.screenMessages()).toEqual(['Hello.']);
+    expect(w.captionNow()).toBe('Hello.');
     run(w, 1);
-    expect(w.screenMessages()).toEqual(['Second line.']);
+    expect(w.captionNow()).toBe('Second line.');
     run(w, 0.5);
     w.voiceBegan('assets/sounds/b.wav');
     run(w, 0.2);
     expect(events[1]).toMatchObject({ type: 'voice', sound: 'assets/sounds/b.wav' });
-    expect(w.screenMessages()).toEqual(['New.']);
+    expect(w.captionNow()).toBe('New.');
     run(w, 2);
     expect(events.at(-1)).toMatchObject({ type: 'voice.stop' });
+    expect(w.captionNow()).toBeNull();
     expect(w.screenMessages()).toEqual([]);
     w.dispose();
   });

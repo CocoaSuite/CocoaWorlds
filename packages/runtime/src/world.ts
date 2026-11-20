@@ -4434,7 +4434,16 @@ export class GameWorld {
   /** The messages on screen now, oldest first. */
   screenMessages(): string[] {
     this.messages = this.messages.filter((m) => m.until > this.time);
-    return this.messages.map((m) => m.text);
+    return this.messages.filter((m) => m.from !== '@voice').map((m) => m.text);
+  }
+
+  /** The voice-over caption on screen now (shown near the bottom, apart from other messages), or null. */
+  captionNow(): string | null {
+    for (let i = this.messages.length - 1; i >= 0; i--) {
+      const m = this.messages[i]!;
+      if (m.from === '@voice' && m.until > this.time) return m.text;
+    }
+    return null;
   }
 
   /** Every game value with its current value, and whether it's shown on screen. */

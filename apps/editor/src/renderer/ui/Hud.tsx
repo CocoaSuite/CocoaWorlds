@@ -36,6 +36,8 @@ export interface Hud {
   values: { name: string; value: string }[];
   /** Messages in the middle of the screen, oldest first. */
   messages: string[];
+  /** The voice-over caption, near the bottom (null: none). */
+  caption: string | null;
   /** Looking at something usable: its prompt word ('' for plain “Use”), else null. */
   use: string | null;
   /** Base building: the blueprint aimed at (how full it is), the one in hand's ghost, a door or a damaged piece. */
@@ -116,6 +118,7 @@ export function hudOf(play: PlaySession, locked: boolean): Hud {
     hurt: (status?.sinceHurt ?? Infinity) < 0.35,
     values: screen.values.filter((v) => v.show).map((v) => ({ name: v.name, value: formatValue(v.value) })),
     messages: screen.messages,
+    caption: screen.caption,
     use: locked ? play.usePrompt() : null,
     build: locked ? play.buildPrompt() : null,
     placing: locked && play.placing,
@@ -185,6 +188,11 @@ export function HudView({ hud }: { hud: Hud }) {
               {m}
             </div>
           ))}
+        </div>
+      )}
+      {hud.caption && (
+        <div className="cw-ov cw-hud-caption" data-testid="hud-caption" role="status">
+          <div className="cw-hud-caption-text">{hud.caption}</div>
         </div>
       )}
       {hud.hurt && hud.hasHealth && <div className="cw-hurt" aria-hidden="true" />}

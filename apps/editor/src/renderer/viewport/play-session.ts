@@ -1347,8 +1347,8 @@ export class PlaySession {
   }
 
   /** Game values (all, with whether each is shown) and the messages on screen now. */
-  screen(): { values: { name: string; value: unknown; show: boolean }[]; messages: string[] } {
-    return { values: this.world.gameValues(), messages: this.world.screenMessages() };
+  screen(): { values: { name: string; value: unknown; show: boolean }[]; messages: string[]; caption: string | null } {
+    return { values: this.world.gameValues(), messages: this.world.screenMessages(), caption: this.world.captionNow() };
   }
 
   /** What is kept between sessions now (null: nothing). */
