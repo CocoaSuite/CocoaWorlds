@@ -69,6 +69,8 @@ export class SoundStage {
   private ctx: AudioContext;
   private lowpass: BiquadFilterNode;
   private dry: GainNode;
+  /** Everything heard goes through here last (screen fades turn it down). */
+  private master: GainNode;
   /** Sounds that areas don't change go here, straight out. */
   readonly plain: GainNode;
   /** Sounds from outside the sealed room the ears are in go here first: muffled, then on as any other. */
@@ -87,11 +89,13 @@ export class SoundStage {
     this.lowpass.Q.value = 0.7;
     this.dry = ctx.createGain();
     this.plain = ctx.createGain();
+    this.master = ctx.createGain();
+    this.master.connect(ctx.destination);
     listener.gain.disconnect();
     listener.gain.connect(this.lowpass);
     this.lowpass.connect(this.dry);
-    this.dry.connect(ctx.destination);
-    this.plain.connect(ctx.destination);
+    this.dry.connect(this.master);
+    this.plain.connect(this.master);
     this.outside = ctx.createGain();
     this.muffle = ctx.createBiquadFilter();
     this.muffle.type = 'lowpass';
@@ -182,8 +186,14 @@ export class SoundStage {
     const wet = this.ctx.createGain();
     wet.gain.value = 0;
     conv.connect(wet);
-    wet.connect(this.ctx.destination);
+    wet.connect(this.master);
     this.echoes.set(effect, { conv, wet, plugged: false, idleAt: Infinity });
+  }
+
+  /** The volume of everything, 0–1 (follows the frame; no glide). */
+  setMaster(v: number): void {
+    const g = Math.max(0, Math.min(1, v));
+    if (Math.abs(this.master.gain.value - g) > 1e-4) this.master.gain.setValueAtTime(g, this.ctx.currentTime);
   }
 
   /** Back to how the listener was. */
@@ -195,6 +205,7 @@ export class SoundStage {
     this.lowpass.disconnect();
     this.dry.disconnect();
     this.plain.disconnect();
+    this.master.disconnect();
     this.outside.disconnect();
     this.muffle.disconnect();
     this.listener.gain.disconnect();

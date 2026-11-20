@@ -186,6 +186,10 @@ type StatementKind_ =
   | { id: string; kind: 'lensFocus'; at: Place | null }
   /** Fade the camera back to the scene's own lens settings. */
   | { id: string; kind: 'lensReset'; seconds: Expr }
+  /** Fade the screen to white or black over some seconds (0: at once) and stop every sound. */
+  | { id: string; kind: 'screenWhite' | 'screenBlack'; seconds: Expr }
+  /** Fade the screen back in from white or black over some seconds. */
+  | { id: string; kind: 'screenBack'; seconds: Expr }
   /** Background sound and Sound components fall silent (footsteps, hits and sounds blocks play stay). */
   | { id: string; kind: 'silence' }
   | { id: string; kind: 'unsilence' }

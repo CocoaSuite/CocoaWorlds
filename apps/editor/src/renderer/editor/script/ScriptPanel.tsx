@@ -1078,6 +1078,14 @@ function statementWords(s: Statement, set: (patch: Record<string, unknown>, merg
           {w('lensFocus')} <RefSlot value={s.at} allowNone allowPlayer allowAim noneLabel={w('lensMiddle')} onChange={(at) => set({ at })} label={statementName('lensFocus')} />
         </>
       );
+    case 'screenWhite':
+    case 'screenBlack':
+    case 'screenBack':
+      return (
+        <>
+          {w(s.kind)} <ExprSlot expr={s.seconds} type="number" label={statementName(s.kind)} /> {w('seconds')}
+        </>
+      );
     case 'lensReset':
       return (
         <>

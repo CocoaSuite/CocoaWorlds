@@ -234,6 +234,10 @@ export function newStatement(kind: StatementKind, opts: { target?: Ref; variable
       return { id: id(), kind, at: target };
     case 'lensReset':
       return { id: id(), kind, seconds: num(1) };
+    case 'screenWhite':
+    case 'screenBlack':
+    case 'screenBack':
+      return { id: id(), kind, seconds: num(1) };
   }
 }
 

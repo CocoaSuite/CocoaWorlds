@@ -155,7 +155,7 @@ export const USE_REACH = 96;
 export type GameAction = 'hurt' | 'heal' | 'addScore' | 'giveArmour';
 export type GameValue = 'health' | 'score' | 'armour';
 
-export type ActionName = 'move' | 'turn' | 'turnTo' | 'return' | 'show' | 'hide' | 'turnOn' | 'turnOff' | 'startTrain' | 'stopTrain' | 'walkTo' | 'runAway' | 'wander' | 'setSide' | 'freeze' | 'unfreeze' | 'viewFrom' | 'remove' | 'scale' | 'physical' | 'push' | 'moveTo' | 'teleport' | 'damage' | 'place' | 'pickUp' | 'drop' | 'unhide' | 'silence' | 'unsilence' | 'playerSize' | 'playerSpeed' | 'playerJump' | 'playerGravity' | 'playerMoves' | 'playerWay' | 'playerNormal' | 'lensSet' | 'lensLook' | 'lensFocus' | 'lensReset';
+export type ActionName = 'move' | 'turn' | 'turnTo' | 'return' | 'show' | 'hide' | 'turnOn' | 'turnOff' | 'startTrain' | 'stopTrain' | 'walkTo' | 'runAway' | 'wander' | 'setSide' | 'freeze' | 'unfreeze' | 'viewFrom' | 'remove' | 'scale' | 'physical' | 'push' | 'moveTo' | 'teleport' | 'damage' | 'place' | 'pickUp' | 'drop' | 'unhide' | 'silence' | 'unsilence' | 'playerSize' | 'playerSpeed' | 'playerJump' | 'playerGravity' | 'playerMoves' | 'playerWay' | 'playerNormal' | 'lensSet' | 'lensLook' | 'lensFocus' | 'lensReset' | 'screenWhite' | 'screenBlack' | 'screenBack';
 
 export type CompiledEvent =
   | { kind: 'start' }
@@ -865,6 +865,14 @@ class HandlerCompiler {
         if (s.at === null) this.emit({ op: 'push', v: null });
         else this.pushPlace(s.at, s.id);
         this.emit({ op: 'act', name: 'lensFocus', argc: 1 });
+        break;
+      case 'screenWhite':
+      case 'screenBlack':
+      case 'screenBack':
+        this.emit({ op: 'ref', ref: { player: true } });
+        this.expect(s.seconds, 'number', 'The time must be a number of seconds.');
+        this.emit({ op: 'act', name: s.kind, argc: 1 });
+        this.waits = true;
         break;
       case 'lensReset':
         this.emit({ op: 'ref', ref: { player: true } });

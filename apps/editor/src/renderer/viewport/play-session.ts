@@ -713,6 +713,28 @@ export class PlaySession {
     }
   }
 
+  /** Stop every sound: Sound components, sounds blocks play, the background, footsteps and hits. */
+  private stopAllSounds(): void {
+    for (const s of [...this.sounds]) {
+      if (s.audio.isPlaying) s.audio.stop();
+      this.dropSound(s);
+    }
+    if (this.background?.audio?.isPlaying) this.background.audio.stop();
+    this.background = null;
+    for (const a of [...this.fading]) this.dropBackground(a);
+    for (const shot of this.shots) {
+      if (!shot.busy) continue;
+      if (shot.audio.isPlaying) shot.audio.stop();
+      shot.busy = false;
+      this.voices--;
+    }
+  }
+
+  /** How much of the screen is covered in white or black now (screen fade blocks). */
+  screenCover(): { color: 'white' | 'black'; alpha: number } {
+    return this.world.screenNow();
+  }
+
   private dropSound(s: Playing): void {
     const i = this.sounds.indexOf(s);
     if (i >= 0) this.sounds.splice(i, 1);
@@ -727,6 +749,8 @@ export class PlaySession {
   private mineView: MineView | null = null;
   private soundAt = new THREE.Vector3();
   private silentNow = false;
+  /** The screen is covered (white or black) and every sound has been stopped for it. */
+  private coveredNow = false;
   /** Footsteps and hits playing now (no more than 8 at once). */
   private voices = 0;
   private lastFile = new Map<string, string>();
@@ -861,6 +885,13 @@ export class PlaySession {
       for (const s of this.sounds) if (s.ambient) ramp(listener.context, s.audio.gain.gain, this.silentNow ? 0 : s.volume, 1.5);
     }
     if (this.silentNow) h.background = null;
+    // Screen fading to white or black: everything fades with it, and once covered every sound stops.
+    const cover = this.world.screenNow();
+    const covered = cover.out && cover.alpha >= 1;
+    if (covered && !this.coveredNow) this.stopAllSounds();
+    this.coveredNow = covered;
+    this.stage.setMaster(cover.out && !covered ? 1 - cover.alpha : 1);
+    if (covered) h.background = null;
     // Where no Sound area says, realistic sound picks the echo from the place itself.
     const env = this.realistic && !h.area && !h.underwater ? this.world.acoustics.environment : null;
     if (env) this.stage.set(env.effect, env.mix);

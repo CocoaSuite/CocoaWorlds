@@ -225,6 +225,10 @@ code { font: var(--fs-m) var(--mono); color: var(--fg); }
 .cw-weak { position: absolute; inset: 0; pointer-events: none; background: radial-gradient(ellipse at center, transparent 45%, rgba(150, 0, 0, 0.75) 100%); animation: cw-weak-pulse 1.2s ease-in-out infinite; }
 @keyframes cw-weak-pulse { 0%, 100% { filter: brightness(0.55); } 18% { filter: brightness(1.25); } 32% { filter: brightness(0.8); } 46% { filter: brightness(1.1); } }
 @media (prefers-reduced-motion: reduce) { .cw-weak { animation: none; } }
+.cw-cover { position: absolute; inset: 0; pointer-events: none; z-index: 5; }
+.cw-cover.black { background: #000; }
+.cw-cover.white { background: #fff; }
+.cw-ov.cw-hud-messages { z-index: 6; }
 .cw-hurt { position: absolute; inset: 0; pointer-events: none; box-shadow: inset 0 0 80px 20px rgba(220, 30, 20, 0.55); }
 @media (prefers-reduced-motion: reduce) { .cw-hud-bar > span { transition: none; } }
 @media (prefers-reduced-motion: reduce) { .cw-playing .cw-side, .cw-playing .cw-tbar { transition: none; } }

@@ -13,6 +13,8 @@ export interface Hud {
   hasHealth: boolean;
   /** How badly hurt, 0–1, with hidden health (pulsing red vignette). */
   weak: number;
+  /** The screen covered in white or black by a block (alpha 0: not at all). */
+  cover: { color: 'white' | 'black'; alpha: number };
   health: number;
   maxHealth: number;
   /** Shown once the player has any. */
@@ -100,6 +102,7 @@ export function hudOf(play: PlaySession, locked: boolean): Hud {
     showHealth: !!status?.showHealth,
     hasHealth: !!status?.hasHealth,
     weak: status?.weak ?? 0,
+    cover: ((c) => ({ color: c.color, alpha: Math.round(c.alpha * 100) / 100 }))(play.screenCover()),
     health: Math.ceil(status?.health ?? 0),
     maxHealth: status?.maxHealth ?? 100,
     armour: Math.floor(status?.armour ?? 0),
@@ -260,6 +263,7 @@ export function HudView({ hud }: { hud: Hud }) {
         )}
       </div>
       )}
+      {hud.cover.alpha > 0 && <div className={`cw-cover ${hud.cover.color}`} aria-hidden="true" data-testid="screen-cover" style={{ opacity: hud.cover.alpha }} />}
     </>
   );
 }

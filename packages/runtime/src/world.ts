@@ -203,6 +203,8 @@ export interface SavedScene {
   /** Camera lens settings blocks set (where their fades were going), their switches, and what is kept in focus. */
   lens?: { set: Record<string, number>; flags?: { dof?: boolean; autoFocus?: boolean; grainColor?: boolean }; focus?: Value };
   noSaving?: boolean;
+  /** The screen covered in white or black by a block. */
+  screen?: 'white' | 'black';
 }
 
 /** An object's saved state: place, turn, and only what differs from how it started. */
@@ -951,6 +953,7 @@ export class GameWorld {
     if (this.stoppedSounds.size) out.stoppedSounds = [...this.stoppedSounds];
     if (this.silent) out.silent = true;
     if (this.savingBlocked) out.noSaving = true;
+    if (this.screenCover.out) out.screen = this.screenCover.color;
     this.lensNow();
     if (this.lensFades.size || this.lensFocus !== undefined || Object.keys(this.lensFlags).length) {
       // (A fade back to the scene's look is saved as there.)
@@ -1052,6 +1055,7 @@ export class GameWorld {
     this.stoppedSounds = new Set(Array.isArray(save.stoppedSounds) ? save.stoppedSounds.filter((x): x is string => typeof x === 'string') : []);
     this.silent = save.silent === true;
     this.savingBlocked = save.noSaving === true;
+    this.screenCover = save.screen === 'white' || save.screen === 'black' ? { color: save.screen, from: 1, out: true, t0: 0, t1: 0 } : { color: 'black', from: 0, out: false, t0: 0, t1: 0 };
     this.lensFades.clear();
     this.lensFlags = {};
     this.lensFocus = undefined;
@@ -3825,6 +3829,16 @@ export class GameWorld {
     return b.enabled ? b : { ...b, enabled: true, dof: false, distortion: 0, aberration: 0, vignette: 0, grain: 0, scanlines: 0, flicker: 0 };
   }
 
+  /** The screen fade blocks set: towards covered (`out`) or clear, from `from` at t0 to there at t1. */
+  private screenCover: { color: 'white' | 'black'; from: number; out: boolean; t0: number; t1: number } = { color: 'black', from: 0, out: false, t0: 0, t1: 0 };
+
+  /** How much of the screen is covered in white or black now (0–1), and whether it is fading out (towards covered). */
+  screenNow(): { color: 'white' | 'black'; alpha: number; out: boolean } {
+    const c = this.screenCover;
+    const k = this.time >= c.t1 ? 1 : Math.max(0, (this.time - c.t0) / (c.t1 - c.t0));
+    return { color: c.color, alpha: c.from + ((c.out ? 1 : 0) - c.from) * k, out: c.out };
+  }
+
   /** The lens settings to draw with now: the scene's, with what blocks set over them. */
   lensNow(): LensSettings {
     if (this.lensResetAt >= 0 && this.time >= this.lensResetAt) {
@@ -4567,6 +4581,14 @@ export class GameWorld {
     if (name === 'lensSet') return this.setLens(args[0] as LensProp, n(args[1] ?? 0), Math.max(0, n(args[2] ?? 0))), null;
     if (name === 'lensLook') return this.lensLook(String(args[0] ?? ''), Math.max(0, n(args[1] ?? 0))), null;
     if (name === 'lensReset') return this.lensReset(Math.max(0, n(args[0] ?? 0))), null;
+    if (name === 'screenWhite' || name === 'screenBlack' || name === 'screenBack') {
+      const sec = Math.max(0, n(args[0] ?? 0));
+      const from = this.screenNow().alpha;
+      const out = name !== 'screenBack';
+      const color = name === 'screenWhite' ? 'white' : name === 'screenBlack' ? 'black' : this.screenCover.color;
+      const c = (this.screenCover = { color, from, out, t0: this.time, t1: this.time + sec });
+      return sec > 0 ? () => this.screenCover !== c || this.time >= c.t1 : null;
+    }
     if (name === 'lensFocus') {
       const at = args[0] ?? null;
       this.lensFocus = at === null ? null : at;
