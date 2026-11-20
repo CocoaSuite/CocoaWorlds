@@ -160,14 +160,19 @@ Code: `GameWorld.lensNow`, `setLens`, `lensLook`, `lensReset` (`world.ts`); `Pla
 view*, within *n* units (an event on the object; it counts for anything inside it too):
 
 - *With the crosshair*: the first thing under the crosshair is this object (or part of it), within reach.
-- *Anywhere in view*: the object's pivot is within 30° of where the player looks (`VIEW_ANGLE`) and within reach,
-  and nothing solid is between the eyes and it (or what is in the way is part of it).
-- Each starts once when it changes: looking at it, then away. Hidden or removed objects aren't looked at. The
-  player's eyes count, not a third-person camera.
+- *Anywhere in view*: some part of it is on screen, within reach, and not hidden behind other things, judged by
+  the camera that draws (its field of view and the screen's shape; a third-person camera too). On screen: its box
+  (brushes, models and collision shapes, where it has moved) is inside the camera's view. Not hidden: a line from
+  the camera reaches it at one of 27 points through its box, or one of a 32 × 18 grid of rays across the screen
+  lands on it (a wall filling the view). So it goes once not a pixel of its box is on screen; something small and
+  nearly all hidden behind something else can slip between the rays and count as gone a little early.
+- Each starts once when it changes: looking at it, then away. Hidden or removed objects aren't looked at. *With the
+  crosshair* goes by the player's eyes; *anywhere in view* by the camera.
 - The value **the player looks at *object* (crosshair / anywhere in view) within *n* u** asks the same thing now.
 
 Something the player hasn't looked at yet is also “not looked at”, but *looks away* starts only after a *looks at*.
-Code: `GameWorld.lookEvents`, `inView` (`world.ts`); `ScriptRunner.lookWatchers` (`vm.ts`).
+Code: `GameWorld.lookEvents`, `inView`, `setCamera` (`world.ts`; the renderer passes its camera each frame in
+`PlaySession.placeCamera`; without one, a 70° camera at the player's eyes); `ScriptRunner.lookWatchers` (`vm.ts`).
 Tests: `packages/runtime/test/lens-look.test.ts`.
 
 ## Game values, messages and signs

@@ -328,8 +328,63 @@ const rgbOf = (c: string): number[] => {
 };
 type Quat = { x: number; y: number; z: number; w: number };
 
-/** “Looks at it (anywhere in view)”: within this many degrees of where the player looks. */
-export const VIEW_ANGLE = 30;
+/** The camera “anywhere in view” judges by when the renderer hasn't said (tests, headless): field of view (degrees, up and down) and width ÷ height. */
+export const FALLBACK_FOV = 70;
+export const FALLBACK_ASPECT = 16 / 9;
+/** Rays across the screen for “anywhere in view” (for big things whose sample points are all off screen). */
+const SCREEN_COLUMNS = 32;
+const SCREEN_ROWS = 18;
+
+/** A camera at `eye` looking along `dir` (up is +Y): view × projection, column-major (as Three.js keeps it). */
+function viewProjection(eye: P3, dir: P3, fovDeg: number, aspect: number, near = 2, far = 1e5): number[] {
+  const zl = Math.hypot(...dir) || 1;
+  const z: P3 = [-dir[0] / zl, -dir[1] / zl, -dir[2] / zl];
+  let x: P3 = [z[2], 0, -z[0]];
+  const xl = Math.hypot(...x);
+  x = xl < 1e-6 ? [1, 0, 0] : [x[0] / xl, x[1] / xl, x[2] / xl];
+  const y: P3 = [z[1] * x[2] - z[2] * x[1], z[2] * x[0] - z[0] * x[2], z[0] * x[1] - z[1] * x[0]];
+  const dot = (a: P3) => a[0] * eye[0] + a[1] * eye[1] + a[2] * eye[2];
+  const v = [x[0], y[0], z[0], 0, x[1], y[1], z[1], 0, x[2], y[2], z[2], 0, -dot(x), -dot(y), -dot(z), 1];
+  const f = 1 / Math.tan((fovDeg * Math.PI) / 360);
+  const pr = [f / aspect, 0, 0, 0, 0, f, 0, 0, 0, 0, (far + near) / (near - far), -1, 0, 0, (2 * far * near) / (near - far), 0];
+  return mul4(pr, v);
+}
+function mul4(a: number[], b: number[]): number[] {
+  const o = new Array<number>(16).fill(0);
+  for (let c = 0; c < 4; c++) for (let r = 0; r < 4; r++) for (let k = 0; k < 4; k++) o[c * 4 + r]! += a[k * 4 + r]! * b[c * 4 + k]!;
+  return o;
+}
+/** A point in clip space (x, y, z, w). */
+function clip(m: number[], p: P3): [number, number, number, number] {
+  const [x, y, z] = p;
+  return [m[0]! * x + m[4]! * y + m[8]! * z + m[12]!, m[1]! * x + m[5]! * y + m[9]! * z + m[13]!, m[2]! * x + m[6]! * y + m[10]! * z + m[14]!, m[3]! * x + m[7]! * y + m[11]! * z + m[15]!];
+}
+/** A screen point (−1…1) at depth `z` (−1 near, 1 far) back into the world. */
+function unclip(inv: number[], x: number, y: number, z: number): P3 | null {
+  const c = clip(inv, [x, y, z]);
+  return Math.abs(c[3]) < 1e-12 ? null : [c[0] / c[3], c[1] / c[3], c[2] / c[3]];
+}
+function invert4(m: number[]): number[] {
+  const inv = new Array<number>(16);
+  inv[0] = m[5]! * m[10]! * m[15]! - m[5]! * m[11]! * m[14]! - m[9]! * m[6]! * m[15]! + m[9]! * m[7]! * m[14]! + m[13]! * m[6]! * m[11]! - m[13]! * m[7]! * m[10]!;
+  inv[4] = -m[4]! * m[10]! * m[15]! + m[4]! * m[11]! * m[14]! + m[8]! * m[6]! * m[15]! - m[8]! * m[7]! * m[14]! - m[12]! * m[6]! * m[11]! + m[12]! * m[7]! * m[10]!;
+  inv[8] = m[4]! * m[9]! * m[15]! - m[4]! * m[11]! * m[13]! - m[8]! * m[5]! * m[15]! + m[8]! * m[7]! * m[13]! + m[12]! * m[5]! * m[11]! - m[12]! * m[7]! * m[9]!;
+  inv[12] = -m[4]! * m[9]! * m[14]! + m[4]! * m[10]! * m[13]! + m[8]! * m[5]! * m[14]! - m[8]! * m[6]! * m[13]! - m[12]! * m[5]! * m[10]! + m[12]! * m[6]! * m[9]!;
+  inv[1] = -m[1]! * m[10]! * m[15]! + m[1]! * m[11]! * m[14]! + m[9]! * m[2]! * m[15]! - m[9]! * m[3]! * m[14]! - m[13]! * m[2]! * m[11]! + m[13]! * m[3]! * m[10]!;
+  inv[5] = m[0]! * m[10]! * m[15]! - m[0]! * m[11]! * m[14]! - m[8]! * m[2]! * m[15]! + m[8]! * m[3]! * m[14]! + m[12]! * m[2]! * m[11]! - m[12]! * m[3]! * m[10]!;
+  inv[9] = -m[0]! * m[9]! * m[15]! + m[0]! * m[11]! * m[13]! + m[8]! * m[1]! * m[15]! - m[8]! * m[3]! * m[13]! - m[12]! * m[1]! * m[11]! + m[12]! * m[3]! * m[9]!;
+  inv[13] = m[0]! * m[9]! * m[14]! - m[0]! * m[10]! * m[13]! - m[8]! * m[1]! * m[14]! + m[8]! * m[2]! * m[13]! + m[12]! * m[1]! * m[10]! - m[12]! * m[2]! * m[9]!;
+  inv[2] = m[1]! * m[6]! * m[15]! - m[1]! * m[7]! * m[14]! - m[5]! * m[2]! * m[15]! + m[5]! * m[3]! * m[14]! + m[13]! * m[2]! * m[7]! - m[13]! * m[3]! * m[6]!;
+  inv[6] = -m[0]! * m[6]! * m[15]! + m[0]! * m[7]! * m[14]! + m[4]! * m[2]! * m[15]! - m[4]! * m[3]! * m[14]! - m[12]! * m[2]! * m[7]! + m[12]! * m[3]! * m[6]!;
+  inv[10] = m[0]! * m[5]! * m[15]! - m[0]! * m[7]! * m[13]! - m[4]! * m[1]! * m[15]! + m[4]! * m[3]! * m[13]! + m[12]! * m[1]! * m[7]! - m[12]! * m[3]! * m[5]!;
+  inv[14] = -m[0]! * m[5]! * m[14]! + m[0]! * m[6]! * m[13]! + m[4]! * m[1]! * m[14]! - m[4]! * m[2]! * m[13]! - m[12]! * m[1]! * m[6]! + m[12]! * m[2]! * m[5]!;
+  inv[3] = -m[1]! * m[6]! * m[11]! + m[1]! * m[7]! * m[10]! + m[5]! * m[2]! * m[11]! - m[5]! * m[3]! * m[10]! - m[9]! * m[2]! * m[7]! + m[9]! * m[3]! * m[6]!;
+  inv[7] = m[0]! * m[6]! * m[11]! - m[0]! * m[7]! * m[10]! - m[4]! * m[2]! * m[11]! + m[4]! * m[3]! * m[10]! + m[8]! * m[2]! * m[7]! - m[8]! * m[3]! * m[6]!;
+  inv[11] = -m[0]! * m[5]! * m[11]! + m[0]! * m[7]! * m[9]! + m[4]! * m[1]! * m[11]! - m[4]! * m[3]! * m[9]! - m[8]! * m[1]! * m[7]! + m[8]! * m[3]! * m[5]!;
+  inv[15] = m[0]! * m[5]! * m[10]! - m[0]! * m[6]! * m[9]! - m[4]! * m[1]! * m[10]! + m[4]! * m[2]! * m[9]! + m[8]! * m[1]! * m[6]! - m[8]! * m[2]! * m[5]!;
+  const det = m[0]! * inv[0]! + m[1]! * inv[4]! + m[2]! * inv[8]! + m[3]! * inv[12]!;
+  return inv.map((v) => v / (det || 1));
+}
 
 /** Lens numbers kept in their ranges (as the Inspector keeps them). */
 function clampLens(k: LensProp, v: number): number {
@@ -3849,25 +3904,128 @@ export class GameWorld {
     return !b || b.info.id !== id || b.visible;
   }
 
+  // ── What the camera sees ──
+
+  /** The camera the last frame was drawn with (view × projection, column-major) and where it was, and when. */
+  private cam: { m: number[]; eye: P3; inv: number[] | null; time: number } | null = null;
+
+  /** The renderer tells the world the camera it draws with (for “anywhere in view”). */
+  setCamera(viewProjection: ArrayLike<number>, eye: ArrayLike<number>): void {
+    this.cam = { m: Array.from(viewProjection), eye: [eye[0]!, eye[1]!, eye[2]!], inv: null, time: this.time };
+    this.screenHits = null;
+  }
+
+  /** The camera to judge by: the renderer's, or (none lately: tests, headless) one at the player's eyes. */
+  private viewCamera(): { m: number[]; eye: P3; inv: number[] | null } | null {
+    if (this.cam && this.time - this.cam.time < 0.5) return this.cam;
+    const p = this.player;
+    if (!p) return null;
+    const eye = p.eye() as P3;
+    const key = `${this.time}`;
+    if (this.fallbackCam?.key === key) return this.fallbackCam;
+    this.fallbackCam = { key, m: viewProjection(eye, p.lookDirection() as P3, FALLBACK_FOV, FALLBACK_ASPECT), eye, inv: null };
+    return this.fallbackCam;
+  }
+  private fallbackCam: { key: string; m: number[]; eye: P3; inv: number[] | null } | null = null;
+
+  /** Objects hit by a grid of rays across the screen this step (and what they are inside). */
+  private screenHits: Set<string> | null = null;
+  private screenHitsAt = -1;
+
+  /** Where an object (and what is inside it) is now: its bounds as placed, moved as its body has moved. */
+  private boundsNow(id: string): { min: P3; max: P3 } | null {
+    const src = this.copyOf.get(id) ?? id;
+    let b = this.boundsCache.get(src);
+    if (b === undefined) this.boundsCache.set(src, (b = this.templateBounds(src) as { min: P3; max: P3 } | null));
+    if (!b) return null;
+    const m = this.motionOf(id);
+    if (!m) return b;
+    const min: P3 = [Infinity, Infinity, Infinity], max: P3 = [-Infinity, -Infinity, -Infinity];
+    for (let i = 0; i < 8; i++) {
+      const c = applyMat4(m, [i & 1 ? b.max[0] : b.min[0], i & 2 ? b.max[1] : b.min[1], i & 4 ? b.max[2] : b.min[2]]);
+      for (let k = 0; k < 3; k++) {
+        min[k] = Math.min(min[k]!, c[k]!);
+        max[k] = Math.max(max[k]!, c[k]!);
+      }
+    }
+    return { min, max };
+  }
+  private boundsCache = new Map<string, { min: P3; max: P3 } | null>();
+
   /**
-   * In view: its pivot within VIEW_ANGLE of where the player looks, within `reach`, and the first thing between the
-   * eyes and it is it (or part of it), or nothing.
+   * Anywhere in view: some part of it is on screen, within `reach`, and not hidden behind other things. On screen: its
+   * box is inside the camera's view. Not hidden: a straight line from the camera reaches it at one of 27 points
+   * spread through its box, or one of a grid of rays across the screen lands on it (for big things whose points
+   * are all off screen). Something small and nearly all hidden can slip between them.
    */
   private inView(id: string, reach: number): boolean {
     const p = this.player;
     if (!p || !this.seen(id)) return false;
-    const at = this.placePoint({ ref: id });
-    if (!at) return false;
-    const e = p.eye(), d = p.lookDirection();
-    const to = [at[0] - e[0], at[1] - e[1], at[2] - e[2]] as P3;
-    const dist = Math.hypot(...to);
-    if (dist > reach) return false;
-    if (dist < 1) return true;
-    if ((to[0] * d[0] + to[1] * d[1] + to[2] * d[2]) / dist < Math.cos((VIEW_ANGLE * Math.PI) / 180)) return false;
-    const hit = this.world.castRay(new RAPIER.Ray({ x: e[0], y: e[1], z: e[2] }, { x: to[0] / dist, y: to[1] / dist, z: to[2] / dist }), dist, true, RAPIER.QueryFilterFlags.EXCLUDE_SENSORS, 0xffffffff, p.collider, undefined, (c) => !this.isHeld(c));
-    if (!hit || hit.timeOfImpact >= dist - 4) return true;
+    const cam = this.viewCamera();
+    const box = this.boundsNow(id);
+    if (!cam || !box) return false;
+    const { m, eye } = cam;
+    const e = 1;
+    const lo = box.min.map((v) => v - e) as P3, hi = box.max.map((v) => v + e) as P3;
+    // (The eyes inside it: it fills the view.)
+    if (eye[0] > lo[0] && eye[0] < hi[0] && eye[1] > lo[1] && eye[1] < hi[1] && eye[2] > lo[2] && eye[2] < hi[2]) return true;
+    // Nearest point of the box within reach.
+    const near = [0, 1, 2].map((k) => Math.max(lo[k]!, Math.min(hi[k]!, eye[k]!))) as P3;
+    if (Math.hypot(near[0] - eye[0], near[1] - eye[1], near[2] - eye[2]) > reach) return false;
+    // Outside the view: every corner beyond the same side of it.
+    let left = 0, right = 0, below = 0, above = 0, behind = 0;
+    for (let i = 0; i < 8; i++) {
+      const c = clip(m, [i & 1 ? hi[0] : lo[0], i & 2 ? hi[1] : lo[1], i & 4 ? hi[2] : lo[2]]);
+      if (c[0] < -c[3]) left++;
+      if (c[0] > c[3]) right++;
+      if (c[1] < -c[3]) below++;
+      if (c[1] > c[3]) above++;
+      if (c[2] < -c[3] || c[3] <= 0) behind++;
+    }
+    if (left === 8 || right === 8 || below === 8 || above === 8 || behind === 8) return false;
+    // Seen at one of 27 points through it (a little inside its box)?
+    const span = (k: number) => [box.min[k]! + 0.5, (box.min[k]! + box.max[k]!) / 2, box.max[k]! - 0.5];
+    const xs = span(0), ys = span(1), zs = span(2);
+    for (const x of xs)
+      for (const y of ys)
+        for (const z of zs) {
+          const c = clip(m, [x, y, z]);
+          if (c[3] <= 0 || Math.abs(c[0]) > c[3] || Math.abs(c[1]) > c[3]) continue;
+          if (this.lineReaches(eye, [x, y, z], id)) return true;
+        }
+    return this.onScreenGrid(cam).has(id);
+  }
+
+  /** Whether a straight line from `from` gets to `to` (or first hits `id` or part of it). */
+  private lineReaches(from: P3, to: P3, id: string): boolean {
+    const d = [to[0] - from[0], to[1] - from[1], to[2] - from[2]], len = Math.hypot(d[0]!, d[1]!, d[2]!);
+    if (len < 1) return true;
+    const hit = this.world.castRay(new RAPIER.Ray({ x: from[0], y: from[1], z: from[2] }, { x: d[0]! / len, y: d[1]! / len, z: d[2]! / len }), len, true, RAPIER.QueryFilterFlags.EXCLUDE_SENSORS, 0xffffffff, this.player?.collider, undefined, (c) => !this.isHeld(c));
+    if (!hit || hit.timeOfImpact >= len - 2) return true;
     const owner = this.owner.get(hit.collider.handle);
     return !!owner && this.withParents(owner).includes(id);
+  }
+
+  /** What a grid of rays across the screen lands on (once a step, only when asked). */
+  private onScreenGrid(cam: { m: number[]; eye: P3; inv: number[] | null }): Set<string> {
+    if (this.screenHits && this.screenHitsAt === this.time) return this.screenHits;
+    const inv = (cam.inv ??= invert4(cam.m));
+    const out = new Set<string>();
+    const { eye } = cam;
+    for (let j = 0; j < SCREEN_ROWS; j++)
+      for (let i = 0; i < SCREEN_COLUMNS; i++) {
+        const x = ((i + 0.5) / SCREEN_COLUMNS) * 2 - 1, y = ((j + 0.5) / SCREEN_ROWS) * 2 - 1;
+        const far = unclip(inv, x, y, 1);
+        if (!far) continue;
+        const d = [far[0] - eye[0], far[1] - eye[1], far[2] - eye[2]], len = Math.hypot(d[0]!, d[1]!, d[2]!);
+        if (len < 1e-6) continue;
+        const hit = this.world.castRay(new RAPIER.Ray({ x: eye[0], y: eye[1], z: eye[2] }, { x: d[0]! / len, y: d[1]! / len, z: d[2]! / len }), 1e6, true, RAPIER.QueryFilterFlags.EXCLUDE_SENSORS, 0xffffffff, this.player?.collider, undefined, (c) => !this.isHeld(c));
+        const owner = hit ? this.owner.get(hit.collider.handle) : undefined;
+        if (owner) for (const x of this.withParents(owner)) out.add(x);
+      }
+    this.screenHits = out;
+    this.screenHitsAt = this.time;
+    return out;
   }
 
   /** The camera for the player's view, smoothed between physics steps. */

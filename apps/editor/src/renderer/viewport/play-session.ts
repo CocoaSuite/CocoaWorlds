@@ -1412,6 +1412,8 @@ export class PlaySession {
   get day(): number {
     return this.world.day;
   }
+  private viewProj = new THREE.Matrix4();
+
   /** Scripts change the camera lens: frames go through the post-processing target from the start (shaders compiled for it). */
   usesLens = false;
 
@@ -1586,6 +1588,9 @@ export class PlaySession {
     cam.rotation.set(v[4]!, v[3]!, 0, 'YXZ');
     cam.updateMatrixWorld();
     this.easeFov(cam, f);
+    // (The game judges “anywhere in view” by the camera that draws.)
+    cam.updateProjectionMatrix();
+    this.world.setCamera(this.viewProj.multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse).elements, [cam.position.x, cam.position.y, cam.position.z]);
     this.mineView?.placeHand(cam, this.world.time, !!f.thirdPerson);
     // Third person: the player is seen, as a simple body turned the way they look.
     if (f.thirdPerson) {

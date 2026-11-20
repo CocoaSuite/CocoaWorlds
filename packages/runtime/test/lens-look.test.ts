@@ -193,4 +193,51 @@ describe('looking at things', () => {
     const bad: Script = { version: 1, variables: [], handlers: [{ id: 'h', event: { id: 'e', kind: 'looks', mode: 'aim', reach: { id: 'r', kind: 'number', value: 0 } }, body: [] }] };
     expect(compileScript('o', bad, { objects: new Map() }).problems.map((p) => p.block)).toEqual(['r']);
   });
+
+  it('the vanishing-door room: a door goes only once no part of it is on screen; the floor goes when looking up', () => {
+    const hideSelf = (e: EntityData, extra: Statement[] = []) =>
+      scripted(e, [{ id: id(), event: { id: id(), kind: 'looksAway', mode: 'view', reach: n(4096), limit: 'once' }, body: [{ id: id(), kind: 'hide', target: { self: true } }, log(`${e.name} gone`), ...extra] }]);
+    // A room 512 across and 256 high around the Player start; a door on each wall, 8 u in front of it.
+    const walls = [brush('wall_n', [-256, 0, -272], [256, 256, -256]), brush('wall_s', [-256, 0, 256], [256, 256, 272]), brush('wall_e', [256, 0, -256], [272, 256, 256]), brush('wall_w', [-272, 0, -256], [-256, 256, 256]), brush('ceiling', [-256, 256, -256], [256, 272, 256])];
+    const doors = [
+      hideSelf(brush('door_n', [-32, 0, -256], [32, 112, -248])),
+      hideSelf(brush('door_s', [-32, 0, 248], [32, 112, 256])),
+      hideSelf(brush('door_e', [248, 0, -32], [256, 112, 32])),
+      hideSelf(brush('door_w', [-256, 0, -32], [-248, 112, 32])),
+    ];
+    const floor = hideSelf(brush('room_floor', [-256, -16, -256], [256, 0, 256]));
+    const below = brush('below', [-1024, -1040, -1024], [1024, -1024, 1024]);
+    const w = GameWorld.create(scene({ rules: undefined }, below, floor, ...walls, ...doors, spawn()));
+    run(w, 0.3);
+    expect(logs(w)).toEqual([]);
+    // Turning a little to the left: the north door is still at the edge of the screen (and the west one comes in).
+    turn(w, 40);
+    run(w, 0.2);
+    expect(logs(w)).toEqual([]);
+    // Facing east: north and west are off screen.
+    turn(w, -90);
+    run(w, 0.2);
+    expect(logs(w).sort()).toEqual(['door_n gone', 'door_w gone']);
+    // The doors never seen stay until they have been.
+    turn(w, 180);
+    run(w, 0.2);
+    expect(logs(w)).toEqual(['door_e gone']);
+    // Looking up: the floor goes, and the player falls.
+    w.player!.input.pitch = (80 * Math.PI) / 180;
+    run(w, 0.2);
+    expect(logs(w)).toContain('room_floor gone');
+    run(w, 1);
+    expect(w.player!.feetPosition.y).toBeLessThan(-200);
+    w.dispose();
+  });
+
+  it('a wall that fills the view is in view, though its corners and middle are off screen', () => {
+    const wall = brush('wall', [-4096, -2048, -96], [4096, 2048, -80]);
+    const big = watcher(wall, 'view');
+    const w = GameWorld.create(scene({}, spawn(), big));
+    run(w, 0.3);
+    expect(logs(w)).toEqual(['wall looked']);
+    w.dispose();
+  });
 });
+

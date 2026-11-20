@@ -626,11 +626,13 @@ Status: done. Blocks fade the lens settings of #34 while playing (`setLens`, `le
 value `lensValue`), over the scene's own (`GameWorld.lensNow`: fades by game time, `lensFlags`, `lensFocus`; the
 renderer draws with `PlaySession.drawSettings`; `usesLens` sends frames through the composer from the start, via
 `AoRenderer.render(..., always)`). Events `looks` / `looksAway` with `mode` aim (crosshair: `lookHit`) or view
-(pivot within `VIEW_ANGLE` 30° and a clear line of sight: `inView`) and a reach; `ScriptRunner.lookWatchers` (cached,
+(any part on screen and not hidden: `inView`, by the drawing camera from `setCamera`: the box against the view, then
+lines to 27 points through the box, then a 32 × 18 grid of screen rays, once a step and only when needed; at first it
+was “pivot within 30°”, which the user found buggy: doors vanished while still on screen) and a reach; `ScriptRunner.lookWatchers` (cached,
 reset when scripts come or go) tells the world what to check each step (not on the first step); value `looking`.
 Saved: `SavedScene.lens`. Docs: `docs/scripting.md` (The camera's look; Looking at things). Tests:
 `packages/runtime/test/lens-look.test.ts`.
 
-Next, if wanted: an e2e test that builds these blocks in the panel; “anywhere in view” by the real camera (third
-person, field of view) and by the object's bounds rather than its pivot.
+Next, if wanted: an e2e test that builds these blocks in the panel; exact pixel visibility from the renderer
+(an ID pass) if the ray sampling ever misses a sliver.
 
