@@ -15,6 +15,7 @@ const KINDS: Record<AssetKind, { dir: string; ext: string[] }> = {
   textures: { dir: 'assets/textures', ext: ['.png', '.jpg', '.jpeg', '.webp'] },
   sounds: { dir: 'assets/sounds', ext: ['.ogg', '.mp3', '.wav'] },
   models: { dir: 'assets/models', ext: ['.glb', '.gltf'] },
+  fonts: { dir: 'assets/fonts', ext: ['.ttf', '.otf', '.woff', '.woff2'] },
 };
 const GRAPH_PATH = /^materials\/[\w-]+\.cwmat$/;
 
@@ -136,7 +137,7 @@ export function openedProject(): OpenedProject {
 }
 
 function listAssets(): Record<AssetKind, AssetEntry[]> {
-  const out = { textures: [], sounds: [], models: [] } as Record<AssetKind, AssetEntry[]>;
+  const out = { textures: [], sounds: [], models: [], fonts: [] } as Record<AssetKind, AssetEntry[]>;
   for (const kind of Object.keys(KINDS) as AssetKind[]) {
     const { dir, ext } = KINDS[kind];
     for (const [key, v] of [...files].sort(([a], [b]) => a.localeCompare(b))) {

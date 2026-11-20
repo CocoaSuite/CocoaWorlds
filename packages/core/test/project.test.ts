@@ -74,3 +74,15 @@ describe('game rules', () => {
     expect(() => parseProject(stringify(project))).toThrow(ProjectFormatError);
   });
 });
+
+describe('caption style', () => {
+  it('fills in defaults and puts odd values right', async () => {
+    const { captionStyle, defaultCaptionStyle, validateProject, newProject } = await import('../src');
+    expect(captionStyle(undefined)).toEqual(defaultCaptionStyle());
+    const c = captionStyle({ captions: { position: 'top', scale: 9, color: 'red', font: 'assets/fonts/a.ttf', align: 'diagonal' as never } });
+    expect(c).toMatchObject({ position: 'top', scale: 3, color: '#ffffff', font: 'assets/fonts/a.ttf', align: 'center' });
+    const { project } = newProject('x');
+    project.settings.captions = c;
+    expect(validateProject(project)).toMatchObject({ ok: true });
+  });
+});

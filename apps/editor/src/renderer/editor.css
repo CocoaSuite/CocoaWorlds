@@ -229,8 +229,8 @@ code { font: var(--fs-m) var(--mono); color: var(--fg); }
 .cw-cover.black { background: #000; }
 .cw-cover.white { background: #fff; }
 .cw-ov.cw-hud-messages { z-index: 6; }
-.cw-ov.cw-hud-caption { left: 50%; bottom: 14%; transform: translateX(-50%); max-width: 70%; pointer-events: none; z-index: 6; text-align: center; }
-.cw-hud-caption-text { display: inline-block; background: rgba(0, 0, 0, 0.55); color: #fff; font-size: 20px; line-height: 1.35; padding: 4px 12px; border-radius: 4px; white-space: pre-line; }
+.cw-ov.cw-hud-caption { left: 50%; transform: translateX(-50%); pointer-events: none; z-index: 6; }
+.cw-hud-caption-text { display: inline-block; line-height: 1.35; padding: 0.2em 0.6em; border-radius: 4px; white-space: pre-line; }
 .cw-hurt { position: absolute; inset: 0; pointer-events: none; box-shadow: inset 0 0 80px 20px rgba(220, 30, 20, 0.55); }
 @media (prefers-reduced-motion: reduce) { .cw-hud-bar > span { transition: none; } }
 @media (prefers-reduced-motion: reduce) { .cw-playing .cw-side, .cw-playing .cw-tbar { transition: none; } }
@@ -1002,3 +1002,7 @@ button.cw-sec.cw-fold { width: 100%; border: 0; border-top: 1px solid var(--line
 .cm-touch-box { position: absolute; z-index: 14; border: 1px dashed var(--sel); background: rgba(75, 156, 255, 0.08); pointer-events: none; }
 .cm-float-delete { position: absolute; left: 50%; bottom: 16px; z-index: 16; transform: translateX(-50%); min-height: 44px; padding: 0 22px; border: 1px solid var(--bad); border-radius: 22px; background: rgba(26, 26, 26, 0.92); color: var(--bad); font: inherit; font-size: var(--fs-l); }
 .cm-float-delete:active { background: var(--bad); color: var(--prifg); }
+
+/* Caption settings: a small stand-in for the game screen, with the caption drawn as it will be. */
+.cw-caption-stage { position: relative; aspect-ratio: 16 / 9; background: linear-gradient(#3b4a4f 55%, #26302f 55%); border-radius: 6px; overflow: hidden; margin-bottom: 8px; }
+.cw-caption-stage .cw-hud-caption { position: absolute; }

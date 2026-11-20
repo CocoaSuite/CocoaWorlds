@@ -27,7 +27,7 @@ export interface PrefabEntry {
   prefab: PrefabFile;
 }
 
-export type AssetKind = 'textures' | 'sounds' | 'models';
+export type AssetKind = 'textures' | 'sounds' | 'models' | 'fonts';
 
 export interface AssetEntry {
   /** Project-relative path, e.g. `assets/textures/brick.png`. */

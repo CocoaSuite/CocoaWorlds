@@ -5,7 +5,7 @@
 import { prepareToDraw, prepareToDrawNow, whenCompiled } from '../viewport/poster';
 import { SceneReflections, sceneProbes } from '../viewport/reflections';
 import { GroundBlend } from '../viewport/ground-blend';
-import { SceneDoc, expandRepeats, workInternal, parkAssets, type GameRules, type GameValue, type MaterialDef, type PlantDef, type SceneFile, type SurfaceSounds, type VfxEffect } from '@cocoaworlds/core';
+import { SceneDoc, expandRepeats, workInternal, parkAssets, type CaptionStyle, type GameRules, type GameValue, type MaterialDef, type PlantDef, type SceneFile, type SurfaceSounds, type VfxEffect } from '@cocoaworlds/core';
 import { isInvisibleMaterial } from '@cocoaworlds/geometry';
 import * as THREE from 'three';
 import { brushBounds } from '../brush/brushes';
@@ -32,6 +32,8 @@ export interface GameData {
   scene: SceneFile;
   rules: GameRules;
   values: GameValue[];
+  /** How voice-over captions look (older exports have none: the defaults). */
+  captions?: Partial<CaptionStyle>;
   /** The project's materials (older exports have none). */
   materials?: MaterialDef[];
   /** The project's effects (VFX workspace). */

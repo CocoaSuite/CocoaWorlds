@@ -48,6 +48,8 @@ import {
   type SceneFile,
   type Transform,
   gameRules,
+  captionStyle,
+  type CaptionStyle,
   type GameRules,
   type GameValue,
   type MaterialDef,
@@ -330,6 +332,8 @@ interface Actions {
   stopPlaying(): void;
   /** Switch a built-in game system on or off for the whole project (saved to the project file at once). */
   setGameRule(rule: keyof GameRules, on: boolean): Promise<void>;
+  /** Change how voice-over captions look (saved to the project a moment after the last change). */
+  setCaptionStyle(patch: Partial<CaptionStyle>): void;
   /** Each surface kind's footstep and hit sounds (saved to the project file at once). */
   setSurfaceSounds(next: SurfaceSounds): Promise<void>;
   /** Change the scene's settings (lighting, sky, fog, gravity), with undo. */
@@ -390,6 +394,9 @@ function uniqueName(doc: SceneDoc, base: string): string {
   return `${base}_${i}`;
 }
 
+/** Pending save of the caption settings (they change many times while a slider moves). */
+let captionSave: ReturnType<typeof setTimeout> | undefined;
+
 export const useEditor = create<State & Actions>()((set, get) => ({
   lang: getLang(),
   session: null,
@@ -408,7 +415,7 @@ export const useEditor = create<State & Actions>()((set, get) => ({
   zUp: savedZUp(),
   uvPane: false,
   gameLighting: false,
-  assets: { textures: [], sounds: [], models: [] },
+  assets: { textures: [], sounds: [], models: [], fonts: [] },
   showStats: true,
   showPlayBar: savedPlayBar(),
   showBottom: true,
@@ -483,7 +490,7 @@ export const useEditor = create<State & Actions>()((set, get) => ({
     void get().loadPrefabs();
     setAssetProject(o.dir);
     forgetTerrains();
-    set({ assets: { textures: [], sounds: [], models: [] } });
+    set({ assets: { textures: [], sounds: [], models: [], fonts: [] } });
     void get().loadAssets();
   },
 
@@ -1583,6 +1590,20 @@ export const useEditor = create<State & Actions>()((set, get) => ({
     const i = GRID_SIZES.findIndex((g) => g >= now);
     const at = i < 0 ? GRID_SIZES.length - 1 : i;
     get().setGridSize(GRID_SIZES[Math.min(GRID_SIZES.length - 1, Math.max(0, (GRID_SIZES[at] === now ? at : dir > 0 ? at - 1 : at) + dir))]!);
+  },
+
+  setCaptionStyle(patch) {
+    const session = get().session;
+    if (!session) return;
+    const settings = { ...session.project.settings, captions: { ...captionStyle(session.project.settings), ...patch } };
+    set({ session: { ...session, project: { ...session.project, settings } } });
+    clearTimeout(captionSave);
+    captionSave = setTimeout(async () => {
+      const s = get().session;
+      if (!s) return;
+      const r = await window.cocoa.projects.saveSettings(s.dir, s.project.settings);
+      if (!r.ok) get().log('error', 'Project', r.error);
+    }, 300);
   },
 
   async setGameRule(rule, on) {

@@ -1,6 +1,8 @@
 /** The in-game display (health, score, game values, messages, the use prompt), for Play and exported games. */
 import type { BuildPrompt, ComputerView, MineHud, MineMenu, UiState } from '@cocoaworlds/runtime';
-import { useEffect, useState } from 'react';
+import { defaultCaptionStyle, type CaptionStyle } from '@cocoaworlds/core';
+import { useEffect, useState, type CSSProperties } from 'react';
+import { assetUrl } from '../assets';
 import { t } from '../i18n';
 import type { PlaySession } from '../viewport/play-session';
 import type { BlueprintMenuState } from './BlueprintMenu';
@@ -133,7 +135,69 @@ export function hudOf(play: PlaySession, locked: boolean): Hud {
 }
 
 /** Health (and the score, once a script uses it) in the corner of the game view; red flash when hurt. */
-export function HudView({ hud }: { hud: Hud }) {
+const CAPTION_FONTS: Record<string, string> = {
+  sans: 'Inter, system-ui, sans-serif',
+  serif: 'Georgia, "Times New Roman", serif',
+  mono: '"JetBrains Mono", Consolas, ui-monospace, monospace',
+  rounded: '"Nunito", "Arial Rounded MT Bold", "Varela Round", system-ui, sans-serif',
+};
+const fontsLoaded = new Map<string, Promise<string>>();
+
+/** A project font file as a CSS font family (loaded once). */
+function useCaptionFont(font: string): string {
+  const builtIn = CAPTION_FONTS[font];
+  const [family, setFamily] = useState(builtIn ?? CAPTION_FONTS.sans!);
+  useEffect(() => {
+    if (builtIn) return void setFamily(builtIn);
+    let p = fontsLoaded.get(font);
+    if (!p) {
+      const name = `cw-caption-${fontsLoaded.size}`;
+      p = assetUrl(font).then(async (url) => {
+        const face = await new FontFace(name, `url(${url})`).load();
+        document.fonts.add(face);
+        return `"${name}", ${CAPTION_FONTS.sans}`;
+      });
+      p.catch(() => fontsLoaded.delete(font));
+      fontsLoaded.set(font, p);
+    }
+    let live = true;
+    p.then((f) => live && setFamily(f)).catch(() => live && setFamily(CAPTION_FONTS.sans!));
+    return () => {
+      live = false;
+    };
+  }, [font, builtIn]);
+  return family;
+}
+
+const hexA = (hex: string, a: number) => `rgba(${parseInt(hex.slice(1, 3), 16)}, ${parseInt(hex.slice(3, 5), 16)}, ${parseInt(hex.slice(5, 7), 16)}, ${a})`;
+
+/** A voice-over caption, styled by the project's caption settings (also the settings' live preview). */
+export function CaptionView({ text, style, preview }: { text: string; style: CaptionStyle; preview?: boolean }) {
+  const family = useCaptionFont(style.font);
+  const pos: CSSProperties =
+    style.position === 'top' ? { top: `${style.offset}%` } : style.position === 'bottom' ? { bottom: `${style.offset}%` } : { top: '50%', transform: 'translate(-50%, -50%)' };
+  const outline = style.background === 'outline';
+  return (
+    <div className={`cw-ov cw-hud-caption${preview ? ' cw-caption-preview' : ''}`} data-testid="hud-caption" role="status" style={{ ...pos, maxWidth: `${style.width}%`, width: `${style.width}%`, textAlign: style.align }}>
+      <span
+        className="cw-hud-caption-text"
+        style={{
+          fontFamily: family,
+          fontSize: `${(preview ? 13 : 20) * style.scale}px`,
+          color: style.color,
+          background: style.background === 'box' ? hexA('#000000', style.boxOpacity) : 'transparent',
+          textShadow: outline ? '-1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000, 0 0 3px #000' : undefined,
+          padding: style.background === 'box' ? undefined : 0,
+        }}
+      >
+        {text}
+      </span>
+    </div>
+  );
+}
+
+export function HudView({ hud, captions }: { hud: Hud; captions?: CaptionStyle }) {
+  const cap = captions ?? defaultCaptionStyle();
   const low = hud.showHealth && hud.health <= 25;
   return (
     <>
@@ -190,11 +254,7 @@ export function HudView({ hud }: { hud: Hud }) {
           ))}
         </div>
       )}
-      {hud.caption && (
-        <div className="cw-ov cw-hud-caption" data-testid="hud-caption" role="status">
-          <div className="cw-hud-caption-text">{hud.caption}</div>
-        </div>
-      )}
+      {hud.caption && cap.show && <CaptionView text={hud.caption} style={cap} />}
       {hud.hurt && hud.hasHealth && <div className="cw-hurt" aria-hidden="true" />}
       {hud.weak > 0 && <div className="cw-weak" aria-hidden="true" style={{ opacity: 0.35 + 0.65 * hud.weak, animationDuration: `${(1.6 - 0.8 * hud.weak).toFixed(2)}s` }} />}
       {hud.weapon && (

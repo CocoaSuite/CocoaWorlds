@@ -3,9 +3,11 @@ import { SurfaceSoundsEditor } from './SurfaceSounds';
 import { PaintPanel } from '../viewport/PaintPanel';
 import { useState } from 'react';
 import { shown, stored, type AxisKind } from '../axes';
-import { LENS_PRESETS, PIVOT, aoOf, bloomOf, lensOf, type LensSettings, dayOf, backgroundSoundOf, gameRules, pivotOf, sceneSettings, worldBoundsOf, type EmptyClass, type EntityData, type SceneSettings as SceneSettingsData, type Transform, type Vec3 } from '@cocoaworlds/core';
+import { LENS_PRESETS, PIVOT, aoOf, bloomOf, lensOf, type LensSettings, dayOf, backgroundSoundOf, gameRules, captionStyle, type CaptionStyle, pivotOf, sceneSettings, worldBoundsOf, type EmptyClass, type EntityData, type SceneSettings as SceneSettingsData, type Transform, type Vec3 } from '@cocoaworlds/core';
 import { brushBounds, brushOf } from '../brush/brushes';
-import { Button, ColorField, Field, NumberField, PanelHeader, Section, Switch } from '@cocoaworlds/ui';
+import { Button, ColorField, Field, NumberField, PanelHeader, Section, Segmented, Switch } from '@cocoaworlds/ui';
+import { Slider } from './MaterialsPanel';
+import { CaptionView } from '../ui/Hud';
 import { storeProgress } from '../game/progress';
 import { getLang, t } from '../i18n';
 import { BrushInspector, MultiBrushActions } from './BrushInspector';
@@ -365,6 +367,7 @@ function SceneSettings() {
         <p className="cw-hint">{t('insp.acousticsHint')}</p>
       </Fold>
       <GameRulesSection />
+      <CaptionSection />
       <Fold id="surfaceSounds" title={t('ss.title')}>
         <SurfaceSoundsEditor />
       </Fold>
@@ -430,6 +433,70 @@ function BuildingLooks() {
         </Field>
       ))}
     </>
+  );
+}
+
+/** How voice-over captions look in this project's games, with a live preview. */
+function CaptionSection() {
+  const raw = useEditor((s) => s.session?.project.settings.captions);
+  const hasProject = useEditor((s) => !!s.session);
+  const fonts = useEditor((s) => s.assets.fonts);
+  const set = useEditor((s) => s.setCaptionStyle);
+  if (!hasProject) return null;
+  const c = captionStyle({ captions: raw });
+  const put = (patch: Partial<CaptionStyle>) => set(patch);
+  return (
+    <Fold id="captions" title={t('cap.title')}>
+      <div className="cw-caption-stage" aria-hidden="true">
+        <CaptionView text={t('cap.sample')} style={c} preview />
+      </div>
+      <Field label={t('cap.show')}>
+        <Switch checked={c.show} label={t('cap.show')} onChange={(show) => put({ show })} />
+      </Field>
+      <Field label={t('cap.position')}>
+        <Segmented label={t('cap.position')} value={c.position} onChange={(position) => put({ position })} options={[{ value: 'top', label: t('cap.top') }, { value: 'middle', label: t('cap.middle') }, { value: 'bottom', label: t('cap.bottom') }]} />
+      </Field>
+      {c.position !== 'middle' && (
+        <Field label={t('cap.offset')}>
+          <Slider label={t('cap.offset')} value={c.offset} min={0} max={45} step={1} onChange={(offset) => put({ offset })} />
+        </Field>
+      )}
+      <Field label={t('cap.font')}>
+        <select className="cw-input cw-select" aria-label={t('cap.font')} value={c.font} onChange={(e) => put({ font: e.target.value })}>
+          <option value="sans">{t('cap.sans')}</option>
+          <option value="serif">{t('cap.serif')}</option>
+          <option value="mono">{t('cap.mono')}</option>
+          <option value="rounded">{t('cap.rounded')}</option>
+          {c.font.startsWith('assets/') && !fonts.some((f) => f.path === c.font) && <option value={c.font}>{c.font.split('/').pop()} ?</option>}
+          {fonts.map((f) => (
+            <option key={f.path} value={f.path}>
+              {f.name}
+            </option>
+          ))}
+        </select>
+      </Field>
+      {!fonts.length && <p className="cw-hint">{t('cap.fontHint')}</p>}
+      <Field label={t('cap.scale')}>
+        <Slider label={t('cap.scale')} value={c.scale} min={0.5} max={3} step={0.05} onChange={(scale) => put({ scale })} />
+      </Field>
+      <Field label={t('cap.width')}>
+        <Slider label={t('cap.width')} value={c.width} min={20} max={100} step={1} onChange={(width) => put({ width })} />
+      </Field>
+      <Field label={t('cap.color')}>
+        <ColorField label={t('cap.color')} value={c.color} onChange={(color) => put({ color })} />
+      </Field>
+      <Field label={t('cap.background')}>
+        <Segmented label={t('cap.background')} value={c.background} onChange={(background) => put({ background })} options={[{ value: 'none', label: t('cap.none') }, { value: 'box', label: t('cap.box') }, { value: 'outline', label: t('cap.outline') }]} />
+      </Field>
+      {c.background === 'box' && (
+        <Field label={t('cap.boxOpacity')}>
+          <Slider label={t('cap.boxOpacity')} value={c.boxOpacity} min={0} max={1} step={0.05} onChange={(boxOpacity) => put({ boxOpacity })} />
+        </Field>
+      )}
+      <Field label={t('cap.align')}>
+        <Segmented label={t('cap.align')} value={c.align} onChange={(align) => put({ align })} options={[{ value: 'left', label: t('cap.left') }, { value: 'center', label: t('cap.center') }, { value: 'right', label: t('cap.right') }]} />
+      </Field>
+    </Fold>
   );
 }
 

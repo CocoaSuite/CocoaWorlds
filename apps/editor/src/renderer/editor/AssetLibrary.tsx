@@ -18,8 +18,8 @@ import { useEditor } from '../store';
 import { useMaterialThumb, useModelThumb } from './asset-thumbs';
 import { TextureSwatch } from './TextureSwatch';
 
-type Category = 'all' | 'materials' | 'prefabs' | 'models' | 'textures' | 'sounds';
-const CATEGORIES: Category[] = ['all', 'materials', 'prefabs', 'models', 'textures', 'sounds'];
+type Category = 'all' | 'materials' | 'prefabs' | 'models' | 'textures' | 'sounds' | 'fonts';
+const CATEGORIES: Category[] = ['all', 'materials', 'prefabs', 'models', 'textures', 'sounds', 'fonts'];
 const LABEL: Record<Category, Parameters<typeof t>[0]> = {
   all: 'assets.all',
   materials: 'assets.materials',
@@ -27,12 +27,13 @@ const LABEL: Record<Category, Parameters<typeof t>[0]> = {
   models: 'assets.models',
   textures: 'assets.textures',
   sounds: 'assets.sounds',
+  fonts: 'assets.fonts',
 };
-const ICON: Record<Category, Parameters<typeof Icon>[0]['name']> = { all: 'grid', materials: 'paint', prefabs: 'cube', models: 'cube', textures: 'face', sounds: 'sound' };
-const ACCEPT: Record<AssetKind, string> = { textures: '.png,.jpg,.jpeg,.webp', sounds: '.ogg,.mp3,.wav', models: '.glb,.gltf' };
+const ICON: Record<Category, Parameters<typeof Icon>[0]['name']> = { all: 'grid', materials: 'paint', prefabs: 'cube', models: 'cube', textures: 'face', sounds: 'sound', fonts: 'block' };
+const ACCEPT: Record<AssetKind, string> = { textures: '.png,.jpg,.jpeg,.webp', sounds: '.ogg,.mp3,.wav', models: '.glb,.gltf', fonts: '.ttf,.otf,.woff,.woff2' };
 const kindOfFile = (name: string): AssetKind | null => {
   const ext = name.split('.').pop()?.toLowerCase() ?? '';
-  return (['textures', 'sounds', 'models'] as AssetKind[]).find((k) => ACCEPT[k].split(',').includes(`.${ext}`)) ?? null;
+  return (['textures', 'sounds', 'models', 'fonts'] as AssetKind[]).find((k) => ACCEPT[k].split(',').includes(`.${ext}`)) ?? null;
 };
 
 const NO_MATERIALS: MaterialDef[] = [];
@@ -72,7 +73,7 @@ function libraryUrl(path: string): Promise<string> {
 type Tile =
   | { kind: 'materials'; id: string; name: string; def: MaterialDef }
   | { kind: 'prefabs'; id: string; name: string; prefabId: string; path: string; objects: number; model: string | null }
-  | { kind: 'models' | 'textures' | 'sounds'; id: string; name: string; asset: AssetEntry }
+  | { kind: 'models' | 'textures' | 'sounds' | 'fonts'; id: string; name: string; asset: AssetEntry }
   | { kind: 'library'; id: string; name: string; sound: LibrarySound; inProject: boolean };
 
 const kb = (n: number) => (n >= 1024 * 1024 ? `${(n / 1024 / 1024).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`);
@@ -107,7 +108,7 @@ export function AssetLibrary() {
       const model = prefab.entities.map((e) => (e.components.model ? readComponent<ModelData>('model', e.components.model).model : '')).find(Boolean) ?? null;
       return { kind: 'prefabs', id: prefab.id, name: prefab.name, prefabId: prefab.id, path, objects: prefab.entities.length, model };
     }),
-    ...(['models', 'textures', 'sounds'] as const).flatMap((k) => assets[k].map((a): Tile => ({ kind: k, id: a.path, name: a.name, asset: a }))),
+    ...(['models', 'textures', 'sounds', 'fonts'] as const).flatMap((k) => assets[k].map((a): Tile => ({ kind: k, id: a.path, name: a.name, asset: a }))),
   ];
   const count = (c: Category) => (c === 'all' ? all.length : all.filter((x) => x.kind === c).length);
   const query = q.trim().toLowerCase();
@@ -187,7 +188,7 @@ export function AssetLibrary() {
             if (files.length) void importFiles(files);
           }}
         />
-        {(['textures', 'sounds', 'models'] as AssetKind[]).map((k) => (
+        {(['textures', 'sounds', 'models', 'fonts'] as AssetKind[]).map((k) => (
           // (One chooser per kind, for File › Import and tests.)
           <input
             key={k}
@@ -224,6 +225,7 @@ const EMPTY: Record<Category, Parameters<typeof t>[0]> = {
   models: 'assets.emptyModels',
   textures: 'assets.noTextures',
   sounds: 'assets.emptySounds',
+  fonts: 'assets.emptyFonts',
 };
 
 function MaterialPicture({ def }: { def: MaterialDef }) {
@@ -314,6 +316,15 @@ function AssetTile({ tile, showKind }: { tile: Tile; showKind: boolean }) {
       action = listening ? t('assets.stopListening') : t('assets.listen');
       onClick = listen;
       break;
+    case 'fonts':
+      picture = (
+        <span className="cw-lib-pic icon">
+          <FontSample path={tile.asset.path} />
+        </span>
+      );
+      action = t('assets.fontUse');
+      onClick = () => st.setCaptionStyle({ font: tile.asset.path });
+      break;
     case 'library': {
       const sound = tile.sound;
       picture = (
@@ -349,7 +360,7 @@ function AssetTile({ tile, showKind }: { tile: Tile; showKind: boolean }) {
     }
   }
   // Project textures, sounds and models can be deleted (× on hover, or right-click): first, what still uses it.
-  const file = tile.kind === 'textures' || tile.kind === 'sounds' || tile.kind === 'models' ? tile.asset.path : null;
+  const file = tile.kind === 'textures' || tile.kind === 'sounds' || tile.kind === 'models' || tile.kind === 'fonts' ? tile.asset.path : null;
   const ask = () => {
     if (file) setConfirm(st.assetUsers(file));
   };
@@ -412,4 +423,24 @@ function AssetTile({ tile, showKind }: { tile: Tile; showKind: boolean }) {
       {showKind && tile.kind !== 'library' && <span className="cw-lib-kind">{t(LABEL[tile.kind])}</span>}
     </div>
   );
+}
+
+/** “Aa” in a project font. */
+function FontSample({ path }: { path: string }) {
+  const [family, setFamily] = useState<string | null>(null);
+  useEffect(() => {
+    let live = true;
+    void assetUrl(path)
+      .then(async (url) => {
+        const name = `cw-font-${path.replace(/\W+/g, '_')}`;
+        const face = await new FontFace(name, `url(${url})`).load();
+        document.fonts.add(face);
+        if (live) setFamily(name);
+      })
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, [path]);
+  return <span style={{ fontFamily: family ? `"${family}", sans-serif` : undefined, fontSize: 28 }}>Aa</span>;
 }

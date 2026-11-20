@@ -43,6 +43,49 @@ export interface ProjectSettings {
   effects?: import('./vfx').VfxEffect[];
   /** Each surface kind's footstep and hit sounds (missing: silent). */
   surfaceSounds?: import('./surfaces').SurfaceSounds;
+  /** How voice-over captions look while playing (missing: the defaults). */
+  captions?: Partial<CaptionStyle>;
+}
+
+/** How voice-over captions look: where, in what font and size, and on what background. */
+export interface CaptionStyle {
+  show: boolean;
+  position: 'top' | 'middle' | 'bottom';
+  /** Distance from the top or bottom edge (% of the screen height; ignored in the middle). */
+  offset: number;
+  /** 'sans' | 'serif' | 'mono' | 'rounded', or a font file in the project (`assets/fonts/…`). */
+  font: string;
+  /** Text size, 1 = normal. */
+  scale: number;
+  /** Widest a caption gets (% of the screen width). */
+  width: number;
+  color: string;
+  background: 'none' | 'box' | 'outline';
+  /** How see-through the box is not (0–1). */
+  boxOpacity: number;
+  align: 'left' | 'center' | 'right';
+}
+
+export const defaultCaptionStyle = (): CaptionStyle => ({ show: true, position: 'bottom', offset: 14, font: 'sans', scale: 1, width: 70, color: '#ffffff', background: 'box', boxOpacity: 0.55, align: 'center' });
+
+/** A project's caption style with defaults filled in and odd values put right. */
+export function captionStyle(settings: Pick<ProjectSettings, 'captions'> | undefined): CaptionStyle {
+  const c = (settings?.captions ?? {}) as Record<string, unknown>;
+  const d = defaultCaptionStyle();
+  const num = (k: 'offset' | 'scale' | 'width' | 'boxOpacity', lo: number, hi: number) => (typeof c[k] === 'number' && Number.isFinite(c[k]) ? Math.min(hi, Math.max(lo, c[k] as number)) : d[k]);
+  const one = <T extends string>(k: keyof CaptionStyle, list: readonly T[]): T => (list.includes(c[k] as T) ? (c[k] as T) : (d[k] as T));
+  return {
+    show: typeof c.show === 'boolean' ? c.show : d.show,
+    position: one('position', ['top', 'middle', 'bottom'] as const),
+    offset: num('offset', 0, 45),
+    font: typeof c.font === 'string' && (['sans', 'serif', 'mono', 'rounded'].includes(c.font) || c.font.startsWith('assets/fonts/')) ? c.font : d.font,
+    scale: num('scale', 0.5, 3),
+    width: num('width', 20, 100),
+    color: typeof c.color === 'string' && /^#[0-9a-f]{6}$/i.test(c.color) ? c.color : d.color,
+    background: one('background', ['none', 'box', 'outline'] as const),
+    boxOpacity: num('boxOpacity', 0, 1),
+    align: one('align', ['left', 'center', 'right'] as const),
+  };
 }
 
 /** A value every script in the game shares, defined once for the project. */

@@ -11,6 +11,10 @@ const MIME: Record<string, string> = {
   mp3: 'audio/mpeg',
   wav: 'audio/wav',
   glb: 'model/gltf-binary',
+  ttf: 'font/ttf',
+  otf: 'font/otf',
+  woff: 'font/woff',
+  woff2: 'font/woff2',
   gltf: 'model/gltf+json',
 };
 

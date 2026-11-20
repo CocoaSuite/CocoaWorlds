@@ -4,8 +4,8 @@
 import '@cocoaworlds/ui/styles.css';
 import '../editor.css';
 import './player.css';
-import { uiOf, type SceneFile } from '@cocoaworlds/core';
-import { useEffect, useRef, useState } from 'react';
+import { captionStyle, uiOf, type SceneFile } from '@cocoaworlds/core';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { setAssetReader } from '../assets';
 import { BlueprintMenu } from '../ui/BlueprintMenu';
@@ -36,6 +36,7 @@ function Player() {
   const [devOpen, setDevOpen] = useState(false);
   /** The scene being played (it changes with level changes). */
   const [scene, setScene] = useState<SceneFile | null>(null);
+  const captions = useMemo(() => captionStyle({ captions: data?.captions }), [data]);
 
   useEffect(() => {
     setAssetReader(fetchBytes);
@@ -65,7 +66,7 @@ function Player() {
   return (
     <div className="cw-player" ref={host}>
       {scene && hud && <UiLayer ui={uiOf(scene.settings)} live={hud.ui} values={hud.allValues} onClick={(id) => runner.current?.clickUi(id)} onRow={(l, row) => runner.current?.pickRow(l, row)} />}
-      {hud && <HudView hud={hud} />}
+      {hud && <HudView hud={hud} captions={captions} />}
       {hud?.blueprints && <BlueprintMenu menu={hud.blueprints} onPick={(id) => runner.current?.pickBlueprint(id)} onClose={() => runner.current?.closeBlueprints()} />}
       {hud?.computer && runner.current && <ComputerScreen view={hud.computer} host={runner.current} />}
       {hud?.mine && <MineUi hud={hud.mine} menu={hud.mineMenu} onAction={(a, arg) => runner.current?.mineAction(a, arg)} />}

@@ -1,7 +1,7 @@
 /** React wrapper around ViewportEngine plus the viewport overlays (view switcher, grid/snap pill, stats, selection readout). */
 import { createPortal } from 'react-dom';
 import { shown } from '../axes';
-import { uiOf, type SceneFile, type Vec3 } from '@cocoaworlds/core';
+import { captionStyle, uiOf, type SceneFile, type Vec3 } from '@cocoaworlds/core';
 import { SaveMenu } from '../ui/SaveMenu';
 import { UiLayer } from '../ui/UiLayer';
 import { BlueprintMenu } from '../ui/BlueprintMenu';
@@ -9,7 +9,7 @@ import { ComputerScreen } from '../ui/Computer';
 import { MineUi } from '../ui/MineUi';
 import { HudView } from '../ui/Hud';
 import { ContextMenu, Segmented, type MenuEntry } from '@cocoaworlds/ui';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { flyState } from '../editor/shortcuts';
 import { t } from '../i18n';
 import { GRID_SIZES, useSelectedEntities, useEditor, type ViewMode } from '../store';
@@ -73,6 +73,8 @@ export function Viewport() {
   const showStats = useEditor((s) => s.showStats);
   const showPlayBar = useEditor((s) => s.showPlayBar);
   const gridSize = useEditor((s) => s.session?.project.settings.gridSize ?? 16);
+  const captionsRaw = useEditor((s) => s.session?.project.settings.captions);
+  const captions = useMemo(() => captionStyle({ captions: captionsRaw }), [captionsRaw]);
   const focusRequest = useEditor((s) => s.focusRequest);
   const sel = useSelectedEntities();
   const setView = useEditor((s) => s.setView);
@@ -416,7 +418,7 @@ export function Viewport() {
       )}
       {playing && lock === true && <div className="cw-crosshair" aria-hidden="true" />}
       {playing && hud && playScene && <UiLayer ui={uiOf(playScene.settings)} live={hud.ui} values={hud.allValues} onClick={(id) => engine.current?.clickUi(id)} onRow={(list, row) => engine.current?.pickRow(list, row)} />}
-      {playing && hud && <HudView hud={hud} />}
+      {playing && hud && <HudView hud={hud} captions={captions} />}
       {hud?.blueprints && <BlueprintMenu menu={hud.blueprints} onPick={(id) => engine.current?.pickBlueprint(id)} onClose={() => engine.current?.closeBlueprints()} />}
       {playing && hud?.computer && engine.current && <ComputerScreen view={hud.computer} host={engine.current} />}
       {hud?.mine && <MineUi hud={hud.mine} menu={hud.mineMenu} onAction={(a, arg) => engine.current?.mineAction(a, arg)} />}
