@@ -107,6 +107,34 @@ full health (the score is kept). A project that doesn't want health or a score s
 | the player's health, the score | Values for comparisons and text (“If the player's health < 30 …”) |
 | When the player dies | Runs when health reaches 0, after the player has started again |
 
+## The player's body and movement
+
+Blocks under **Player body and movement** change the player while playing; **When the player …** (Player movement)
+and the value **The player's size, speed, moving …** follow what they do.
+
+| Block | What it does |
+|---|---|
+| Set the player's size to *k* times normal over *s* seconds | 0.5 is half as tall and wide, 2 twice (0.1 to 10). The box, the eyes, the step height, crouching, footstep strides and the third-person body scale with it; speed, jump and reach don't. The stack waits *s* seconds. Growing needs room: under a low ceiling the player gets as big as fits and keeps growing once there is room |
+| Set the player's speed / jump height / gravity to *k* times normal | Speed: running, walking, crouching, sprinting, swimming and climbing (0 stands still). Jump height: ×2 jumps twice as high, whatever the gravity. Gravity: 0.5 falls slower (floaty), 0 floats away after a jump (0 to 10) |
+| Let the player move only: forward back left right jump crouch | Ticks the ways the player may move; the rest do nothing (only *back* ticked: they can only walk backwards). The view still turns |
+| The player can / can't go *way* | Allows or takes away one way, leaving the others |
+| Put the player's size, speed, jump, gravity and moves back to normal | |
+
+**When the player** *starts moving · keeps moving · stops moving · jumps · lands · crouches · stands up from
+crouching · starts swimming · stops swimming*. Moving means under their own steam (walking, swimming, climbing a
+ladder) faster than 20 u/s (less when small); pushing into a wall isn't moving, and it stops after 0.1 s below
+8 u/s. *Keeps moving* starts every frame while they move, unless the stack is still running, so *keeps moving → change
+`size` by −0.01, set the player's size to `size` over 0 seconds, wait 0.2* shrinks them while they walk.
+
+The value **the player's …**: size, speed / jump / gravity setting, speed now (u/s), distance walked (units, from
+the start), falling speed now, last landing speed (u/s, for “if they landed hard”), and yes-or-no: is moving, on the
+ground, crouching, swimming, on a ladder, can go forward / back / left / right, can jump, can crouch.
+
+Dying keeps all of these; use *When the player dies → Put the player … back to normal* to reset. A kept world keeps
+the size (a resize under way is saved finished), the three settings, the ways of moving and the distance walked.
+Code: `Player.resize`, `scriptSpeed`, `scriptJump`, `scriptGravity`, `moves`, `moving`, `walked` (`player.ts`);
+`GameWorld.movementEvents`, `playerState` (`world.ts`). Tests: `packages/runtime/test/player-body.test.ts`.
+
 ## Game values, messages and signs
 
 **Game values** are shared by every script in the project: Cash, Gems, Round. Add them with **+ Game value**

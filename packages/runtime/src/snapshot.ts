@@ -39,6 +39,8 @@ export class FrameSnapshot {
   hasView = false;
   thirdPerson = false;
   crouched = false;
+  /** The player's size (scripts can change it; 1 is normal). */
+  size = 1;
   /** The player is sprinting (the view widens). */
   sprinting = false;
   /** How fast the player falls (units/s, 0 when not falling; the view widens on long falls). */
@@ -156,7 +158,7 @@ export class FrameSnapshot {
     this.npcState[i] = state;
   }
 
-  setView(v: { eye: ArrayLike<number>; yaw: number; pitch: number; thirdPerson: boolean; feet: ArrayLike<number> } | null, crouched: boolean): void {
+  setView(v: { eye: ArrayLike<number>; yaw: number; pitch: number; thirdPerson: boolean; feet: ArrayLike<number> } | null, crouched: boolean, size = 1): void {
     this.hasView = !!v;
     if (!v) return;
     const o = this.view;
@@ -170,6 +172,7 @@ export class FrameSnapshot {
     o[7] = v.feet[2]!;
     this.thirdPerson = v.thirdPerson;
     this.crouched = crouched;
+    this.size = size;
   }
 
   /** What the view's field-of-view effects follow. */

@@ -3,7 +3,7 @@
  * the compiler turns each handler into a flat list of instructions for the VM. A handler with an error is
  * reported and left out, so one broken script never stops the rest of the game.
  */
-import type { Direction, Expr, LightProp, Handler, Place, Ref, Script, Statement, ValueType } from './model';
+import { PLAYER_MOVE_KINDS, PLAYER_NUMBERS, PLAYER_WAYS, PLAYER_YES_NO, type Direction, type Expr, type LightProp, type Handler, type Place, type PlayerMoveKind, type PlayerStateKind, type Ref, type Script, type Statement, type ValueType } from './model';
 
 /** What the checker needs to know about the scene. */
 export interface SceneInfo {
@@ -141,6 +141,8 @@ export type Op =
   | { op: 'isday' }
   /** Pops a light; pushes whether it is on. */
   | { op: 'lit' }
+  /** Pushes something about the player's body or movement. */
+  | { op: 'pstate'; what: PlayerStateKind }
   | { op: 'halt' };
 
 /** How far (units) “When the player uses this” reaches unless it says otherwise. */
@@ -149,7 +151,7 @@ export const USE_REACH = 96;
 export type GameAction = 'hurt' | 'heal' | 'addScore' | 'giveArmour';
 export type GameValue = 'health' | 'score' | 'armour';
 
-export type ActionName = 'move' | 'turn' | 'turnTo' | 'return' | 'show' | 'hide' | 'turnOn' | 'turnOff' | 'startTrain' | 'stopTrain' | 'walkTo' | 'runAway' | 'wander' | 'setSide' | 'freeze' | 'unfreeze' | 'viewFrom' | 'remove' | 'scale' | 'physical' | 'push' | 'moveTo' | 'teleport' | 'damage' | 'place' | 'pickUp' | 'drop' | 'unhide' | 'silence' | 'unsilence';
+export type ActionName = 'move' | 'turn' | 'turnTo' | 'return' | 'show' | 'hide' | 'turnOn' | 'turnOff' | 'startTrain' | 'stopTrain' | 'walkTo' | 'runAway' | 'wander' | 'setSide' | 'freeze' | 'unfreeze' | 'viewFrom' | 'remove' | 'scale' | 'physical' | 'push' | 'moveTo' | 'teleport' | 'damage' | 'place' | 'pickUp' | 'drop' | 'unhide' | 'silence' | 'unsilence' | 'playerSize' | 'playerSpeed' | 'playerJump' | 'playerGravity' | 'playerMoves' | 'playerWay' | 'playerNormal';
 
 export type CompiledEvent =
   | { kind: 'start' }
@@ -158,6 +160,7 @@ export type CompiledEvent =
   | { kind: 'use'; prompt: string; reach: number }
   | { kind: 'useHolding'; item: string | null; reach: number }
   | { kind: 'die' }
+  | { kind: 'playerMove'; what: PlayerMoveKind }
   | { kind: 'breaks' }
   | { kind: 'printed' }
   | { kind: 'hit' }
@@ -283,6 +286,10 @@ class HandlerCompiler {
       const item = ev.item ? this.resolveRef(ev.item, ev.id) : null;
       if (item === 'player' || item === 'other' || item === 'held') this.problem(ev.id, 'Pick an object the player could hold (or “anything”).');
       else if (reach !== null && (!ev.item || item)) event = { kind: 'useHolding', item: item === 'self' ? this.owner : item, reach };
+    }
+    else if (ev.kind === 'playerMove') {
+      if (!PLAYER_MOVE_KINDS.includes(ev.what)) this.problem(ev.id, 'Pick what the player does.');
+      else event = { kind: 'playerMove', what: ev.what };
     }
     else if (ev.kind === 'breaks') event = { kind: 'breaks' };
     else if (ev.kind === 'printed') event = { kind: 'printed' };
@@ -770,6 +777,39 @@ class HandlerCompiler {
         this.emit({ op: 'ref', ref: { player: true } });
         this.emit({ op: 'act', name: s.kind === 'freezePlayer' ? 'freeze' : 'unfreeze', argc: 0 });
         break;
+      case 'playerSize':
+        this.emit({ op: 'ref', ref: { player: true } });
+        this.expect(s.factor, 'number', 'The size must be a number (1 is normal, 0.5 half size).');
+        this.expect(s.seconds, 'number', 'The time must be a number of seconds.');
+        if (s.factor.kind === 'number' && !(s.factor.value > 0)) this.problem(s.factor.id, 'The size must be above 0 (1 is normal, 0.5 half size).');
+        this.emit({ op: 'act', name: 'playerSize', argc: 2 });
+        this.waits = true;
+        break;
+      case 'playerSet': {
+        const name = s.prop === 'speed' ? 'playerSpeed' : s.prop === 'jump' ? 'playerJump' : s.prop === 'gravity' ? 'playerGravity' : null;
+        if (!name) this.problem(s.id, 'Pick speed, jump height or gravity.');
+        this.emit({ op: 'ref', ref: { player: true } });
+        this.expect(s.value, 'number', 'This is a number of times normal (1 is normal, 2 twice, 0.5 half).');
+        if (s.value.kind === 'number' && s.value.value < 0) this.problem(s.value.id, 'This can’t be below 0 (1 is normal).');
+        this.emit({ op: 'act', name: name ?? 'playerSpeed', argc: 1 });
+        break;
+      }
+      case 'playerMoves':
+        this.emit({ op: 'ref', ref: { player: true } });
+        for (const w of PLAYER_WAYS) this.emit({ op: 'push', v: s.ways.includes(w) });
+        this.emit({ op: 'act', name: 'playerMoves', argc: 6 });
+        break;
+      case 'playerWay':
+        if (!PLAYER_WAYS.includes(s.way)) this.problem(s.id, 'Pick a way of moving.');
+        this.emit({ op: 'ref', ref: { player: true } });
+        this.emit({ op: 'push', v: s.way });
+        this.emit({ op: 'push', v: !!s.on });
+        this.emit({ op: 'act', name: 'playerWay', argc: 2 });
+        break;
+      case 'playerNormal':
+        this.emit({ op: 'ref', ref: { player: true } });
+        this.emit({ op: 'act', name: 'playerNormal', argc: 0 });
+        break;
       case 'viewFrom':
         this.actTarget(s.target, s.id);
         this.expect(s.seconds, 'number', 'The time must be a number of seconds.');
@@ -1012,6 +1052,18 @@ class HandlerCompiler {
         this.lightTarget(e.target, e.id);
         this.emit({ op: 'lit' });
         return 'boolean';
+      case 'playerState':
+        if (PLAYER_NUMBERS.includes(e.what)) {
+          this.emit({ op: 'pstate', what: e.what });
+          return 'number';
+        }
+        if (PLAYER_YES_NO.includes(e.what)) {
+          this.emit({ op: 'pstate', what: e.what });
+          return 'boolean';
+        }
+        this.problem(e.id, 'Pick what to know about the player.');
+        this.emit({ op: 'push', v: null });
+        return 'unknown';
       case 'armour':
         this.ruleOff('health', e.id);
         this.emit({ op: 'read', name: 'armour' });

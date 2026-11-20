@@ -233,6 +233,56 @@ const W = {
   yes: ['yes', 'да'],
   no: ['no', 'нет'],
   pickVariable: ['pick a variable', 'выберите переменную'],
+  // the player's body and movement
+  playerMove: ['When the player', 'Когда игрок'],
+  pmStart: ['starts moving', 'начинает двигаться'],
+  pmMoving: ['keeps moving (again and again)', 'продолжает двигаться (снова и снова)'],
+  pmStop: ['stops moving', 'останавливается'],
+  pmJump: ['jumps', 'прыгает'],
+  pmLand: ['lands', 'приземляется'],
+  pmCrouch: ['crouches', 'приседает'],
+  pmUncrouch: ['stands up from crouching', 'встаёт из приседа'],
+  pmSwim: ['starts swimming', 'начинает плавать'],
+  pmUnswim: ['stops swimming', 'перестаёт плавать'],
+  playerSize: ['Set the player’s size to', 'Сделать размер игрока'],
+  timesNormal: ['times normal over', 'от обычного за'],
+  playerSet: ['Set the player’s', 'Сделать у игрока'],
+  psSpeed: ['speed', 'скорость'],
+  psJump: ['jump height', 'высоту прыжка'],
+  psGravity: ['gravity', 'гравитацию'],
+  timesNormalEnd: ['times normal', 'от обычного (раз)'],
+  playerMoves: ['Let the player move only:', 'Игрок может двигаться только:'],
+  playerWay: ['The player', 'Игрок'],
+  wayCan: ['can', 'может'],
+  wayCant: ['can’t', 'не может'],
+  wayForward: ['forward', 'вперёд'],
+  wayBack: ['back', 'назад'],
+  wayLeft: ['left', 'влево'],
+  wayRight: ['right', 'вправо'],
+  wayJump: ['jump', 'прыгать'],
+  wayCrouch: ['crouch', 'приседать'],
+  goWord: ['go', 'идти'],
+  playerNormal: ['Put the player’s size, speed, jump, gravity and moves back to normal', 'Вернуть игроку обычный размер, скорость, прыжок, гравитацию и движения'],
+  playerStateWord: ['the player’s', 'у игрока:'],
+  stSize: ['size (× normal)', 'размер (× обычного)'],
+  stSpeed: ['speed setting (× normal)', 'скорость (× обычной)'],
+  stJump: ['jump setting (× normal)', 'прыжок (× обычного)'],
+  stGravity: ['gravity setting (× normal)', 'гравитация (× обычной)'],
+  stSpeedNow: ['speed now (units/s)', 'скорость сейчас (ед./с)'],
+  stWalked: ['distance walked (units)', 'пройдено (ед.)'],
+  stFallSpeed: ['falling speed now (units/s)', 'скорость падения (ед./с)'],
+  stLandSpeed: ['last landing speed (units/s)', 'скорость последнего приземления (ед./с)'],
+  stMoving: ['is moving', 'двигается'],
+  stOnGround: ['is on the ground', 'на земле'],
+  stCrouching: ['is crouching', 'присел'],
+  stSwimming: ['is swimming', 'плывёт'],
+  stClimbing: ['is on a ladder', 'на лестнице'],
+  stCanForward: ['can go forward', 'может идти вперёд'],
+  stCanBack: ['can go back', 'может идти назад'],
+  stCanLeft: ['can go left', 'может идти влево'],
+  stCanRight: ['can go right', 'может идти вправо'],
+  stCanJump: ['can jump', 'может прыгать'],
+  stCanCrouch: ['can crouch', 'может приседать'],
 } satisfies Record<string, Pair>;
 
 export const w = (k: keyof typeof W) => pick(W[k] as Pair);
@@ -281,6 +331,7 @@ const PALETTE_EVENT: Record<EventKind, Pair> = {
   near: ['When the player comes near this', 'Когда игрок подходит к этому'],
   far: ['When the player goes away from this', 'Когда игрок уходит от этого'],
   useHolding: ['When the player uses this while holding something', 'Когда игрок использует это, держа что-то'],
+  playerMove: ['When the player moves, stops, jumps, lands …', 'Когда игрок идёт, останавливается, прыгает, приземляется …'],
 };
 export const eventName = (k: EventKind) => pick(PALETTE_EVENT[k]);
 
@@ -297,6 +348,11 @@ const PALETTE_STMT: Record<StatementKind, Pair> = {
   runAway: ['Make a creature run away', 'Заставить существо убегать'],
   wander: ['Make a creature wander or stay', 'Существо бродит или стоит'],
   freezePlayer: ['Freeze the player', 'Остановить игрока'],
+  playerSize: ['Set the player’s size', 'Размер игрока'],
+  playerSet: ['Set the player’s speed, jump or gravity', 'Скорость, прыжок или гравитация игрока'],
+  playerMoves: ['Let the player move only some ways', 'Разрешить игроку только некоторые движения'],
+  playerWay: ['Allow or stop one way of moving', 'Разрешить или запретить одно движение'],
+  playerNormal: ['Player back to normal (size, speed, moves)', 'Игрок снова обычный (размер, скорость, движения)'],
   silence: ['Silence the world', 'Тишина в мире'],
   unsilence: ['Bring the world’s sounds back', 'Вернуть звуки мира'],
   unfreezePlayer: ['Let the player move again', 'Снова дать игроку двигаться'],
@@ -368,6 +424,7 @@ export const statementName = (k: StatementKind) => pick(PALETTE_STMT[k]);
 export const EVENT_GROUPS: { title: Pair; kinds: EventKind[] }[] = [
   { title: ['Game', 'Игра'], kinds: ['start', 'every', 'die'] },
   { title: ['Player actions', 'Действия игрока'], kinds: ['use', 'press', 'useHolding', 'key', 'useItem'] },
+  { title: ['Player movement', 'Движение игрока'], kinds: ['playerMove'] },
   { title: ['Distance and zones', 'Расстояние и зоны'], kinds: ['near', 'far', 'enter', 'leave'] },
   { title: ['Time', 'Время'], kinds: ['newDay', 'dayStarts', 'atHour'] },
   { title: ['Messages', 'Сообщения'], kinds: ['message', 'messageStop'] },
@@ -387,6 +444,7 @@ export const STATEMENT_GROUPS: { title: Pair; kinds: StatementKind[] }[] = [
   { title: ['Effects', 'Эффекты'], kinds: ['playEffect'] },
   { title: ['Sound', 'Звук'], kinds: ['playSound', 'stopSound', 'silence', 'unsilence'] },
   { title: ['Player', 'Игрок'], kinds: ['teleport', 'hurt', 'heal', 'giveArmour', 'freezePlayer', 'unfreezePlayer', 'unhide', 'viewFrom', 'changeScene'] },
+  { title: ['Player body and movement', 'Тело и движение игрока'], kinds: ['playerSize', 'playerSet', 'playerMoves', 'playerWay', 'playerNormal'] },
   { title: ['Score and items', 'Счёт и предметы'], kinds: ['addScore', 'giveItem', 'takeItem'] },
   { title: ['Creatures', 'Существа'], kinds: ['walkTo', 'setSide', 'runAway', 'wander', 'noise', 'hint'] },
   { title: ['Screen and signs', 'Экран и таблички'], kinds: ['say', 'showScreen', 'hideScreen', 'toggleScreen', 'showUi', 'hideUi', 'setUiText', 'addRow', 'removeRow', 'clearList', 'setText'] },
@@ -423,13 +481,27 @@ const VALUE: Record<ExprKind, Pair> = {
   timeOfDay: ['The time of day (hours)', 'Время суток (часы)'],
   day: ['The day', 'День'],
   isDay: ['Today is day …', 'Сегодня день …'],
+  playerState: ['The player’s size, speed, moving …', 'Размер, скорость, движение игрока …'],
 };
 export const valueName = (k: ExprKind) => pick(VALUE[k]);
 
 /** Which value blocks fit a slot of a given type. */
 export const VALUES_FOR: Record<'number' | 'boolean' | 'text' | 'any', ExprKind[]> = {
-  number: ['number', 'variable', 'varOf', 'maths', 'random', 'distance', 'time', 'timeOfDay', 'day', 'clock', 'health', 'armour', 'score', 'itemCount'],
-  boolean: ['boolean', 'inside', 'holds', 'hiding', 'lightOn', 'isDay', 'variable', 'varOf', 'compare', 'logic', 'not'],
-  text: ['text', 'variable', 'varOf', 'join', 'number', 'object', 'day', 'score', 'itemCount', 'selectedItem', 'pickedRow'],
-  any: ['number', 'text', 'boolean', 'variable', 'varOf', 'maths', 'compare', 'logic', 'not', 'inside', 'holds', 'hiding', 'lightOn', 'isDay', 'random', 'distance', 'join', 'time', 'timeOfDay', 'day', 'clock', 'health', 'armour', 'score', 'itemCount', 'selectedItem', 'pickedRow', 'object', 'copy'],
+  number: ['number', 'variable', 'varOf', 'maths', 'random', 'distance', 'time', 'timeOfDay', 'day', 'clock', 'health', 'armour', 'score', 'itemCount', 'playerState'],
+  boolean: ['boolean', 'inside', 'holds', 'hiding', 'lightOn', 'isDay', 'variable', 'varOf', 'compare', 'logic', 'not', 'playerState'],
+  text: ['text', 'variable', 'varOf', 'join', 'number', 'object', 'day', 'score', 'itemCount', 'selectedItem', 'pickedRow', 'playerState'],
+  any: ['number', 'text', 'boolean', 'variable', 'varOf', 'maths', 'compare', 'logic', 'not', 'inside', 'holds', 'hiding', 'lightOn', 'isDay', 'random', 'distance', 'join', 'time', 'timeOfDay', 'day', 'clock', 'health', 'armour', 'score', 'itemCount', 'selectedItem', 'pickedRow', 'object', 'copy', 'playerState'],
+};
+
+/** Labels for the player's movement events, ways of moving and what can be read about the player. */
+export const PLAYER_MOVE_WORD: Record<string, keyof typeof W> = {
+  start: 'pmStart', moving: 'pmMoving', stop: 'pmStop', jump: 'pmJump', land: 'pmLand', crouch: 'pmCrouch', uncrouch: 'pmUncrouch', swim: 'pmSwim', unswim: 'pmUnswim',
+};
+export const PLAYER_WAY_WORD: Record<string, keyof typeof W> = {
+  forward: 'wayForward', back: 'wayBack', left: 'wayLeft', right: 'wayRight', jump: 'wayJump', crouch: 'wayCrouch',
+};
+export const PLAYER_STATE_WORD: Record<string, keyof typeof W> = {
+  size: 'stSize', speed: 'stSpeed', jump: 'stJump', gravity: 'stGravity', speedNow: 'stSpeedNow', walked: 'stWalked', fallSpeed: 'stFallSpeed', landSpeed: 'stLandSpeed',
+  moving: 'stMoving', onGround: 'stOnGround', crouching: 'stCrouching', swimming: 'stSwimming', climbing: 'stClimbing',
+  canForward: 'stCanForward', canBack: 'stCanBack', canLeft: 'stCanLeft', canRight: 'stCanRight', canJump: 'stCanJump', canCrouch: 'stCanCrouch',
 };

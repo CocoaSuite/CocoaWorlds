@@ -9,7 +9,7 @@
  *  - A failing action or a division by zero stops only that thread, with a message pointing at the block.
  */
 import type { ActionName, CompiledHandler, GameAction, GameValue, Op, Program, Value } from './compile';
-import type { LightProp, Ref } from './model';
+import type { LightProp, PlayerMoveKind, PlayerStateKind, Ref } from './model';
 
 export const STEP_BUDGET = 10_000;
 
@@ -34,6 +34,8 @@ export interface ScriptHost {
   game?(name: GameAction, amount: number, owner: string): void;
   /** The player's health or the score. */
   read?(name: GameValue): number;
+  /** Something about the player's body or movement. */
+  player?(what: PlayerStateKind): Value;
   /** Game values shared by all scripts. */
   getGlobal?(name: string): Value;
   setGlobal?(name: string, value: Value): void;
@@ -179,6 +181,8 @@ export type RunnerEvent =
   | { type: 'useHolding'; targets: string[]; held: string[]; distance: number }
   /** The player's health reached 0. */
   | { type: 'die' }
+  /** The player moved: started, kept moving, stopped, jumped, landed … */
+  | { type: 'player'; what: PlayerMoveKind }
   /** A breakable object's health reached 0. */
   | { type: 'breaks'; target: string }
   /** A 3D printer finished printing `copy`. */
@@ -393,6 +397,8 @@ export class ScriptRunner {
           if (ev.kind === 'atHour' && Math.floor((e.to - ev.hour) / 24) > Math.floor((e.from - ev.hour) / 24)) this.spawn(inst, h, null);
         } else if (e.type === 'die') {
           if (ev.kind === 'die') this.spawn(inst, h, null);
+        } else if (e.type === 'player') {
+          if (ev.kind === 'playerMove' && ev.what === e.what) this.spawn(inst, h, null);
         } else if (e.type === 'use') {
           if (ev.kind === 'use' && e.targets.includes(inst.program.owner) && (e.distance ?? 0) <= ev.reach) this.spawn(inst, h, e.by);
         } else if (e.type === 'useHolding') {
@@ -672,6 +678,9 @@ export class ScriptRunner {
           break;
         case 'read':
           s.push(this.host.read?.(op.name) ?? 0);
+          break;
+        case 'pstate':
+          s.push(this.host.player?.(op.what) ?? 0);
           break;
         case 'gvar':
           s.push(this.host.getGlobal?.(op.name) ?? null);

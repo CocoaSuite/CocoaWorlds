@@ -577,3 +577,26 @@ down), Fractal sum 4 even grainy blotches (value noise), B&W spots 1–4 continu
 
 Next, if wanted: Free transform handles for Scatter-like placement of several copies; a shortcut for sections;
 showing the wrapped part of a placed copy in the handles.
+
+### 33. Player body and movement blocks (2026-11-20)
+
+Status: done. The player can be resized, sped up, made to jump higher, given less gravity and limited to some ways
+of moving by blocks, and scripts can listen for starting, keeping and stopping moving, jumps, landings, crouching
+and swimming, and read the player's size, settings, speed, distance walked and more. Docs: `docs/scripting.md`
+(The player's body and movement).
+
+Code: `packages/scripting/src/model.ts` (`playerSize`, `playerSet`, `playerMoves`, `playerWay`, `playerNormal`;
+event `playerMove`; value `playerState`; `PLAYER_MOVE_KINDS`, `PLAYER_NUMBERS`, `PLAYER_YES_NO`, `PLAYER_WAYS`),
+`compile.ts` (player actions, `pstate` op), `vm.ts` (`player` event, `host.player`), `factory.ts`.
+`packages/runtime/src/player.ts`: the box, eyes, step height and crouch are per player (`size`, `standH`,
+`crouchH`, `eyeH`, `radius`, `stepH`); `resize` eases over seconds and applies in `step` (never on the first step,
+when queries see nothing), growing only where the box fits (as big as fits meanwhile); `scriptSpeed`,
+`scriptJump` (height, so take-off speed is √(jump × gravity)), `scriptGravity`; `moves` filters the input; `moving`
+(own input and speed, with a short still time), `walked`, `jumped`, `landed`. `world.ts`: `actOnPlayer`
+(`playerSize` waits), `movementEvents`, `playerState`, saved in `SavedScene.player.body`; third-person camera and
+body, footstep strides and level zones follow the size. Editor: `words.ts`, `ScriptPanel.tsx` (way toggles
+`.cw-way`). Tests: `packages/runtime/test/player-body.test.ts`.
+
+Next, if wanted: reach scaling with size (an option); a “size” for creatures; an e2e test of the blocks in the
+editor.
+

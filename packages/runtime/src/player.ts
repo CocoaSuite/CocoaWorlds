@@ -87,11 +87,29 @@ export const noInput = (): PlayerInput => ({ forward: 0, right: 0, jump: false, 
 
 type V = { x: number; y: number; z: number };
 
+/** The ways scripts can let the player move (or not). */
+export interface PlayerMoves {
+  forward: boolean;
+  back: boolean;
+  left: boolean;
+  right: boolean;
+  jump: boolean;
+  crouch: boolean;
+}
+export const allMoves = (): PlayerMoves => ({ forward: true, back: true, left: true, right: true, jump: true, crouch: true });
+/** Sizes scripts can set (a tenth to ten times normal). */
+export const MIN_SIZE = 0.1;
+export const MAX_SIZE = 10;
+/** Moving faster than this starts “moving”; slower than STILL_SPEED for STILL_TIME stops it. */
+export const MOVE_SPEED = 20;
+export const STILL_SPEED = 8;
+export const STILL_TIME = 0.1;
+
 /** Query groups that skip hidden and switched-off objects (their collision groups are 0). */
 const SOLID = 0xffffffff;
 
 /** The player's shape, for “does it fit here” checks. */
-const playerShape = (height: number) => new RAPIER.Cylinder(height / 2, PLAYER.radius);
+const playerShape = (height: number, radius: number = PLAYER.radius) => new RAPIER.Cylinder(height / 2, radius);
 
 /** What the world tells the player about moving things (lifts, doors, platforms). */
 export interface PlayerSurroundings {
@@ -106,6 +124,127 @@ export interface PlayerSurroundings {
 }
 
 export class Player {
+  /**
+   * The player's size (scripts: “Set the player's size”): 1 is normal, 0.5 half as tall and wide. The box, the eyes,
+   * the step height and crouching scale with it; speed and jump have their own factors.
+   */
+  size = 1;
+  private sizeTween: { from: number; to: number; t: number; seconds: number } | null = null;
+  /** The size scripts asked for (it can lag behind while there is no room to grow). */
+  sizeTarget = 1;
+  /** Script factors on speed and jump height (1: normal). */
+  scriptSpeed = 1;
+  scriptJump = 1;
+  /** Script factor on gravity (1: normal, 0.5 floaty, 0 none). */
+  scriptGravity = 1;
+  /** Which ways the player may move (scripts: “Let the player move”). */
+  moves: PlayerMoves = allMoves();
+
+  get standH() {
+    return PLAYER.height * this.size;
+  }
+  get crouchH() {
+    return PLAYER.crouchHeight * this.size;
+  }
+  get eyeH() {
+    return PLAYER.eye * this.size;
+  }
+  get crouchEyeH() {
+    return PLAYER.crouchEye * this.size;
+  }
+  get radius() {
+    return PLAYER.radius * this.size;
+  }
+  get stepH() {
+    return PLAYER.stepHeight * this.size;
+  }
+  /** The eye height now (standing or crouched). */
+  get eyeHeight() {
+    return this.crouched ? this.crouchEyeH : this.eyeH;
+  }
+
+  /** Grow or shrink to `to` times the normal size over `seconds` (0: at once, if there is room). */
+  resize(to: number, seconds = 0): void {
+    to = Math.max(MIN_SIZE, Math.min(MAX_SIZE, Number.isFinite(to) ? to : 1));
+    this.sizeTarget = to;
+    // (Applied in the next step: room is checked against the world as physics last left it.)
+    this.sizeTween = { from: this.size, to, t: 0, seconds: Math.max(0, seconds) };
+  }
+
+  /** Whether a resize is still under way (its time hasn't run out; growing may still wait for room after). */
+  get resizing(): boolean {
+    const tw = this.sizeTween;
+    return !!tw && tw.t < tw.seconds;
+  }
+
+  /** Advance a resize; growing waits until there is room. */
+  private stepSize(dt: number): void {
+    const tw = this.sizeTween;
+    if (!tw) return;
+    tw.t = Math.min(tw.seconds, tw.t + dt);
+    const k = tw.seconds > 0 ? tw.t / tw.seconds : 1;
+    const e = k * k * (3 - 2 * k);
+    const want = tw.from + (tw.to - tw.from) * e;
+    if (!this.setSize(want) && want > this.size) {
+      // No room to grow: get as big as fits (halving the gap), then keep trying.
+      let lo = this.size, hi = want;
+      for (let i = 0; i < 6; i++) {
+        const mid = (lo + hi) / 2;
+        if (this.setSize(mid)) lo = mid;
+        else hi = mid;
+      }
+    }
+    if (tw.t >= tw.seconds) this.sizeTween = Math.abs(this.size - tw.to) < 1e-4 ? null : { from: this.size, to: tw.to, t: 0, seconds: 0 };
+  }
+
+  /** Change the size now, feet staying put, if the new box fits (shrinking always does). */
+  private setSize(size: number): boolean {
+    if (Math.abs(size - this.size) < 1e-6) return true;
+    const old = this.size;
+    this.size = size;
+    const h = this.height, r = this.radius;
+    const t = this.body.translation();
+    const feetY = t.y - ((this.crouched ? PLAYER.crouchHeight : PLAYER.height) * old) / 2;
+    const at = { x: t.x, y: feetY + h / 2, z: t.z };
+    // (Checked a unit up, so the floor under the feet doesn't count.)
+    if (size > old && this.world.intersectionWithShape({ ...at, y: at.y + 1 }, { x: 0, y: 0, z: 0, w: 1 }, playerShape(h, r), RAPIER.QueryFilterFlags.EXCLUDE_SENSORS, SOLID, this.collider)) {
+      this.size = old;
+      return false;
+    }
+    this.collider.setHalfHeight(h / 2);
+    this.collider.setRadius(r);
+    this.body.setTranslation(at, true);
+    this.collider.setTranslation(at);
+    this.controller.enableAutostep(this.stepH, 4 * size, false);
+    this.controller.enableSnapToGround(this.stepH / 2);
+    // The view keeps its place for the eased eye height (smoothView) to follow.
+    return true;
+  }
+
+  /** Back to normal: size, speed, jump and every way of moving. */
+  resetBody(): void {
+    this.resize(1);
+    this.scriptSpeed = 1;
+    this.scriptJump = 1;
+    this.scriptGravity = 1;
+    this.moves = allMoves();
+  }
+
+  private steps = 0;
+
+  /** Is the player moving under their own steam (walking, running, swimming, climbing)? Set every step. */
+  moving = false;
+  private stillFor = 0;
+  /** Set for one step: the player jumped (from the ground, in the air, off a ladder or out of water). */
+  jumped = false;
+  /** Set for one step: the feet touched the ground after being off it; how fast they were falling. */
+  landed = false;
+  landedSpeed = 0;
+  /** Units walked (moved under their own steam), from the start. */
+  walked = 0;
+  /** How fast the player moves now (sideways speed, or climbing), units per second. */
+  speedNow = 0;
+
   readonly body: RAPIER.RigidBody;
   readonly collider: RAPIER.Collider;
   private controller: RAPIER.KinematicCharacterController;
@@ -153,13 +292,13 @@ export class Player {
   ) {
     feet = { x: feet.x, y: feet.y + 1, z: feet.z };
     this.spawn = { feet: { ...feet }, yaw };
-    this.body = world.createRigidBody(RAPIER.RigidBodyDesc.kinematicPositionBased().setTranslation(feet.x, feet.y + PLAYER.height / 2, feet.z));
+    this.body = world.createRigidBody(RAPIER.RigidBodyDesc.kinematicPositionBased().setTranslation(feet.x, feet.y + this.standH / 2, feet.z));
     // An upright cylinder: a flat bottom (stands firmly on floors and edges and climbs steps like Source's box)
     // and round sides, so it slides around pillars, balls and corners instead of catching on their facets.
-    this.collider = world.createCollider(RAPIER.ColliderDesc.cylinder(PLAYER.height / 2, PLAYER.radius).setFriction(0), this.body);
+    this.collider = world.createCollider(RAPIER.ColliderDesc.cylinder(this.standH / 2, this.radius).setFriction(0), this.body);
     this.controller = world.createCharacterController(0.5);
-    this.controller.enableAutostep(PLAYER.stepHeight, 4, false);
-    this.controller.enableSnapToGround(PLAYER.stepHeight / 2);
+    this.controller.enableAutostep(this.stepH, 4, false);
+    this.controller.enableSnapToGround(this.stepH / 2);
     this.controller.setMaxSlopeClimbAngle((PLAYER.maxSlope * Math.PI) / 180);
     this.controller.setMinSlopeSlideAngle(((PLAYER.maxSlope + 5) * Math.PI) / 180);
     this.controller.setApplyImpulsesToDynamicBodies(true);
@@ -172,12 +311,12 @@ export class Player {
   }
 
   private resetView(): void {
-    this.view = { y: this.feet.y, eye: this.crouched ? PLAYER.crouchEye : PLAYER.eye };
+    this.view = { y: this.feet.y, eye: this.crouched ? this.crouchEyeH : this.eyeH };
     this.prevView = { ...this.view };
   }
 
   private get height() {
-    return this.crouched ? PLAYER.crouchHeight : PLAYER.height;
+    return this.crouched ? this.crouchH : this.standH;
   }
 
   /** Eye position between the last two physics steps (`alpha` 0…1). */
@@ -219,7 +358,7 @@ export class Player {
   }
 
   teleport(feet: V, yaw?: number): void {
-    const shape = playerShape(this.height);
+    const shape = playerShape(this.height, this.radius);
     let y = feet.y + 1;
     for (let i = 0; i < 64; i++, y += 8) {
       const hit = this.world.intersectionWithShape({ x: feet.x, y: y + this.height / 2, z: feet.z }, { x: 0, y: 0, z: 0, w: 1 }, shape, RAPIER.QueryFilterFlags.EXCLUDE_SENSORS, SOLID, this.collider);
@@ -239,7 +378,7 @@ export class Player {
 
   /** Whether the player would fit standing here (nothing solid in the way, other than sensors). */
   fitsAt(feet: V): boolean {
-    const hit = this.world.intersectionWithShape({ x: feet.x, y: feet.y + 1 + this.height / 2, z: feet.z }, { x: 0, y: 0, z: 0, w: 1 }, playerShape(this.height), RAPIER.QueryFilterFlags.EXCLUDE_SENSORS, SOLID, this.collider);
+    const hit = this.world.intersectionWithShape({ x: feet.x, y: feet.y + 1 + this.height / 2, z: feet.z }, { x: 0, y: 0, z: 0, w: 1 }, playerShape(this.height, this.radius), RAPIER.QueryFilterFlags.EXCLUDE_SENSORS, SOLID, this.collider);
     return !hit;
   }
 
@@ -295,8 +434,49 @@ export class Player {
 
   /** One fixed physics step. */
   step(dt: number): void {
-    const inp = this.input;
+    this.jumped = this.landed = false;
     if (this.noclip) return this.fly(dt);
+    // (Not on the very first step: until physics has stepped once, its queries can't see anything.)
+    if (this.steps++ > 0) this.stepSize(dt);
+    const wasGround = this.onGround, vy = this.velocity.y, wasLadder = this.onLadder;
+    const raw = this.input, m = this.moves;
+    // Ways scripts have taken away are as if not pressed (the view still turns).
+    const inp: PlayerInput =
+      m.forward && m.back && m.left && m.right && m.jump && m.crouch
+        ? raw
+        : {
+            ...raw,
+            forward: (raw.forward > 0 && !m.forward) || (raw.forward < 0 && !m.back) ? 0 : raw.forward,
+            right: (raw.right > 0 && !m.right) || (raw.right < 0 && !m.left) ? 0 : raw.right,
+            jump: raw.jump && m.jump,
+            crouch: raw.crouch && m.crouch,
+          };
+    this.stepBody(inp, dt);
+    if (!wasGround && this.onGround && !wasLadder) {
+      this.landed = true;
+      this.landedSpeed = Math.max(0, -vy);
+    }
+    this.watchMoving(dt);
+  }
+
+  /** Track “moving”, how fast, and how far walked. */
+  private watchMoving(dt: number): void {
+    const v = this.velocity;
+    const speed = this.onLadder ? Math.hypot(v.x, v.y, v.z) : this.waterLevel >= 2 ? Math.hypot(v.x, v.y, v.z) : Math.hypot(v.x, v.z);
+    this.speedNow = speed;
+    const own = this.input.forward !== 0 || this.input.right !== 0 || (this.waterLevel >= 2 && (this.input.jump || this.input.crouch));
+    if (own && speed > MOVE_SPEED * Math.min(1, this.size)) {
+      this.moving = true;
+      this.stillFor = 0;
+    } else if (this.moving && speed < STILL_SPEED * Math.min(1, this.size)) {
+      if ((this.stillFor += dt) >= STILL_TIME) this.moving = false;
+    } else if (this.moving && !own) {
+      if ((this.stillFor += dt) >= STILL_TIME) this.moving = false;
+    }
+    if (this.moving) this.walked += speed * dt;
+  }
+
+  private stepBody(inp: PlayerInput, dt: number): void {
     this.setCrouch(inp.crouch);
     const sprint = this.sprinting;
     if (this.tires) {
@@ -314,7 +494,7 @@ export class Player {
       wx /= len;
       wz /= len;
     }
-    const maxSpeed = (this.crouched ? PLAYER.crouchSpeed : sprint ? PLAYER.sprintSpeed : inp.walk && !this.tires ? PLAYER.walkSpeed : PLAYER.runSpeed) * this.speedScale;
+    const maxSpeed = (this.crouched ? PLAYER.crouchSpeed : sprint ? PLAYER.sprintSpeed : inp.walk && !this.tires ? PLAYER.walkSpeed : PLAYER.runSpeed) * this.speedScale * this.scriptSpeed;
     const wishSpeed = len > 1e-6 ? maxSpeed : 0;
     const s = this.surroundings;
     this.sense(s);
@@ -345,7 +525,7 @@ export class Player {
     this.feet = { x: this.feet.x + x, y: this.feet.y + y, z: this.feet.z + z };
     this.body.setNextKinematicTranslation({ x: this.feet.x, y: this.feet.y + this.height / 2, z: this.feet.z });
     this.prevView = { ...this.view };
-    this.view = { y: this.feet.y, eye: PLAYER.eye };
+    this.view = { y: this.feet.y, eye: this.eyeH };
   }
 
   /** Where the player is: how deep in water, and whether on a ladder. */
@@ -359,12 +539,12 @@ export class Player {
         this.waterLevel = 1;
         if (wet(feet + this.height / 2)) {
           this.waterLevel = 2;
-          if (wet(feet + (this.crouched ? PLAYER.crouchEye : PLAYER.eye))) this.waterLevel = 3;
+          if (wet(feet + (this.crouched ? this.crouchEyeH : this.eyeH))) this.waterLevel = 3;
         }
       }
     }
     if (this.ladderCooldown > 0) this.ladderCooldown--;
-    const speed = s?.ladder && !this.ladderCooldown ? s.ladder(new RAPIER.Cylinder(this.height / 2, PLAYER.radius + 2), t) : null;
+    const speed = s?.ladder && !this.ladderCooldown ? s.ladder(new RAPIER.Cylinder(this.height / 2, this.radius + 2), t) : null;
     this.ladderSpeed = speed ?? 0;
     this.onLadder = speed !== null;
   }
@@ -381,12 +561,13 @@ export class Player {
       v.x = -fx * PLAYER.ladderJumpSpeed;
       v.z = -fz * PLAYER.ladderJumpSpeed;
       v.y = PLAYER.ladderJumpSpeed * 0.5;
+      this.jumped = true;
       this.ladderCooldown = 20;
       this.onLadder = false;
       this.onGround = false;
       return;
     }
-    const speed = this.ladderSpeed;
+    const speed = this.ladderSpeed * this.scriptSpeed;
     const up = inp.pitch > -0.35 ? 1 : -1;
     v.y = inp.forward * speed * up;
     // Forward also presses into the ladder, so at the top the player steps off onto the floor.
@@ -400,15 +581,16 @@ export class Player {
     const v = this.velocity;
     // Out onto a ledge: at the surface, swimming forward against a wall, with Jump.
     if (this.waterLevel === 2 && inp.jump && inp.forward > 0 && this.lastBlocked) {
+      if (v.y < PLAYER.waterJumpSpeed) this.jumped = true;
       v.y = Math.max(v.y, PLAYER.waterJumpSpeed);
       return;
     }
     const d = this.lookDirection();
-    const run = this.crouched ? PLAYER.runSpeed : maxSpeed;
+    const run = this.crouched ? PLAYER.runSpeed * this.scriptSpeed : maxSpeed;
     const wish = { x: (d[0] * inp.forward + rx * inp.right) * run, y: d[1] * inp.forward * run, z: (d[2] * inp.forward + rz * inp.right) * run };
     if (inp.jump) wish.y += run;
     else if (inp.crouch) wish.y -= run;
-    else if (!inp.forward && !inp.right) wish.y -= PLAYER.sinkSpeed;
+    else if (!inp.forward && !inp.right) wish.y -= PLAYER.sinkSpeed * this.scriptGravity;
     let wishSpeed = Math.hypot(wish.x, wish.y, wish.z);
     const dir = wishSpeed > 1e-6 ? { x: wish.x / wishSpeed, y: wish.y / wishSpeed, z: wish.z / wishSpeed } : { x: 0, y: 0, z: 0 };
     wishSpeed = Math.min(wishSpeed, run) * PLAYER.swimFactor;
@@ -438,14 +620,16 @@ export class Player {
     if (this.onGround) this.airJumped = 0;
     else if (inp.jump && !this.jumpHeld && this.airJumped < this.airJumps) {
       this.airJumped++;
-      this.velocity.y = PLAYER.jumpSpeed * this.jumpScale;
+      this.velocity.y = this.jumpSpeed;
+      this.jumped = true;
     }
     if (this.onGround) {
       // Jump (pressing again each time; holding doesn't repeat).
       if (inp.jump && !this.jumpHeld && !this.riding && (!this.tires || this.stamina >= PLAYER.jumpCost)) {
         if (this.tires) this.tire(PLAYER.jumpCost);
-        this.velocity.y = PLAYER.jumpSpeed * this.jumpScale;
+        this.velocity.y = this.jumpSpeed;
         this.onGround = false;
+        this.jumped = true;
       } else {
         this.applyFriction(dt);
         this.accelerate(wx, wz, wishSpeed, PLAYER.accelerate, dt);
@@ -453,8 +637,16 @@ export class Player {
     }
     if (!this.onGround) {
       this.accelerate(wx, wz, Math.min(wishSpeed, PLAYER.airCap), PLAYER.airAccelerate, dt, wishSpeed);
-      this.velocity.y -= this.gravity * dt;
+      this.velocity.y -= this.gravity * this.scriptGravity * dt;
     }
+  }
+
+  /**
+   * Take-off speed. The script jump factor is how high (×2 is twice as high), and the height keeps that with any
+   * gravity: speed = √(2 g h).
+   */
+  private get jumpSpeed(): number {
+    return PLAYER.jumpSpeed * this.jumpScale * Math.sqrt(Math.max(0, this.scriptJump) * Math.max(0.05, this.scriptGravity));
   }
 
   /** Move by `desired` this step, sliding along what is hit, stepping up, riding what moves. */
@@ -539,9 +731,9 @@ export class Player {
     const footY = at.y - this.height / 2;
     // The middle and the edge of the feet (standing at the edge of a lift still counts). From a step above
     // the feet (still inside the player), in case they have sunk into it.
-    const r = PLAYER.radius * 0.9;
+    const r = this.radius * 0.9;
     for (const [ox, oz] of [[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1]] as const) {
-      const from = { x: at.x + ox * r, y: footY + Math.min(PLAYER.stepHeight, this.height - 1), z: at.z + oz * r };
+      const from = { x: at.x + ox * r, y: footY + Math.min(this.stepH, this.height - 1), z: at.z + oz * r };
       const hit = this.world.castRay(new RAPIER.Ray(from, { x: 0, y: -1, z: 0 }), from.y - footY + 4, false, undefined, SOLID, this.collider, undefined, (c) => s.blocks(c));
       if (hit) return { handle: hit.collider.handle, top: from.y - hit.timeOfImpact };
     }
@@ -559,10 +751,10 @@ export class Player {
     if (flying) this.view.y = y;
     else {
       this.view.y += (y - this.view.y) * k;
-      const lag = PLAYER.stepHeight * 1.5;
+      const lag = this.stepH * 1.5;
       this.view.y = Math.min(y + lag, Math.max(y - lag, this.view.y));
     }
-    const eye = this.crouched ? PLAYER.crouchEye : PLAYER.eye;
+    const eye = this.crouched ? this.crouchEyeH : this.eyeH;
     this.view.eye += (eye - this.view.eye) * k;
   }
 
@@ -571,7 +763,7 @@ export class Player {
     const top = this.stepAhead(desired.x, desired.z);
     if (top === null) return null;
     const up = { x: t.x + desired.x, y: top + this.height / 2 + 0.5, z: t.z + desired.z };
-    const shape = playerShape(this.height);
+    const shape = playerShape(this.height, this.radius);
     return this.world.intersectionWithShape(up, { x: 0, y: 0, z: 0, w: 1 }, shape, RAPIER.QueryFilterFlags.EXCLUDE_SENSORS, SOLID, this.collider) ? null : up;
   }
 
@@ -583,12 +775,12 @@ export class Player {
     const feet = t.y - this.height / 2;
     // A few distances past the front of the player's box (the riser may not be touching yet).
     for (const ahead of [1, 4, 8]) {
-      const reach = PLAYER.radius + ahead;
-      const from = { x: t.x + (dx / len) * reach, y: feet + PLAYER.stepHeight + 1, z: t.z + (dz / len) * reach };
-      const hit = this.world.castRayAndGetNormal(new RAPIER.Ray(from, { x: 0, y: -1, z: 0 }), PLAYER.stepHeight + 1, true, RAPIER.QueryFilterFlags.EXCLUDE_SENSORS, SOLID, this.collider);
+      const reach = this.radius + ahead;
+      const from = { x: t.x + (dx / len) * reach, y: feet + this.stepH + 1, z: t.z + (dz / len) * reach };
+      const hit = this.world.castRayAndGetNormal(new RAPIER.Ray(from, { x: 0, y: -1, z: 0 }), this.stepH + 1, true, RAPIER.QueryFilterFlags.EXCLUDE_SENSORS, SOLID, this.collider);
       if (!hit) continue;
       const top = from.y - hit.timeOfImpact;
-      if (top > feet + 0.25 && top <= feet + PLAYER.stepHeight + 0.5 && hit.normal.y > 0.7) return top;
+      if (top > feet + 0.25 && top <= feet + this.stepH + 0.5 && hit.normal.y > 0.7) return top;
     }
     return null;
   }
@@ -624,19 +816,19 @@ export class Player {
     const t = this.body.translation();
     if (want) {
       this.crouched = true;
-      this.collider.setHalfHeight(PLAYER.crouchHeight / 2);
+      this.collider.setHalfHeight(this.crouchH / 2);
       // Keep the feet where they are.
-      this.body.setTranslation({ x: t.x, y: t.y - (PLAYER.height - PLAYER.crouchHeight) / 2, z: t.z }, true);
+      this.body.setTranslation({ x: t.x, y: t.y - (this.standH - this.crouchH) / 2, z: t.z }, true);
       this.collider.setTranslation(this.body.translation());
       return;
     }
-    const lift = PLAYER.height - PLAYER.crouchHeight;
-    const shape = playerShape(PLAYER.height);
+    const lift = this.standH - this.crouchH;
+    const shape = playerShape(this.standH, this.radius);
     const pos = { x: t.x, y: t.y + lift / 2, z: t.z };
     const blocked = this.world.intersectionWithShape(pos, { x: 0, y: 0, z: 0, w: 1 }, shape, RAPIER.QueryFilterFlags.EXCLUDE_SENSORS, SOLID, this.collider);
     if (blocked) return;
     this.crouched = false;
-    this.collider.setHalfHeight(PLAYER.height / 2);
+    this.collider.setHalfHeight(this.standH / 2);
     this.body.setTranslation(pos, true);
     this.collider.setTranslation(pos);
   }

@@ -67,7 +67,7 @@ import {
   uiShown,
 } from '@cocoaworlds/core';
 import { EventBus } from './events';
-import { DIRECTIONS, ScriptRunner, compileScript, type ScriptSave, type ActionName, type GameValueDef, type Problem, type Program, type SceneInfo, type Script, type Value } from '@cocoaworlds/scripting';
+import { DIRECTIONS, ScriptRunner, compileScript, type PlayerMoveKind, type PlayerStateKind, type ScriptSave, type ActionName, type GameValueDef, type Problem, type Program, type SceneInfo, type Script, type Value } from '@cocoaworlds/scripting';
 import { scriptTargets } from './script-targets';
 import { PLAYER, Player, fallDamage, type PlayerInput } from './player';
 import { Weapons, type V3 } from './weapons';
@@ -154,7 +154,17 @@ export interface SavedScene {
   /** Creatures: where they stand, which way they face, their health (0: dead). */
   npcs: Record<string, { at: [number, number, number]; yaw: number; health: number }>;
   /** The player (left out when the scene was only passed through). */
-  player?: { at: [number, number, number]; yaw: number; pitch: number; health: number; armour: number; score: number; slot?: number };
+  player?: {
+    at: [number, number, number];
+    yaw: number;
+    pitch: number;
+    health: number;
+    armour: number;
+    score: number;
+    slot?: number;
+    /** What scripts changed about the player's body: size, speed, jump and gravity factors, ways of moving, units walked. */
+    body?: { size?: number; speed?: number; jump?: number; gravity?: number; moves?: boolean[]; walked?: number };
+  };
   /** Lights switched on or off, broken objects' health, signs' texts (only what changed). */
   lights?: Record<string, boolean>;
   broken?: Record<string, number>;
@@ -634,7 +644,7 @@ export class GameWorld {
   private checkLevelZones(): void {
     const p = this.player;
     if (!p || !this.levelZones.length || this.travel) return;
-    const shape = new RAPIER.Cylinder((p.crouched ? PLAYER.crouchHeight : PLAYER.height) / 2, PLAYER.radius);
+    const shape = new RAPIER.Cylinder((p.crouched ? p.crouchH : p.standH) / 2, p.radius);
     const at = p.body.translation();
     const zone = this.levelZones.find((z) => z.collider.intersectsShape(shape, at, { x: 0, y: 0, z: 0, w: 1 }));
     if (!zone) this.zonesArmed = true;
@@ -789,6 +799,15 @@ export class GameWorld {
     if (withPlayer && p) {
       const f = p.feetPosition;
       out.player = { at: [r(f.x), r(f.y), r(f.z)], yaw: r(p.input.yaw, 1e4), pitch: r(p.input.pitch, 1e4), health: this.health, armour: this.armour, score: this.score, slot: this.slot };
+      // (Size, speed, jump, gravity and ways of moving that scripts changed; a resize under way is saved finished.)
+      const m = p.moves, body: NonNullable<NonNullable<SavedScene['player']>['body']> = {};
+      if (p.sizeTarget !== 1) body.size = r(p.sizeTarget, 1e4);
+      if (p.scriptSpeed !== 1) body.speed = p.scriptSpeed;
+      if (p.scriptJump !== 1) body.jump = p.scriptJump;
+      if (p.scriptGravity !== 1) body.gravity = p.scriptGravity;
+      if (!(m.forward && m.back && m.left && m.right && m.jump && m.crouch)) body.moves = [m.forward, m.back, m.left, m.right, m.jump, m.crouch];
+      if (p.walked) body.walked = Math.round(p.walked);
+      if (Object.keys(body).length) out.player.body = body;
     }
     const lights: Record<string, boolean> = {};
     for (const [id, l] of this.lights) {
@@ -950,6 +969,15 @@ export class GameWorld {
       this.armour = Math.max(0, Math.min(MAX_ARMOUR, num(pl.armour)));
       this.score = num(pl.score, this.score);
       if (typeof pl.slot === 'number') this.slot = Math.max(0, Math.round(pl.slot));
+      const b = pl.body && typeof pl.body === 'object' ? pl.body : {};
+      p.scriptSpeed = Math.max(0, Math.min(20, num(b.speed, 1)));
+      p.scriptJump = Math.max(0, Math.min(20, num(b.jump, 1)));
+      p.scriptGravity = Math.max(0, Math.min(10, num(b.gravity, 1)));
+      const mv = Array.isArray(b.moves) && b.moves.length === 6 ? b.moves.map((x) => x !== false) : null;
+      if (mv) p.moves = { forward: mv[0]!, back: mv[1]!, left: mv[2]!, right: mv[3]!, jump: mv[4]!, crouch: mv[5]! };
+      p.walked = Math.max(0, num(b.walked));
+      // (Back to its size where there is room; otherwise it grows as soon as there is.)
+      if (num(b.size, 1) !== 1) p.resize(num(b.size, 1), 0);
     }
   }
 
@@ -1336,6 +1364,7 @@ export class GameWorld {
         else this.heal(amount);
       },
       read: (name) => (name === 'health' ? this.health : name === 'armour' ? this.armour : this.score),
+      player: (what) => this.playerState(what),
       getGlobal: (name) => this.globals.get(name) ?? null,
       setGlobal: (name, value) => void this.globals.set(name, value),
       say: (text, seconds, from) => this.say(text, seconds, from),
@@ -2870,6 +2899,7 @@ export class GameWorld {
         if (this.frozen) Object.assign(this.player.input, { forward: 0, right: 0, jump: false, crouch: false, fire: false, use: false });
         this.player.speedScale = (1 - WEAK.slow * this.weakness()) * (1 + (this.mine?.stat('moveSpeed') ?? 0)) * (this.mine?.moveScale() ?? 1) * this.dev.speed;
         this.player.step(STEP);
+        this.movementEvents();
         this.playerNoise();
         if (this.player.landingSpeed) {
           // (No fall damage in the mine.)
@@ -3056,7 +3086,7 @@ export class GameWorld {
       // (At a computer: only the view moves.)
     } else if (this.seats.has(id)) {
       // (Sitting: the body goes under the eyes and can still be hit.)
-      p.placeAt({ x: view.eye[0], y: view.eye[1] - PLAYER.eye, z: view.eye[2] });
+      p.placeAt({ x: view.eye[0], y: view.eye[1] - p.eyeH, z: view.eye[2] });
       // (A physics seat holds still under the player.)
       const b = this.bodies.get(this.bodyOf(id) ?? '');
       if (b?.body.isDynamic()) {
@@ -3091,7 +3121,7 @@ export class GameWorld {
       const n = by.feet;
       const dx = h.view.eye[0] - n.x, dz = h.view.eye[2] - n.z;
       const len = Math.hypot(dx, dz) || 1;
-      const ux = dx / len, uz = dz / len, gap = by.radius + PLAYER.radius + 8;
+      const ux = dx / len, uz = dz / len, gap = by.radius + (this.player?.radius ?? PLAYER.radius) + 8;
       const tries = [feet, ...[[-uz, ux], [uz, -ux], [-ux, -uz]].map(([x, z]) => ({ x: n.x + x! * gap, y: n.y, z: n.z + z! * gap }))];
       feet = tries.find((f) => Math.hypot(f.x - n.x, f.z - n.z) >= gap - 1 && p.fitsAt(f)) ?? feet;
       yaw = Math.atan2(n.x - feet.x, n.z - feet.z) + Math.PI;
@@ -3561,6 +3591,81 @@ export class GameWorld {
     if (!this.frozen) this.useQueued = true;
   }
 
+  /** Movement as it was last step (for “When the player starts moving / jumps / lands …”). */
+  private wasMoving = false;
+  private wasCrouched = false;
+  private wasSwimming = false;
+  /** How fast the player was falling when they last landed (units per second). */
+  lastLanding = 0;
+
+  /** Start the stacks that listen for the player's movement. */
+  private movementEvents(): void {
+    const p = this.player;
+    if (!p) return;
+    const fire = (what: PlayerMoveKind) => this.runner.dispatch({ type: 'player', what });
+    if (p.moving && !this.wasMoving) fire('start');
+    if (p.moving) fire('moving');
+    if (!p.moving && this.wasMoving) fire('stop');
+    this.wasMoving = p.moving;
+    if (p.jumped) fire('jump');
+    if (p.landed) {
+      this.lastLanding = p.landedSpeed;
+      fire('land');
+    }
+    if (p.crouched !== this.wasCrouched) fire(p.crouched ? 'crouch' : 'uncrouch');
+    this.wasCrouched = p.crouched;
+    const swimming = p.waterLevel >= 2;
+    if (swimming !== this.wasSwimming) fire(swimming ? 'swim' : 'unswim');
+    this.wasSwimming = swimming;
+  }
+
+  /** What scripts can read about the player's body and movement. */
+  playerState(what: PlayerStateKind): Value {
+    const p = this.player;
+    if (!p) return what === 'moving' || what === 'onGround' || what === 'crouching' || what === 'swimming' || what === 'climbing' || what.startsWith('can') ? false : 0;
+    const r2 = (x: number) => Math.round(x * 100) / 100;
+    switch (what) {
+      case 'size':
+        return r2(p.size);
+      case 'speed':
+        return p.scriptSpeed;
+      case 'jump':
+        return p.scriptJump;
+      case 'gravity':
+        return p.scriptGravity;
+      case 'moving':
+        return p.moving;
+      case 'onGround':
+        return p.onGround;
+      case 'crouching':
+        return p.crouched;
+      case 'swimming':
+        return p.waterLevel >= 2;
+      case 'climbing':
+        return p.onLadder;
+      case 'speedNow':
+        return Math.round(p.speedNow);
+      case 'walked':
+        return Math.round(p.walked);
+      case 'fallSpeed':
+        return p.onGround || p.velocity.y >= 0 ? 0 : Math.round(-p.velocity.y);
+      case 'landSpeed':
+        return Math.round(this.lastLanding);
+      case 'canForward':
+        return p.moves.forward;
+      case 'canBack':
+        return p.moves.back;
+      case 'canLeft':
+        return p.moves.left;
+      case 'canRight':
+        return p.moves.right;
+      case 'canJump':
+        return p.moves.jump;
+      case 'canCrouch':
+        return p.moves.crouch;
+    }
+  }
+
   /** The camera for the player's view, smoothed between physics steps. */
   playerView(): { eye: [number, number, number]; yaw: number; pitch: number; thirdPerson: boolean; feet: [number, number, number] } | null {
     const p = this.player;
@@ -3572,14 +3677,15 @@ export class GameWorld {
     }
     const alpha = Math.min(1, this.accumulator / STEP);
     const eye = p.eye(alpha);
-    const feet: [number, number, number] = [eye[0], eye[1] - (p.crouched ? PLAYER.crouchEye : PLAYER.eye), eye[2]];
+    const feet: [number, number, number] = [eye[0], eye[1] - p.eyeHeight, eye[2]];
     if (!this.rules.thirdPerson) return { eye, yaw: p.input.yaw, pitch: p.input.pitch, thirdPerson: false, feet };
     // Behind and a little above the head, pulled in when a wall is in the way.
     const d = p.lookDirection();
-    const from = { x: eye[0], y: eye[1] + 40, z: eye[2] };
+    const from = { x: eye[0], y: eye[1] + 40 * p.size, z: eye[2] };
     const back = { x: -d[0], y: -d[1], z: -d[2] };
-    const hit = this.world.castRay(new RAPIER.Ray(from, back), THIRD_PERSON_DISTANCE, true, RAPIER.QueryFilterFlags.EXCLUDE_SENSORS, 0xffffffff, p.collider);
-    const dist = hit ? Math.max(8, hit.timeOfImpact - 8) : THIRD_PERSON_DISTANCE;
+    const far = THIRD_PERSON_DISTANCE * Math.max(0.25, p.size);
+    const hit = this.world.castRay(new RAPIER.Ray(from, back), far, true, RAPIER.QueryFilterFlags.EXCLUDE_SENSORS, 0xffffffff, p.collider);
+    const dist = hit ? Math.max(8 * Math.min(1, p.size), hit.timeOfImpact - 8 * Math.min(1, p.size)) : far;
     return { eye: [from.x + back.x * dist, from.y + back.y * dist, from.z + back.z * dist], yaw: p.input.yaw, pitch: p.input.pitch, thirdPerson: true, feet };
   }
 
@@ -4031,7 +4137,7 @@ export class GameWorld {
   }
 
   /** Actions on the player: push and teleport. */
-  private actOnPlayer(name: ActionName, args: Value[]): null {
+  private actOnPlayer(name: ActionName, args: Value[]): (() => boolean) | null {
     const p = this.player;
     if (!p) return null;
     const n = (v: Value) => (typeof v === 'number' ? v : 0);
@@ -4044,6 +4150,25 @@ export class GameWorld {
       return null;
     }
     if (name === 'drop') return this.dropHeld(), null;
+    if (name === 'playerSize') {
+      const to = n(args[0] ?? 1), sec = Math.max(0, n(args[1] ?? 0));
+      p.resize(to, sec);
+      return sec > 0 ? () => !p.resizing : null;
+    }
+    if (name === 'playerSpeed') return (p.scriptSpeed = Math.max(0, Math.min(20, n(args[0] ?? 1)))), null;
+    if (name === 'playerJump') return (p.scriptJump = Math.max(0, Math.min(20, n(args[0] ?? 1)))), null;
+    if (name === 'playerGravity') return (p.scriptGravity = Math.max(0, Math.min(10, n(args[0] ?? 1)))), null;
+    if (name === 'playerMoves') {
+      const [forward, back, left, right, jump, crouch] = args.map((a) => a !== false);
+      p.moves = { forward: forward!, back: back!, left: left!, right: right!, jump: jump!, crouch: crouch! };
+      return null;
+    }
+    if (name === 'playerNormal') return p.resetBody(), null;
+    if (name === 'playerWay') {
+      const way = args[0];
+      if (way === 'forward' || way === 'back' || way === 'left' || way === 'right' || way === 'jump' || way === 'crouch') p.moves = { ...p.moves, [way]: args[1] !== false };
+      return null;
+    }
     if (name === 'unhide') return this.leaveHiding(), null;
     if (name === 'teleport') this.stopHiding();
     if (name === 'push') {
@@ -4660,7 +4785,7 @@ export class GameWorld {
     const sprint = speed > 250, walk = p.crouched || speed < 130;
     this.stepLeft -= speed * STEP;
     if (this.stepLeft > 0) return;
-    this.stepLeft += p.crouched ? 95 : walk ? 122 : sprint ? 198 : 160;
+    this.stepLeft += (p.crouched ? 95 : walk ? 122 : sprint ? 198 : 160) * Math.max(0.2, p.size);
     step('step', p.crouched ? 0.03 : walk ? 0.06 : sprint ? 0.15 : 0.1);
   }
 
@@ -5264,7 +5389,7 @@ export class GameWorld {
       const { feet, yaw } = this.drawnNpc(n);
       s.setNpc(s.indexNpc(n.id), feet[0], feet[1], feet[2], yaw, n.alive, n.state, n.health);
     }
-    s.setView(this.playerView(), this.player?.crouched ?? false);
+    s.setView(this.playerView(), this.player?.crouched ?? false, this.player?.size ?? 1);
     const pl = this.player;
     s.setMotion(pl?.sprinting ?? false, pl && !pl.onGround ? Math.max(0, -pl.velocity.y) : 0, pl ? this.weakness() : 0);
     return s;

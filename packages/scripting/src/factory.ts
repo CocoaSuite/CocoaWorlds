@@ -62,6 +62,8 @@ export function newEvent(kind: EventKind, zone: Ref = self): EventBlock {
       return { id: id(), kind, key: 'KeyF', prompt: '' };
     case 'does':
       return { id: id(), kind, what: '' };
+    case 'playerMove':
+      return { id: id(), kind, what: 'start' };
   }
 }
 
@@ -203,6 +205,16 @@ export function newStatement(kind: StatementKind, opts: { target?: Ref; variable
       return { id: id(), kind, target };
     case 'drop':
       return { id: id(), kind };
+    case 'playerSize':
+      return { id: id(), kind, factor: num(0.5), seconds: num(1) };
+    case 'playerSet':
+      return { id: id(), kind, prop: 'speed', value: num(2) };
+    case 'playerMoves':
+      return { id: id(), kind, ways: ['back'] };
+    case 'playerWay':
+      return { id: id(), kind, way: 'jump', on: false };
+    case 'playerNormal':
+      return { id: id(), kind };
   }
 }
 
@@ -258,5 +270,7 @@ export function newExpr(kind: ExprKind, opts: { variable?: string } = {}): Expr 
     case 'pickedRow':
     case 'clock':
       return { id: id(), kind };
+    case 'playerState':
+      return { id: id(), kind, what: 'moving' };
   }
 }

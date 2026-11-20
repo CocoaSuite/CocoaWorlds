@@ -61,9 +61,32 @@ export type Expr =
   /** The day count (goes up at midnight). */
   | { id: string; kind: 'day' }
   /** Whether today is day `a`. */
-  | { id: string; kind: 'isDay'; a: Expr };
+  | { id: string; kind: 'isDay'; a: Expr }
+  /** Something about the player's body or movement (size, speed now, units walked, on the ground …). */
+  | { id: string; kind: 'playerState'; what: PlayerStateKind };
 
 export type LightProp = 'intensity' | 'range' | 'angle' | 'color';
+
+/**
+ * The player's movement, for “When the player …”: starts moving, keeps moving (each frame, while the stack isn't
+ * already running), stops, jumps, lands, crouches, stands up from crouching, starts or stops swimming.
+ */
+export type PlayerMoveKind = 'start' | 'moving' | 'stop' | 'jump' | 'land' | 'crouch' | 'uncrouch' | 'swim' | 'unswim';
+export const PLAYER_MOVE_KINDS: PlayerMoveKind[] = ['start', 'moving', 'stop', 'jump', 'land', 'crouch', 'uncrouch', 'swim', 'unswim'];
+
+/** What scripts can read about the player's body and movement (numbers, or yes/no for the rest). */
+export type PlayerStateKind =
+  | 'size' | 'speed' | 'jump' | 'gravity' | 'speedNow' | 'walked' | 'fallSpeed' | 'landSpeed'
+  | 'moving' | 'onGround' | 'crouching' | 'swimming' | 'climbing'
+  | 'canForward' | 'canBack' | 'canLeft' | 'canRight' | 'canJump' | 'canCrouch';
+export const PLAYER_NUMBERS: PlayerStateKind[] = ['size', 'speed', 'jump', 'gravity', 'speedNow', 'walked', 'fallSpeed', 'landSpeed'];
+export const PLAYER_YES_NO: PlayerStateKind[] = ['moving', 'onGround', 'crouching', 'swimming', 'climbing', 'canForward', 'canBack', 'canLeft', 'canRight', 'canJump', 'canCrouch'];
+
+/** Factors scripts set on the player: speed (×), jump height (×), gravity (×). */
+export type PlayerFactor = 'speed' | 'jump' | 'gravity';
+/** Ways of moving scripts can allow or take away. */
+export type PlayerWay = 'forward' | 'back' | 'left' | 'right' | 'jump' | 'crouch';
+export const PLAYER_WAYS: PlayerWay[] = ['forward', 'back', 'left', 'right', 'jump', 'crouch'];
 
 export type Direction = 'up' | 'down' | 'north' | 'south' | 'east' | 'west';
 export type Axis = 'up' | 'north' | 'east';
@@ -127,6 +150,16 @@ type StatementKind_ =
   /** Scripted scenes: the player can't move (or can again); the view looks through an object for a while. */
   | { id: string; kind: 'freezePlayer' }
   | { id: string; kind: 'unfreezePlayer' }
+  /** Grow or shrink the player to `factor` times the normal size over some seconds (the stack waits). */
+  | { id: string; kind: 'playerSize'; factor: Expr; seconds: Expr }
+  /** Set the player's speed, jump height or gravity to `value` times normal. */
+  | { id: string; kind: 'playerSet'; prop: PlayerFactor; value: Expr }
+  /** Which ways the player may move: the ways not listed are taken away (only backwards: `['back']`). */
+  | { id: string; kind: 'playerMoves'; ways: PlayerWay[] }
+  /** Allow or take away one way of moving, leaving the others as they are. */
+  | { id: string; kind: 'playerWay'; way: PlayerWay; on: boolean }
+  /** The player's size, speed, jump, gravity and ways of moving back to normal. */
+  | { id: string; kind: 'playerNormal' }
   /** Background sound and Sound components fall silent (footsteps, hits and sounds blocks play stay). */
   | { id: string; kind: 'silence' }
   | { id: string; kind: 'unsilence' }
@@ -230,6 +263,8 @@ export type EventBlock = { limit?: EventLimit } & (
   | { id: string; kind: 'atHour'; hour: Expr }
   /** The player's health reached 0 (they start again at the Player start). */
   | { id: string; kind: 'die' }
+  /** The player moved: started, kept moving, stopped, jumped, landed, crouched … (see PlayerMoveKind). */
+  | { id: string; kind: 'playerMove'; what: PlayerMoveKind }
   /** This 3D printer finished a print (“the thing that entered” is the printed copy). */
   | { id: string; kind: 'printed' }
   /** This breakable object's health reached 0 (it is removed after this starts). */

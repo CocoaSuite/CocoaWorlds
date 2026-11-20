@@ -1584,7 +1584,7 @@ export class PlaySession {
       this.body.visible = true;
       this.body.position.set(v[5]!, v[6]!, v[7]!);
       this.body.rotation.set(0, v[3]!, 0);
-      this.body.scale.set(1, f.crouched ? 0.5 : 1, 1);
+      this.body.scale.set(f.size, (f.crouched ? 0.5 : 1) * f.size, f.size);
     } else if (this.body) this.body.visible = false;
     return true;
   }

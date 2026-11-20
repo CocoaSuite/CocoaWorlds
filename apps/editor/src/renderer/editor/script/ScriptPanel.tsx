@@ -21,6 +21,12 @@ import {
   blockId,
   freshIds,
   innerLists,
+  PLAYER_MOVE_KINDS,
+  PLAYER_NUMBERS,
+  PLAYER_WAYS,
+  PLAYER_YES_NO,
+  type PlayerFactor,
+  type PlayerWay,
   type EventBlock,
   type EventLimit,
   type Handler,
@@ -43,7 +49,7 @@ import { Fragment, createContext, useContext, useEffect, useMemo, useState, type
 import { getLang, t } from '../../i18n';
 import { useEditor } from '../../store';
 import { sceneInfo } from './scene-info';
-import { EVENT_GROUPS, STATEMENT_GROUPS, VALUES_FOR, axisLabel, directionLabel, eventName, groupTitle, statementName, valueName, w } from './words';
+import { EVENT_GROUPS, PLAYER_MOVE_WORD, PLAYER_STATE_WORD, PLAYER_WAY_WORD, STATEMENT_GROUPS, VALUES_FOR, axisLabel, directionLabel, eventName, groupTitle, statementName, valueName, w } from './words';
 
 interface Ctx {
   owner: string;
@@ -445,6 +451,19 @@ function EventRow({ ev, onRemove, onCopy, pick }: { ev: EventBlock; onRemove: ()
       </>
     );
   else if (ev.kind === 'die') content = w('die');
+  else if (ev.kind === 'playerMove')
+    content = (
+      <>
+        {w('playerMove')}{' '}
+        <select className="cw-input cw-mini" aria-label={w('playerMove')} value={ev.what} onChange={(e) => set({ what: e.target.value } as Partial<EventBlock>)}>
+          {PLAYER_MOVE_KINDS.map((k) => (
+            <option key={k} value={k}>
+              {w(PLAYER_MOVE_WORD[k]!)}
+            </option>
+          ))}
+        </select>
+      </>
+    );
   else if (ev.kind === 'breaks') content = w('breaks');
   else if (ev.kind === 'printed') content = w('printed');
   else if (ev.kind === 'hit') content = w('hit');
@@ -915,6 +934,67 @@ function statementWords(s: Statement, set: (patch: Record<string, unknown>, merg
           {w('withStrength')} <ExprSlot expr={s.strength} type="number" label={`${w('push')} ${w('withStrength')}`} />
         </>
       );
+    case 'playerSize':
+      return (
+        <>
+          {w('playerSize')} <ExprSlot expr={s.factor} type="number" label={w('playerSize')} /> {w('timesNormal')}{' '}
+          <ExprSlot expr={s.seconds} type="number" label={`${w('playerSize')} ${w('over')}`} /> {w('seconds')}
+        </>
+      );
+    case 'playerSet':
+      return (
+        <>
+          {w('playerSet')}{' '}
+          <select className="cw-input cw-mini" aria-label={w('playerSet')} value={s.prop} onChange={(e) => set({ prop: e.target.value as PlayerFactor })}>
+            <option value="speed">{w('psSpeed')}</option>
+            <option value="jump">{w('psJump')}</option>
+            <option value="gravity">{w('psGravity')}</option>
+          </select>{' '}
+          {w('setTo')} <ExprSlot expr={s.value} type="number" label={`${w('playerSet')} ${w('setTo')}`} /> {w('timesNormalEnd')}
+        </>
+      );
+    case 'playerMoves':
+      return (
+        <>
+          {w('playerMoves')}{' '}
+          {PLAYER_WAYS.map((way) => {
+            const on = s.ways.includes(way);
+            return (
+              <button
+                key={way}
+                type="button"
+                className={`cw-input cw-mini cw-way${on ? ' on' : ''}`}
+                aria-pressed={on}
+                aria-label={`${w('playerMoves')} ${w(PLAYER_WAY_WORD[way]!)}`}
+                onClick={() => set({ ways: on ? s.ways.filter((x) => x !== way) : PLAYER_WAYS.filter((x) => x === way || s.ways.includes(x)) })}
+              >
+                {on ? '✓ ' : ''}
+                {w(PLAYER_WAY_WORD[way]!)}
+              </button>
+            );
+          })}
+        </>
+      );
+    case 'playerWay':
+      return (
+        <>
+          {w('playerWay')}{' '}
+          <select className="cw-input cw-mini" aria-label={`${w('playerWay')} ${w('wayCan')}`} value={s.on ? 'on' : 'off'} onChange={(e) => set({ on: e.target.value === 'on' })}>
+            <option value="on">{w('wayCan')}</option>
+            <option value="off">{w('wayCant')}</option>
+          </select>{' '}
+          {s.way === 'jump' || s.way === 'crouch' ? '' : `${w('goWord')} `}
+          <select className="cw-input cw-mini" aria-label={statementName('playerWay')} value={s.way} onChange={(e) => set({ way: e.target.value as PlayerWay })}>
+            {PLAYER_WAYS.map((way) => (
+              <option key={way} value={way}>
+                {w(PLAYER_WAY_WORD[way]!)}
+              </option>
+            ))}
+          </select>
+        </>
+      );
+    case 'playerNormal':
+      return w('playerNormal');
     case 'freezePlayer':
     case 'unfreezePlayer':
     case 'unhide':
@@ -1400,7 +1480,13 @@ function VariableSlot({ value, onChange, label, numbersOnly }: { value: string; 
 function ExprSlot({ expr, type, label }: { expr: Expr; type: 'number' | 'boolean' | 'text' | 'any'; label: string }) {
   const c = useC();
   const set = (patch: Record<string, unknown>) => c.update((s) => replaceBlock(s, expr.id, (b) => ({ ...b, ...patch }) as Expr), 'Edit value');
-  const swap = (kind: ExprKind) => c.update((s) => replaceBlock(s, expr.id, () => ({ ...newExpr(kind, { variable: c.script.variables[0]?.name }), id: expr.id }) as Expr), 'Change value');
+  const swap = (kind: ExprKind) =>
+    c.update((s) => replaceBlock(s, expr.id, () => {
+      const e = { ...newExpr(kind, { variable: c.script.variables[0]?.name }), id: expr.id } as Expr;
+      // (A number slot starts with a number about the player: its size.)
+      if (e.kind === 'playerState' && (type === 'number' || type === 'text')) e.what = 'size';
+      return e;
+    }), 'Change value');
   const changer = (
     <button
       type="button"
@@ -1433,6 +1519,22 @@ function ExprSlot({ expr, type, label }: { expr: Expr; type: 'number' | 'boolean
     case 'copy':
       body = <span className="cw-pill-text">{w(expr.kind)}</span>;
       break;
+    case 'playerState': {
+      const kinds = type === 'boolean' ? PLAYER_YES_NO : type === 'number' ? PLAYER_NUMBERS : [...PLAYER_NUMBERS, ...PLAYER_YES_NO];
+      body = (
+        <>
+          {w('playerStateWord')}{' '}
+          <select className="cw-input cw-mini" aria-label={`${label} ${w('playerStateWord')}`} value={expr.what} onChange={(e) => set({ what: e.target.value })}>
+            {(kinds.includes(expr.what) ? kinds : [expr.what, ...kinds]).map((k) => (
+              <option key={k} value={k}>
+                {w(PLAYER_STATE_WORD[k] ?? 'stSize')}
+              </option>
+            ))}
+          </select>
+        </>
+      );
+      break;
+    }
     case 'varOf':
       body = (
         <>
