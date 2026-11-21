@@ -117,7 +117,8 @@ export interface CocoaApi {
      * Export the project's game (saved files) for a target: asks where (unless a folder is given in tests),
      * reports progress, and returns where it was written.
      */
-    export(dir: string, target: ExportTarget): Promise<Result<{ folder: string; start: string; bytes: number } | null>>;
+    /** `trim`: leave out scenes the game can't reach, and what only they use. */
+    export(dir: string, target: ExportTarget, trim?: boolean): Promise<Result<{ folder: string; start: string; bytes: number } | null>>;
     /** Show an exported game in the file manager, or start a desktop game built for this computer. */
     reveal(path: string): Promise<void>;
     launch(path: string): Promise<Result<true>>;

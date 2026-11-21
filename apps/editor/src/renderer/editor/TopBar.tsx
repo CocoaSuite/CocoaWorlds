@@ -285,6 +285,7 @@ function BuildDialog({ onClose }: { onClose: () => void }) {
   const here = window.cocoa.platform;
   const [target, setTarget] = useState<Target>(here === 'win32' || here === 'darwin' || here === 'linux' ? (here as Target) : 'web');
   const [busy, setBusy] = useState(false);
+  const [trim, setTrim] = useState(false);
   const [progress, setProgress] = useState('');
   const [done, setDone] = useState<{ folder: string; start: string; bytes: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -316,7 +317,7 @@ function BuildDialog({ onClose }: { onClose: () => void }) {
     try {
       if (st.dirty && !(await st.save())) throw new Error(t('export.failed'));
       await flushProjectSave();
-      const r = await window.cocoa.game.export(dir, target);
+      const r = await window.cocoa.game.export(dir, target, trim);
       if (!r.ok) throw new Error(r.error);
       if (r.value) {
         setDone(r.value);
@@ -355,6 +356,13 @@ function BuildDialog({ onClose }: { onClose: () => void }) {
           </label>
         ))}
       </div>
+      <label className="cw-export-trim">
+        <input type="checkbox" checked={trim} disabled={busy} onChange={(e) => setTrim(e.currentTarget.checked)} />
+        <span>
+          <strong>{t('export.trim')}</strong>
+          <span className="cw-muted">{t('export.trimHint')}</span>
+        </span>
+      </label>
       {busy && (
         <p role="status" className="cw-hint">
           {progress || t('export.working')}

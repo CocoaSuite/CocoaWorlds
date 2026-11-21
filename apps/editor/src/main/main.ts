@@ -179,7 +179,8 @@ function registerExport(): void {
     await fsp.rm(iconPath(str(dirArg)), { force: true });
     return true as const;
   });
-  handle(IPC.exportGame, async (dirArg, targetArg) => {
+  handle(IPC.exportGame, async (dirArg, targetArg, trimArg) => {
+    const trim = trimArg === true;
     const dir = str(dirArg);
     const target = String(targetArg) as ExportTarget;
     if (!(target in TARGET_LABEL)) throw new Error('Unknown export target.');
@@ -206,7 +207,7 @@ function registerExport(): void {
     let result;
     if (target === 'web') {
       say('Writing the web game…');
-      result = await writeWebGame(dir, rendererDir, folder, await iconPngs(dir));
+      result = await writeWebGame(dir, rendererDir, folder, await iconPngs(dir), trim);
     } else {
       let runtime: string;
       if (target === process.platform) runtime = ownRuntime(process.execPath, process.platform);
@@ -219,7 +220,7 @@ function registerExport(): void {
         });
       }
       say(`Writing the ${TARGET_LABEL[target]} game…`);
-      result = await writeDesktopGame(dir, rendererDir, path.join(__dirname, 'game-shell.cjs'), runtime, target, folder, await iconPngs(dir), signMac);
+      result = await writeDesktopGame(dir, rendererDir, path.join(__dirname, 'game-shell.cjs'), runtime, target, folder, await iconPngs(dir), signMac, trim);
     }
     exported.add(result.start);
     exported.add(result.folder);

@@ -50,7 +50,7 @@ const api: CocoaApi = {
     saveFile: (name, bytes) => ipcRenderer.invoke(IPC.saveModelFile, name, bytes),
   },
   game: {
-    export: (dir, target) => ipcRenderer.invoke(IPC.exportGame, dir, target),
+    export: (dir, target, trim) => ipcRenderer.invoke(IPC.exportGame, dir, target, !!trim),
     reveal: (path) => ipcRenderer.invoke(IPC.revealGame, path),
     launch: (path) => ipcRenderer.invoke(IPC.launchGame, path),
     icon: (dir) => ipcRenderer.invoke(IPC.gameIcon, dir),
