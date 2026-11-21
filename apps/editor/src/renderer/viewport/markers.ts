@@ -21,8 +21,9 @@ import pointIcon from '../assets/empty/PathPoint.png';
 import spawnIcon from '../assets/empty/Finish.png';
 import { powerStandIn } from './power-props';
 import audioIcon from '../assets/empty/AudioEmitter.png';
+import scriptIcon from '../assets/empty/Script.png';
 
-const ICONS: Record<EmptyClass, string> = { point: pointIcon, assetSpawn: spawnIcon, audioEmitter: audioIcon };
+const ICONS: Record<EmptyClass, string> = { point: pointIcon, assetSpawn: spawnIcon, audioEmitter: audioIcon, script: scriptIcon };
 const ICON_SIZE = 32;
 const iconTextures = new Map<EmptyClass, THREE.Texture>();
 
@@ -39,7 +40,7 @@ function iconTexture(c: EmptyClass): THREE.Texture {
 const worldScale = new THREE.Vector3();
 
 /** A camera-facing icon of a set size in the world. */
-function iconSprite(c: EmptyClass): THREE.Sprite {
+export function iconSprite(c: EmptyClass): THREE.Sprite {
   const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: iconTexture(c), transparent: true }));
   sprite.name = 'empty-icon';
   sprite.onBeforeRender = () => {
@@ -49,6 +50,86 @@ function iconSprite(c: EmptyClass): THREE.Sprite {
     sprite.updateMatrixWorld();
   };
   return sprite;
+}
+
+/** Hard-edge corners of a mesh, in its own space: points where faces meet at a sharp angle (cached per geometry). */
+const cornerCache = new WeakMap<THREE.BufferGeometry, Float32Array>();
+const SHARP = Math.cos((30 * Math.PI) / 180);
+const MAX_CORNERS = 4096;
+
+function geometryCorners(g: THREE.BufferGeometry): Float32Array {
+  let out = cornerCache.get(g);
+  if (out) return out;
+  const pos = g.getAttribute('position') as THREE.BufferAttribute | undefined;
+  const pts: number[] = [];
+  if (pos) {
+    const idx = g.getIndex();
+    const n = idx ? idx.count : pos.count;
+    const at = (i: number) => (idx ? idx.getX(i) : i);
+    const q = (v: THREE.Vector3) => `${Math.round(v.x * 100)},${Math.round(v.y * 100)},${Math.round(v.z * 100)}`;
+    // Each edge's faces: an edge is sharp where two of them turn away from each other, or open (one face).
+    const where = new Map<string, THREE.Vector3>();
+    const edges = new Map<string, { a: string; b: string; n: THREE.Vector3[] }>();
+    const vs = [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()];
+    const e1 = new THREE.Vector3(), e2 = new THREE.Vector3();
+    for (let i = 0; i + 2 < n; i += 3) {
+      for (let j = 0; j < 3; j++) vs[j]!.fromBufferAttribute(pos, at(i + j));
+      const fn = e1.subVectors(vs[2]!, vs[1]!).cross(e2.subVectors(vs[0]!, vs[1]!)).clone();
+      if (fn.lengthSq() < 1e-12) continue;
+      fn.normalize();
+      const ks = vs.map((v) => {
+        const k = q(v);
+        if (!where.has(k)) where.set(k, v.clone());
+        return k;
+      });
+      for (let j = 0; j < 3; j++) {
+        const ka = ks[j]!, kb = ks[(j + 1) % 3]!;
+        if (ka === kb) continue;
+        const key = ka < kb ? `${ka}|${kb}` : `${kb}|${ka}`;
+        let r = edges.get(key);
+        if (!r) edges.set(key, (r = { a: ka, b: kb, n: [] }));
+        r.n.push(fn);
+      }
+    }
+    const sharp = new Set<string>();
+    for (const r of edges.values()) {
+      let hard = r.n.length === 1;
+      for (let i = 0; i < r.n.length && !hard; i++) for (let j = i + 1; j < r.n.length; j++) if (r.n[i]!.dot(r.n[j]!) < SHARP) { hard = true; break; }
+      if (hard) sharp.add(r.a).add(r.b);
+    }
+    for (const k of sharp) {
+      const v = where.get(k)!;
+      pts.push(v.x, v.y, v.z);
+      if (pts.length >= MAX_CORNERS * 3) break;
+    }
+    if (!pts.length) {
+      // Smooth all over: its bounding-box corners instead.
+      g.computeBoundingBox();
+      const bb = g.boundingBox!;
+      for (const x of [bb.min.x, bb.max.x]) for (const y of [bb.min.y, bb.max.y]) for (const z of [bb.min.z, bb.max.z]) pts.push(x, y, z);
+    }
+  }
+  out = new Float32Array(pts);
+  cornerCache.set(g, out);
+  return out;
+}
+
+/** World-space corners of a marker's loaded model (none if it has no model or it hasn't loaded). */
+export function modelCorners(m: Marker): [number, number, number][] {
+  const root = m.group.userData.modelObject as THREE.Object3D | undefined;
+  if (!root) return [];
+  const out: [number, number, number][] = [];
+  const v = new THREE.Vector3();
+  root.updateWorldMatrix(true, true);
+  root.traverseVisible((o) => {
+    if (!(o instanceof THREE.Mesh) || !o.layers.isEnabled(0)) return;
+    const c = geometryCorners(o.geometry as THREE.BufferGeometry);
+    for (let i = 0; i < c.length; i += 3) {
+      v.set(c[i]!, c[i + 1]!, c[i + 2]!).applyMatrix4(o.matrixWorld);
+      out.push([v.x, v.y, v.z]);
+    }
+  });
+  return out;
 }
 
 /** An object with nothing to draw of its own (it can be given a class icon). */
@@ -182,6 +263,7 @@ export function buildMarker(e: EntityData): Marker {
       .then((inst) => {
         if (group.userData.disposed) return inst.dispose();
         group.add(inst.object);
+        group.userData.modelObject = inst.object;
         // (Googly eyes ride on its head bone, if they should and it has one.)
         eyes?.rideModel(inst.object);
         group.userData.dispose = inst.dispose;

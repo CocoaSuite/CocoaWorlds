@@ -649,7 +649,7 @@ function EntityInspector({ e }: { e: EntityData }) {
       {isPlainEmpty(e) && (
         <Field label={t('insp.class')}>
           <select className="cw-input cw-select" aria-label={t('insp.class')} value={e.emptyClass ?? ''} onChange={(ev) => s.setEmptyClass(e.id, (ev.target.value || undefined) as EmptyClass | undefined)}>
-            {(['', 'point', 'assetSpawn', 'audioEmitter'] as const).map((c) => (
+            {(['', 'point', 'assetSpawn', 'audioEmitter', 'script'] as const).map((c) => (
               <option key={c} value={c}>
                 {t(`class.${c || 'none'}`)}
               </option>

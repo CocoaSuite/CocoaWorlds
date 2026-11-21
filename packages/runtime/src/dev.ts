@@ -271,6 +271,11 @@ export const DEV_COMMANDS: Record<string, DevCommand> = {
       return `Going to ${a[0]}…`;
     },
   },
+  showempties: {
+    args: '[on|off]',
+    help: 'Show the icons of empty objects (point, asset spawn, audio, script).',
+    run: (w, a) => `Empty icons ${(w.dev.emptyIcons = onOff(a[0], w.dev.emptyIcons)) ? 'on' : 'off'}.`,
+  },
   save: { args: '', help: 'Save progress now.', run: (w) => (w.saveNow(), 'Saved.') },
 };
 

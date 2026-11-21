@@ -44,6 +44,7 @@ import { allSurfaceFiles, materialSurfaces, surfaceFiles } from './surface-sound
 import { projectMaterials } from './project-materials';
 import { BaseView } from './base-view';
 import { MineView } from './mine-view';
+import { iconSprite } from './markers';
 import type { SceneLighting } from './scene-lighting';
 
 export interface PlayInfo {
@@ -215,6 +216,8 @@ export class PlaySession {
     // Still ones of the same model are drawn together (A2c); the rest one by one.
     const scripted = JSON.stringify(doc.entities.filter((x) => x.components.script).map((x) => x.components.script)) + JSON.stringify(doc.settings.ui ?? '');
     this.usesLens = /"kind":"(setLens|lensLook|lensFocus)"/.test(scripted);
+    // Empty objects' class icons, for the dev console's showempties (made the first time they're asked for).
+    for (const e of doc.entities) if (e.emptyClass) this.empties.push({ id: e.id, cls: e.emptyClass, matrix: doc.worldMatrix(e.id) });
     const stillModels = new Map<string, { data: ModelData; copies: { id: string; matrix: THREE.Matrix4 }[] }>();
     for (const e of doc.entities) {
       // (Creatures draw their own model, where they walk.)
@@ -1234,6 +1237,7 @@ export class PlaySession {
     // (One picture of what is drawn this frame: everything below reads it, not the world object by object.)
     this.snap = this.world.snapshot();
     this.effects.syncProjectiles(this.world.projectilesNow());
+    this.updateEmptyIcons();
     this.placeNpcs();
     this.updateGlow();
     this.emit(dt);
@@ -1534,6 +1538,41 @@ export class PlaySession {
 
   /** Scripts change the camera lens: frames go through the post-processing target from the start (shaders compiled for it). */
   usesLens = false;
+  private empties: { id: string; cls: NonNullable<EntityData['emptyClass']>; matrix: number[] }[] = [];
+  private emptyIcons: THREE.Group | null = null;
+
+  /** Show or hide the empty-object icons (dev console: showempties); moving ones follow their bodies. */
+  private updateEmptyIcons(): void {
+    const on = this.world.dev.emptyIcons;
+    if (!on && !this.emptyIcons?.visible) return;
+    if (!this.emptyIcons) {
+      const g = (this.emptyIcons = new THREE.Group());
+      g.name = 'empty-icons';
+      for (const e of this.empties) {
+        const holder = new THREE.Group();
+        holder.matrixAutoUpdate = false;
+        holder.matrix.fromArray(e.matrix);
+        holder.userData.id = e.id;
+        const icon = iconSprite(e.cls);
+        icon.material.depthTest = false;
+        icon.renderOrder = 30;
+        holder.add(icon);
+        g.add(holder);
+      }
+      this.group.add(g);
+    }
+    this.emptyIcons.visible = on;
+    if (!on) return;
+    for (const h of this.emptyIcons.children) {
+      const at = this.world.positionOf(h.userData.id as string);
+      if (at) {
+        h.matrix.elements[12] = at[0];
+        h.matrix.elements[13] = at[1];
+        h.matrix.elements[14] = at[2];
+        h.matrixWorldNeedsUpdate = true;
+      }
+    }
+  }
 
   /** The scene's settings with the lens as blocks have set it now, for drawing. */
   drawSettings<T extends object>(settings: T): T & { lens: Partial<LensSettings> } {

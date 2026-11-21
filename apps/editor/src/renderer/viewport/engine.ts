@@ -20,7 +20,7 @@ import { PIVOT, REPEAT_AXES, applyMat4, mat4Key, pivotOf, repeatEnd, type Mat4 }
 import { BrushDraft, draftAxes, type DraftState } from './brush-draft';
 import { CameraRig, type ViewKind } from './camera';
 import { EditorGrid } from './grid';
-import { buildMarker, disposeMarker, markerKey, onMarkerLoaded, setMarkerSelected, type Marker } from './markers';
+import { buildMarker, disposeMarker, markerKey, modelCorners, onMarkerLoaded, setMarkerSelected, type Marker } from './markers';
 import { WorldRenderer, type FaceRef } from './world-render';
 import { tickMaterials } from './project-materials';
 import { VertexTool } from './vertex-tool';
@@ -1613,13 +1613,18 @@ export class ViewportEngine {
     return set;
   }
 
-  /** Brush corners and point-entity positions. */
+  /** Brush corners, model corners (hard edges) and point-entity positions. */
   private pointsOf(items: EntityData[]): V3[] {
     const out: V3[] = [];
     for (const e of items) {
       const b = this.doc ? worldBrushOf(this.doc, e, this.mats.get(e.id)) : null;
       if (b) out.push(...vertices(b.brush));
-      else if (this.markers.has(e.id)) out.push(this.worldPos(e));
+      else {
+        const rec = this.markers.get(e.id);
+        if (!rec) continue;
+        out.push(this.worldPos(e));
+        if (rec.m.group.visible) for (const p of modelCorners(rec.m)) out.push(p);
+      }
     }
     return out;
   }
@@ -2105,7 +2110,7 @@ export class ViewportEngine {
     let snapped: V3 | null = null;
     if (this.vertexSnap && this.doc) {
       const targets: { p: V3; x: number; y: number }[] = [];
-      for (const v of this.pointsOf(this.doc.entities.filter((x) => x.components.brush && isShown(this.doc!, x)))) {
+      for (const v of this.pointsOf(this.doc.entities.filter((x) => (x.components.brush || x.components.model) && isShown(this.doc!, x)))) {
         const sp = this.toScreen(v);
         if (sp.z < 1) targets.push({ p: v, x: sp.x, y: sp.y });
       }

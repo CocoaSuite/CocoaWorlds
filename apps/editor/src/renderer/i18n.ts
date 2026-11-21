@@ -385,6 +385,7 @@ const en = {
   'class.point': 'Point',
   'class.assetSpawn': 'Asset spawn',
   'class.audioEmitter': 'Audio emitter',
+  'class.script': 'Script',
   'insp.smooth': 'Smooth shading',
   'insp.tint': 'Tint',
   'insp.tintClear': 'No tint',
