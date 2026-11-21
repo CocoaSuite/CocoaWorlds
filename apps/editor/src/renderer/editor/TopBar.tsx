@@ -2,6 +2,7 @@ import { Button, ContextMenu, Dialog, Divider, Icon, IconButton, MenuBar, Spacer
 import { useEffect, useState } from 'react';
 import logo from '../assets/cocoaworlds-logo.svg';
 import { t } from '../i18n';
+import defaultGameIcon from '../assets/game-icon.png';
 import { flushProjectSave, useEditor } from '../store';
 
 const mod = navigator.platform.toLowerCase().includes('mac') ? '⌘' : 'Ctrl+';
@@ -288,6 +289,22 @@ function BuildDialog({ onClose }: { onClose: () => void }) {
   const [done, setDone] = useState<{ folder: string; start: string; bytes: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
   useEffect(() => window.cocoa.game.onProgress(setProgress), []);
+  const dir = useEditor((s) => s.session?.dir);
+  const [icon, setIcon] = useState<string | null>(null);
+  useEffect(() => {
+    if (dir) void window.cocoa.game.icon(dir).then((r) => r.ok && setIcon(r.value));
+  }, [dir]);
+  const chooseIcon = async () => {
+    if (!dir) return;
+    const r = await window.cocoa.game.chooseIcon(dir);
+    if (!r.ok) setError(r.error);
+    else if (r.value) setIcon(r.value);
+  };
+  const clearIcon = async () => {
+    if (!dir) return;
+    const r = await window.cocoa.game.clearIcon(dir);
+    if (r.ok) setIcon(null);
+  };
   const names: Record<Target, string> = { web: t('export.web'), win32: 'Windows', darwin: 'macOS', linux: 'Linux' };
   const go = async () => {
     const st = useEditor.getState();
@@ -314,6 +331,21 @@ function BuildDialog({ onClose }: { onClose: () => void }) {
   return (
     <Dialog title={t('export.title')} onClose={() => !busy && onClose()} width={520}>
       <p className="cw-hint">{t('export.intro')}</p>
+      <div className="cw-export-icon">
+        <img src={icon ?? defaultGameIcon} alt="" width={48} height={48} />
+        <div>
+          <strong>{t('export.icon')}</strong>
+          <span className="cw-muted">{icon ? t('export.iconOwn') : t('export.iconDefault')}</span>
+        </div>
+        <Button onClick={() => void chooseIcon()} disabled={busy}>
+          {t('export.iconChoose')}
+        </Button>
+        {icon && (
+          <Button onClick={() => void clearIcon()} disabled={busy}>
+            {t('export.iconReset')}
+          </Button>
+        )}
+      </div>
       <div className="cw-export-targets" role="radiogroup" aria-label={t('export.target')}>
         {(['web', 'win32', 'darwin', 'linux'] as Target[]).map((x) => (
           <label key={x} className={`cw-export-target${target === x ? ' on' : ''}`}>

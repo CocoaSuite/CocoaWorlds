@@ -36,6 +36,7 @@
     "extract-zip": "^2.0.1",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
+    "resedit": "^3.1.1",
     "three": "^0.187.0",
     "zustand": "^5.0.16"
   }

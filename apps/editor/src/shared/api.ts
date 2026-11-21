@@ -122,6 +122,11 @@ export interface CocoaApi {
     reveal(path: string): Promise<void>;
     launch(path: string): Promise<Result<true>>;
     onProgress(fn: (text: string) => void): () => void;
+    /** The project's game icon (icon.png in the project) as a data URL, or null for the default. */
+    icon(dir: string): Promise<Result<string | null>>;
+    /** Pick a picture for the icon (copied in as icon.png); null if cancelled. */
+    chooseIcon(dir: string): Promise<Result<string | null>>;
+    clearIcon(dir: string): Promise<Result<true>>;
   };
   window: {
     setTitle(title: string): void;
@@ -167,6 +172,9 @@ export const IPC = {
   openMaterialFiles: 'materials:openFiles',
   saveModelFile: 'models:saveFile',
   exportGame: 'game:export',
+  gameIcon: 'game:icon',
+  chooseGameIcon: 'game:chooseIcon',
+  clearGameIcon: 'game:clearIcon',
   exportProgress: 'game:exportProgress',
   revealGame: 'game:reveal',
   launchGame: 'game:launch',

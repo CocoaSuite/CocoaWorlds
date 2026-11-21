@@ -2,7 +2,10 @@
  * Electron main process: windows, native dialogs and the project file system.
  * The UI runs sandboxed with context isolation; it reaches this process only through the IPC handlers below.
  */
-import { BrowserWindow, Menu, app, dialog, ipcMain, shell, type IpcMainInvokeEvent } from 'electron';
+import { BrowserWindow, Menu, app, dialog, ipcMain, nativeImage, shell, type IpcMainInvokeEvent } from 'electron';
+import { promises as fsp } from 'node:fs';
+import { execFile } from 'node:child_process';
+import { ICON_SIZES, type IconPng } from './branding';
 import path from 'node:path';
 import { IPC, type Result } from '../shared/api';
 import { listAssets, readAsset, writeAsset, addSample, librarySounds, readLibrarySound, addLibrarySound, trashAsset, restoreAsset, writeTerrain, readGraph, writeGraph, writeGenerated } from './assets-fs';
@@ -129,7 +132,53 @@ const exported = new Set<string>();
 
 const TARGET_LABEL: Record<ExportTarget, string> = { web: 'Web', win32: 'Windows', darwin: 'macOS', linux: 'Linux' };
 
+/** The project's own game icon file. */
+const iconPath = (dir: string) => path.join(dir, 'icon.png');
+
+/** The game's icon at every size the exports need (the project's, or the default). */
+async function iconPngs(dir: string): Promise<IconPng[]> {
+  const own = await fsp.stat(iconPath(dir)).then(() => true, () => false);
+  const img = nativeImage.createFromPath(own ? iconPath(dir) : path.join(__dirname, 'game-icon.png'));
+  if (img.isEmpty()) return [];
+  return ICON_SIZES.map((size) => ({ size, png: img.resize({ width: size, height: size, quality: 'best' }).toPNG() }));
+}
+
+/** Ad-hoc sign a changed macOS bundle (it won't open otherwise on Apple silicon); only on a Mac. */
+function signMac(app: string): Promise<void> {
+  if (process.platform !== 'darwin') return Promise.resolve();
+  return new Promise((ok) => execFile('codesign', ['--force', '--deep', '--sign', '-', app], () => ok()));
+}
+
 function registerExport(): void {
+  handle(IPC.gameIcon, async (dirArg) => {
+    const dir = str(dirArg);
+    const img = nativeImage.createFromPath(iconPath(dir));
+    return img.isEmpty() ? null : img.resize({ width: 128, height: 128, quality: 'best' }).toDataURL();
+  });
+  handle(IPC.chooseGameIcon, async (dirArg) => {
+    const dir = str(dirArg);
+    if (!win) return null;
+    const r = await dialog.showOpenDialog(win, { title: 'Game icon', properties: ['openFile'], filters: [{ name: 'Pictures', extensions: ['png', 'jpg', 'jpeg', 'ico', 'icns', 'bmp', 'gif', 'webp'] }] });
+    if (r.canceled || !r.filePaths[0]) return null;
+    const img = nativeImage.createFromPath(r.filePaths[0]);
+    if (img.isEmpty()) throw new ProjectError('That picture could not be read.');
+    // Square, 1024 at most: a non-square picture is centred on a clear square.
+    const { width, height } = img.getSize();
+    const side = Math.min(1024, Math.max(width, height));
+    const k = side / Math.max(width, height);
+    const w = Math.max(1, Math.round(width * k)), h = Math.max(1, Math.round(height * k));
+    const scaled = img.resize({ width: w, height: h, quality: 'best' }).toBitmap();
+    const out = Buffer.alloc(side * side * 4);
+    const ox = Math.floor((side - w) / 2), oy = Math.floor((side - h) / 2);
+    for (let y = 0; y < h; y++) scaled.copy(out, ((y + oy) * side + ox) * 4, y * w * 4, (y + 1) * w * 4);
+    const square = nativeImage.createFromBitmap(out, { width: side, height: side });
+    await fsp.writeFile(iconPath(dir), square.toPNG());
+    return square.resize({ width: 128, height: 128, quality: 'best' }).toDataURL();
+  });
+  handle(IPC.clearGameIcon, async (dirArg) => {
+    await fsp.rm(iconPath(str(dirArg)), { force: true });
+    return true as const;
+  });
   handle(IPC.exportGame, async (dirArg, targetArg) => {
     const dir = str(dirArg);
     const target = String(targetArg) as ExportTarget;
@@ -157,7 +206,7 @@ function registerExport(): void {
     let result;
     if (target === 'web') {
       say('Writing the web game…');
-      result = await writeWebGame(dir, rendererDir, folder);
+      result = await writeWebGame(dir, rendererDir, folder, await iconPngs(dir));
     } else {
       let runtime: string;
       if (target === process.platform) runtime = ownRuntime(process.execPath, process.platform);
@@ -170,7 +219,7 @@ function registerExport(): void {
         });
       }
       say(`Writing the ${TARGET_LABEL[target]} game…`);
-      result = await writeDesktopGame(dir, rendererDir, path.join(__dirname, 'game-shell.cjs'), runtime, target, folder);
+      result = await writeDesktopGame(dir, rendererDir, path.join(__dirname, 'game-shell.cjs'), runtime, target, folder, await iconPngs(dir), signMac);
     }
     exported.add(result.start);
     exported.add(result.folder);

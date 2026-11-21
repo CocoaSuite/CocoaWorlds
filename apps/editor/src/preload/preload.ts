@@ -53,6 +53,9 @@ const api: CocoaApi = {
     export: (dir, target) => ipcRenderer.invoke(IPC.exportGame, dir, target),
     reveal: (path) => ipcRenderer.invoke(IPC.revealGame, path),
     launch: (path) => ipcRenderer.invoke(IPC.launchGame, path),
+    icon: (dir) => ipcRenderer.invoke(IPC.gameIcon, dir),
+    chooseIcon: (dir) => ipcRenderer.invoke(IPC.chooseGameIcon, dir),
+    clearIcon: (dir) => ipcRenderer.invoke(IPC.clearGameIcon, dir),
     onProgress: (fn) => {
       const listener = (_e: unknown, text: string) => fn(text);
       ipcRenderer.on(IPC.exportProgress, listener);

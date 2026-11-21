@@ -26,6 +26,11 @@ const entries = [
   { entryPoints: ['src/game-shell/main.ts'], outfile: 'dist/main/game-shell.cjs', sourcemap: false, external: ['electron', './package.json'] },
 ];
 
+// The icon a game gets when its project has none of its own.
+import { mkdirSync, copyFileSync } from 'node:fs';
+mkdirSync(path.join(root, 'dist/main'), { recursive: true });
+copyFileSync(path.join(root, 'src/renderer/assets/game-icon.png'), path.join(root, 'dist/main/game-icon.png'));
+
 if (watch) {
   const { context } = await import('esbuild');
   for (const e of entries) await (await context({ ...common, ...e })).watch();

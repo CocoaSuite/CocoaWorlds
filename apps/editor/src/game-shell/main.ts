@@ -7,9 +7,15 @@ import { BrowserWindow, Menu, app, net, protocol, shell } from 'electron';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
-const pkg = require('./package.json') as { productName?: string; name: string };
+import { existsSync } from 'node:fs';
+
+const pkg = require('./package.json') as { productName?: string; name: string; appId?: string };
 const title = pkg.productName ?? pkg.name;
 app.setName(title);
+// Its own taskbar group on Windows, and no runtime name in what the page reports about itself.
+if (process.platform === 'win32') app.setAppUserModelId(pkg.appId ?? title);
+app.userAgentFallback = app.userAgentFallback.replace(/\s(Electron|[\w.-]+)\/[\d.]+(?=\s|$)/g, (m, n: string) => (n === 'Electron' || n === pkg.name ? '' : m));
+const iconFile = path.join(__dirname, 'icon.png');
 
 protocol.registerSchemesAsPrivileged([{ scheme: 'game', privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true } }]);
 
@@ -32,6 +38,7 @@ app.whenReady().then(() => {
     minHeight: 360,
     backgroundColor: '#000000',
     title,
+    ...(existsSync(iconFile) ? { icon: iconFile } : {}),
     autoHideMenuBar: true,
     webPreferences: { contextIsolation: true, sandbox: true, nodeIntegration: false, autoplayPolicy: 'no-user-gesture-required' },
   });

@@ -2,9 +2,26 @@ import { describe, expect, it } from 'vitest';
 import { promises as fs } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { gameFileName, ownRuntime, playerFiles, usedAssets } from '../src/main/export';
+import { brandPage, gameFileName, ownRuntime, playerFiles, usedAssets } from '../src/main/export';
+import { bundleIdOf, icoFrom } from '../src/main/branding';
 
 describe('export helpers', () => {
+  it('names the page and gives it the game icon', () => {
+    const html = '<html><head><title>Game</title><link rel="icon" href="x.svg"></head><body></body></html>';
+    const out = brandPage(html, 'Cats & <Dogs>', true);
+    expect(out).toContain('<title>Cats &amp; &lt;Dogs&gt;</title>');
+    expect(out).toContain('href="icon.png"');
+    expect(out).not.toContain('x.svg');
+  });
+
+  it('makes an .ico of PNG pictures and a bundle id', () => {
+    const png = Buffer.from([1, 2, 3]);
+    const ico = icoFrom([{ size: 16, png }, { size: 256, png }, { size: 512, png }]);
+    expect(ico.readUInt16LE(4)).toBe(2);
+    expect(ico.readUInt8(6 + 16)).toBe(0);
+    expect(bundleIdOf('My Game!', 'abc-123')).toBe('com.cocoaworlds.mygame.abc123');
+  });
+
   it('names files after the game safely', () => {
     expect(gameFileName('Coin Counter')).toBe('Coin Counter');
     expect(gameFileName('Café: «Deluxe»/2!')).toBe('Cafe Deluxe2');

@@ -261,6 +261,9 @@ export async function installWebCocoa(): Promise<void> {
       reveal: async () => {},
       launch: notHere,
       onProgress: () => () => {},
+      icon: async () => ok(null),
+      chooseIcon: notHere,
+      clearIcon: notHere,
     },
     window: {
       setTitle: () => void (document.title = 'Cocoa Materials'),

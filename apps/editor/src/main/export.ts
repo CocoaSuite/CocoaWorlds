@@ -7,6 +7,7 @@
  */
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
+import { brandMacApp, brandWindowsExe, bundleIdOf, icnsFrom, icoFrom, tuckLicenses, type IconPng } from './branding';
 import { captionStyle, effectsOf, gameRules, materialsOf, plantsOf, validateProject, validateScene, type ProjectFile, type SceneFile } from '@cocoaworlds/core';
 
 export type ExportTarget = 'web' | 'win32' | 'darwin' | 'linux';
@@ -115,13 +116,21 @@ async function copyDir(from: string, to: string, skip: (rel: string) => boolean 
 }
 
 /** Write the web version of the game into `folder` (emptied first). */
-export async function writeWebGame(projectDir: string, rendererDir: string, folder: string): Promise<ExportResult> {
-  const { data } = await gameData(projectDir);
+export async function writeWebGame(projectDir: string, rendererDir: string, folder: string, icon: IconPng[] = []): Promise<ExportResult> {
+  const { data, project } = await gameData(projectDir);
   const json = JSON.stringify(data);
   await fs.rm(folder, { recursive: true, force: true });
   await fs.mkdir(path.join(folder, 'game'), { recursive: true });
   let bytes = 0;
   for (const f of await playerFiles(rendererDir)) bytes += await copyFile(path.join(rendererDir, f), path.join(folder, f === 'player.html' ? 'index.html' : f));
+  // The page: the game's name and icon in the tab.
+  const page = path.join(folder, 'index.html');
+  const fav = icon.find((p) => p.size === 256) ?? icon[icon.length - 1];
+  if (fav) {
+    await fs.writeFile(path.join(folder, 'icon.png'), fav.png);
+    bytes += fav.png.length;
+  }
+  await fs.writeFile(page, brandPage(await fs.readFile(page, 'utf8'), project.name, !!fav));
   await fs.writeFile(path.join(folder, 'game', 'game.json'), json);
   bytes += json.length;
   for (const a of usedAssets(json)) {
@@ -130,6 +139,15 @@ export async function writeWebGame(projectDir: string, rendererDir: string, fold
     bytes += await copyFile(src, path.join(folder, 'game', a)).catch(() => 0);
   }
   return { folder, start: path.join(folder, 'index.html'), bytes };
+}
+
+/** The player page with the game's title and (if it has one) icon.png as its icon. */
+export function brandPage(html: string, title: string, icon: boolean): string {
+  const esc = title.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  let out = html.replace(/<link[^>]+rel="(?:shortcut )?icon"[^>]*>\s*/gi, '');
+  out = /<title>[^<]*<\/title>/i.test(out) ? out.replace(/<title>[^<]*<\/title>/i, `<title>${esc}</title>`) : out.replace(/<head>/i, `<head>\n    <title>${esc}</title>`);
+  if (icon) out = out.replace(/<\/head>/i, '    <link rel="icon" type="image/png" href="icon.png" />\n  </head>');
+  return out;
 }
 
 /** Where an Electron runtime's program and resources are, for a platform. */
@@ -152,6 +170,9 @@ export async function writeDesktopGame(
   runtime: string,
   target: Exclude<ExportTarget, 'web'>,
   folder: string,
+  icon: IconPng[] = [],
+  /** macOS: re-sign the changed bundle (only possible on a Mac). */
+  sign?: (app: string) => Promise<void>,
 ): Promise<ExportResult> {
   const { project } = await gameData(projectDir);
   const name = gameFileName(project.name);
@@ -163,12 +184,15 @@ export async function writeDesktopGame(
   const l = layout(target, folder, '');
   const resources = await l.resources();
   const appDir = path.join(resources, 'app');
-  const web = await writeWebGame(projectDir, rendererDir, path.join(appDir, 'web'));
+  const web = await writeWebGame(projectDir, rendererDir, path.join(appDir, 'web'), icon);
+  // (The window icon on Linux and Windows' title bar.)
+  const winIcon = icon.find((p) => p.size === 256) ?? icon[icon.length - 1];
+  if (winIcon) await fs.writeFile(path.join(appDir, 'icon.png'), winIcon.png);
   bytes += web.bytes;
   await fs.copyFile(shellFile, path.join(appDir, 'main.cjs'));
   await fs.writeFile(
     path.join(appDir, 'package.json'),
-    JSON.stringify({ name: name.toLowerCase().replace(/[^a-z0-9]+/g, '-') || 'game', productName: project.name, version: '1.0.0', main: 'main.cjs', private: true }, null, 2),
+    JSON.stringify({ name: name.toLowerCase().replace(/[^a-z0-9]+/g, '-') || 'game', productName: project.name, appId: bundleIdOf(name, project.id), version: '1.0.0', main: 'main.cjs', private: true }, null, 2),
   );
   // Named after the game.
   let start: string;
@@ -177,12 +201,16 @@ export async function writeDesktopGame(
     const renamed = `${name}.app`;
     if (app !== renamed) await fs.rename(path.join(folder, app), path.join(folder, renamed));
     start = path.join(folder, renamed);
+    await brandMacApp(start, name, bundleIdOf(name, project.id), icon.length ? icnsFrom(icon) : null);
+    await sign?.(start);
   } else {
     const exe = (await fs.readdir(folder)).find((f) => (target === 'win32' ? /\.exe$/i.test(f) && !/crashpad|squirrel/i.test(f) : /^(electron|cocoaworlds)$/i.test(f)));
     if (!exe) throw new Error('The runtime has no program to start.');
     start = path.join(folder, target === 'win32' ? `${name}.exe` : name);
     await fs.rename(path.join(folder, exe), start);
+    if (target === 'win32') await brandWindowsExe(start, project.name, name, icon.length ? icoFrom(icon) : null);
   }
+  await tuckLicenses(folder);
   return { folder, start, bytes };
 }
 

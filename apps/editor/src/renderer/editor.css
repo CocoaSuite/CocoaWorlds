@@ -415,6 +415,10 @@ code { font: var(--fs-m) var(--mono); color: var(--fg); }
 .cw-export-target.on { border-color: var(--sel); }
 .cw-export-target input { grid-row: span 2; }
 .cw-export-target span { font-size: 12px; }
+.cw-export-icon { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; margin: 10px 0; }
+.cw-export-icon img { border-radius: 6px; image-rendering: auto; object-fit: contain; }
+.cw-export-icon > div { display: flex; flex-direction: column; flex: 1; min-width: 0; }
+.cw-export-icon span { font-size: 12px; }
 .cw-export-error { color: var(--bad); }
 .cw-export-done { word-break: break-all; }
 
