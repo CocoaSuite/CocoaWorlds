@@ -386,6 +386,8 @@ const en = {
   'class.assetSpawn': 'Asset spawn',
   'class.audioEmitter': 'Audio emitter',
   'class.script': 'Script',
+  'class.camera': 'Camera',
+  'class.prop': 'Prop',
   'insp.smooth': 'Smooth shading',
   'insp.tint': 'Tint',
   'insp.tintClear': 'No tint',

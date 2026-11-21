@@ -22,8 +22,11 @@ import spawnIcon from '../assets/empty/Finish.png';
 import { powerStandIn } from './power-props';
 import audioIcon from '../assets/empty/AudioEmitter.png';
 import scriptIcon from '../assets/empty/Script.png';
+import cameraIcon from '../assets/empty/Camera.png';
+import propIcon from '../assets/empty/Prop.png';
+import missingIcon from '../assets/empty/Missing.png';
 
-const ICONS: Record<EmptyClass, string> = { point: pointIcon, assetSpawn: spawnIcon, audioEmitter: audioIcon, script: scriptIcon };
+const ICONS: Record<EmptyClass, string> = { point: pointIcon, assetSpawn: spawnIcon, audioEmitter: audioIcon, script: scriptIcon, camera: cameraIcon, prop: propIcon };
 const ICON_SIZE = 32;
 const iconTextures = new Map<EmptyClass, THREE.Texture>();
 
@@ -130,6 +133,23 @@ export function modelCorners(m: Marker): [number, number, number][] {
     }
   });
   return out;
+}
+
+/** The MISSING icon shown over a model that couldn't load (alongside its pink box). */
+let missingTex: THREE.Texture | null = null;
+function missingSprite(): THREE.Sprite {
+  if (!missingTex) {
+    missingTex = new THREE.TextureLoader().load(missingIcon, () => markerLoaded());
+    missingTex.colorSpace = THREE.SRGBColorSpace;
+  }
+  const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: missingTex, transparent: true }));
+  sprite.name = 'model-missing-icon';
+  sprite.onBeforeRender = () => {
+    sprite.parent?.getWorldScale(worldScale);
+    sprite.scale.set(ICON_SIZE / (worldScale.x || 1), ICON_SIZE / (worldScale.y || 1), 1);
+    sprite.updateMatrixWorld();
+  };
+  return sprite;
 }
 
 /** An object with nothing to draw of its own (it can be given a class icon). */
@@ -279,6 +299,7 @@ export function buildMarker(e: EntityData): Marker {
         const box = new THREE.Mesh(new THREE.BoxGeometry(24, 24, 24), new THREE.MeshBasicMaterial({ color: 0xff00dc, wireframe: true }));
         box.name = 'model-missing';
         group.add(box);
+        group.add(missingSprite());
         markerLoaded();
       });
   } else if (e.components.sign) {

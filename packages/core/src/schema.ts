@@ -157,7 +157,7 @@ export interface ProjectFile {
 /** Component data is plain JSON keyed by component type, e.g. `{ light: { kind: 'point', ... } }`. */
 export type ComponentData = Record<string, unknown>;
 
-export type EmptyClass = 'point' | 'assetSpawn' | 'audioEmitter' | 'script';
+export type EmptyClass = 'point' | 'assetSpawn' | 'audioEmitter' | 'script' | 'camera' | 'prop';
 
 export interface EntityData {
   id: string;
