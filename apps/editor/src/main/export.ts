@@ -32,7 +32,7 @@ export function gameFileName(name: string): string {
 }
 
 /** The project's game, as the player reads it (game/game.json). */
-export async function gameData(projectDir: string): Promise<{ project: ProjectFile; data: object; scene: SceneFile }> {
+export async function gameData(projectDir: string, trim = false): Promise<{ project: ProjectFile; data: object; scene: SceneFile }> {
   const projectRaw = JSON.parse(await fs.readFile(path.join(projectDir, 'project.cwproj'), 'utf8'));
   const pv = validateProject(projectRaw);
   if (!pv.ok) throw new Error(`The project file has problems: ${pv.problems[0]?.message}`);
@@ -52,6 +52,15 @@ export async function gameData(projectDir: string): Promise<{ project: ProjectFi
     const raw = JSON.parse(await fs.readFile(path.join(projectDir, p), 'utf8').catch(() => 'null'));
     const v = raw ? validateScene(raw) : null;
     if (v?.ok) scenes[stem(p)] = v.value;
+  }
+  // Remove unused: only the scenes the start scene can lead to (by name, through level changes and scripts).
+  if (trim) {
+    const keep = new Set([stem(scenePath)]);
+    for (const name of keep) {
+      const json = JSON.stringify(scenes[name]);
+      for (const other of Object.keys(scenes)) if (!keep.has(other) && json.includes(`"${other}"`)) keep.add(other);
+    }
+    for (const name of Object.keys(scenes)) if (!keep.has(name)) delete scenes[name];
   }
   // Only the materials the scenes use (and so only their images).
   const sceneJson = JSON.stringify(scenes);
@@ -116,8 +125,8 @@ async function copyDir(from: string, to: string, skip: (rel: string) => boolean 
 }
 
 /** Write the web version of the game into `folder` (emptied first). */
-export async function writeWebGame(projectDir: string, rendererDir: string, folder: string, icon: IconPng[] = []): Promise<ExportResult> {
-  const { data, project } = await gameData(projectDir);
+export async function writeWebGame(projectDir: string, rendererDir: string, folder: string, icon: IconPng[] = [], trim = false): Promise<ExportResult> {
+  const { data, project } = await gameData(projectDir, trim);
   const json = JSON.stringify(data);
   await fs.rm(folder, { recursive: true, force: true });
   await fs.mkdir(path.join(folder, 'game'), { recursive: true });
@@ -173,6 +182,7 @@ export async function writeDesktopGame(
   icon: IconPng[] = [],
   /** macOS: re-sign the changed bundle (only possible on a Mac). */
   sign?: (app: string) => Promise<void>,
+  trim = false,
 ): Promise<ExportResult> {
   const { project } = await gameData(projectDir);
   const name = gameFileName(project.name);
@@ -184,7 +194,7 @@ export async function writeDesktopGame(
   const l = layout(target, folder, '');
   const resources = await l.resources();
   const appDir = path.join(resources, 'app');
-  const web = await writeWebGame(projectDir, rendererDir, path.join(appDir, 'web'), icon);
+  const web = await writeWebGame(projectDir, rendererDir, path.join(appDir, 'web'), icon, trim);
   // (The window icon on Linux and Windows' title bar.)
   const winIcon = icon.find((p) => p.size === 256) ?? icon[icon.length - 1];
   if (winIcon) await fs.writeFile(path.join(appDir, 'icon.png'), winIcon.png);

@@ -87,4 +87,28 @@ describe('exported game data', () => {
     expect((data as { start: string }).start).toBe(scenePath.split('/').pop()!.replace('.cwscene', ''));
     await fs.rm(dir, { recursive: true, force: true });
   });
+
+  it('remove unused: leaves out scenes the game cannot reach', async () => {
+    const { newEntity, newProject, stringify } = await import('@cocoaworlds/core');
+    const { gameData } = await import('../src/main/export');
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'cw-trim-'));
+    const { project, scenes } = newProject('Trim');
+    const [startPath, start] = Object.entries(scenes)[0]!;
+    const spawn = newEntity('Player start');
+    spawn.components.playerSpawn = {};
+    const door = newEntity('Door');
+    door.components.levelChange = { scene: 'cave', landmark: '' };
+    start.entities.push(spawn, door);
+    const folder = path.dirname(startPath);
+    project.scenes = [startPath, `${folder}/cave.cwscene`, `${folder}/old.cwscene`];
+    await fs.mkdir(path.join(dir, folder), { recursive: true });
+    await fs.writeFile(path.join(dir, 'project.cwproj'), stringify(project));
+    await fs.writeFile(path.join(dir, startPath), stringify(start));
+    for (const n of ['cave', 'old']) await fs.writeFile(path.join(dir, folder, `${n}.cwscene`), stringify({ ...start, entities: [] }));
+    const names = async (trim: boolean) => Object.keys(((await gameData(dir, trim)).data as { scenes: object }).scenes).sort();
+    const first = startPath.split('/').pop()!.replace('.cwscene', '');
+    expect(await names(false)).toEqual([first, 'cave', 'old'].sort());
+    expect(await names(true)).toEqual([first, 'cave'].sort());
+    await fs.rm(dir, { recursive: true, force: true });
+  });
 });
