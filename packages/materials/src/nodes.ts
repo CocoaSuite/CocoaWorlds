@@ -888,7 +888,7 @@ outColor = vec4(clamp(hsv2rgb(h) + p_lightness, 0., 1.), 1.);`,
   {
     type: 'tint',
     group: 'colour',
-    label: l('Colorise', 'Окрасить'),
+    label: l('Colorize', 'Окрасить'),
     hint: l('Tint a picture with one color.', 'Окрасить картинку одним цветом.'),
     inputs: [IN_GREY('in', l('In', 'Вход'), [1, 1, 1])],
     output: 'color',
