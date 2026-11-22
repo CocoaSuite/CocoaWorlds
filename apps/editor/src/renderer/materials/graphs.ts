@@ -29,6 +29,7 @@ let projectDir: string | null = null;
 useEditor.subscribe((s) => {
   const dir = s.session?.dir ?? null;
   if (dir === projectDir) return;
+  endGesture();
   projectDir = dir;
   for (const t of saveTimers.values()) clearTimeout(t);
   saveTimers.clear();
