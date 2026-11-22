@@ -166,7 +166,7 @@ export function SkyPanel() {
         </Row>
         <Button onClick={() => void exportSky('env')}>{L('Export sky as env texture', 'Экспорт неба как текстуры окружения')}</Button>
         <Button onClick={() => void exportSky('box')}>{L('Export sky as skybox (6 squares)', 'Экспорт неба как скайбокса (6 квадратов)')}</Button>
-        <div className="cw-muted cw-hint">{L('A preset also sets the scene’s Sun: its height, colour and brightness (not its direction). Saved skies are kept in the project, for every scene; double-click one to rename it.', 'Заготовка задаёт и Солнце сцены: высоту, цвет и яркость (не направление). Сохранённое небо хранится в проекте, для всех сцен; двойной щелчок — переименовать.')}</div>
+        <div className="cw-muted cw-hint">{L('A preset also sets the scene’s Sun: its height, color and brightness (not its direction). Saved skies are kept in the project, for every scene; double-click one to rename it.', 'Заготовка задаёт и Солнце сцены: высоту, цвет и яркость (не направление). Сохранённое небо хранится в проекте, для всех сцен; двойной щелчок — переименовать.')}</div>
       </aside>
       <div className="cw-plants-view">
         <SkyPreview sky={settings.sky} ambient={{ colour: settings.ambientColor, intensity: settings.ambientIntensity }} sun={sun ? { toward: sun.toward, colour: sun.colour, intensity: sun.intensity } : null} />
@@ -175,7 +175,7 @@ export function SkyPanel() {
         <Row label={L('Sky', 'Небо')}>
           <Switch label={L('Sky on', 'Небо включено')} checked={sky.enabled} onChange={(v) => setSky({ enabled: v })} />
         </Row>
-        <div className="cw-lib-cats-h">{L('Colours', 'Цвета')}</div>
+        <div className="cw-lib-cats-h">{L('Colors', 'Цвета')}</div>
         {colour('top', L('Overhead', 'Над головой'))}
         {colour('horizon', L('Horizon', 'Горизонт'))}
         {colour('ground', L('Below horizon', 'Ниже горизонта'))}
@@ -189,8 +189,8 @@ export function SkyPanel() {
             <Row label={L('Direction', 'Направление')}>
               <NumberField label="°" ariaLabel={L('Sun direction', 'Направление солнца')} step={1} value={Math.round(sun.turn)} onChange={(v) => aimSun(sun.height, ((v % 360) + 360) % 360, 'sky-sun-aim')} onCommit={(v) => aimSun(sun.height, ((v % 360) + 360) % 360, 'sky-sun-aim')} />
             </Row>
-            <Row label={L('Sun colour', 'Цвет солнца')}>
-              <ColorField label={L('Sun colour', 'Цвет солнца')} value={sun.colour} onChange={(v) => st.setComponentField(sun.id, 'light', 'color', v, 'sky-sun-colour')} />
+            <Row label={L('Sun color', 'Цвет солнца')}>
+              <ColorField label={L('Sun color', 'Цвет солнца')} value={sun.colour} onChange={(v) => st.setComponentField(sun.id, 'light', 'color', v, 'sky-sun-colour')} />
             </Row>
             <Row label={L('Brightness', 'Яркость')}>
               <NumberField label="#" ariaLabel={L('Sun brightness', 'Яркость солнца')} step={0.05} value={sun.intensity} onChange={(v) => st.setComponentField(sun.id, 'light', 'intensity', Math.max(0, v), 'sky-sun-int')} onCommit={(v) => st.setComponentField(sun.id, 'light', 'intensity', Math.max(0, v), 'sky-sun-int')} />
@@ -229,7 +229,7 @@ export function SkyPanel() {
             {num('mtnLayers', L('Ranges', 'Хребты'), 1, 3, 1)}
             {num('mtnSnow', L('Snow', 'Снег'), 0, 1, 0.05)}
             {colour('mtnRock', L('Rock', 'Камень'))}
-            {colour('mtnSnowColour', L('Snow colour', 'Цвет снега'))}
+            {colour('mtnSnowColour', L('Snow color', 'Цвет снега'))}
             {num('mtnDetail', L('Texture detail', 'Детализация текстуры'), 1, 8, 1)}
             <Row label={L('Smooth texture', 'Сглаживание текстуры')}>
               <Switch label={L('Smooth texture', 'Сглаживание текстуры')} checked={sky.mtnSmooth} onChange={(v) => setSky({ mtnSmooth: v })} />
@@ -239,7 +239,7 @@ export function SkyPanel() {
             </Row>
             {num('valleyFog', L('Valley fog', 'Туман в долинах'), 0, 1, 0.05)}
             {num('valleyFogHeight', L('Fog height', 'Высота тумана'), 0.1, 10, 0.1, '°')}
-            {colour('valleyFogColour', L('Fog colour', 'Цвет тумана'))}
+            {colour('valleyFogColour', L('Fog color', 'Цвет тумана'))}
           </>
         )}
         <div className="cw-lib-cats-h">{L('Forest', 'Лес')}</div>
@@ -254,14 +254,14 @@ export function SkyPanel() {
           </select>
         </Row>
         {num('treeSize', L('Tree size', 'Размер деревьев'), 0.2, 4, 0.1, '×')}
-        {colour('forestColour', L('Forest colour', 'Цвет леса'))}
+        {colour('forestColour', L('Forest color', 'Цвет леса'))}
         <div className="cw-lib-cats-h">{L('Sea', 'Море')}</div>
         <Row label={L('Sea', 'Море')}>
           <Switch label={L('Sea on', 'Море включено')} checked={sky.sea} onChange={(v) => setSky({ sea: v })} />
         </Row>
         {sky.sea && (
           <>
-            {colour('seaColour', L('Water colour', 'Цвет воды'))}
+            {colour('seaColour', L('Water color', 'Цвет воды'))}
             {num('seaWaves', L('Wave size', 'Размер волн'), 0.1, 5, 0.1, '×')}
             {num('seaChop', L('Choppiness', 'Волнение'), 0, 1, 0.05)}
             {num('seaReflect', L('Reflection', 'Отражение'), 0, 1, 0.05)}
@@ -284,7 +284,7 @@ export function SkyPanel() {
         <Row label={L('Ambient brightness', 'Яркость окружения')}>
           <NumberField label="#" ariaLabel={L('Ambient brightness', 'Яркость окружения')} step={0.05} value={settings.ambientIntensity} onChange={(v) => st.setSceneSettings({ ambientIntensity: Math.max(0, v) }, 'Ambient', 'sky-amb')} onCommit={(v) => st.setSceneSettings({ ambientIntensity: Math.max(0, v) }, 'Ambient', 'sky-amb')} />
         </Row>
-        <div className="cw-muted cw-hint">{L('Light from the sky: the ambient light (and fog, if on) take their colours from the sky, so the scene matches what’s above it. Reflect the scene: shiny and metal materials reflect the level around the camera (captured as you move), not just the sky. Probes for rooms: rooms the brushes make get their own reflections, fitted to their walls (View › Show reflection probes shows them; add a Reflection probe to place one yourself).', 'Свет от неба: окружающий свет (и туман, если включён) берут цвета неба, и сцена совпадает с тем, что над ней.')}</div>
+        <div className="cw-muted cw-hint">{L('Light from the sky: the ambient light (and fog, if on) take their colors from the sky, so the scene matches what’s above it. Reflect the scene: shiny and metal materials reflect the level around the camera (captured as you move), not just the sky. Probes for rooms: rooms the brushes make get their own reflections, fitted to their walls (View › Show reflection probes shows them; add a Reflection probe to place one yourself).', 'Свет от неба: окружающий свет (и туман, если включён) берут цвета неба, и сцена совпадает с тем, что над ней.')}</div>
       </aside>
     </div>
   );
