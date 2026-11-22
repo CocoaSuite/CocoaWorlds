@@ -257,15 +257,15 @@ Makes: color · hash `af716a1e`
 outColor = p_image_ok > 0.5 ? vec4(texture(p_image, uv).rgb, 1.) : vec4(mod(floor(uv.x * 8.) + floor(uv.y * 8.), 2.) * vec3(1., 0., 0.86), 1.);
 ```
 
-### Colour — `color`
+### Color — `color`
 
-One flat colour.
+One flat color.
 
 Makes: color · hash `8ec5675c`
 
 | Setting | Kind | Range | Default |
 |---|---|---|---|
-| `color` (Colour) | color |  | `#b08c64` |
+| `color` (Color) | color |  | `#b08c64` |
 
 ```glsl
 outColor = vec4(p_color, 1.);
@@ -986,18 +986,18 @@ float e = (1. - p_sharpness) * 0.5 + 0.01; v = mix(v, smoothstep(0.5 - e, 0.5 + 
 outColor = vec4(vec3(v), 1.);
 ```
 
-### Colour cells — `colorCells`
+### Color cells — `colorCells`
 
-Cells (Voronoi) or squares, each a random colour between two colours or of a random hue: mosaics, stained glass, terrazzo.
+Cells (Voronoi) or squares, each a random color between two colors or of a random hue: mosaics, stained glass, terrazzo.
 
 Makes: color · hash `d5261809`
 
 | Setting | Kind | Range | Default |
 |---|---|---|---|
 | `shape` (Cells) | choice | 0 `voronoi`, 1 `squares` | `voronoi` |
-| `mode` (Colours) | choice | 0 `between`, 1 `hues` | `between` |
-| `a` (Colour A) | color |  | `#2f5d8a` |
-| `b` (Colour B) | color |  | `#d9a441` |
+| `mode` (Colors) | choice | 0 `between`, 1 `hues` | `between` |
+| `a` (Color A) | color |  | `#2f5d8a` |
+| `b` (Color B) | color |  | `#d9a441` |
 | `saturation` (Saturation (any hue)) | number | 0 – 1 | `0.6` |
 | `scale` (Scale) | int | 1 – 64 | `8` |
 | `gap` (Gap) | number | 0 – 0.3 | `0.04` |
@@ -1608,7 +1608,7 @@ outColor = vec4(inC_in(q).rgb, 1.);
 
 ### Flood fill — `floodFill`
 
-Give each separate white shape of a mask (each brick, tile, plank) its own value: a random grey or colour, a gradient across it, or where it is.
+Give each separate white shape of a mask (each brick, tile, plank) its own value: a random grey or color, a gradient across it, or where it is.
 
 Makes: color · hash `a9ea0ba4`
 
@@ -2444,9 +2444,9 @@ Makes: color · hash `b84bf5a3`
 
 | Input | Reads as | Unlinked |
 |---|---|---|
-| `top` (Top colour) | color | 1, 1, 1 |
+| `top` (Top color) | color | 1, 1, 1 |
 | `heightTop` (Top height) | grey | 0.5, 0.5, 0.5 |
-| `bottom` (Bottom colour) | color | 0, 0, 0 |
+| `bottom` (Bottom color) | color | 0, 0, 0 |
 | `heightBottom` (Bottom height) | grey | 0.5, 0.5, 0.5 |
 
 | Setting | Kind | Range | Default |
@@ -2464,7 +2464,7 @@ outColor = vec4(r, 1.);
 
 ### Combine channels — `combineChannels`
 
-Make a colour from three greys as its red, green and blue.
+Make a color from three greys as its red, green and blue.
 
 Makes: color · hash `1ec92276`
 
@@ -2480,7 +2480,7 @@ outColor = vec4(inG_r(uv), inG_g(uv), inG_b(uv), 1.);
 
 ### Pick channel — `splitChannel`
 
-One channel of a colour as grey: red, green, blue, or brightness.
+One channel of a color as grey: red, green, blue, or brightness.
 
 Makes: grey · hash `72bbb1cb`
 
@@ -2498,9 +2498,9 @@ float v = k == 0 ? c.r : k == 1 ? c.g : k == 2 ? c.b : dot(c, vec3(0.2126, 0.715
 outColor = vec4(vec3(v), 1.);
 ```
 
-### Colour to mask — `colorSelect`
+### Color to mask — `colorSelect`
 
-White where the picture is close to a colour: pick out one part to treat differently.
+White where the picture is close to a color: pick out one part to treat differently.
 
 Makes: grey · hash `cbcfc721`
 
@@ -2510,7 +2510,7 @@ Makes: grey · hash `cbcfc721`
 
 | Setting | Kind | Range | Default |
 |---|---|---|---|
-| `color` (Colour) | color |  | `#808080` |
+| `color` (Color) | color |  | `#808080` |
 | `tolerance` (Tolerance) | number | 0 – 1 | `0.2` |
 | `softness` (Softness) | number | 0 – 1 | `0.2` |
 
@@ -2550,11 +2550,11 @@ if (h_d > 0.5) { if (seen == k) col = inC_d(uv).rgb; seen += 1.; }
 outColor = vec4(col, 1.);
 ```
 
-## Colour
+## Color
 
 ### Gradient map — `gradientMap`
 
-Colour a grey picture: black takes the left colour, white the right.
+Color a grey picture: black takes the left color, white the right.
 
 Makes: color · hash `c69e4515`
 
@@ -2564,7 +2564,7 @@ Makes: color · hash `c69e4515`
 
 | Setting | Kind | Range | Default |
 |---|---|---|---|
-| `ramp` (Colours) | ramp | 1–8 stops | `[{"at":0,"color":"#1e1a16"},{"at":1,"color":"#e8dcc8"}]` |
+| `ramp` (Colors) | ramp | 1–8 stops | `[{"at":0,"color":"#1e1a16"},{"at":1,"color":"#e8dcc8"}]` |
 
 ```glsl
 outColor = vec4(ramp(inG_in(uv), p_ramp_c, p_ramp_t, p_ramp_n), 1.);
@@ -2572,7 +2572,7 @@ outColor = vec4(ramp(inG_in(uv), p_ramp_c, p_ramp_t, p_ramp_n), 1.);
 
 ### Hue, saturation, lightness — `hsl`
 
-Shift the colours round the wheel, make them stronger or greyer, lighter or darker.
+Shift the colors round the wheel, make them stronger or greyer, lighter or darker.
 
 Makes: color · hash `83a81cf8`
 
@@ -2592,9 +2592,9 @@ h.x = fract(h.x + p_hue / 360.); h.y = clamp(h.y * p_saturation, 0., 1.);
 outColor = vec4(clamp(hsv2rgb(h) + p_lightness, 0., 1.), 1.);
 ```
 
-### Colourise — `tint`
+### Colorize — `tint`
 
-Tint a picture with one colour.
+Tint a picture with one color.
 
 Makes: color · hash `8fcb5e07`
 
@@ -2604,15 +2604,15 @@ Makes: color · hash `8fcb5e07`
 
 | Setting | Kind | Range | Default |
 |---|---|---|---|
-| `color` (Colour) | color |  | `#c08040` |
+| `color` (Color) | color |  | `#c08040` |
 
 ```glsl
 outColor = vec4(p_color * inG_in(uv), 1.);
 ```
 
-### Replace colour — `replaceColor`
+### Replace color — `replaceColor`
 
-Swap one colour for another (and its near shades).
+Swap one color for another (and its near shades).
 
 Makes: color · hash `74e45830`
 
@@ -2635,7 +2635,7 @@ outColor = vec4(mix(c, clamp(c + (p_to - p_from), 0., 1.), m), 1.);
 
 ### Desaturate — `desaturate`
 
-Take the colour out, partly or fully.
+Take the color out, partly or fully.
 
 Makes: color · hash `6329b1f8`
 
@@ -2651,9 +2651,9 @@ Makes: color · hash `6329b1f8`
 vec3 c = inC_in(uv).rgb; outColor = vec4(mix(c, vec3(dot(c, vec3(0.2126, 0.7152, 0.0722))), p_amount), 1.);
 ```
 
-### Colour variation — `colorVariation`
+### Color variation — `colorVariation`
 
-Break up a flat colour with large, soft shifts in brightness and hue.
+Break up a flat color with large, soft shifts in brightness and hue.
 
 Makes: color · hash `645a4c2f`
 
@@ -2676,7 +2676,7 @@ outColor = vec4(hsv2rgb(h), 1.);
 
 ### Warm or cool — `temperature`
 
-Shift the colours warmer (orange) or cooler (blue), and greener or pinker.
+Shift the colors warmer (orange) or cooler (blue), and greener or pinker.
 
 Makes: color · hash `48c044fd`
 
@@ -2694,7 +2694,7 @@ vec3 c = inC_in(uv).rgb; c.r += p_warmth * 0.12; c.b -= p_warmth * 0.12; c.g -= 
 outColor = vec4(clamp(c, 0., 1.), 1.);
 ```
 
-### Colour balance — `colorBalance`
+### Color balance — `colorBalance`
 
 Tint the dark, middle and light parts separately: warm highlights, cool shadows, aged looks.
 
@@ -2720,7 +2720,7 @@ outColor = vec4(clamp(c + shift * p_amount, 0., 1.), 1.);
 
 ### Rainbow palette — `palette`
 
-Colour a grey picture by a smooth looping palette: rainbows, oil slicks, heat, sci-fi glows.
+Color a grey picture by a smooth looping palette: rainbows, oil slicks, heat, sci-fi glows.
 
 Makes: color · hash `aa898c0c`
 
@@ -2998,9 +2998,9 @@ outColor = vec4(vec3(v), 1.);
 
 ## Materialize
 
-### Photo to colour — `matColor`
+### Photo to color — `matColor`
 
-The photo’s colour with the broad light and shadow taken out, so the material isn’t lit twice.
+The photo’s color with the broad light and shadow taken out, so the material isn’t lit twice.
 
 Makes: color · hash `12bb2e17`
 
@@ -3158,7 +3158,7 @@ outColor = vec4(vec3(clamp(1. - max(s - h, 0.) * p_strength * 4., 0., 1.)), 1.);
 
 ### Photo to metal — `matMetal`
 
-White where the photo is close to the metal’s colour: pick the colour of the bare metal in it.
+White where the photo is close to the metal’s color: pick the color of the bare metal in it.
 
 Makes: grey · hash `f46d24f8`
 
@@ -3168,7 +3168,7 @@ Makes: grey · hash `f46d24f8`
 
 | Setting | Kind | Range | Default |
 |---|---|---|---|
-| `color` (Metal colour) | color |  | `#d6dade` |
+| `color` (Metal color) | color |  | `#d6dade` |
 | `range` (Range) | number | 0 – 1 | `0.03` |
 | `softness` (Softness) | number | 0 – 1 | `0.04` |
 | `amount` (Amount) | number | 0 – 1 | `1` |
@@ -3180,15 +3180,15 @@ outColor = vec4(vec3((1. - smoothstep(p_range, p_range + p_softness + 0.001, d))
 
 ## Output
 
-### Colour — `outColor`
+### Color — `outColor`
 
-The material’s colour.
+The material’s color.
 
 Makes: nothing (output node: the material's `color` map) · hash `9c2e4524`
 
 | Input | Reads as | Unlinked |
 |---|---|---|
-| `in` (Colour) | color | 0.7, 0.7, 0.7 |
+| `in` (Color) | color | 0.7, 0.7, 0.7 |
 
 ```glsl
 outColor = vec4(inC_in(uv).rgb, 1.);
@@ -3266,7 +3266,7 @@ float v = inG_in(uv); outColor = vec4(vec3(v), 1.);
 
 ### Glow — `outGlow`
 
-Where it glows, and in what colour (black: no glow).
+Where it glows, and in what color (black: no glow).
 
 Makes: nothing (output node: the material's `glow` map) · hash `22489aeb`
 
@@ -3292,15 +3292,15 @@ Makes: nothing (output node: the material's `opacity` map) · hash `ea010fb3`
 float v = inG_in(uv); outColor = vec4(vec3(v), 1.);
 ```
 
-### Wear colour — `outWearColor`
+### Wear color — `outWearColor`
 
-The wear layer’s colour (bare metal under paint, dust): shown on edges, in creases or on top, as the material’s Wear settings say.
+The wear layer’s color (bare metal under paint, dust): shown on edges, in creases or on top, as the material’s Wear settings say.
 
 Makes: nothing (output node: the material's `wearColor` map) · hash `3491259d`
 
 | Input | Reads as | Unlinked |
 |---|---|---|
-| `in` (Wear colour) | color | 0.6, 0.6, 0.6 |
+| `in` (Wear color) | color | 0.6, 0.6, 0.6 |
 
 ```glsl
 outColor = vec4(inC_in(uv).rgb, 1.);
