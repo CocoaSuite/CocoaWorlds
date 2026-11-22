@@ -30,7 +30,7 @@ import { useEditor } from '../store';
 import { buildPsd } from './psd';
 import { bakeLater, context, graphPathFor, loadBitmap, loadGraph, useGraphs } from './graphs';
 
-/** Maps that are pictures of values (one channel), not colours. */
+/** Maps that are pictures of values (one channel), not colors. */
 const GREY: ReadonlySet<OutputRole> = new Set(['height', 'roughness', 'metalness', 'occlusion', 'opacity', 'wearRoughness', 'wearMetal', 'wearNoise']);
 
 type Loader = (path: string) => Promise<ImageBitmap>;
@@ -174,6 +174,8 @@ export interface ImageOptions {
   orm: boolean;
   /** Which maps (all when not given). */
   roles?: OutputRole[];
+  /** Map-only presets omit the CocoaWorlds material manifest. */
+  includeManifest?: boolean;
 }
 
 const EMPTY: MatGraph = { format: 'cocoaworlds.material', version: 1, nodes: [], links: [] };
@@ -219,10 +221,12 @@ export async function imageFiles(m: MaterialDef, opts: ImageOptions, src: Parame
     }
     files.push({ name: `${stem}_orm.png`, bytes: await mapPng('orm', px, n) });
   }
-  const manifest = manifestOf(m, g ?? EMPTY, { generator: `CocoaWorlds ${window.cocoa?.versions.app ?? ''}`.trim() });
-  manifest.normalGreen = opts.green;
-  manifest.evaluation.size = n;
-  files.push({ name: `${stem}.material.json`, bytes: new TextEncoder().encode(`${JSON.stringify(manifest, null, 2)}\n`) });
+  if (opts.includeManifest !== false) {
+    const manifest = manifestOf(m, g ?? EMPTY, { generator: `CocoaWorlds ${window.cocoa?.versions.app ?? ''}`.trim() });
+    manifest.normalGreen = opts.green;
+    manifest.evaluation.size = n;
+    files.push({ name: `${stem}.material.json`, bytes: new TextEncoder().encode(`${JSON.stringify(manifest, null, 2)}\n`) });
+  }
   return files;
 }
 
@@ -240,10 +244,10 @@ export async function exportImages(ms: MaterialDef[], opts: ImageOptions): Promi
   return w.value;
 }
 
-/** Layer names in a PSD, top first: the colour on top, then the rest in the usual order. */
-const PSD_NAMES: Partial<Record<OutputRole, string>> = { color: 'Base colour', normal: 'Normal', roughness: 'Roughness', metalness: 'Metalness', height: 'Height', occlusion: 'Ambient occlusion', glow: 'Glow', opacity: 'Opacity', wearColor: 'Wear colour', wearRoughness: 'Wear roughness', wearMetal: 'Wear metalness', wearNoise: 'Wear noise' };
+/** Layer names in a PSD, top first: the color on top, then the rest in the usual order. */
+const PSD_NAMES: Partial<Record<OutputRole, string>> = { color: 'Base color', normal: 'Normal', roughness: 'Roughness', metalness: 'Metalness', height: 'Height', occlusion: 'Ambient occlusion', glow: 'Glow', opacity: 'Opacity', wearColor: 'Wear color', wearRoughness: 'Wear roughness', wearMetal: 'Wear metalness', wearNoise: 'Wear noise' };
 
-/** One material as a layered `.psd`: each map is a visible layer, base colour on top. */
+/** One material as a layered `.psd`: each map is a visible layer, base color on top. */
 export async function psdFile(m: MaterialDef, opts: ImageOptions): Promise<{ name: string; bytes: Uint8Array }> {
   const n = opts.size;
   const maps = await mapsOf(m, n);
