@@ -340,11 +340,11 @@ outColor = vec4(vec3(smoothstep(m - c, m + c, v)), 1.);`,
   {
     type: 'color',
     group: 'make',
-    label: l('Colour', 'Цвет'),
+    label: l('Color', 'Цвет'),
     hint: l('One flat color.', 'Один ровный цвет.'),
     inputs: [],
     output: 'color',
-    params: [{ id: 'color', label: l('Colour', 'Цвет'), kind: 'color', default: '#b08c64' }],
+    params: [{ id: 'color', label: l('Color', 'Цвет'), kind: 'color', default: '#b08c64' }],
     glsl: 'outColor = vec4(p_color, 1.);',
   },
   {
@@ -888,11 +888,11 @@ outColor = vec4(clamp(hsv2rgb(h) + p_lightness, 0., 1.), 1.);`,
   {
     type: 'tint',
     group: 'colour',
-    label: l('Colorise', 'Окрасить'),
+    label: l('Colorize', 'Окрасить'),
     hint: l('Tint a picture with one color.', 'Окрасить картинку одним цветом.'),
     inputs: [IN_GREY('in', l('In', 'Вход'), [1, 1, 1])],
     output: 'color',
-    params: [{ id: 'color', label: l('Colour', 'Цвет'), kind: 'color', default: '#c08040' }],
+    params: [{ id: 'color', label: l('Color', 'Цвет'), kind: 'color', default: '#c08040' }],
     glsl: 'outColor = vec4(p_color * inG_in(uv), 1.);',
   },
 
@@ -1393,7 +1393,7 @@ outColor = vec4(vec3(clamp(r, 0., 1.)), 1.);`,
     params: [
       { id: 'offset', label: l('Top raised by', 'Поднять верхний на'), kind: 'number', min: -1, max: 1, default: 0 },
       { id: 'contrast', label: l('Hardness', 'Резкость'), kind: 'number', min: 0, max: 1, default: 0.85 },
-      { id: 'out', label: l('Gives', 'Выдаёт'), kind: 'choice', options: [opt('colour', 'Colour', 'Цвет'), opt('height', 'Height', 'Высоту'), opt('mask', 'Mask', 'Маску')], default: 'colour' },
+      { id: 'out', label: l('Gives', 'Выдаёт'), kind: 'choice', options: [opt('colour', 'Color', 'Цвет'), opt('height', 'Height', 'Высоту'), opt('mask', 'Mask', 'Маску')], default: 'colour' },
     ],
     glsl: `float ha = inG_heightTop(uv) + p_offset, hb = inG_heightBottom(uv); float w = (1. - p_contrast) * 0.5 + 0.005;
 float m = smoothstep(-w, w, ha - hb);
@@ -1430,7 +1430,7 @@ outColor = vec4(vec3(v), 1.);`,
     inputs: [IN_COLOR()],
     output: 'grey',
     params: [
-      { id: 'color', label: l('Colour', 'Цвет'), kind: 'color', default: '#808080' },
+      { id: 'color', label: l('Color', 'Цвет'), kind: 'color', default: '#808080' },
       { id: 'tolerance', label: l('Tolerance', 'Допуск'), kind: 'number', min: 0, max: 1, default: 0.2 },
       { id: 'softness', label: l('Softness', 'Мягкость'), kind: 'number', min: 0, max: 1, default: 0.2 },
     ],
@@ -2545,7 +2545,7 @@ outColor = vec4(vec3((1. - smoothstep(p_range, p_range + p_softness + 0.001, d))
   },
 
   // ── Outputs ──
-  output('outColor', 'color', 'color', 'Colour', 'Цвет', 'The material’s color.', 'Цвет материала.', [0.7, 0.7, 0.7]),
+  output('outColor', 'color', 'color', 'Color', 'Цвет', 'The material’s color.', 'Цвет материала.', [0.7, 0.7, 0.7]),
   output('outHeight', 'height', 'grey', 'Height', 'Высота', 'How high each spot is (white high): bumps when there is no normal map.', 'Высота каждой точки (белое — выше): рельеф, если нет карты нормалей.', [0.5, 0.5, 0.5]),
   output('outNormal', 'normal', 'color', 'Normal', 'Нормали', 'Bumps for lighting (from Height to normal).', 'Рельеф для освещения (из «Высота в нормали»).', [0.5, 0.5, 1]),
   output('outRoughness', 'roughness', 'grey', 'Roughness', 'Шероховатость', 'White is matte, black mirror-smooth.', 'Белое — матовое, чёрное — гладкое как зеркало.', [0.8, 0.8, 0.8]),
@@ -2566,7 +2566,7 @@ export const GROUPS: { id: Group; label: L }[] = [
   { id: 'make', label: l('Make', 'Создать') },
   { id: 'change', label: l('Change', 'Изменить') },
   { id: 'combine', label: l('Combine', 'Совместить') },
-  { id: 'colour', label: l('Colour', 'Цвет') },
+  { id: 'colour', label: l('Color', 'Цвет') },
   { id: 'surface', label: l('Surface', 'Поверхность') },
   { id: 'materialize', label: l('Materialize') },
   { id: 'output', label: l('Outputs', 'Выходы') },
