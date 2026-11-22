@@ -213,7 +213,7 @@ function SceneSettings() {
       </Fold>
       <Fold id="light" title={t('insp.lighting')}>
         <Field label={t('insp.ambient')}>
-          <ColorField label={t('insp.ambient')} value={cur.ambientColor} onChange={(v) => set({ ambientColor: v }, 'Ambient colour', 'scene-ambient')} />
+          <ColorField label={t('insp.ambient')} value={cur.ambientColor} onChange={(v) => set({ ambientColor: v }, 'Ambient color', 'scene-ambient')} />
         </Field>
         <Field label={t('insp.ambientStrength')}>
           {num(t('insp.ambientStrength'), cur.ambientIntensity, 0.05, (v) => set({ ambientIntensity: Math.max(0, v) }, 'Ambient strength', 'scene-ambient-i'))}
@@ -280,7 +280,7 @@ function SceneSettings() {
               </>
             )}
             <Field label={t('insp.distortion')}>{num(t('insp.distortion'), lens.distortion, 0.05, (v) => setLens({ distortion: Math.max(-1, Math.min(1, v)) }, 'Lens distortion', 'scene-lens-d'))}</Field>
-            <Field label={t('insp.aberration')}>{num(t('insp.aberration'), lens.aberration, 0.05, (v) => setLens({ aberration: unit(v) }, 'Colour fringes', 'scene-lens-a'))}</Field>
+            <Field label={t('insp.aberration')}>{num(t('insp.aberration'), lens.aberration, 0.05, (v) => setLens({ aberration: unit(v) }, 'Color fringes', 'scene-lens-a'))}</Field>
             <Field label={t('insp.vignette')}>{num(t('insp.vignette'), lens.vignette, 0.05, (v) => setLens({ vignette: unit(v) }, 'Vignette', 'scene-lens-v'))}</Field>
             {lens.vignette > 0 && (
               <Field label={t('insp.vignetteSoftness')}>{num(t('insp.vignetteSoftness'), lens.vignetteSoftness, 0.05, (v) => setLens({ vignetteSoftness: unit(v) }, 'Vignette softness', 'scene-lens-vs'))}</Field>
@@ -292,7 +292,7 @@ function SceneSettings() {
                 <Field label={t('insp.grainSize')}>{num(t('insp.grainSize'), lens.grainSize, 1, (v) => setLens({ grainSize: Math.max(1, Math.min(8, Math.round(v))) }, 'Grain size', 'scene-lens-gs'), 'px')}</Field>
                 <Field label={t('insp.grainSpeed')}>{num(t('insp.grainSpeed'), lens.grainSpeed, 1, (v) => setLens({ grainSpeed: Math.max(0, Math.min(60, v)) }, 'Grain changes', 'scene-lens-gv'), '/s')}</Field>
                 <Field label={t('insp.grainColor')}>
-                  <Switch label={t('insp.grainColor')} checked={lens.grainColor} onChange={(v) => setLens({ grainColor: v }, v ? 'Colour grain' : 'Grey grain')} />
+                  <Switch label={t('insp.grainColor')} checked={lens.grainColor} onChange={(v) => setLens({ grainColor: v }, v ? 'Color grain' : 'Grey grain')} />
                 </Field>
                 <Field label={t('insp.grainShadows')}>{num(t('insp.grainShadows'), lens.grainShadows, 0.05, (v) => setLens({ grainShadows: unit(v) }, 'Grain in shadows', 'scene-lens-gd'))}</Field>
               </>
@@ -338,7 +338,7 @@ function SceneSettings() {
           <>
             {!(sky.enabled && sky.lightFromSky) && (
               <Field label={t('insp.fogColor')}>
-                <ColorField label={t('insp.fogColor')} value={cur.fog.color} onChange={(v) => set({ fog: { ...cur.fog, color: v } }, 'Fog colour', 'scene-fog-c')} />
+                <ColorField label={t('insp.fogColor')} value={cur.fog.color} onChange={(v) => set({ fog: { ...cur.fog, color: v } }, 'Fog color', 'scene-fog-c')} />
               </Field>
             )}
             <Field label={t('insp.fogNear')}>{num(t('insp.fogNear'), cur.fog.near, 64, (v) => set({ fog: { ...cur.fog, near: Math.max(0, v) } }, 'Fog', 'scene-fog-n'), 'u')}</Field>
@@ -429,7 +429,7 @@ function BuildingLooks() {
       <p className="cw-hint">{t('insp.buildingLooksHint')}</p>
       {sections.map((sec) => (
         <Field key={sec} label={sec}>
-          <MaterialSelect label={sec} value={looks[sec] ?? ''} onChange={(m) => set(sec, m)} none={t('insp.flatColour')} />
+          <MaterialSelect label={sec} value={looks[sec] ?? ''} onChange={(m) => set(sec, m)} none={t('insp.flatColor')} />
         </Field>
       ))}
     </>
