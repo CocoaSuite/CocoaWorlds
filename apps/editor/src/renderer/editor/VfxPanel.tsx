@@ -400,7 +400,7 @@ function GradientField({ label, value, onChange }: { label: string; value: VfxGr
           <span className="cw-vfx-stop">
             <ColorField label={`${label} ${i + 1}`} value={s.colour} onChange={(v) => set(i, { colour: v })} />
             <NumberField label="%" ariaLabel={`${label} ${i + 1} ${L('at', 'на')}`} step={5} value={Math.round(s.t * 100)} onChange={(v) => set(i, { t: clamp(v, 0, 100) / 100 })} onCommit={(v) => set(i, { t: clamp(v, 0, 100) / 100 })} />
-            <button type="button" className="cw-vfx-x" disabled={stops.length < 2} aria-label={L(`Remove colour ${i + 1}`, `Убрать цвет ${i + 1}`)} onClick={() => onChange(stops.filter((_, j) => j !== i))}>
+            <button type="button" className="cw-vfx-x" disabled={stops.length < 2} aria-label={L(`Remove color ${i + 1}`, `Убрать цвет ${i + 1}`)} onClick={() => onChange(stops.filter((_, j) => j !== i))}>
               ×
             </button>
           </span>
@@ -409,7 +409,7 @@ function GradientField({ label, value, onChange }: { label: string; value: VfxGr
       {stops.length < 6 && (
         <Row label="">
           <Button size="sm" onClick={() => onChange([...stops, { t: 1, colour: stops[stops.length - 1]?.colour ?? '#ffffff' }])}>
-            + {L('Colour', 'Цвет')}
+            + {L('Color', 'Цвет')}
           </Button>
         </Row>
       )}
@@ -448,7 +448,7 @@ function EmitterProps({ e, editLayer }: { e: VfxEmitter; editLayer: EditLayer })
       <CurveField label={L('Size', 'Размер')} max={3} value={e.sizeOverLife} onChange={(v) => ed((x) => void (x.sizeOverLife = v), 'sizeCurve')} />
       <CurveField label={L('Speed', 'Скорость')} max={3} value={e.speedOverLife} onChange={(v) => ed((x) => void (x.speedOverLife = v), 'speedCurve')} />
       <CurveField label={L('Opacity', 'Непрозрачность')} value={e.opacityOverLife} onChange={(v) => ed((x) => void (x.opacityOverLife = v), 'opCurve')} />
-      <GradientField label={L('Colour', 'Цвет')} value={e.colourOverLife} onChange={(v) => ed((x) => void (x.colourOverLife = v), 'grad')} />
+      <GradientField label={L('Color', 'Цвет')} value={e.colourOverLife} onChange={(v) => ed((x) => void (x.colourOverLife = v), 'grad')} />
       <div className="cw-muted cw-hint">{L('Curves: drag a point, click to add one, double-click one to remove it. Left is when a particle is born, right when it dies.', 'Кривые: тяните точку, щелчок — добавить, двойной щелчок — убрать. Слева — рождение частицы, справа — исчезновение.')}</div>
     </>
   );
@@ -491,8 +491,8 @@ function ShapeProps({ s, k, keyIndex, setKeyIndex, editLayer, tr }: { s: VfxShap
         <>
           <Num label={L('Time', 'Время')} unit="s" step={0.05} min={0} max={s.duration} value={k.t} onChange={(v) => edKey((x) => void (x.t = v), 't')} />
           <Num label={L('Size', 'Размер')} unit="u" step={1} min={0} value={k.size} onChange={(v) => edKey((x) => void (x.size = v), 'size')} />
-          <Row label={L('Colour', 'Цвет')}>
-            <ColorField label={L('Key colour', 'Цвет ключа')} value={k.colour} onChange={(v) => edKey((x) => void (x.colour = v), 'col')} />
+          <Row label={L('Color', 'Цвет')}>
+            <ColorField label={L('Key color', 'Цвет ключа')} value={k.colour} onChange={(v) => edKey((x) => void (x.colour = v), 'col')} />
           </Row>
           <Num label={L('Opacity', 'Непрозрачность')} step={0.05} min={0} max={1} value={k.opacity} onChange={(v) => edKey((x) => void (x.opacity = v), 'op')} />
           <Num label={L('Rotation', 'Поворот')} unit="°" step={5} value={k.rotation} onChange={(v) => edKey((x) => void (x.rotation = v), 'rot')} />
