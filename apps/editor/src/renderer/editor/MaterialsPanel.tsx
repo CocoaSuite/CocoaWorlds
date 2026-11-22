@@ -33,7 +33,7 @@ function unique(base: string, taken: Iterable<string>): string {
   return `${base} ${i}`;
 }
 
-// Dragging a slider or a colour is one undo step: changes with the same key join until it rests a moment.
+// Dragging a slider or a color is one undo step: changes with the same key join until it rests a moment.
 let gesture: { key: string; timer: ReturnType<typeof setTimeout> } | null = null;
 function endGesture(): void {
   if (!gesture) return;
@@ -80,7 +80,7 @@ export function MaterialsPanel() {
   const [extra, setExtra] = useState<string[]>([]);
   const picks = mat ? [mat, ...list.filter((m) => m.id !== mat.id && extra.includes(m.id))] : [];
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
-  const [imagesFor, setImagesFor] = useState<MaterialDef[] | null>(null);
+  const [imagesFor, setImagesFor] = useState<{ materials: MaterialDef[]; preset: 'custom' | 'roblox' } | null>(null);
   const clickItem = (e: React.MouseEvent, id: string) => {
     if (e.ctrlKey || e.metaKey) {
       if (id !== mat?.id) setExtra((x) => (x.includes(id) ? x.filter((y) => y !== id) : [...x, id]));
@@ -322,8 +322,8 @@ export function MaterialsPanel() {
         <p className="cw-muted cw-screens-hint">{t('mat.hint')}</p>
       </aside>
       )}
-      {menu && <ContextMenu x={menu.x} y={menu.y} items={exportItems(picks, () => setImagesFor(picks))} onClose={() => setMenu(null)} />}
-      {imagesFor && <ImagesDialog ms={imagesFor} onClose={() => setImagesFor(null)} />}
+      {menu && <ContextMenu x={menu.x} y={menu.y} items={exportItems(picks, () => setImagesFor({ materials: picks, preset: 'custom' }), () => setImagesFor({ materials: picks, preset: 'roblox' }))} onClose={() => setMenu(null)} />}
+      {imagesFor && <ImagesDialog key={imagesFor.preset} ms={imagesFor.materials} preset={imagesFor.preset} onClose={() => setImagesFor(null)} />}
 
       {mat?.graph ? (
         <GraphWorkspace
@@ -587,7 +587,7 @@ function MaterialProps({
         />
       </Row>
       <Row label={t('mat.color')}>
-        <ColorField label={t('mat.color')} value={m.color} onChange={(v) => edit({ color: v }, 'Material colour', `mat-color-${m.id}`)} />
+        <ColorField label={t('mat.color')} value={m.color} onChange={(v) => edit({ color: v }, 'Material color', `mat-color-${m.id}`)} />
       </Row>
       <Row label={t('mat.image')}>
         <ImagePick label={t('mat.image')} value={m.map} textures={textures} onChange={(v) => edit({ map: v, color: v && !m.map && m.color === '#b4b4b4' ? '#ffffff' : m.color }, 'Material image')} />
@@ -645,7 +645,7 @@ function MaterialProps({
             <ImagePick label={t('mat.glowMap')} value={m.glowMap} textures={textures} onChange={(v) => edit({ glowMap: v }, 'Glow image')} />
           </Row>
           <Row label={t('mat.glowColor')}>
-            <ColorField label={t('mat.glowColor')} value={m.emissive!} onChange={(v) => edit({ emissive: v }, 'Glow colour', `mat-glow-${m.id}`)} />
+            <ColorField label={t('mat.glowColor')} value={m.emissive!} onChange={(v) => edit({ emissive: v }, 'Glow color', `mat-glow-${m.id}`)} />
           </Row>
           <BarSlider label={t('mat.glowStrength')} value={m.emissiveStrength ?? 1} max={10} step={0.1} onChange={(v) => edit({ emissiveStrength: v }, 'Glow strength', `mat-glow-i-${m.id}`)} />
         </>
@@ -999,7 +999,7 @@ export function WearSettings({ m, edit }: { m: MaterialDef; edit: (patch: Partia
           <BarSlider label={t('wear.width')} value={w.width} min={0.5} max={32} step={0.5} onChange={(v) => set({ width: v }, 'Wear width', 'width')} />
           <BarSlider label={t('wear.noise')} value={w.noise} onChange={(v) => set({ noise: v }, 'Wear noise', 'noise')} />
           <Row label={t('wear.color')}>
-            <ColorField label={t('wear.color')} value={w.color} onChange={(v) => set({ color: v }, 'Wear colour', 'color')} />
+            <ColorField label={t('wear.color')} value={w.color} onChange={(v) => set({ color: v }, 'Wear color', 'color')} />
           </Row>
           <BarSlider label={t('wear.roughness')} value={w.roughness} onChange={(v) => set({ roughness: v }, 'Wear roughness', 'rough')} />
           <BarSlider label={t('wear.metalness')} value={w.metalness} onChange={(v) => set({ metalness: v }, 'Wear metal', 'metal')} />
