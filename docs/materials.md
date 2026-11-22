@@ -23,18 +23,18 @@ an image shows at the size it will have in the level.
 | Setting | What it does |
 |---|---|
 | Name | What it is called in the lists. Faces refer to the material by an id that never changes, so renaming is safe. |
-| Colour | The colour, or the tint of the image (white leaves the image as it is). |
+| Color | The color, or the tint of the image (white leaves the image as it is). |
 | Image | A project texture drawn on the faces. **Image size** stretches it (2 = twice as big). |
 | Cut out see-through pixels | Pixels under half opacity become holes (fences, grilles, leaves). On by default. |
 | Bumps | A normal map that gives the surface bumps under light, with **Bump strength** (0–2). |
 | Roughness | 0 is mirror-smooth, 1 is matte. |
-| Metal | 0 for plastic, wood or stone; 1 for metal. Metal and polished materials reflect the scene's sky colours (or its ambient colour when there is no sky). |
+| Metal | 0 for plastic, wood or stone; 1 for metal. Metal and polished materials reflect the scene's sky colors (or its ambient color when there is no sky). |
 | Opacity | 1 is solid; lower is see-through (glass, water). |
-| Glows | A glow colour and strength. It lights the surface itself, even in the dark; it does not light other things (use a Light for that). With an image, the glow follows the image's pattern. |
+| Glows | A glow color and strength. It lights the surface itself, even in the dark; it does not light other things (use a Light for that). With an image, the glow follows the image's pattern. |
 | Seen from both sides | For thin things such as leaves and flags. |
 | Scroll | Moves the image across the faces, in units a second: water, lava, conveyor belts. |
 
-Changes from a slider or colour drag are one undo step. Undo and redo (Ctrl+Z, Ctrl+Y) work in the Materials
+Changes from a slider or color drag are one undo step. Undo and redo (Ctrl+Z, Ctrl+Y) work in the Materials
 workspace, as in the scene. Materials are saved to the project file a moment after each change, and before
 saving the scene or exporting a game.
 
@@ -43,7 +43,7 @@ saving the scene or exporting a game.
 The **Assets** tab under the 3D view shows every material as a sphere among the project's other assets. Click
 one to paint faces with it, or double-click it to open it here.
 
-Project materials appear in the Face tool's and the Paint tool's material pickers, after the built-in colours
+Project materials appear in the Face tool's and the Paint tool's material pickers, after the built-in colors
 and before the plain images. The workspace also has:
 
 - **Use on picked faces**: puts the material on the faces picked with the Face tool.
@@ -74,13 +74,13 @@ bumps included.
 **Wear** gives a material a second look (bare metal under paint, dust, dirt) where it would wear: **On edges**
 that stick out, **In creases** where things meet (the foot of a wall on a floor), and **On top** (surfaces facing
 up). **Width** is how far in from an edge or crease it reaches (up to 32 units); **Broken up** mixes in noise
-so it frays irregularly. The wear's own **colour**, **roughness** and **metal** say what it looks like.
+so it frays irregularly. The wear's own **color**, **roughness** and **metal** say what it looks like.
 
 On brushes the edges are exact: every face carries its distance to its outer edges and to its creases (edges
 where it meets another brush), so a wall's top corners wear and its foot gathers dirt. On models it is an
 estimate from how quickly the surface curves (good for chunky props).
 
-A graph material can make the wear's look itself with the **Wear colour**, **Wear roughness**, **Wear metal** and
+A graph material can make the wear's look itself with the **Wear color**, **Wear roughness**, **Wear metal** and
 **Wear noise** outputs (baked like the other maps; Wear noise, often a Grunge, decides where the wear frays
 first); its Wear settings still say where the wear goes.
 
@@ -98,7 +98,7 @@ from a small working graph (a stone-like surface) to change.
 - **Add a node** without the library: right-click the graph, press **Space**, or **+ Node**. Type to find one;
   Enter adds the first match where you clicked.
 - **Wire**: drag from a node's output (right) to another node's input (left). An input takes one wire; a new
-  one replaces it. Wires that would loop back are refused. Grey dots carry grey pictures, gold ones colour.
+  one replaces it. Wires that would loop back are refused. Grey dots carry grey pictures, gold ones color.
   The dots can be grabbed (and wires dropped on them) from a little way off.
 - **Unplug**: grab a plugged input and pull its wire off: let go on empty graph to unplug it, or on another
   input to move it there. Alt+click on a wire unplugs it too.
@@ -108,7 +108,7 @@ from a small working graph (a stone-like surface) to change.
   zooms.
 - **Sections**: **+ Section** puts a labelled box behind the picked nodes (or in the middle of the view). Drag
   it by its title and the nodes inside it come along (those whose middle is in the box, and smaller sections
-  inside it). Double-click the title to rename it; the dot on the right changes its colour; picked, its edges
+  inside it). Double-click the title to rename it; the dot on the right changes its color; picked, its edges
   and corners resize it; **Delete** removes it and leaves its nodes. Boxes can be drawn inside a section (only
   its title takes the mouse). Sections are saved in the graph (`sections`) and carried in `.cocoamat` files.
 - **Remove**: pick nodes, wires or sections and press **Delete**.
@@ -137,13 +137,13 @@ The picture goes over **Background** (its second input) by **Cover**, **Lighter*
 
 | Group | Nodes |
 |---|---|
-| Make | Noise (Perlin, value, ridged), Clouds 1 and 2, Perlin noise, Plasma, Crystal 1 and 2, Fractal sum 1 to 4, B&W spots 1 to 4 (with **Brightness**), Billows, Warped noise, Fibers (soft or ridged, stretched one way), Static (white noise), Crystals, Rings and ripples, Truchet (arcs or maze diagonals), Herringbone, Scales, Tread plate, Studs and rivets, Caustics, Sand ripples, Triangles, Interference, Spiral, Colour cells, Cells, Bricks and tiles, Shape (circle, square, polygon, star), Gradient, Checker, Scratches, Grunge (blotches, streaks, speckles, rust), Image (a project texture), Colour, Number, Waves and stripes, Hexagons, Weave, Planks, Wood grain, Cobblestones, Cracks, Marble, Blobs, Speckles, Scatter (copies of a picture, varied size, turn and brightness; Keep apart for no overlaps), Zigzag |
-| Change | Levels, Curve, Invert, Clamp, Blur, Warp, Slope blur (blur, darkest, lightest), Directional warp (shift or flow along one direction by an intensity), Flood fill (each white shape of a mask its own random grey, colour, gradient, position or size), Distance, Transform (repeat, slide, quarter turns), Edge detect, Sharpen, Posterize, Threshold, Brightness and contrast (and gamma), Mirror, Pixelate, Swirl, Outline, Directional blur, Light from height, Free transform (placed by hand, see above), Tile shuffle (random turns and flips per piece), Halftone, High pass, Grow or shrink, Ripple, Stagger rows |
-| Combine | Blend (mix, add, subtract, multiply, screen, overlay, lighter, darker, difference, through a mask), Switch, Math (+ − × ÷, min, max, power, difference, average), Height blend (colour, height or mask), Combine channels, Pick channel, Colour to mask, Pick per cell (one of up to four pictures per cell or square) |
-| Colour | Gradient map, Hue / saturation / lightness, Colourise, Replace colour, Desaturate, Colour variation, Warm or cool, Colour balance (shadows, mid-tones, highlights), Rainbow palette |
+| Make | Noise (Perlin, value, ridged), Clouds 1 and 2, Perlin noise, Plasma, Crystal 1 and 2, Fractal sum 1 to 4, B&W spots 1 to 4 (with **Brightness**), Billows, Warped noise, Fibers (soft or ridged, stretched one way), Static (white noise), Crystals, Rings and ripples, Truchet (arcs or maze diagonals), Herringbone, Scales, Tread plate, Studs and rivets, Caustics, Sand ripples, Triangles, Interference, Spiral, Color cells, Cells, Bricks and tiles, Shape (circle, square, polygon, star), Gradient, Checker, Scratches, Grunge (blotches, streaks, speckles, rust), Image (a project texture), Color, Number, Waves and stripes, Hexagons, Weave, Planks, Wood grain, Cobblestones, Cracks, Marble, Blobs, Speckles, Scatter (copies of a picture, varied size, turn and brightness; Keep apart for no overlaps), Zigzag |
+| Change | Levels, Curve, Invert, Clamp, Blur, Warp, Slope blur (blur, darkest, lightest), Directional warp (shift or flow along one direction by an intensity), Flood fill (each white shape of a mask its own random grey, color, gradient, position or size), Distance, Transform (repeat, slide, quarter turns), Edge detect, Sharpen, Posterize, Threshold, Brightness and contrast (and gamma), Mirror, Pixelate, Swirl, Outline, Directional blur, Light from height, Free transform (placed by hand, see above), Tile shuffle (random turns and flips per piece), Halftone, High pass, Grow or shrink, Ripple, Stagger rows |
+| Combine | Blend (mix, add, subtract, multiply, screen, overlay, lighter, darker, difference, through a mask), Switch, Math (+ − × ÷, min, max, power, difference, average), Height blend (color, height or mask), Combine channels, Pick channel, Color to mask, Pick per cell (one of up to four pictures per cell or square) |
+| Color | Gradient map, Hue / saturation / lightness, Colorize, Replace color, Desaturate, Color variation, Warm or cool, Color balance (shadows, mid-tones, highlights), Rainbow palette |
 | Surface | Height to normal, Height to occlusion, Height to curvature, Combine normals, Adjust normals (strength, flip green), Edge wear, Dirt, Drips and streaks, Puddles, Settles on top (snow, dust, moss), Slope mask |
-| Materialize | Photo to colour (takes out broad light and shadow), Photo to height (fine, medium and large detail), Photo to normal, Photo to roughness, Photo to occlusion, Photo to metal (by the metal's colour). Each reads a flat photo, such as an Image node of a brick wall, and makes one map: wire each into its output to turn the photo into a full material. **Dark is high** flips which parts count as raised |
-| Outputs | Colour, Height, Normal, Roughness, Metal, Occlusion, Glow, Opacity |
+| Materialize | Photo to color (takes out broad light and shadow), Photo to height (fine, medium and large detail), Photo to normal, Photo to roughness, Photo to occlusion, Photo to metal (by the metal's color). Each reads a flat photo, such as an Image node of a brick wall, and makes one map: wire each into its output to turn the photo into a full material. **Dark is high** flips which parts count as raised |
+| Outputs | Color, Height, Normal, Roughness, Metal, Occlusion, Glow, Opacity |
 
 Everything tiles: the patterns repeat over their square, so the material never shows a seam. Random nodes
 have a **Seed**; **New** picks another random pattern of the same kind.
@@ -188,6 +188,10 @@ cut-out off).
 - **Images (PNG)…** (any material): its maps as `<name>_<role>.png` plus `<name>.material.json`, at 256–2048
   (4096 where the card allows), with the normal map's green down (CocoaWorlds, DirectX) or up (OpenGL, Blender),
   occlusion, roughness and metal packed into `<name>_orm.png` if wanted, and a choice of maps.
+- **Export to Roblox…** (any material): a PNG-only preset for Roblox SurfaceAppearance. Exports only available
+  color, normal, roughness and metalness maps, as separate `<name>_<role>.png` files. Normal maps use OpenGL
+  (Y-up) convention; no ORM map, height/occlusion/glow/opacity map, or CocoaWorlds `.material.json` is written.
+  If a material does not have one of those four maps, that map is omitted.
 
 **Import…** makes graph materials from `.cocoamat` files: the graph goes in `materials/`, its images in
 `assets/textures/`, its parameter values become the material's own settings, and it bakes. A file using nodes
@@ -208,7 +212,7 @@ Exported games carry the baked images, not the graphs.
 ## Glass and glow images
 
 - **Glass (see-through)**: how much light passes through; **Bending** (index of refraction) and **Thickness** set how
-  much what's behind is bent, by the surface's normals (a normal map makes it ripple). Colour tints it, roughness
+  much what's behind is bent, by the surface's normals (a normal map makes it ripple). Color tints it, roughness
   frosts it. Project materials are physical materials for this (no cost when glass is off). Glass casts no shadow,
   in the editor and in Play: light goes through it (`viewport/glass-shadows.ts` leaves it out of the shadow pass).
-- **Glow image** (under Glows): where it glows, tinted by the glow colour.
+- **Glow image** (under Glows): where it glows, tinted by the glow color.
