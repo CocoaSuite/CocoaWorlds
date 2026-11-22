@@ -218,9 +218,9 @@ export function PlantsPanel() {
               )}
             </>
           )}
-          {colour('colour', L('Root colour', 'Цвет у корня'))}
-          {colour('tipColour', L('Tip colour', 'Цвет кончиков'))}
-          {p.form === 'tree' && colour('trunkColour', L('Trunk colour', 'Цвет ствола'))}
+          {colour('colour', L('Root color', 'Цвет у корня'))}
+          {colour('tipColour', L('Tip color', 'Цвет кончиков'))}
+          {p.form === 'tree' && colour('trunkColour', L('Trunk color', 'Цвет ствола'))}
           {num('variation', L('Variation', 'Разнообразие'), 0, 1, 0.05, '#')}
           {num('wind', L('Wind sway', 'Качание на ветру'), 0, 3, 0.05, '×', 1)}
           <PRow label={L('Seed', 'Зерно')}>
