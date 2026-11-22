@@ -14,7 +14,7 @@ async function material(page, colour, blend) {
   await page.getByRole('tablist', { name: 'Workspace' }).getByRole('tab', { name: 'Materials' }).click();
   await page.getByRole('button', { name: '+ Material', exact: true }).click();
   const mat = page.getByRole('complementary', { name: 'Material', exact: true });
-  await mat.getByLabel('Colour', { exact: true }).fill(colour);
+  await mat.getByLabel('Color', { exact: true }).fill(colour);
   if (blend) await mat.getByRole('slider', { name: 'Blend into ground (u)' }).fill(String(blend));
   await page.getByRole('button', { name: 'Paint with it' }).click();
 }
