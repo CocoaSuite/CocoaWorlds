@@ -54,6 +54,9 @@ function createWindow(): void {
   win.webContents.on('will-navigate', (e) => e.preventDefault());
 
   win.on('close', (e) => {
+    // E2E projects live in isolated temporary directories; do not block test teardown
+    // with a native save-confirmation dialog. Normal editor sessions still prompt.
+    if (process.env.CW_E2E === '1' && process.env.CW_USER_DATA && process.env.CW_PROJECTS_DIR) return;
     if (!dirty || !win) return;
     e.preventDefault();
     const choice = dialog.showMessageBoxSync(win, {
