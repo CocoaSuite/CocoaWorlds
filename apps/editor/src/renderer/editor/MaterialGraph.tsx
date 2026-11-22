@@ -63,6 +63,12 @@ import { useEditor } from '../store';
 import { BarSlider, ImagePick, MaterialPreview, Row, WearSettings, type Shape } from './MaterialsPanel';
 
 const say = (x: L) => (getLang() === 'ru' ? x.ru : x.en);
+
+/** Search aliases do not change serialized graph node types. */
+const nodeSearchAliases: Record<string, string> = { gradientMap: 'color ramp colour ramp' };
+const matchesNodeSearch = (n: (typeof NODES)[number], query: string): boolean =>
+  !query || [say(n.label), n.label.en, say(n.hint), nodeSearchAliases[n.type] ?? '']
+    .some((text) => text.toLowerCase().includes(query));
 /** The live picture size: the baked size, but no more than 512 while editing. */
 const liveSize = (m: MaterialDef) => Math.min(m.bakeSize ?? 512, 512);
 
@@ -233,7 +239,7 @@ function AddMenu({ at, onPick, onClose }: { at: { x: number; y: number }; onPick
   const [q, setQ] = useState('');
   const [hi, setHi] = useState(0);
   const query = q.trim().toLowerCase();
-  const list = NODES.filter((n) => !n.hidden).filter((n) => !query || say(n.label).toLowerCase().includes(query) || n.label.en.toLowerCase().includes(query) || say(n.hint).toLowerCase().includes(query));
+  const list = NODES.filter((n) => !n.hidden).filter((n) => matchesNodeSearch(n, query));
   const [recent] = useState(recentTypes);
   // In the order shown (so the arrow keys follow what is on screen).
   const sections = [
@@ -390,7 +396,7 @@ function NodeLibrary({ onAdd, onDropAt, onHide, wide }: { onAdd: (type: string) 
   const [shut, setShut] = useState<Set<string>>(new Set());
   const icons = useMemo(() => nodeIcons(), []);
   const query = q.trim().toLowerCase();
-  const match = (n: (typeof NODES)[number]) => !n.hidden && (!query || say(n.label).toLowerCase().includes(query) || n.label.en.toLowerCase().includes(query) || say(n.hint).toLowerCase().includes(query));
+  const match = (n: (typeof NODES)[number]) => !n.hidden && (matchesNodeSearch(n, query));
   return (
     <aside className={`cm-lib${w >= 300 ? ' wide' : ''}`} style={{ width: w }} aria-label={t('cm.library')}>
       <div className="cm-lib-grip" role="separator" aria-orientation="vertical" aria-label={t('cm.resizeLibrary')} onPointerDown={resize} onDoubleClick={() => { setWidth(null); try { localStorage.removeItem('cw-cm-library-w'); } catch { /* storage off */ } }} />
