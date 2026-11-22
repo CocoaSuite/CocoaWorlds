@@ -428,7 +428,7 @@ function ElementProps({
           <Row label={t('ui.rowHeight')}>{num('rowHeight', 'px')}</Row>
           <Row label={t('ui.textSize')}>{num('size', 'px')}</Row>
           <Row label={t('ui.textColor')}>
-            <ColorField label={t('ui.textColor')} value={e.color} onChange={(color) => set({ color }, 'Screen element colour', `ui-${e.id}-color`)} />
+            <ColorField label={t('ui.textColor')} value={e.color} onChange={(color) => set({ color }, 'Screen element color', `ui-${e.id}-color`)} />
           </Row>
         </>
       )}
@@ -440,7 +440,7 @@ function ElementProps({
           <p className="cw-muted cw-screens-note">{t('ui.textHint')}</p>
           <Row label={t('ui.textSize')}>{num('size', 'px')}</Row>
           <Row label={t('ui.textColor')}>
-            <ColorField label={t('ui.textColor')} value={e.color} onChange={(color) => set({ color }, 'Screen element colour', `ui-${e.id}-color`)} />
+            <ColorField label={t('ui.textColor')} value={e.color} onChange={(color) => set({ color }, 'Screen element color', `ui-${e.id}-color`)} />
           </Row>
         </>
       )}
@@ -451,7 +451,7 @@ function ElementProps({
               <Switch label={`${t('ui.fill')} on`} checked={!!e.fill} onChange={(on) => set({ fill: on ? '#000000aa' : '' }, 'Screen element background')} />
             )}
             {(e.fill || e.kind === 'bar') && (
-              <ColorField label={e.kind === 'bar' ? t('ui.barColor') : t('ui.fill')} value={(e.fill || '#d94b3d').slice(0, 7)} onChange={(hex) => set({ fill: withAlpha(hex, alpha) }, 'Screen element colour', `ui-${e.id}-fill`)} />
+              <ColorField label={e.kind === 'bar' ? t('ui.barColor') : t('ui.fill')} value={(e.fill || '#d94b3d').slice(0, 7)} onChange={(hex) => set({ fill: withAlpha(hex, alpha) }, 'Screen element color', `ui-${e.id}-fill`)} />
             )}
           </span>
         </Row>
