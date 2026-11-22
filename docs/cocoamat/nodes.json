@@ -802,11 +802,11 @@
       "type": "color",
       "group": "make",
       "label": {
-        "en": "Colour",
+        "en": "Color",
         "ru": "Цвет"
       },
       "hint": {
-        "en": "One flat colour.",
+        "en": "One flat color.",
         "ru": "Один ровный цвет."
       },
       "inputs": [],
@@ -816,7 +816,7 @@
           "id": "color",
           "kind": "color",
           "label": {
-            "en": "Colour",
+            "en": "Color",
             "ru": "Цвет"
           },
           "default": "#b08c64"
@@ -1565,7 +1565,7 @@
         "ru": "Заливка областей"
       },
       "hint": {
-        "en": "Give each separate white shape of a mask (each brick, tile, plank) its own value: a random grey or colour, a gradient across it, or where it is.",
+        "en": "Give each separate white shape of a mask (each brick, tile, plank) its own value: a random grey or color, a gradient across it, or where it is.",
         "ru": "Дать каждой отдельной белой фигуре маски (кирпичу, плитке, доске) своё значение: случайный серый или цвет, градиент по ней или её положение. Точно для прямоугольных фигур."
       },
       "inputs": [
@@ -1604,7 +1604,7 @@
             {
               "value": "colour",
               "label": {
-                "en": "Random colour",
+                "en": "Random color",
                 "ru": "Случайный цвет"
               }
             },
@@ -2408,7 +2408,7 @@
         "ru": "Карта градиента"
       },
       "hint": {
-        "en": "Colour a grey picture: black takes the left colour, white the right.",
+        "en": "Color a grey picture: black takes the left color, white the right.",
         "ru": "Раскрасить серую картинку: чёрное берёт левый цвет, белое — правый."
       },
       "inputs": [
@@ -2432,7 +2432,7 @@
           "id": "ramp",
           "kind": "ramp",
           "label": {
-            "en": "Colours",
+            "en": "Colors",
             "ru": "Цвета"
           },
           "default": [
@@ -2458,7 +2458,7 @@
         "ru": "Тон, насыщенность, яркость"
       },
       "hint": {
-        "en": "Shift the colours round the wheel, make them stronger or greyer, lighter or darker.",
+        "en": "Shift the colors round the wheel, make them stronger or greyer, lighter or darker.",
         "ru": "Сдвинуть цвета по кругу, сделать насыщеннее или серее, светлее или темнее."
       },
       "inputs": [
@@ -2520,11 +2520,11 @@
       "type": "tint",
       "group": "colour",
       "label": {
-        "en": "Colourise",
+        "en": "Colorize",
         "ru": "Окрасить"
       },
       "hint": {
-        "en": "Tint a picture with one colour.",
+        "en": "Tint a picture with one color.",
         "ru": "Окрасить картинку одним цветом."
       },
       "inputs": [
@@ -2548,7 +2548,7 @@
           "id": "color",
           "kind": "color",
           "label": {
-            "en": "Colour",
+            "en": "Color",
             "ru": "Цвет"
           },
           "default": "#c08040"
@@ -4361,7 +4361,7 @@
           "id": "top",
           "kind": "color",
           "label": {
-            "en": "Top colour",
+            "en": "Top color",
             "ru": "Верхний цвет"
           },
           "fallback": [
@@ -4387,7 +4387,7 @@
           "id": "bottom",
           "kind": "color",
           "label": {
-            "en": "Bottom colour",
+            "en": "Bottom color",
             "ru": "Нижний цвет"
           },
           "fallback": [
@@ -4446,7 +4446,7 @@
             {
               "value": "colour",
               "label": {
-                "en": "Colour",
+                "en": "Color",
                 "ru": "Цвет"
               }
             },
@@ -4478,7 +4478,7 @@
         "ru": "Собрать каналы"
       },
       "hint": {
-        "en": "Make a colour from three greys as its red, green and blue.",
+        "en": "Make a color from three greys as its red, green and blue.",
         "ru": "Собрать цвет из трёх серых как красный, зелёный и синий."
       },
       "inputs": [
@@ -4535,7 +4535,7 @@
         "ru": "Взять канал"
       },
       "hint": {
-        "en": "One channel of a colour as grey: red, green, blue, or brightness.",
+        "en": "One channel of a color as grey: red, green, blue, or brightness.",
         "ru": "Один канал цвета как серое: красный, зелёный, синий или яркость."
       },
       "inputs": [
@@ -4602,11 +4602,11 @@
       "type": "colorSelect",
       "group": "combine",
       "label": {
-        "en": "Colour to mask",
+        "en": "Color to mask",
         "ru": "Цвет в маску"
       },
       "hint": {
-        "en": "White where the picture is close to a colour: pick out one part to treat differently.",
+        "en": "White where the picture is close to a color: pick out one part to treat differently.",
         "ru": "Белое там, где картинка близка к цвету: выделить часть, чтобы обработать отдельно."
       },
       "inputs": [
@@ -4630,7 +4630,7 @@
           "id": "color",
           "kind": "color",
           "label": {
-            "en": "Colour",
+            "en": "Color",
             "ru": "Цвет"
           },
           "default": "#808080"
@@ -4665,11 +4665,11 @@
       "type": "replaceColor",
       "group": "colour",
       "label": {
-        "en": "Replace colour",
+        "en": "Replace color",
         "ru": "Заменить цвет"
       },
       "hint": {
-        "en": "Swap one colour for another (and its near shades).",
+        "en": "Swap one color for another (and its near shades).",
         "ru": "Заменить один цвет другим (и близкие оттенки)."
       },
       "inputs": [
@@ -4741,7 +4741,7 @@
         "ru": "Обесцветить"
       },
       "hint": {
-        "en": "Take the colour out, partly or fully.",
+        "en": "Take the color out, partly or fully.",
         "ru": "Убрать цвет, частично или полностью."
       },
       "inputs": [
@@ -4780,11 +4780,11 @@
       "type": "colorVariation",
       "group": "colour",
       "label": {
-        "en": "Colour variation",
+        "en": "Color variation",
         "ru": "Разнообразие цвета"
       },
       "hint": {
-        "en": "Break up a flat colour with large, soft shifts in brightness and hue.",
+        "en": "Break up a flat color with large, soft shifts in brightness and hue.",
         "ru": "Оживить ровный цвет крупными мягкими сдвигами яркости и тона."
       },
       "inputs": [
@@ -4858,7 +4858,7 @@
         "ru": "Теплее или холоднее"
       },
       "hint": {
-        "en": "Shift the colours warmer (orange) or cooler (blue), and greener or pinker.",
+        "en": "Shift the colors warmer (orange) or cooler (blue), and greener or pinker.",
         "ru": "Сдвинуть цвета теплее (оранжевее) или холоднее (синее), и зеленее или розовее."
       },
       "inputs": [
@@ -6426,11 +6426,11 @@
       "type": "colorCells",
       "group": "make",
       "label": {
-        "en": "Colour cells",
+        "en": "Color cells",
         "ru": "Цветные ячейки"
       },
       "hint": {
-        "en": "Cells (Voronoi) or squares, each a random colour between two colours or of a random hue: mosaics, stained glass, terrazzo.",
+        "en": "Cells (Voronoi) or squares, each a random color between two colors or of a random hue: mosaics, stained glass, terrazzo.",
         "ru": "Ячейки (Вороной) или квадраты, каждая случайного цвета между двумя цветами или случайного оттенка: мозаика, витраж, терраццо."
       },
       "inputs": [],
@@ -6465,7 +6465,7 @@
           "id": "mode",
           "kind": "choice",
           "label": {
-            "en": "Colours",
+            "en": "Colors",
             "ru": "Цвета"
           },
           "default": "between",
@@ -6473,7 +6473,7 @@
             {
               "value": "between",
               "label": {
-                "en": "Between two colours",
+                "en": "Between two colors",
                 "ru": "Между двумя цветами"
               }
             },
@@ -6490,7 +6490,7 @@
           "id": "a",
           "kind": "color",
           "label": {
-            "en": "Colour A",
+            "en": "Color A",
             "ru": "Цвет A"
           },
           "default": "#2f5d8a"
@@ -6499,7 +6499,7 @@
           "id": "b",
           "kind": "color",
           "label": {
-            "en": "Colour B",
+            "en": "Color B",
             "ru": "Цвет B"
           },
           "default": "#d9a441"
@@ -7234,7 +7234,7 @@
       "type": "colorBalance",
       "group": "colour",
       "label": {
-        "en": "Colour balance",
+        "en": "Color balance",
         "ru": "Цветовой баланс"
       },
       "hint": {
@@ -7308,7 +7308,7 @@
         "ru": "Радужная палитра"
       },
       "hint": {
-        "en": "Colour a grey picture by a smooth looping palette: rainbows, oil slicks, heat, sci-fi glows.",
+        "en": "Color a grey picture by a smooth looping palette: rainbows, oil slicks, heat, sci-fi glows.",
         "ru": "Раскрасить серую картинку плавной зацикленной палитрой: радуга, бензиновые разводы, жар, неон."
       },
       "inputs": [
@@ -8864,11 +8864,11 @@
       "type": "matColor",
       "group": "materialize",
       "label": {
-        "en": "Photo to colour",
+        "en": "Photo to color",
         "ru": "Photo to colour"
       },
       "hint": {
-        "en": "The photo’s colour with the broad light and shadow taken out, so the material isn’t lit twice.",
+        "en": "The photo’s color with the broad light and shadow taken out, so the material isn’t lit twice.",
         "ru": "The photo’s colour with the broad light and shadow taken out, so the material isn’t lit twice."
       },
       "inputs": [
@@ -9301,7 +9301,7 @@
         "ru": "Photo to metal"
       },
       "hint": {
-        "en": "White where the photo is close to the metal’s colour: pick the colour of the bare metal in it.",
+        "en": "White where the photo is close to the metal’s color: pick the color of the bare metal in it.",
         "ru": "White where the photo is close to the metal’s colour: pick the colour of the bare metal in it."
       },
       "inputs": [
@@ -9325,7 +9325,7 @@
           "id": "color",
           "kind": "color",
           "label": {
-            "en": "Metal colour",
+            "en": "Metal color",
             "ru": "Metal colour"
           },
           "default": "#d6dade"
@@ -9371,11 +9371,11 @@
       "type": "outColor",
       "group": "output",
       "label": {
-        "en": "Colour",
+        "en": "Color",
         "ru": "Цвет"
       },
       "hint": {
-        "en": "The material’s colour.",
+        "en": "The material’s color.",
         "ru": "Цвет материала."
       },
       "inputs": [
@@ -9383,7 +9383,7 @@
           "id": "in",
           "kind": "color",
           "label": {
-            "en": "Colour",
+            "en": "Color",
             "ru": "Цвет"
           },
           "fallback": [
@@ -9567,7 +9567,7 @@
         "ru": "Свечение"
       },
       "hint": {
-        "en": "Where it glows, and in what colour (black: no glow).",
+        "en": "Where it glows, and in what color (black: no glow).",
         "ru": "Где светится и каким цветом (чёрное — не светится)."
       },
       "inputs": [
@@ -9627,11 +9627,11 @@
       "type": "outWearColor",
       "group": "output",
       "label": {
-        "en": "Wear colour",
+        "en": "Wear color",
         "ru": "Цвет износа"
       },
       "hint": {
-        "en": "The wear layer’s colour (bare metal under paint, dust): shown on edges, in creases or on top, as the material’s Wear settings say.",
+        "en": "The wear layer’s color (bare metal under paint, dust): shown on edges, in creases or on top, as the material’s Wear settings say.",
         "ru": "Цвет слоя износа (металл под краской, пыль): виден на краях, в углах или сверху, как задано в настройках износа материала."
       },
       "inputs": [
@@ -9639,7 +9639,7 @@
           "id": "in",
           "kind": "color",
           "label": {
-            "en": "Wear colour",
+            "en": "Wear color",
             "ru": "Цвет износа"
           },
           "fallback": [

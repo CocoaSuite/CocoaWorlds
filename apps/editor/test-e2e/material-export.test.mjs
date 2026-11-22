@@ -97,6 +97,21 @@ test('export graph materials as .cocoamat and images, and import one back', asyn
     const m = JSON.parse(await fs.readFile(path.join(out, 'Graph material.material.json'), 'utf8'));
     assert.equal(m.normalGreen, 'up');
     assert.equal(m.evaluation.size, 256);
+
+    // The Roblox preset exports only separate SurfaceAppearance maps, never a manifest,
+    // height, packed ORM or any other CocoaWorlds-specific maps.
+    await fs.rm(out, { recursive: true, force: true });
+    await fs.mkdir(out, { recursive: true });
+    await page.getByRole('button', { name: 'Export…' }).click();
+    await page.getByRole('menuitem', { name: 'Export to Roblox…' }).click();
+    const roblox = page.getByRole('dialog', { name: 'Export to Roblox' });
+    assert.deepEqual(await roblox.locator('.cw-mex-maps input').count(), 3); // This graph has no metalness output.
+    await roblox.getByLabel('Size').selectOption('256');
+    await roblox.getByRole('button', { name: 'Export', exact: true }).click();
+    await roblox.waitFor({ state: 'detached', timeout: 20000 });
+    assert.deepEqual((await fs.readdir(out)).sort(), [
+      'Graph material_color.png', 'Graph material_normal.png', 'Graph material_roughness.png',
+    ]);
     await shot(page, 'mex01');
   } catch (e) {
     await shot(page, 'mex-failure');

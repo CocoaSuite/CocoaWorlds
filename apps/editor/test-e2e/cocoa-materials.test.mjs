@@ -44,9 +44,20 @@ test('cocoa materials: a graph material, edited, baked and used', async () => {
     assert.equal(firstColour.readUInt32BE(16), 512);
     await shot(page, 'cm01-new');
 
-    // 2. Add a node from the menu (searching), then wire it into the gradient map in place of the noise.
+    // 2. Both node searches recognize "color ramp" as Gradient Map.
     await page.getByTestId('material-graph').getByRole('button', { name: '+ Node' }).click();
-    const menu = page.getByRole('dialog', { name: '+ Node' });
+    let menu = page.getByRole('dialog', { name: '+ Node' });
+    await menu.getByLabel('Find a node…').fill('color ramp');
+    await menu.getByRole('menuitem', { name: 'Gradient map' }).waitFor();
+    await menu.getByLabel('Find a node…').press('Escape');
+    const library = page.getByRole('complementary', { name: 'Library' });
+    await library.getByLabel('Search the library').fill('color ramp');
+    await library.getByRole('button', { name: 'Gradient map' }).waitFor();
+    await library.getByLabel('Search the library').fill('');
+
+    // Add a node from the menu, then wire it into the gradient map in place of the noise.
+    await page.getByTestId('material-graph').getByRole('button', { name: '+ Node' }).click();
+    menu = page.getByRole('dialog', { name: '+ Node' });
     await menu.getByLabel('Find a node…').fill('brick');
     await menu.getByLabel('Find a node…').press('Enter');
     await nodeOf('bricks').waitFor();

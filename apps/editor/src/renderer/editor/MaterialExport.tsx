@@ -18,7 +18,7 @@ const failed = (e: unknown) => {
   st.notify(`${t('mex.failed')}: ${(e as Error).message}`);
 };
 
-export function exportItems(ms: MaterialDef[], openImages: () => void): MenuEntry[] {
+export function exportItems(ms: MaterialDef[], openImages: () => void, openRoblox: () => void): MenuEntry[] {
   const graphs = ms.filter((m) => m.graph);
   return [
     {
@@ -28,6 +28,7 @@ export function exportItems(ms: MaterialDef[], openImages: () => void): MenuEntr
       onSelect: () => void exportCocoaMats(graphs).then(done, failed),
     },
     { label: t('mex.images'), disabled: !ms.length, onSelect: openImages },
+    { label: t('mex.roblox'), disabled: !ms.length, onSelect: openRoblox },
   ];
 }
 
@@ -58,8 +59,13 @@ const ROLE_KEY: Record<OutputRole, Key> = {
   wearNoise: 'mex.r.wearNoise',
 };
 
-export function ImagesDialog({ ms, onClose }: { ms: MaterialDef[]; onClose: () => void }) {
+/** Roblox SurfaceAppearance accepts separate ColorMap, NormalMap, RoughnessMap and MetalnessMap files. */
+const ROBLOX_ROLES: OutputRole[] = ['color', 'normal', 'roughness', 'metalness'];
+
+export function ImagesDialog({ ms, onClose, preset = 'custom' }: { ms: MaterialDef[]; onClose: () => void; preset?: 'custom' | 'roblox' }) {
+  const roblox = preset === 'roblox';
   const roles = useMemo(() => rolesOf(ms), [ms]);
+  const available = roblox ? ROBLOX_ROLES.filter((r) => roles.includes(r)) : roles;
   const sizes = useMemo(() => {
     let max = 2048;
     try {
@@ -70,16 +76,18 @@ export function ImagesDialog({ ms, onClose }: { ms: MaterialDef[]; onClose: () =
     return [256, 512, 1024, 2048, 4096].filter((s) => s <= max);
   }, []);
   const [size, setSize] = useState(String(Math.min(2048, ms[0]?.bakeSize ?? 1024)));
-  const [green, setGreen] = useState<ImageOptions['green']>('down');
+  const [green, setGreen] = useState<ImageOptions['green']>(roblox ? 'up' : 'down');
   const [orm, setOrm] = useState(false);
   const [format, setFormat] = useState<'png' | 'psd'>('png');
-  const [want, setWant] = useState<Set<OutputRole>>(() => new Set(roles));
+  const [want, setWant] = useState<Set<OutputRole>>(() => new Set(available));
   const [busy, setBusy] = useState(false);
   const go = async () => {
     setBusy(true);
     try {
-      const opts = { size: Number(size), green, orm: format === 'png' && orm, roles: want.size === roles.length ? undefined : [...want] };
-      done(await (format === 'psd' ? exportPsds(ms, opts) : exportImages(ms, opts)));
+      const opts: ImageOptions = roblox
+        ? { size: Number(size), green: 'up', orm: false, roles: [...want], includeManifest: false }
+        : { size: Number(size), green, orm: format === 'png' && orm, roles: want.size === roles.length ? undefined : [...want] };
+      done(await (!roblox && format === 'psd' ? exportPsds(ms, opts) : exportImages(ms, opts)));
       onClose();
     } catch (e) {
       failed(e);
@@ -87,10 +95,11 @@ export function ImagesDialog({ ms, onClose }: { ms: MaterialDef[]; onClose: () =
     }
   };
   return (
-    <Dialog title={t('mex.imagesTitle')} onClose={() => !busy && onClose()} width={420}>
+    <Dialog title={t(roblox ? 'mex.robloxTitle' : 'mex.imagesTitle')} onClose={() => !busy && onClose()} width={420}>
       <p className="cw-hint">{ms.length === 1 ? ms[0]!.name : t('mex.several').replace('{n}', String(ms.length))}</p>
       <div className="cw-form">
-        <div className="cw-f">
+        {roblox && <p className="cw-hint">{t('mex.robloxHint')}</p>}
+        {!roblox && <div className="cw-f">
           <span>{t('mex.format')}</span>
           <Segmented<'png' | 'psd'>
             label={t('mex.format')}
@@ -101,7 +110,7 @@ export function ImagesDialog({ ms, onClose }: { ms: MaterialDef[]; onClose: () =
               { value: 'psd', label: t('mex.formatPsd') },
             ]}
           />
-        </div>
+        </div>}
         <label className="cw-f">
           <span>{t('mex.size')}</span>
           <select className="cw-input" aria-label={t('mex.size')} value={size} disabled={busy} onChange={(e) => setSize(e.currentTarget.value)}>
@@ -112,7 +121,7 @@ export function ImagesDialog({ ms, onClose }: { ms: MaterialDef[]; onClose: () =
             ))}
           </select>
         </label>
-        <div className="cw-f">
+        {!roblox && <div className="cw-f">
           <span>{t('mex.green')}</span>
           <Segmented<ImageOptions['green']>
             label={t('mex.green')}
@@ -123,8 +132,8 @@ export function ImagesDialog({ ms, onClose }: { ms: MaterialDef[]; onClose: () =
               { value: 'up', label: t('mex.greenUp') },
             ]}
           />
-        </div>
-        {format === 'png' && (
+        </div>}
+        {format === 'png' && !roblox && (
           <label className="cw-screens-sw">
             <Switch label={t('mex.orm')} checked={orm} onChange={setOrm} />
             {t('mex.orm')}
@@ -132,12 +141,12 @@ export function ImagesDialog({ ms, onClose }: { ms: MaterialDef[]; onClose: () =
         )}
         <fieldset className="cw-mex-maps" aria-label={t('mex.maps')}>
           <legend>{t('mex.maps')}</legend>
-          {roles.map((r) => (
+          {available.map((r) => (
             <label key={r}>
               <input
                 type="checkbox"
                 checked={want.has(r)}
-                disabled={busy}
+                disabled={busy || roblox}
                 onChange={(e) => {
                   const next = new Set(want);
                   if (e.currentTarget.checked) next.add(r);
@@ -154,7 +163,7 @@ export function ImagesDialog({ ms, onClose }: { ms: MaterialDef[]; onClose: () =
         <Button disabled={busy} onClick={onClose}>
           {t('new.cancel')}
         </Button>
-        <Button variant="primary" disabled={busy || (!want.size && !(orm && format === 'png'))} onClick={() => void go()}>
+        <Button variant="primary" disabled={busy || (!want.size && !(orm && format === 'png' && !roblox))} onClick={() => void go()}>
           {busy ? t('mex.working') : t('mex.export')}
         </Button>
       </div>

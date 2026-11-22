@@ -128,7 +128,7 @@ export function catalogMarkdown(c: Catalog = nodeCatalog()): string {
   ];
   const groups = [...new Set(c.nodes.map((n) => n.group))];
   for (const g of groups) {
-    out.push(`## ${g[0]!.toUpperCase()}${g.slice(1)}`, '');
+    out.push(`## ${g === 'colour' ? 'Color' : `${g[0]!.toUpperCase()}${g.slice(1)}`}`, '');
     for (const n of c.nodes.filter((x) => x.group === g)) {
       out.push(`### ${n.label.en} — \`${n.type}\``, '', cell(n.hint.en), '');
       out.push(`Makes: ${n.output ?? `nothing (output node: the material's \`${n.role}\` map)`} · hash \`${n.hash}\``, '');

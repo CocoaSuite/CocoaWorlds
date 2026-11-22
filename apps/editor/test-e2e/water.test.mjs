@@ -35,7 +35,7 @@ test('water and ladders', async () => {
     const tree = page.getByRole('tree');
     await tree.getByRole('treeitem', { name: 'water' }).click();
     const insp = page.getByRole('complementary', { name: 'Inspector' });
-    await insp.getByText('Colour under water').waitFor();
+    await insp.getByText('Color under water').waitFor();
     await tree.getByRole('treeitem', { name: 'ladder' }).click();
     await insp.getByText('Climb speed').waitFor();
     await page.keyboard.press('Escape');

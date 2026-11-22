@@ -63,6 +63,12 @@ import { useEditor } from '../store';
 import { BarSlider, ImagePick, MaterialPreview, Row, WearSettings, type Shape } from './MaterialsPanel';
 
 const say = (x: L) => (getLang() === 'ru' ? x.ru : x.en);
+/** Keep node lookup consistent in the add menu and the library. */
+const matchesNode = (n: (typeof NODES)[number], query: string) =>
+  !n.hidden &&
+  (!query ||
+    [say(n.label), n.label.en, say(n.hint), n.type === 'gradientMap' ? 'color ramp' : '']
+      .some((text) => text.toLowerCase().includes(query)));
 /** The live picture size: the baked size, but no more than 512 while editing. */
 const liveSize = (m: MaterialDef) => Math.min(m.bakeSize ?? 512, 512);
 
@@ -155,7 +161,7 @@ function CmNodeView({ id, data, selected }: NodeProps<CmNode>) {
   );
 }
 
-/** A section: a labelled, coloured box behind nodes (dragged by its title, resized by its edges when picked). */
+/** A section: a labelled, colored box behind nodes (dragged by its title, resized by its edges when picked). */
 function SectionView({ id, data, selected }: NodeProps<SecNode>) {
   const { editSection } = useContext(GraphCtx);
   const s = data.section;
@@ -194,13 +200,13 @@ function SectionView({ id, data, selected }: NodeProps<SecNode>) {
             type="button"
             className="cm-sec-col nodrag"
             style={{ background: color }}
-            aria-label={t('cm.sectionColour')}
-            title={t('cm.sectionColour')}
+            aria-label={t('cm.sectionColor')}
+            title={t('cm.sectionColor')}
             onPointerDown={(e) => e.stopPropagation()}
             onClick={(e) => {
               e.stopPropagation();
               const next = SECTION_COLORS[(SECTION_COLORS.indexOf(color) + 1) % SECTION_COLORS.length]!;
-              editSection?.(id, { color: next === SECTION_COLORS[0] ? undefined : next }, 'Section colour');
+              editSection?.(id, { color: next === SECTION_COLORS[0] ? undefined : next }, 'Section color');
             }}
           />
         </div>
@@ -233,7 +239,7 @@ function AddMenu({ at, onPick, onClose }: { at: { x: number; y: number }; onPick
   const [q, setQ] = useState('');
   const [hi, setHi] = useState(0);
   const query = q.trim().toLowerCase();
-  const list = NODES.filter((n) => !n.hidden).filter((n) => !query || say(n.label).toLowerCase().includes(query) || n.label.en.toLowerCase().includes(query) || say(n.hint).toLowerCase().includes(query));
+  const list = NODES.filter((n) => matchesNode(n, query));
   const [recent] = useState(recentTypes);
   // In the order shown (so the arrow keys follow what is on screen).
   const sections = [
@@ -390,7 +396,7 @@ function NodeLibrary({ onAdd, onDropAt, onHide, wide }: { onAdd: (type: string) 
   const [shut, setShut] = useState<Set<string>>(new Set());
   const icons = useMemo(() => nodeIcons(), []);
   const query = q.trim().toLowerCase();
-  const match = (n: (typeof NODES)[number]) => !n.hidden && (!query || say(n.label).toLowerCase().includes(query) || n.label.en.toLowerCase().includes(query) || say(n.hint).toLowerCase().includes(query));
+  const match = (n: (typeof NODES)[number]) => matchesNode(n, query);
   return (
     <aside className={`cm-lib${w >= 300 ? ' wide' : ''}`} style={{ width: w }} aria-label={t('cm.library')}>
       <div className="cm-lib-grip" role="separator" aria-orientation="vertical" aria-label={t('cm.resizeLibrary')} onPointerDown={resize} onDoubleClick={() => { setWidth(null); try { localStorage.removeItem('cw-cm-library-w'); } catch { /* storage off */ } }} />
@@ -1179,7 +1185,7 @@ function Flow({ path, graph, sel, onSelect, wideLibrary }: { path: string; graph
   );
 }
 
-/** A colour ramp: the bar, then each stop's colour and place. */
+/** A color ramp: the bar, then each stop's color and place. */
 function RampField({ value, onChange }: { value: RampStop[]; onChange: (v: RampStop[], key: string) => void }) {
   const stops = [...value].sort((a, b) => a.at - b.at);
   const bar = `linear-gradient(to right, ${stops.map((s) => `${s.color} ${Math.round(s.at * 100)}%`).join(', ')})`;
@@ -1199,7 +1205,7 @@ function RampField({ value, onChange }: { value: RampStop[]; onChange: (v: RampS
         <Button
           size="sm"
           onClick={() => {
-            // A new stop halfway along the widest gap, in the colour already there.
+            // A new stop halfway along the widest gap, in the color already there.
             let best = 0, gap = -1;
             for (let i = 0; i + 1 < stops.length; i++) {
               const d = stops[i + 1]!.at - stops[i]!.at;
@@ -1490,7 +1496,7 @@ function GraphMaterialProps({
   );
 }
 
-/** The picked node's picture, flat (or the material's colour when nothing is picked). */
+/** The picked node's picture, flat (or the material's color when nothing is picked). */
 function FlatPreview({ id, path, graph }: { id: string | null; path?: string; graph?: MatGraph }) {
   const { live } = useContext(GraphCtx);
   const ref = useRef<HTMLCanvasElement>(null);
