@@ -441,7 +441,7 @@ function NodeLibrary({ onAdd, onDropAt, onHide, wide }: { onAdd: (type: string) 
                       onClick={() => performance.now() - dropped.current > 400 && onAdd(n.type)}
                       onContextMenu={(e) => e.preventDefault()}
                     >
-                      {icons.get(n.type) ? <img src={icons.get(n.type)} alt="" width={40} height={40} /> : <i className={`cm-lib-ph g-${n.group}`} />}
+                      {icons.get(n.type) ? <img src={icons.get(n.type)} alt="" width={40} height={40} draggable={false} /> : <i className={`cm-lib-ph g-${n.group}`} />}
                       <span>{say(n.label)}</span>
                     </button>
                   ))}
@@ -1056,18 +1056,21 @@ function Flow({ path, graph, sel, onSelect, wideLibrary }: { path: string; graph
         e.dataTransfer.dropEffect = 'copy';
       }}
       onDrop={(e) => {
+        // The node-library thumbnail is an image too. Prefer our explicit node type over
+        // browser-supplied image files, or the first drag can import an Image node instead.
+        const type = e.dataTransfer.getData(NODE_DRAG);
+        if (type && nodeDef(type)) {
+          e.preventDefault();
+          const p = rf.screenToFlowPosition({ x: e.clientX, y: e.clientY });
+          add(type, { x: p.x - 66, y: p.y - 20 });
+          return;
+        }
         const images = [...e.dataTransfer.files].filter((f) => f.type.startsWith('image/'));
         if (images.length) {
           e.preventDefault();
           const p = rf.screenToFlowPosition({ x: e.clientX, y: e.clientY });
           void dropImages(images, p);
-          return;
         }
-        const type = e.dataTransfer.getData(NODE_DRAG);
-        if (!type || !nodeDef(type)) return;
-        e.preventDefault();
-        const p = rf.screenToFlowPosition({ x: e.clientX, y: e.clientY });
-        add(type, { x: p.x - 66, y: p.y - 20 });
       }}
       onKeyDown={(e) => {
         if ((e.target as HTMLElement).closest('input, select, textarea')) return;
