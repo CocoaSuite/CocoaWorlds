@@ -1,10 +1,10 @@
 /**
- * The nodes of Cocoa Materials. Each makes one picture (grey or color) from its settings and its inputs, as a
+ * The nodes of Cocoa Materials. Each makes one picture (grey or colour) from its settings and its inputs, as a
  * small GLSL program run on the graphics card (decision C1). Everything tiles: generators repeat over their
  * square, so baked maps never show a seam.
  *
  * In the GLSL bodies: `uv` is where in the square (0–1, top-left first), `p_<id>` are the settings, `inC_<id>(uv)`
- * and `inG_<id>(uv)` read an input as color or grey, `h_<id>` is 1 when the input is linked, `u_px` is one pixel,
+ * and `inG_<id>(uv)` read an input as colour or grey, `h_<id>` is 1 when the input is linked, `u_px` is one pixel,
  * and the body sets `outColor`.
  */
 
@@ -826,8 +826,8 @@ outColor = vec4(vec3(smoothstep(p_threshold, p_threshold + 0.05, e)), 1.);`,
       { id: 'cutoff', label: l('Black cutoff', 'Порог чёрного'), kind: 'number', min: 0.005, max: 1, default: 0.1 },
     ],
     glsl: `vec3 a = inC_top(uv).rgb, b = inC_bottom(uv).rgb; vec3 r;
-// Black to alpha: the top's black background turns see-through, so a colored picture sits on the bottom one.
-// Darks below the cutoff fade out; colors above stay solid. Soft edges keep their full color.
+// Black to alpha: the top's black background turns see-through, so a coloured picture sits on the bottom one.
+// Darks below the cutoff fade out; colours above stay solid. Soft edges keep their full colour.
 float al = 1.;
 if (p_blackAlpha > 0.5) { float mx = max(a.r, max(a.g, a.b)); al = smoothstep(0., p_cutoff, mx); a = mx > 1e-4 ? a / mx * max(mx, min(p_cutoff, 1.)) : a; }
 int m = int(p_mode + 0.5);
@@ -848,7 +848,7 @@ outColor = vec4(clamp(mix(b, r, inG_mask(uv) * p_opacity * al), 0., 1.), 1.);`,
     glsl: 'outColor = vec4(p_useB > 0.5 ? inC_b(uv).rgb : inC_a(uv).rgb, 1.);',
   },
 
-  // ── Color ──
+  // ── Colour ──
   {
     type: 'gradientMap',
     group: 'colour',
@@ -1438,7 +1438,7 @@ outColor = vec4(vec3(v), 1.);`,
 outColor = vec4(vec3(1. - smoothstep(p_tolerance, p_tolerance + p_softness * 0.3 + 1e-3, d)), 1.);`,
   },
 
-  // ── More: color ──
+  // ── More: colour ──
   {
     type: 'replaceColor',
     group: 'colour',
@@ -2134,7 +2134,7 @@ q.x += s; if (p_direction > 0.5) q = q.yx;
 outColor = vec4(inC_in(q).rgb, 1.);`,
   },
 
-  // ── More (2026-11): combine and color ──
+  // ── More (2026-11): combine and colour ──
   {
     type: 'cellPick',
     group: 'combine',
