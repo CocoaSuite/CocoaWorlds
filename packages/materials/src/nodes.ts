@@ -1,10 +1,10 @@
 /**
- * The nodes of Cocoa Materials. Each makes one picture (grey or colour) from its settings and its inputs, as a
+ * The nodes of Cocoa Materials. Each makes one picture (grey or color) from its settings and its inputs, as a
  * small GLSL program run on the graphics card (decision C1). Everything tiles: generators repeat over their
  * square, so baked maps never show a seam.
  *
  * In the GLSL bodies: `uv` is where in the square (0–1, top-left first), `p_<id>` are the settings, `inC_<id>(uv)`
- * and `inG_<id>(uv)` read an input as colour or grey, `h_<id>` is 1 when the input is linked, `u_px` is one pixel,
+ * and `inG_<id>(uv)` read an input as color or grey, `h_<id>` is 1 when the input is linked, `u_px` is one pixel,
  * and the body sets `outColor`.
  */
 
@@ -341,7 +341,7 @@ outColor = vec4(vec3(smoothstep(m - c, m + c, v)), 1.);`,
     type: 'color',
     group: 'make',
     label: l('Colour', 'Цвет'),
-    hint: l('One flat colour.', 'Один ровный цвет.'),
+    hint: l('One flat color.', 'Один ровный цвет.'),
     inputs: [],
     output: 'color',
     params: [{ id: 'color', label: l('Colour', 'Цвет'), kind: 'color', default: '#b08c64' }],
@@ -525,7 +525,7 @@ outColor = vec4(inC_in(q).rgb, 1.);`,
     type: 'floodFill',
     group: 'change',
     label: l('Flood fill', 'Заливка областей'),
-    hint: l('Give each separate white shape of a mask (each brick, tile, plank) its own value: a random grey or colour, a gradient across it, or where it is.', 'Дать каждой отдельной белой фигуре маски (кирпичу, плитке, доске) своё значение: случайный серый или цвет, градиент по ней или её положение. Точно для прямоугольных фигур.'),
+    hint: l('Give each separate white shape of a mask (each brick, tile, plank) its own value: a random grey or color, a gradient across it, or where it is.', 'Дать каждой отдельной белой фигуре маски (кирпичу, плитке, доске) своё значение: случайный серый или цвет, градиент по ней или её положение. Точно для прямоугольных фигур.'),
     inputs: [IN_GREY('in', l('Mask', 'Маска'), [1, 1, 1])],
     output: 'color',
     params: [
@@ -533,7 +533,7 @@ outColor = vec4(inC_in(q).rgb, 1.);`,
         id: 'gives',
         label: l('Gives', 'Выдаёт'),
         kind: 'choice',
-        options: [opt('grey', 'Random grey', 'Случайный серый'), opt('colour', 'Random colour', 'Случайный цвет'), opt('gradient', 'Gradient', 'Градиент'), opt('position', 'Position', 'Положение'), opt('size', 'Size', 'Размер')],
+        options: [opt('grey', 'Random grey', 'Случайный серый'), opt('colour', 'Random color', 'Случайный цвет'), opt('gradient', 'Gradient', 'Градиент'), opt('position', 'Position', 'Положение'), opt('size', 'Size', 'Размер')],
         default: 'grey',
       },
       { id: 'direction', label: l('Gradient', 'Градиент'), kind: 'choice', options: [opt('across', 'Across', 'Поперёк'), opt('down', 'Down', 'Вниз'), opt('random', 'Random way', 'Случайно')], default: 'random' },
@@ -826,8 +826,8 @@ outColor = vec4(vec3(smoothstep(p_threshold, p_threshold + 0.05, e)), 1.);`,
       { id: 'cutoff', label: l('Black cutoff', 'Порог чёрного'), kind: 'number', min: 0.005, max: 1, default: 0.1 },
     ],
     glsl: `vec3 a = inC_top(uv).rgb, b = inC_bottom(uv).rgb; vec3 r;
-// Black to alpha: the top's black background turns see-through, so a coloured picture sits on the bottom one.
-// Darks below the cutoff fade out; colours above stay solid. Soft edges keep their full colour.
+// Black to alpha: the top's black background turns see-through, so a colored picture sits on the bottom one.
+// Darks below the cutoff fade out; colors above stay solid. Soft edges keep their full color.
 float al = 1.;
 if (p_blackAlpha > 0.5) { float mx = max(a.r, max(a.g, a.b)); al = smoothstep(0., p_cutoff, mx); a = mx > 1e-4 ? a / mx * max(mx, min(p_cutoff, 1.)) : a; }
 int m = int(p_mode + 0.5);
@@ -848,18 +848,18 @@ outColor = vec4(clamp(mix(b, r, inG_mask(uv) * p_opacity * al), 0., 1.), 1.);`,
     glsl: 'outColor = vec4(p_useB > 0.5 ? inC_b(uv).rgb : inC_a(uv).rgb, 1.);',
   },
 
-  // ── Colour ──
+  // ── Color ──
   {
     type: 'gradientMap',
     group: 'colour',
     label: l('Gradient map', 'Карта градиента'),
-    hint: l('Colour a grey picture: black takes the left colour, white the right.', 'Раскрасить серую картинку: чёрное берёт левый цвет, белое — правый.'),
+    hint: l('Color a grey picture: black takes the left color, white the right.', 'Раскрасить серую картинку: чёрное берёт левый цвет, белое — правый.'),
     inputs: [IN_GREY()],
     output: 'color',
     params: [
       {
         id: 'ramp',
-        label: l('Colours', 'Цвета'),
+        label: l('Colors', 'Цвета'),
         kind: 'ramp',
         default: [
           { at: 0, color: '#1e1a16' },
@@ -873,7 +873,7 @@ outColor = vec4(clamp(mix(b, r, inG_mask(uv) * p_opacity * al), 0., 1.), 1.);`,
     type: 'hsl',
     group: 'colour',
     label: l('Hue, saturation, lightness', 'Тон, насыщенность, яркость'),
-    hint: l('Shift the colours round the wheel, make them stronger or greyer, lighter or darker.', 'Сдвинуть цвета по кругу, сделать насыщеннее или серее, светлее или темнее.'),
+    hint: l('Shift the colors round the wheel, make them stronger or greyer, lighter or darker.', 'Сдвинуть цвета по кругу, сделать насыщеннее или серее, светлее или темнее.'),
     inputs: [IN_COLOR()],
     output: 'color',
     params: [
@@ -888,8 +888,8 @@ outColor = vec4(clamp(hsv2rgb(h) + p_lightness, 0., 1.), 1.);`,
   {
     type: 'tint',
     group: 'colour',
-    label: l('Colourise', 'Окрасить'),
-    hint: l('Tint a picture with one colour.', 'Окрасить картинку одним цветом.'),
+    label: l('Colorise', 'Окрасить'),
+    hint: l('Tint a picture with one color.', 'Окрасить картинку одним цветом.'),
     inputs: [IN_GREY('in', l('In', 'Вход'), [1, 1, 1])],
     output: 'color',
     params: [{ id: 'color', label: l('Colour', 'Цвет'), kind: 'color', default: '#c08040' }],
@@ -1388,7 +1388,7 @@ outColor = vec4(vec3(clamp(r, 0., 1.)), 1.);`,
     group: 'combine',
     label: l('Height blend', 'Смешать по высоте'),
     hint: l('Two materials meet by height: the higher one shows (sand between stones, moss in cracks, paint chipping off).', 'Два материала встречаются по высоте: видно более высокий (песок между камнями, мох в трещинах, облупившаяся краска).'),
-    inputs: [IN_COLOR('top', l('Top colour', 'Верхний цвет'), [1, 1, 1]), IN_GREY('heightTop', l('Top height', 'Верхняя высота'), [0.5, 0.5, 0.5]), IN_COLOR('bottom', l('Bottom colour', 'Нижний цвет'), [0, 0, 0]), IN_GREY('heightBottom', l('Bottom height', 'Нижняя высота'), [0.5, 0.5, 0.5])],
+    inputs: [IN_COLOR('top', l('Top color', 'Верхний цвет'), [1, 1, 1]), IN_GREY('heightTop', l('Top height', 'Верхняя высота'), [0.5, 0.5, 0.5]), IN_COLOR('bottom', l('Bottom color', 'Нижний цвет'), [0, 0, 0]), IN_GREY('heightBottom', l('Bottom height', 'Нижняя высота'), [0.5, 0.5, 0.5])],
     output: 'color',
     params: [
       { id: 'offset', label: l('Top raised by', 'Поднять верхний на'), kind: 'number', min: -1, max: 1, default: 0 },
@@ -1404,7 +1404,7 @@ outColor = vec4(r, 1.);`,
     type: 'combineChannels',
     group: 'combine',
     label: l('Combine channels', 'Собрать каналы'),
-    hint: l('Make a colour from three greys as its red, green and blue.', 'Собрать цвет из трёх серых как красный, зелёный и синий.'),
+    hint: l('Make a color from three greys as its red, green and blue.', 'Собрать цвет из трёх серых как красный, зелёный и синий.'),
     inputs: [IN_GREY('r', l('Red', 'Красный')), IN_GREY('g', l('Green', 'Зелёный')), IN_GREY('b', l('Blue', 'Синий'))],
     output: 'color',
     params: [],
@@ -1414,7 +1414,7 @@ outColor = vec4(r, 1.);`,
     type: 'splitChannel',
     group: 'combine',
     label: l('Pick channel', 'Взять канал'),
-    hint: l('One channel of a colour as grey: red, green, blue, or brightness.', 'Один канал цвета как серое: красный, зелёный, синий или яркость.'),
+    hint: l('One channel of a color as grey: red, green, blue, or brightness.', 'Один канал цвета как серое: красный, зелёный, синий или яркость.'),
     inputs: [IN_COLOR()],
     output: 'grey',
     params: [{ id: 'channel', label: l('Channel', 'Канал'), kind: 'choice', options: [opt('r', 'Red', 'Красный'), opt('g', 'Green', 'Зелёный'), opt('b', 'Blue', 'Синий'), opt('l', 'Brightness', 'Яркость')], default: 'r' }],
@@ -1425,8 +1425,8 @@ outColor = vec4(vec3(v), 1.);`,
   {
     type: 'colorSelect',
     group: 'combine',
-    label: l('Colour to mask', 'Цвет в маску'),
-    hint: l('White where the picture is close to a colour: pick out one part to treat differently.', 'Белое там, где картинка близка к цвету: выделить часть, чтобы обработать отдельно.'),
+    label: l('Color to mask', 'Цвет в маску'),
+    hint: l('White where the picture is close to a color: pick out one part to treat differently.', 'Белое там, где картинка близка к цвету: выделить часть, чтобы обработать отдельно.'),
     inputs: [IN_COLOR()],
     output: 'grey',
     params: [
@@ -1438,12 +1438,12 @@ outColor = vec4(vec3(v), 1.);`,
 outColor = vec4(vec3(1. - smoothstep(p_tolerance, p_tolerance + p_softness * 0.3 + 1e-3, d)), 1.);`,
   },
 
-  // ── More: colour ──
+  // ── More: color ──
   {
     type: 'replaceColor',
     group: 'colour',
-    label: l('Replace colour', 'Заменить цвет'),
-    hint: l('Swap one colour for another (and its near shades).', 'Заменить один цвет другим (и близкие оттенки).'),
+    label: l('Replace color', 'Заменить цвет'),
+    hint: l('Swap one color for another (and its near shades).', 'Заменить один цвет другим (и близкие оттенки).'),
     inputs: [IN_COLOR()],
     output: 'color',
     params: [
@@ -1460,7 +1460,7 @@ outColor = vec4(mix(c, clamp(c + (p_to - p_from), 0., 1.), m), 1.);`,
     type: 'desaturate',
     group: 'colour',
     label: l('Desaturate', 'Обесцветить'),
-    hint: l('Take the colour out, partly or fully.', 'Убрать цвет, частично или полностью.'),
+    hint: l('Take the color out, partly or fully.', 'Убрать цвет, частично или полностью.'),
     inputs: [IN_COLOR()],
     output: 'color',
     params: [{ id: 'amount', label: l('Amount', 'Сила'), kind: 'number', min: 0, max: 1, default: 1 }],
@@ -1469,8 +1469,8 @@ outColor = vec4(mix(c, clamp(c + (p_to - p_from), 0., 1.), m), 1.);`,
   {
     type: 'colorVariation',
     group: 'colour',
-    label: l('Colour variation', 'Разнообразие цвета'),
-    hint: l('Break up a flat colour with large, soft shifts in brightness and hue.', 'Оживить ровный цвет крупными мягкими сдвигами яркости и тона.'),
+    label: l('Color variation', 'Разнообразие цвета'),
+    hint: l('Break up a flat color with large, soft shifts in brightness and hue.', 'Оживить ровный цвет крупными мягкими сдвигами яркости и тона.'),
     inputs: [IN_COLOR('in', l('In', 'Вход'), [0.6, 0.6, 0.6])],
     output: 'color',
     params: [
@@ -1487,7 +1487,7 @@ outColor = vec4(hsv2rgb(h), 1.);`,
     type: 'temperature',
     group: 'colour',
     label: l('Warm or cool', 'Теплее или холоднее'),
-    hint: l('Shift the colours warmer (orange) or cooler (blue), and greener or pinker.', 'Сдвинуть цвета теплее (оранжевее) или холоднее (синее), и зеленее или розовее.'),
+    hint: l('Shift the colors warmer (orange) or cooler (blue), and greener or pinker.', 'Сдвинуть цвета теплее (оранжевее) или холоднее (синее), и зеленее или розовее.'),
     inputs: [IN_COLOR()],
     output: 'color',
     params: [
@@ -1955,15 +1955,15 @@ outColor = vec4(vec3(v), 1.);`,
   {
     type: 'colorCells',
     group: 'make',
-    label: l('Colour cells', 'Цветные ячейки'),
-    hint: l('Cells (Voronoi) or squares, each a random colour between two colours or of a random hue: mosaics, stained glass, terrazzo.', 'Ячейки (Вороной) или квадраты, каждая случайного цвета между двумя цветами или случайного оттенка: мозаика, витраж, терраццо.'),
+    label: l('Color cells', 'Цветные ячейки'),
+    hint: l('Cells (Voronoi) or squares, each a random color between two colors or of a random hue: mosaics, stained glass, terrazzo.', 'Ячейки (Вороной) или квадраты, каждая случайного цвета между двумя цветами или случайного оттенка: мозаика, витраж, терраццо.'),
     inputs: [],
     output: 'color',
     params: [
       { id: 'shape', label: l('Cells', 'Ячейки'), kind: 'choice', options: [opt('voronoi', 'Round (Voronoi)', 'Округлые (Вороной)'), opt('squares', 'Squares', 'Квадраты')], default: 'voronoi' },
-      { id: 'mode', label: l('Colours', 'Цвета'), kind: 'choice', options: [opt('between', 'Between two colours', 'Между двумя цветами'), opt('hues', 'Any hue', 'Любой оттенок')], default: 'between' },
-      { id: 'a', label: l('Colour A', 'Цвет A'), kind: 'color', default: '#2f5d8a' },
-      { id: 'b', label: l('Colour B', 'Цвет B'), kind: 'color', default: '#d9a441' },
+      { id: 'mode', label: l('Colors', 'Цвета'), kind: 'choice', options: [opt('between', 'Between two colors', 'Между двумя цветами'), opt('hues', 'Any hue', 'Любой оттенок')], default: 'between' },
+      { id: 'a', label: l('Color A', 'Цвет A'), kind: 'color', default: '#2f5d8a' },
+      { id: 'b', label: l('Color B', 'Цвет B'), kind: 'color', default: '#d9a441' },
       { id: 'saturation', label: l('Saturation (any hue)', 'Насыщенность (любой оттенок)'), kind: 'number', min: 0, max: 1, default: 0.6 },
       { id: 'scale', label: l('Scale', 'Масштаб'), kind: 'int', min: 1, max: 64, default: 8 },
       { id: 'gap', label: l('Gap', 'Шов'), kind: 'number', min: 0, max: 0.3, default: 0.04 },
@@ -2134,7 +2134,7 @@ q.x += s; if (p_direction > 0.5) q = q.yx;
 outColor = vec4(inC_in(q).rgb, 1.);`,
   },
 
-  // ── More (2026-11): combine and colour ──
+  // ── More (2026-11): combine and color ──
   {
     type: 'cellPick',
     group: 'combine',
@@ -2160,7 +2160,7 @@ outColor = vec4(col, 1.);`,
   {
     type: 'colorBalance',
     group: 'colour',
-    label: l('Colour balance', 'Цветовой баланс'),
+    label: l('Color balance', 'Цветовой баланс'),
     hint: l('Tint the dark, middle and light parts separately: warm highlights, cool shadows, aged looks.', 'Подкрасить тёмные, средние и светлые части по отдельности: тёплые блики, холодные тени, состаривание.'),
     inputs: [IN_COLOR('in', l('In', 'Вход'), [0.5, 0.5, 0.5])],
     output: 'color',
@@ -2179,7 +2179,7 @@ outColor = vec4(clamp(c + shift * p_amount, 0., 1.), 1.);`,
     type: 'palette',
     group: 'colour',
     label: l('Rainbow palette', 'Радужная палитра'),
-    hint: l('Colour a grey picture by a smooth looping palette: rainbows, oil slicks, heat, sci-fi glows.', 'Раскрасить серую картинку плавной зацикленной палитрой: радуга, бензиновые разводы, жар, неон.'),
+    hint: l('Color a grey picture by a smooth looping palette: rainbows, oil slicks, heat, sci-fi glows.', 'Раскрасить серую картинку плавной зацикленной палитрой: радуга, бензиновые разводы, жар, неон.'),
     inputs: [IN_GREY('in', l('In', 'Вход'), [0.5, 0.5, 0.5])],
     output: 'color',
     params: [
@@ -2402,8 +2402,8 @@ outColor = vec4(col, 1.);`,
   {
     type: 'matColor',
     group: 'materialize',
-    label: l('Photo to colour'),
-    hint: l('The photo’s colour with the broad light and shadow taken out, so the material isn’t lit twice.'),
+    label: l('Photo to color'),
+    hint: l('The photo’s color with the broad light and shadow taken out, so the material isn’t lit twice.'),
     inputs: [IN_COLOR('in', l('Photo'), [0.5, 0.5, 0.5])],
     output: 'color',
     params: [
@@ -2531,11 +2531,11 @@ outColor = vec4(vec3(clamp(1. - max(s - h, 0.) * p_strength * 4., 0., 1.)), 1.);
     type: 'matMetal',
     group: 'materialize',
     label: l('Photo to metal'),
-    hint: l('White where the photo is close to the metal’s colour: pick the colour of the bare metal in it.'),
+    hint: l('White where the photo is close to the metal’s color: pick the color of the bare metal in it.'),
     inputs: [IN_COLOR('in', l('Photo'), [0.5, 0.5, 0.5])],
     output: 'grey',
     params: [
-      { id: 'color', label: l('Metal colour'), kind: 'color', default: '#d6dade' },
+      { id: 'color', label: l('Metal color'), kind: 'color', default: '#d6dade' },
       { id: 'range', label: l('Range'), kind: 'number', min: 0, max: 1, default: 0.03 },
       { id: 'softness', label: l('Softness'), kind: 'number', min: 0, max: 1, default: 0.04 },
       { id: 'amount', label: l('Amount'), kind: 'number', min: 0, max: 1, default: 1 },
@@ -2545,15 +2545,15 @@ outColor = vec4(vec3((1. - smoothstep(p_range, p_range + p_softness + 0.001, d))
   },
 
   // ── Outputs ──
-  output('outColor', 'color', 'color', 'Colour', 'Цвет', 'The material’s colour.', 'Цвет материала.', [0.7, 0.7, 0.7]),
+  output('outColor', 'color', 'color', 'Colour', 'Цвет', 'The material’s color.', 'Цвет материала.', [0.7, 0.7, 0.7]),
   output('outHeight', 'height', 'grey', 'Height', 'Высота', 'How high each spot is (white high): bumps when there is no normal map.', 'Высота каждой точки (белое — выше): рельеф, если нет карты нормалей.', [0.5, 0.5, 0.5]),
   output('outNormal', 'normal', 'color', 'Normal', 'Нормали', 'Bumps for lighting (from Height to normal).', 'Рельеф для освещения (из «Высота в нормали»).', [0.5, 0.5, 1]),
   output('outRoughness', 'roughness', 'grey', 'Roughness', 'Шероховатость', 'White is matte, black mirror-smooth.', 'Белое — матовое, чёрное — гладкое как зеркало.', [0.8, 0.8, 0.8]),
   output('outMetal', 'metalness', 'grey', 'Metal', 'Металл', 'White where it is metal.', 'Белое — там, где металл.', [0, 0, 0]),
   output('outOcclusion', 'occlusion', 'grey', 'Occlusion', 'Затенение', 'Dark where little light gets in (cracks, dips).', 'Темнее там, куда мало света попадает (трещины, впадины).', [1, 1, 1]),
-  output('outGlow', 'glow', 'color', 'Glow', 'Свечение', 'Where it glows, and in what colour (black: no glow).', 'Где светится и каким цветом (чёрное — не светится).', [0, 0, 0]),
+  output('outGlow', 'glow', 'color', 'Glow', 'Свечение', 'Where it glows, and in what color (black: no glow).', 'Где светится и каким цветом (чёрное — не светится).', [0, 0, 0]),
   output('outOpacity', 'opacity', 'grey', 'Opacity', 'Непрозрачность', 'Black is see-through (cut out), white solid.', 'Чёрное — насквозь (вырезано), белое — сплошное.', [1, 1, 1]),
-  output('outWearColor', 'wearColor', 'color', 'Wear colour', 'Цвет износа', 'The wear layer’s colour (bare metal under paint, dust): shown on edges, in creases or on top, as the material’s Wear settings say.', 'Цвет слоя износа (металл под краской, пыль): виден на краях, в углах или сверху, как задано в настройках износа материала.', [0.6, 0.6, 0.6]),
+  output('outWearColor', 'wearColor', 'color', 'Wear color', 'Цвет износа', 'The wear layer’s color (bare metal under paint, dust): shown on edges, in creases or on top, as the material’s Wear settings say.', 'Цвет слоя износа (металл под краской, пыль): виден на краях, в углах или сверху, как задано в настройках износа материала.', [0.6, 0.6, 0.6]),
   output('outWearRoughness', 'wearRoughness', 'grey', 'Wear roughness', 'Шероховатость износа', 'The wear layer’s roughness (white matte).', 'Шероховатость слоя износа (белое — матовое).', [0.35, 0.35, 0.35]),
   output('outWearMetal', 'wearMetal', 'grey', 'Wear metal', 'Металл износа', 'Where the wear layer is metal (white).', 'Где слой износа металлический (белое).', [1, 1, 1]),
   output('outWearNoise', 'wearNoise', 'grey', 'Wear noise', 'Шум износа', 'Breaks the wear up: where it is white, wear shows sooner (a grunge works well).', 'Разбивает износ: где белое, износ проявляется раньше (хорошо подходит «Грязь»).', [0.5, 0.5, 0.5]),
