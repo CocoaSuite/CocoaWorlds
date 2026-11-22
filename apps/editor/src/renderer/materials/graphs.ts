@@ -46,6 +46,8 @@ export async function loadGraph(path: string): Promise<void> {
   if (!dir) return;
   const r = await window.cocoa.projects.readGraph(dir, path);
   if (useEditor.getState().session?.dir !== dir) return;
+  // An edit or another load may have populated this graph while the disk read was pending.
+  if (useGraphs.getState().graphs[path] || useGraphs.getState().errors[path]) return;
   const problem = r.ok ? validateGraph(r.value) : r.error;
   if (problem || !r.ok) useGraphs.setState((s) => ({ errors: { ...s.errors, [path]: problem ?? 'Unreadable.' } }));
   else useGraphs.setState((s) => ({ graphs: { ...s.graphs, [path]: r.value as MatGraph } }));
