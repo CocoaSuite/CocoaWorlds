@@ -83,6 +83,8 @@ export function setGraphLive(path: string, next: MatGraph, label: string, key: s
 export { endGesture as endGraphGesture };
 
 const saveTimers = new Map<string, ReturnType<typeof setTimeout>>();
+/** Serialize writes per graph: a slow save must never overwrite a newer edit. */
+const saveWrites = new Map<string, Promise<void>>();
 function saveSoon(path: string): void {
   clearTimeout(saveTimers.get(path));
   saveTimers.set(
@@ -91,23 +93,38 @@ function saveSoon(path: string): void {
   );
 }
 async function saveNow(path: string): Promise<void> {
+  clearTimeout(saveTimers.get(path));
   saveTimers.delete(path);
   const dir = useEditor.getState().session?.dir;
-  const g = useGraphs.getState().graphs[path];
-  if (!dir || !g) return;
-  const r = await window.cocoa.projects.writeGraph(dir, path, g);
-  if (!r.ok) useEditor.getState().log('error', 'Materials', r.error);
+  if (!dir) return;
+  const previous = saveWrites.get(path) ?? Promise.resolve();
+  const write = previous.catch(() => {}).then(async () => {
+    // Read the latest graph only after any earlier write finishes.
+    if (useEditor.getState().session?.dir !== dir) return;
+    const g = useGraphs.getState().graphs[path];
+    if (!g) return;
+    const r = await window.cocoa.projects.writeGraph(dir, path, g);
+    if (!r.ok) useEditor.getState().log('error', 'Materials', r.error);
+  });
+  saveWrites.set(path, write);
+  try {
+    await write;
+  } finally {
+    if (saveWrites.get(path) === write) saveWrites.delete(path);
+  }
 }
 
 /** Write graphs still waiting (before closing or exporting). */
 export async function flushGraphs(): Promise<void> {
   const paths = [...saveTimers.keys()];
   for (const p of paths) clearTimeout(saveTimers.get(p));
-  await Promise.all(paths.map(saveNow));
+  await Promise.all([...paths.map(saveNow), ...saveWrites.values()]);
   const bakes = [...bakeTimers.keys()];
   for (const p of bakes) clearTimeout(bakeTimers.get(p));
   bakeTimers.clear();
   for (const p of bakes) await bakeGraph(p);
+  // A bake may already have started before the flush.
+  await bakeChain;
 }
 
 /** A file name made from a material's name: `materials/old_brick.cwmat`. */
