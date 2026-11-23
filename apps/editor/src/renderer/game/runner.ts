@@ -326,7 +326,7 @@ export class GameRunner {
       }
       this.reflections.update(this.scene, this.cam.getWorldPosition(new THREE.Vector3()), this.play?.doc.settings.reflections !== false);
       (this.groundBlend ??= new GroundBlend()).prepare(this.renderer, this.scene, this.cam);
-      if (!(this.ao ??= new AoRenderer(this.renderer)).render(this.scene, this.cam, this.play ? this.play.drawSettings(this.play.doc.settings) : undefined, !!this.play?.usesLens)) this.renderer.render(this.scene, this.cam);
+      if (!(this.ao ??= new AoRenderer(this.renderer)).render(this.scene, this.cam, this.play ? this.play.drawSettings(this.play.doc.settings) : undefined, !!this.play?.usesLens, this.lighting.raySun)) this.renderer.render(this.scene, this.cam);
     }
   };
 
@@ -339,7 +339,7 @@ export class GameRunner {
 
   /** Whether frames are drawn through occlusion and bloom's render target (shaders are compiled to match). */
   private drawsViaTarget(): boolean {
-    return !!this.play?.usesLens || (this.ao ??= new AoRenderer(this.renderer)).active(this.play?.doc.settings);
+    return !!this.play?.usesLens || (this.ao ??= new AoRenderer(this.renderer)).active(this.play?.doc.settings, this.lighting.raySun);
   }
 
   /** A level change: the same game goes on in the next scene, from where the last one left the player. */
