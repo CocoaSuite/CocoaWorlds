@@ -69,7 +69,7 @@ export async function gameData(projectDir: string, trim = false): Promise<{ proj
   return {
     project,
     scene,
-    data: { format: 'cocoaworlds.game', name: project.name, id: project.id, scene, start: stem(scenePath), scenes, rules: gameRules(project.settings), values: project.settings.values ?? [], materials, plants, effects: effectsOf(project.settings).filter((x) => sceneJson.includes(`"${x.id}"`)), surfaceSounds: project.settings.surfaceSounds, captions: captionStyle(project.settings) },
+    data: { format: 'cocoaworlds.game', name: project.name, id: project.id, scene, start: stem(scenePath), scenes, worldMode: project.settings.worldMode ?? '3d', rules: gameRules(project.settings), values: project.settings.values ?? [], materials, plants, effects: effectsOf(project.settings).filter((x) => sceneJson.includes(`"${x.id}"`)), surfaceSounds: project.settings.surfaceSounds, captions: captionStyle(project.settings) },
   };
 }
 

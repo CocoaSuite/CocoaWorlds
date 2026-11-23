@@ -18,7 +18,7 @@ import { rootsOf } from '../scene-ops';
 import { isGroup } from '../scene-ops';
 import { PIVOT, REPEAT_AXES, applyMat4, mat4Key, pivotOf, repeatEnd, type Mat4 } from '@cocoaworlds/core';
 import { BrushDraft, draftAxes, type DraftState } from './brush-draft';
-import { CameraRig, type ViewKind } from './camera';
+import { CameraRig, IsometricPlayCamera, type ViewKind } from './camera';
 import { EditorGrid } from './grid';
 import { buildMarker, disposeMarker, markerKey, modelCorners, onMarkerLoaded, setMarkerSelected, type Marker } from './markers';
 import { WorldRenderer, type FaceRef } from './world-render';
@@ -41,7 +41,7 @@ import type { VoxelBox, VoxelTile } from '@cocoaworlds/geometry';
 
 export type { Hud } from '../ui/Hud';
 
-import type { GameRules, GameValue, SceneFile } from '@cocoaworlds/core';
+import type { GameRules, GameValue, SceneFile, WorldMode } from '@cocoaworlds/core';
 
 /** Path lines in the editor (cyan, like a route on a map). */
 const PATH_LINE = new THREE.LineBasicMaterial({ color: 0x4fd0d6, transparent: true, opacity: 0.9, depthTest: false });
@@ -241,6 +241,12 @@ export class ViewportEngine {
   private gridWasVisible = true;
   /** First-person camera while playing as the player. */
   private fpCam = new THREE.PerspectiveCamera(74, 1, 2, 65536);
+  private isoCam = new IsometricPlayCamera();
+  private playWorldMode: WorldMode = '3d';
+
+  private get playCamera(): THREE.PerspectiveCamera | IsometricPlayCamera {
+    return this.playWorldMode === 'isometric' ? this.isoCam : this.fpCam;
+  }
   private gameKeys = new Set<string>();
   private shapeOpts: ShapeOptions = { shape: 'box', sides: 16, steps: 8, facing: 0 };
   private brushRole: DrawRole = 'solid';
@@ -556,7 +562,7 @@ export class ViewportEngine {
   /** Go on playing in another scene (a level change): the same game, from where the last scene left the player. */
   travelTo(scene: SceneFile, t: Travel, rules?: GameRules, values?: GameValue[]): Promise<PlayInfo> {
     this.travelling = true;
-    return this.startPlay(scene, rules, values, this.saveId ?? undefined, t);
+    return this.startPlay(scene, rules, values, this.saveId ?? undefined, t, this.playWorldMode);
   }
 
   get playing(): boolean {
@@ -564,8 +570,9 @@ export class ViewportEngine {
   }
 
   /** Build a game world from a scene snapshot and show it instead of the editor's scene. */
-  async startPlay(scene: SceneFile, rules?: GameRules, values?: GameValue[], saveId?: string, arrive?: Travel | null): Promise<PlayInfo> {
+  async startPlay(scene: SceneFile, rules?: GameRules, values?: GameValue[], saveId?: string, arrive?: Travel | null, worldMode: WorldMode = '3d'): Promise<PlayInfo> {
     this.stopPlay();
+    this.playWorldMode = worldMode;
     const token = ++this.playToken;
     // Physics (and its WebAssembly) loads on first Play, so opening the editor stays quick.
     const { PlaySession } = await import('./play-session');
@@ -581,7 +588,7 @@ export class ViewportEngine {
     this.play = session;
     this.queueNav(0);
     // Heard from where it's seen: the player's eyes, or the editor camera in a physics preview.
-    session.setEars(session.info.player ? this.fpCam : this.rig.camera);
+    session.setEars(session.info.player ? this.playCamera : this.rig.camera);
     this.cancelDraft();
     this.gizmo.detach();
     this.world.group.visible = false;
@@ -601,6 +608,7 @@ export class ViewportEngine {
     this.lastTick = performance.now();
     if (session.info.player && !arrive) {
       this.gameKeys.clear();
+      if (this.playWorldMode === 'isometric') this.sendInput();
       this.cb.playerLock(false);
       this.lockPointer();
     } else if (arrive) this.sendInput();
@@ -688,7 +696,7 @@ export class ViewportEngine {
   async loadGame(): Promise<boolean> {
     const p = this.play, a = this.playArgs;
     if (!p || !a || !this.saveId || p.savingBlocked || !loadProgress(this.saveId)) return false;
-    await this.startPlay(a.scene, a.rules, a.values, this.saveId);
+    await this.startPlay(a.scene, a.rules, a.values, this.saveId, null, this.playWorldMode);
     return true;
   }
 
@@ -810,12 +818,13 @@ export class ViewportEngine {
   private onMouseMove = (e: MouseEvent): void => {
     if (!this.asPlayer || !this.locked || !this.play) return;
     if (this.rotating && this.play.holding) return this.play.rotateHeld(e.movementX, e.movementY);
+    if (this.playWorldMode === 'isometric') return;
     const look = lookFromMouse(this.play.look, e.movementX, e.movementY);
     if (look) this.play.setInput(look);
   };
 
   private sendInput(): void {
-    this.play?.setInput(inputFromKeys(this.gameKeys));
+    this.play?.setInput(inputFromKeys(this.gameKeys, this.playWorldMode === 'isometric'));
   }
 
   /** Returns true when the key was the game's. */
@@ -1732,6 +1741,7 @@ export class ViewportEngine {
     this.rig.resize(w, h);
     this.fpCam.aspect = w / h;
     this.fpCam.updateProjectionMatrix();
+    this.isoCam.resize(w, h);
     this.grid.update(this.gridSize, this.rig.unitsPerPixel);
     this.invalidate();
   }
@@ -1984,24 +1994,26 @@ export class ViewportEngine {
     // (Paths are an editing aid: not shown while playing.)
     if (this.pathLines) this.pathLines.visible = !this.play;
     this.updateLighting();
-    if (this.play?.placeCamera(this.fpCam)) {
-      this.lighting.follow(this.fpCam.getWorldPosition(new THREE.Vector3()));
-      this.play.updateFoliage(this.fpCam);
-      this.waterDepth.prepare(r, this.scene, this.fpCam);
+    const cam = this.playCamera;
+    if (this.play?.placeCamera(cam)) {
+      const focus = cam instanceof IsometricPlayCamera ? cam.focus : cam.getWorldPosition(new THREE.Vector3());
+      this.lighting.follow(focus);
+      this.play.updateFoliage(cam);
+      this.waterDepth.prepare(r, this.scene, cam);
       this.reflections ??= new SceneReflections(r);
       if (this.reflectOn()) this.syncProbes();
-      if (!this.warmPlay(this.fpCam, this.fpCam.getWorldPosition(new THREE.Vector3()))) return;
+      if (!this.warmPlay(cam, focus)) return;
       if (waiting) r.clear();
       this.relight();
-      (this.reflections ??= new SceneReflections(r)).update(this.scene, this.fpCam.getWorldPosition(new THREE.Vector3()), this.reflectOn(), [this.grid.object]);
+      (this.reflections ??= new SceneReflections(r)).update(this.scene, focus, this.reflectOn(), [this.grid.object]);
       if (this.reflections.busy) this.invalidate();
-      this.groundBlend.prepare(r, this.scene, this.fpCam, [this.grid.object]);
-      this.play.applyWater(this.scene, this.fpCam);
-      if (!this.renderAo(this.fpCam)) r.render(this.scene, this.fpCam);
+      this.groundBlend.prepare(r, this.scene, cam, [this.grid.object]);
+      this.play.applyWater(this.scene, cam);
+      if (!this.renderAo(cam)) r.render(this.scene, cam);
       return;
     }
-    this.grid.setCamera(this.rig.camera.position);
-    this.lighting.follow(this.rig.target, Math.max(1400, this.rig.camera.position.distanceTo(this.rig.target) * 1.5));
+    this.grid.setCamera(this.rig.kind === 'isometric' ? this.rig.target : this.rig.camera.position);
+    this.lighting.follow(this.rig.target, Math.max(1400, this.rig.kind === 'isometric' ? this.rig.unitsPerPixel * Math.max(size.x, size.y) : this.rig.camera.position.distanceTo(this.rig.target) * 1.5));
     this.foliage.update(this.rig.camera, this.rig.unitsPerPixel);
     this.play?.updateFoliage(this.rig.camera, this.rig.unitsPerPixel);
     this.plants.update(this.rig.camera);

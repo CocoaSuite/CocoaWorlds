@@ -230,7 +230,7 @@ export function Viewport() {
     }
     let cancelled = false;
     const st = useEditor.getState();
-    e.startPlay(playing.scene, playing.rules, playing.values, st.session?.project.id)
+    e.startPlay(playing.scene, playing.rules, playing.values, st.session?.project.id, null, st.session?.project.settings.worldMode)
       .then((info) => {
         if (cancelled) return;
         st.log(
@@ -391,7 +391,7 @@ export function Viewport() {
           </button>
         </div>
       )}
-      {playing && lock === true && <div className="cw-crosshair" aria-hidden="true" />}
+      {playing && lock === true && useEditor.getState().session?.project.settings.worldMode !== 'isometric' && <div className="cw-crosshair" aria-hidden="true" />}
       {playing && hud && playScene && <UiLayer ui={uiOf(playScene.settings)} live={hud.ui} values={hud.allValues} onClick={(id) => engine.current?.clickUi(id)} onRow={(list, row) => engine.current?.pickRow(list, row)} />}
       {playing && hud && <HudView hud={hud} captions={captions} />}
       {hud?.blueprints && <BlueprintMenu menu={hud.blueprints} onPick={(id) => engine.current?.pickBlueprint(id)} onClose={() => engine.current?.closeBlueprints()} />}
@@ -404,7 +404,7 @@ export function Viewport() {
       {playing && lock === false && !uiMouse && !devOpen && !(hud && playing.rules.saveMenu) && (
         <button type="button" className="cw-ov cw-click-play" data-testid="click-to-play" onClick={() => engine.current?.capturePlayer()}>
           <strong>{t('play.click')}</strong>
-          <span>{t('play.keys')}</span>
+          <span>{t(useEditor.getState().session?.project.settings.worldMode === 'isometric' ? 'play.isoKeys' : 'play.keys')}</span>
         </button>
       )}
       {!playing && tool === 'brush' && (

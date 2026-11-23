@@ -1,5 +1,6 @@
 /** The game's controls, shared by Play in the editor and by exported games. */
 import type { PlayerInput } from '@cocoaworlds/runtime';
+import { ISOMETRIC_YAW } from '../viewport/camera';
 
 /** Keys the game uses itself while playing (they never reach anything else). */
 export const GAME_KEYS = new Set(['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space', 'ControlLeft', 'ControlRight', 'KeyC', 'ShiftLeft', 'ShiftRight', 'KeyE']);
@@ -9,11 +10,15 @@ export const MAX_MOUSE_STEP = 300;
 const LOOK_SPEED = 0.0022;
 
 /** Movement from the keys held down. */
-export function inputFromKeys(keys: Set<string>): Partial<PlayerInput> {
+export function inputFromKeys(keys: Set<string>, isometric = false): Partial<PlayerInput> {
   const on = (...c: string[]) => c.some((x) => keys.has(x));
+  const forward = (on('KeyW', 'ArrowUp') ? 1 : 0) - (on('KeyS', 'ArrowDown') ? 1 : 0);
+  const right = (on('KeyD', 'ArrowRight') ? 1 : 0) - (on('KeyA', 'ArrowLeft') ? 1 : 0);
   return {
-    forward: (on('KeyW', 'ArrowUp') ? 1 : 0) - (on('KeyS', 'ArrowDown') ? 1 : 0),
-    right: (on('KeyD', 'ArrowRight') ? 1 : 0) - (on('KeyA', 'ArrowLeft') ? 1 : 0),
+    forward,
+    right,
+    // The movement axes stay fixed to the screen; the player faces the chosen direction.
+    ...(isometric ? { movementYaw: ISOMETRIC_YAW, ...(forward || right ? { yaw: ISOMETRIC_YAW - Math.atan2(right, forward), pitch: 0 } : {}) } : {}),
     jump: on('Space'),
     crouch: on('ControlLeft', 'ControlRight', 'KeyC'),
     walk: on('ShiftLeft', 'ShiftRight'),

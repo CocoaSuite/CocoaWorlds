@@ -87,6 +87,18 @@ describe('Player', () => {
     w.dispose();
   });
 
+  it('moves on fixed isometric axes while facing the direction of movement', () => {
+    const w = GameWorld.create(scene(floor(), spawn()));
+    run(w, 0.2);
+    w.setPlayerInput({ right: 1, movementYaw: Math.PI / 4, yaw: -Math.PI / 4, pitch: 0 });
+    run(w, 1);
+    expect(w.player!.feetPosition.x).toBeGreaterThan(100);
+    expect(w.player!.feetPosition.z).toBeLessThan(-100);
+    expect(w.player!.lookDirection()[0]).toBeCloseTo(Math.SQRT1_2);
+    expect(w.player!.lookDirection()[2]).toBeCloseTo(-Math.SQRT1_2);
+    w.dispose();
+  });
+
   it('jumps about 45 u high, once per press', () => {
     const w = GameWorld.create(scene(floor(), spawn()));
     run(w, 0.3);

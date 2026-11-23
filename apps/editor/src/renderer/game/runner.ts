@@ -10,6 +10,8 @@ import { isInvisibleMaterial } from '@cocoaworlds/geometry';
 import * as THREE from 'three';
 import { brushBounds } from '../brush/brushes';
 import { PlaySession } from '../viewport/play-session';
+import { IsometricPlayCamera } from '../viewport/camera';
+import type { WorldMode } from '@cocoaworlds/core';
 import { AoRenderer } from '../viewport/ao';
 import { glassCastsNoShadow } from '../viewport/glass-shadows';
 import type { Travel } from '@cocoaworlds/runtime';
@@ -31,6 +33,7 @@ export interface GameData {
   id: string;
   scene: SceneFile;
   rules: GameRules;
+  worldMode?: WorldMode;
   values: GameValue[];
   /** How voice-over captions look (older exports have none: the defaults). */
   captions?: Partial<CaptionStyle>;
@@ -62,7 +65,11 @@ export interface RunnerEvents {
 export class GameRunner {
   private renderer: THREE.WebGLRenderer;
   private scene = new THREE.Scene();
-  private cam = new THREE.PerspectiveCamera(74, 1, 2, 65536);
+  private cam: THREE.PerspectiveCamera | IsometricPlayCamera;
+
+  private get cameraFocus(): THREE.Vector3 {
+    return this.cam instanceof IsometricPlayCamera ? this.cam.focus : this.cam.getWorldPosition(new THREE.Vector3());
+  }
   private lighting = new SceneLighting();
   private doc: SceneDoc;
   private play: PlaySession | null = null;
@@ -88,6 +95,7 @@ export class GameRunner {
     private data: GameData,
     private cb: RunnerEvents,
   ) {
+    this.cam = data.worldMode === 'isometric' ? new IsometricPlayCamera() : new THREE.PerspectiveCamera(74, 1, 2, 65536);
     this.doc = new SceneDoc(parkAssets(expandRepeats(workInternal(structuredClone(data.scene)), brushBounds), brushBounds));
     this.current = data.scene;
     const r = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
@@ -144,6 +152,7 @@ export class GameRunner {
     if (this.disposed) return play.dispose();
     this.play = play;
     play.setEars(this.cam);
+    if (this.data.worldMode === 'isometric') this.send();
     this.scene.add(play.group);
     this.savedKey = JSON.stringify(play.progress());
     this.last = performance.now();
@@ -253,8 +262,11 @@ export class GameRunner {
     const w = this.host.clientWidth, h = this.host.clientHeight;
     if (!w || !h) return;
     this.renderer.setSize(w, h, false);
-    this.cam.aspect = w / h;
-    this.cam.updateProjectionMatrix();
+    if (this.cam instanceof IsometricPlayCamera) this.cam.resize(w, h);
+    else {
+      this.cam.aspect = w / h;
+      this.cam.updateProjectionMatrix();
+    }
   }
 
   private loop = (): void => {
@@ -288,7 +300,7 @@ export class GameRunner {
     this.renderer.shadowMap.enabled = this.lighting.shadows;
     if (play.travel) return void this.go(play.travel);
     if (play.placeCamera(this.cam)) {
-      this.lighting.follow(this.cam.getWorldPosition(new THREE.Vector3()));
+      this.lighting.follow(this.cameraFocus);
       play.applyWater(this.scene, this.cam);
       this.reflections ??= new SceneReflections(this.renderer);
       if (this.probesFor !== play) {
@@ -301,7 +313,7 @@ export class GameRunner {
       // thread); the level starts, ticking and drawn, once they are all compiled. Drawn before, each would be waited
       // for in turn, the window frozen meanwhile.
       if (this.warmed !== play) {
-        const eye = this.cam.getWorldPosition(new THREE.Vector3()), reflect = play.doc.settings.reflections !== false;
+        const eye = this.cameraFocus, reflect = play.doc.settings.reflections !== false;
         if (this.warming !== play) {
           this.warming = play;
           this.reflections.kick(this.scene, eye, reflect, play.group);
@@ -324,7 +336,7 @@ export class GameRunner {
         this.lightSeen = this.lighting.dayVersion;
         this.reflections.relight();
       }
-      this.reflections.update(this.scene, this.cam.getWorldPosition(new THREE.Vector3()), this.play?.doc.settings.reflections !== false);
+      this.reflections.update(this.scene, this.cameraFocus, this.play?.doc.settings.reflections !== false);
       (this.groundBlend ??= new GroundBlend()).prepare(this.renderer, this.scene, this.cam);
       if (!(this.ao ??= new AoRenderer(this.renderer)).render(this.scene, this.cam, this.play ? this.play.drawSettings(this.play.doc.settings) : undefined, !!this.play?.usesLens)) this.renderer.render(this.scene, this.cam);
     }
@@ -395,7 +407,7 @@ export class GameRunner {
   private dropLock = false;
 
   private send(): void {
-    this.play?.setInput(inputFromKeys(this.keys));
+    this.play?.setInput(inputFromKeys(this.keys, this.data.worldMode === 'isometric'));
   }
 
   /** The dev console is open (the game rule lets exported games have it). */
@@ -470,6 +482,7 @@ export class GameRunner {
   private mouseMove = (e: MouseEvent): void => {
     if (!this.locked || !this.play) return;
     if (this.rotating && this.play.holding) return this.play.rotateHeld(e.movementX, e.movementY);
+    if (this.data.worldMode === 'isometric') return;
     const look = lookFromMouse(this.play.look, e.movementX, e.movementY);
     if (look) this.play.setInput(look);
   };

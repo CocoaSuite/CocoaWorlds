@@ -2,7 +2,7 @@
  * Play mode inside the editor (decision D7): a game world built from a snapshot of the scene, drawn with
  * its own meshes. The editor's scene is never touched; stopping throws all of this away.
  *
- * With a Player start in the scene you play as the player (first person); without one, Play is a physics
+ * With a Player start in the scene you play as the player; without one, Play is a physics
  * preview watched with the free camera.
  */
 import { navInWorkers } from './nav-pool';
@@ -16,6 +16,7 @@ const SPARE_SHADOWS = 3;
 const FOV = { sprint: 8, fall: 10, weak: -14, easeIn: 6, easeOut: 4 };
 import type { Problem, ScriptError } from '@cocoaworlds/scripting';
 import * as THREE from 'three';
+import { IsometricPlayCamera } from './camera';
 import { brushBounds, worldBrushes } from '../brush/brushes';
 import { FoliageRenderer } from './foliage';
 import { waterLookOf, waterMaterialFor } from './water-look';
@@ -1736,25 +1737,35 @@ export class PlaySession {
     }
   }
 
-  /** Place a camera at the player's eyes. Returns false when there is no player. */
-  placeCamera(cam: THREE.PerspectiveCamera): boolean {
+  /** Place the play camera. Returns false when there is no player. */
+  placeCamera(cam: THREE.PerspectiveCamera | IsometricPlayCamera): boolean {
     const f = this.frame;
     if (!f.hasView) return false;
     const v = f.view;
-    cam.position.set(v[0]!, v[1]!, v[2]!);
-    cam.rotation.set(v[4]!, v[3]!, 0, 'YXZ');
-    cam.updateMatrixWorld();
-    this.easeFov(cam, f);
+    const iso = cam instanceof IsometricPlayCamera;
+    if (iso) {
+      cam.follow(v[5]!, v[6]! + 32 * f.size, v[7]!);
+      // Hear sounds at the player, not hundreds of units up at the camera.
+      if (this.listener) {
+        this.listener.position.copy(cam.worldToLocal(new THREE.Vector3(v[5]!, v[6]! + (f.crouched ? 32 : 64) * f.size, v[7]!)));
+        this.listener.updateMatrixWorld();
+      }
+    } else {
+      cam.position.set(v[0]!, v[1]!, v[2]!);
+      cam.rotation.set(v[4]!, v[3]!, 0, 'YXZ');
+      cam.updateMatrixWorld();
+      this.easeFov(cam, f);
+    }
     // (The game judges “anywhere in view” by the camera that draws.)
     cam.updateProjectionMatrix();
     this.world.setCamera(this.viewProj.multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse).elements, [cam.position.x, cam.position.y, cam.position.z]);
-    this.mineView?.placeHand(cam, this.world.time, !!f.thirdPerson);
-    // Third person: the player is seen, as a simple body turned the way they look.
-    if (f.thirdPerson) {
+    this.mineView?.placeHand(cam, this.world.time, iso || !!f.thirdPerson);
+    // Third person and isometric: a simple body turned the way the player looks.
+    if (iso || f.thirdPerson) {
       this.body ??= this.makeBody();
       this.body.visible = true;
       this.body.position.set(v[5]!, v[6]!, v[7]!);
-      this.body.rotation.set(0, v[3]!, 0);
+      this.body.rotation.set(0, iso ? this.world.player?.input.yaw ?? v[3]! : v[3]!, 0);
       this.body.scale.set(f.size, (f.crouched ? 0.5 : 1) * f.size, f.size);
     } else if (this.body) this.body.visible = false;
     return true;

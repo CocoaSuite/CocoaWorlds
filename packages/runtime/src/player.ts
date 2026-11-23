@@ -81,6 +81,8 @@ export interface PlayerInput {
   /** View angles in radians: yaw turns left/right around Y (0 looks along −Z), pitch looks up/down. */
   yaw: number;
   pitch: number;
+  /** Optional fixed movement basis, independent of facing (isometric controls). */
+  movementYaw?: number;
 }
 
 export const noInput = (): PlayerInput => ({ forward: 0, right: 0, jump: false, crouch: false, walk: false, yaw: 0, pitch: 0 });
@@ -485,9 +487,10 @@ export class Player {
       if (this.outOfBreath && this.stamina >= PLAYER.staminaToSprint) this.outOfBreath = false;
     }
 
-    // Wished direction on the ground plane from the view yaw.
-    const fx = -Math.sin(inp.yaw), fz = -Math.cos(inp.yaw);
-    const rx = Math.cos(inp.yaw), rz = -Math.sin(inp.yaw);
+    // Wished direction on the ground plane from the movement basis (normally the view yaw).
+    const yaw = inp.movementYaw ?? inp.yaw;
+    const fx = -Math.sin(yaw), fz = -Math.cos(yaw);
+    const rx = Math.cos(yaw), rz = -Math.sin(yaw);
     let wx = fx * inp.forward + rx * inp.right, wz = fz * inp.forward + rz * inp.right;
     const len = Math.hypot(wx, wz);
     if (len > 1e-6) {
@@ -511,8 +514,9 @@ export class Player {
   private fly(dt: number): void {
     const inp = this.input;
     this.setCrouch(false);
-    const d = this.lookDirection();
-    const rx = Math.cos(inp.yaw), rz = -Math.sin(inp.yaw);
+    const yaw = inp.movementYaw ?? inp.yaw;
+    const d: [number, number, number] = inp.movementYaw === undefined ? this.lookDirection() : [-Math.sin(yaw), 0, -Math.cos(yaw)];
+    const rx = Math.cos(yaw), rz = -Math.sin(yaw);
     const up = (inp.jump ? 1 : 0) - (inp.crouch ? 1 : 0);
     let x = d[0] * inp.forward + rx * inp.right, y = d[1] * inp.forward + up, z = d[2] * inp.forward + rz * inp.right;
     const len = Math.hypot(x, y, z);
@@ -585,7 +589,7 @@ export class Player {
       v.y = Math.max(v.y, PLAYER.waterJumpSpeed);
       return;
     }
-    const d = this.lookDirection();
+    const d: [number, number, number] = inp.movementYaw === undefined ? this.lookDirection() : [-Math.sin(inp.movementYaw), 0, -Math.cos(inp.movementYaw)];
     const run = this.crouched ? PLAYER.runSpeed * this.scriptSpeed : maxSpeed;
     const wish = { x: (d[0] * inp.forward + rx * inp.right) * run, y: d[1] * inp.forward * run, z: (d[2] * inp.forward + rz * inp.right) * run };
     if (inp.jump) wish.y += run;

@@ -66,6 +66,7 @@ describe('exported game data', () => {
     const { gameData } = await import('../src/main/export');
     const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'cw-gamedata-'));
     const { project, scenes } = newProject('Lava Run');
+    project.settings.worldMode = 'isometric';
     const lava = newMaterial('Lava', { map: 'assets/textures/lava.png', scroll: [0, 8], emissive: '#ff6020' });
     const unused = newMaterial('Unused', { map: 'assets/textures/unused.png' });
     project.settings.materials = [lava, unused];
@@ -79,6 +80,7 @@ describe('exported game data', () => {
     await fs.writeFile(path.join(dir, 'project.cwproj'), stringify(project));
     await fs.writeFile(path.join(dir, scenePath), stringify(scene));
     const { data } = await gameData(dir);
+    expect(data).toMatchObject({ worldMode: 'isometric' });
     const json = JSON.stringify(data);
     expect((data as { materials: { name: string }[] }).materials.map((m) => m.name)).toEqual(['Lava']);
     expect(usedAssets(json)).toEqual(['assets/textures/lava.png']);
@@ -107,6 +109,7 @@ describe('exported game data', () => {
     for (const n of ['cave', 'old']) await fs.writeFile(path.join(dir, folder, `${n}.cwscene`), stringify({ ...start, entities: [] }));
     const names = async (trim: boolean) => Object.keys(((await gameData(dir, trim)).data as { scenes: object }).scenes).sort();
     const first = startPath.split('/').pop()!.replace('.cwscene', '');
+    expect((await gameData(dir)).data).toMatchObject({ worldMode: '3d' });
     expect(await names(false)).toEqual([first, 'cave', 'old'].sort());
     expect(await names(true)).toEqual([first, 'cave'].sort());
     await fs.rm(dir, { recursive: true, force: true });

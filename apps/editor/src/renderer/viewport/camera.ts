@@ -8,11 +8,39 @@ import * as THREE from 'three';
 
 export type ViewKind = 'perspective' | 'top' | 'front' | 'side' | 'isometric';
 
+// A true isometric view looks equally along all three axes, from above the XZ ground.
+export const ISOMETRIC_YAW = Math.PI / 4;
+const ISO_FORWARD = new THREE.Vector3(-1, -1, -1).normalize();
+
+export class IsometricPlayCamera extends THREE.OrthographicCamera {
+  readonly focus = new THREE.Vector3();
+  constructor() {
+    super(-480, 480, 480, -480, 1, 65536);
+  }
+
+  resize(w: number, h: number): void {
+    const halfHeight = 480;
+    const halfWidth = halfHeight * Math.max(1, w) / Math.max(1, h);
+    this.left = -halfWidth;
+    this.right = halfWidth;
+    this.top = halfHeight;
+    this.bottom = -halfHeight;
+    this.updateProjectionMatrix();
+  }
+
+  follow(x: number, y: number, z: number): void {
+    const target = this.focus.set(x, y, z);
+    this.position.copy(target).addScaledVector(ISO_FORWARD, -1200);
+    this.lookAt(target);
+    this.updateMatrixWorld();
+  }
+}
+
 const ORTHO_DIRS: Record<Exclude<ViewKind, 'perspective'>, { dir: THREE.Vector3; up: THREE.Vector3 }> = {
   top: { dir: new THREE.Vector3(0, -1, 0), up: new THREE.Vector3(0, 0, -1) },
   front: { dir: new THREE.Vector3(0, 0, -1), up: new THREE.Vector3(0, 1, 0) },
   side: { dir: new THREE.Vector3(-1, 0, 0), up: new THREE.Vector3(0, 1, 0) },
-  isometric: { dir: new THREE.Vector3(1, Math.sqrt(2), 1).normalize(), up: new THREE.Vector3(0, 1, 0) },
+  isometric: { dir: ISO_FORWARD, up: new THREE.Vector3(0, 1, 0) },
 };
 
 export class CameraRig {
@@ -28,6 +56,7 @@ export class CameraRig {
 
   /** The point the camera orbits around (straight ahead at the focus distance). */
   get target(): THREE.Vector3 {
+    if (this.kind === 'isometric') return this.orthoState.isometric!.center.clone();
     return this.pos.clone().addScaledVector(this.forward(), this.focusDist);
   }
   flySpeed = 512; // units per second
@@ -154,8 +183,9 @@ export class CameraRig {
 
   private orthoAxes(): { right: THREE.Vector3; up: THREE.Vector3; dir: THREE.Vector3 } {
     const k = (this.kind === 'perspective' ? 'top' : this.kind) as keyof typeof ORTHO_DIRS;
-    const { dir, up } = ORTHO_DIRS[k];
-    const right = new THREE.Vector3().crossVectors(dir, up).normalize();
+    const { dir, up: worldUp } = ORTHO_DIRS[k];
+    const right = new THREE.Vector3().crossVectors(dir, worldUp).normalize();
+    const up = new THREE.Vector3().crossVectors(right, dir).normalize();
     return { right, up, dir };
   }
 

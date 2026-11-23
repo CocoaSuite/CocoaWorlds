@@ -70,7 +70,7 @@ function Player() {
       {hud?.blueprints && <BlueprintMenu menu={hud.blueprints} onPick={(id) => runner.current?.pickBlueprint(id)} onClose={() => runner.current?.closeBlueprints()} />}
       {hud?.computer && runner.current && <ComputerScreen view={hud.computer} host={runner.current} />}
       {hud?.mine && <MineUi hud={hud.mine} menu={hud.mineMenu} onAction={(a, arg) => runner.current?.mineAction(a, arg)} />}
-      {locked && <div className="cw-crosshair" aria-hidden="true" />}
+      {locked && data?.worldMode !== 'isometric' && <div className="cw-crosshair" aria-hidden="true" />}
       {devOpen && <DevConsole onRun={(l) => runner.current?.devCommand(l) ?? []} onClose={() => runner.current?.setConsole(false)} />}
       {data && hud && !locked && !uiMouse && !devOpen && data.rules.saveMenu && (
         <SaveMenu onResume={() => runner.current?.capture()} onSave={() => runner.current?.saveGame() ?? false} onLoad={() => runner.current?.loadGame() ?? false} savedAt={runner.current?.savedAt ?? null} />
