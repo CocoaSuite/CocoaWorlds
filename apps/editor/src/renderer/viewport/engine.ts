@@ -965,10 +965,14 @@ export class ViewportEngine {
     this.gridSize = gridSize;
     // Translation snapping is done relative to the drag start in onProxyGizmo.
     this.gizmo.setTranslationSnap(null);
-    this.gizmo.setRotationSnap(enabled ? 15 * DEG : null);
     this.gizmo.setScaleSnap(enabled ? 0.25 : null);
     this.grid.update(gridSize, this.rig.unitsPerPixel);
     this.invalidate();
+  }
+
+  /** Rotation snap is independent of the translation/scale grid. */
+  setSnapAngle(degrees: number): void {
+    this.gizmo.setRotationSnap(degrees > 0 ? degrees * DEG : null);
   }
 
   private navOn = false;
