@@ -86,3 +86,24 @@ describe('caption style', () => {
     expect(validateProject(project)).toMatchObject({ ok: true });
   });
 });
+
+describe('World presentation mode', () => {
+  it('defaults newly created Worlds to standard 3D', () => {
+    const { project } = newProject('World');
+    expect(project.settings.worldMode).toBe('3d');
+  });
+
+  it('persists isometric mode through project serialization', () => {
+    const { project } = newProject('Isometric');
+    project.settings.worldMode = 'isometric';
+    expect(parseProject(stringify(project)).project.settings.worldMode).toBe('isometric');
+  });
+
+  it('accepts old projects without a World mode and rejects invalid ones', () => {
+    const { project } = newProject('Legacy');
+    delete project.settings.worldMode;
+    expect(parseProject(stringify(project)).project.settings.worldMode).toBeUndefined();
+    project.settings.worldMode = 'sideways' as never;
+    expect(() => parseProject(stringify(project))).toThrow(ProjectFormatError);
+  });
+});
