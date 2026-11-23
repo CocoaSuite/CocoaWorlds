@@ -131,6 +131,8 @@ export type Justify = 'left' | 'right' | 'top' | 'bottom' | 'center';
 export type ViewMode = 'perspective' | 'top' | 'front' | 'side';
 /** Grid sizes to snap to (u). */
 export const GRID_SIZES = [1, 2, 4, 8, 16, 32, 64, 128, 256, 512];
+/** Rotation snapping in degrees; zero means free rotation. */
+export const SNAP_ANGLES = [0, 1, 5, 10, 15, 22.5, 30, 45, 90];
 
 export type AddKind = 'empty' | 'pointLight' | 'spotLight' | 'sun' | 'spawn' | 'sign' | 'reflectionProbe' | 'poster' | 'painting' | 'decal' | 'stake' | 'junk' | 'carpet' | 'outlet' | 'extender' | 'stringLights' | 'generator' | 'lightSwitch' | 'shelf';
 export interface LogEntry {
@@ -174,6 +176,7 @@ interface State {
   showPlayBar: boolean;
   showBottom: boolean;
   snap: boolean;
+  snapAngle: number;
   dirty: boolean;
   saving: boolean;
   logs: LogEntry[];
@@ -340,6 +343,7 @@ interface Actions {
   setSceneSettings(patch: Partial<SceneSettings>, label: string, mergeKey?: string): void;
   /** The snapping grid's size (u; saved with the project). */
   setGridSize(size: number): void;
+  setSnapAngle(angle: number): void;
   /** Next finer or coarser grid (×½ or ×2). */
   stepGrid(dir: -1 | 1): void;
   /** Replace the project's game values (saved to the project file at once). */
@@ -420,6 +424,7 @@ export const useEditor = create<State & Actions>()((set, get) => ({
   showPlayBar: savedPlayBar(),
   showBottom: true,
   snap: true,
+  snapAngle: 15,
   dirty: false,
   saving: false,
   logs: [],
@@ -536,6 +541,9 @@ export const useEditor = create<State & Actions>()((set, get) => ({
   },
   setTool: (tool) => set((s) => (tool === 'face' || s.tool !== 'face' ? { tool } : { tool, faceSelection: [] })),
   setView: (view) => set({ view }),
+  setSnapAngle: (angle) => {
+    if (SNAP_ANGLES.includes(angle)) set({ snapAngle: angle });
+  },
   toggle: (k) => {
     set((s) => ({ [k]: !s[k] }) as Partial<State>);
     if (k === 'zUp') saveZUp(get().zUp);
