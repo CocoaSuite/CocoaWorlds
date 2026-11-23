@@ -86,7 +86,7 @@ export class SceneLighting {
   private suns: THREE.DirectionalLight[] = [];
   /** The first currently lit sun, including the day/night light. */
   get raySun(): THREE.DirectionalLight | null {
-    return this.suns.find((s) => s.visible && s.intensity > 0) ?? null;
+    return this.suns.find((s) => s.visible && s.castShadow && s.intensity > 0) ?? null;
   }
   /** The lights by object id, with how much brighter the light is than its Brightness (Play changes them). */
   readonly lights = new Map<string, { light: THREE.Light; falloff: number }>();
