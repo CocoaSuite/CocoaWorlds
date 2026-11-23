@@ -1079,7 +1079,8 @@ button.cw-sec.cw-fold { width: 100%; border: 0; border-top: 1px solid var(--line
 .cw-command-row .cw-dd { max-height: calc(100vh - 130px); overflow-y: auto; }
 .cw-workarea .cw-lib-side { overflow-x: auto; overflow-y: hidden; }
 .cw-workarea .cw-lib-cats { flex: none; }
-.cw-dialogue { position: absolute; z-index: 12; bottom: 5%; left: 50%; transform: translateX(-50%); box-sizing: border-box; width: min(88%, 760px); padding: 18px 26px; background: #171827f5; color: #faf7ee; border: 1px solid #a99bc1; border-radius: 8px; box-shadow: 0 6px 22px #0008; pointer-events: none; }
+.cw-dialogue { position: absolute; z-index: 12; bottom: 5%; left: 50%; transform: translateX(-50%); box-sizing: border-box; width: min(88%, 760px); padding: 18px 26px; color: #faf7ee; pointer-events: none; }
+.cw-dialogue::before { content: ""; position: absolute; inset: 0; z-index: -1; background: #000; transform: skewX(-4deg); }
 .cw-dialogue strong { color: #e9bf88; }
 .cw-dialogue p { margin: 9px 0; font: 20px/1.45 Georgia, serif; overflow-wrap: anywhere; max-height: 40vh; overflow: auto; }
 .cw-dialogue small { display: block; text-align: right; color: #d6d0e2; }
