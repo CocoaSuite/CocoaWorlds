@@ -830,6 +830,13 @@ export class ViewportEngine {
   /** Returns true when the key was the game's. */
   private gameKey(e: KeyboardEvent, down: boolean): boolean {
     if (!this.asPlayer || !(this.locked || (this.uiFree && !this.uiPaused && this.play))) return false;
+    if (this.play?.dialogue && !['Escape', 'F5', 'F6'].includes(e.key)) {
+      this.gameKeys.clear();
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      if (down && !e.repeat && ['KeyE', 'Enter', 'Space'].includes(e.code)) this.play.use();
+      return true;
+    }
     // At a computer the keys are typed into its screen (notes): not the game's, nor the editor's. Esc gets up.
     if (this.play?.atComputer) {
       if (e.key === 'F5' || e.key === 'F6') return false;

@@ -22,6 +22,26 @@ const run = (w: GameWorld, seconds: number) => {
 };
 
 describe('Player', () => {
+  it('talks to an object in reach, advances speakers, and releases control at the end', () => {
+    const npc = brush('Guide', [-32, 0, -80], [32, 96, -64], { dialogue: { pages: 'Welcome.\nTraveler: Thank you!\n\nGoodbye.' } });
+    const w = GameWorld.create(scene(floor(), npc, spawn()));
+    run(w, 0.3);
+    expect(w.usePrompt()).toBe('Talk');
+    w.use();
+    run(w, 0.1);
+    expect(w.dialogue).toEqual({ speaker: 'Guide', text: 'Welcome.', last: false });
+    w.setPlayerInput({ forward: 1 });
+    expect(w.player!.input.forward).toBe(0);
+    w.use();
+    expect(w.dialogue?.speaker).toBe('Traveler');
+    w.use();
+    expect(w.dialogue).toEqual({ speaker: 'Traveler', text: 'Goodbye.', last: true });
+    w.use();
+    expect(w.dialogue).toBeNull();
+    w.setPlayerInput({ forward: 1 });
+    expect(w.player!.input.forward).toBe(1);
+    w.dispose();
+  });
   it('with stamina, Shift sprints until it runs out, then runs; jumping costs some; it comes back after a rest', () => {
     const w = GameWorld.create(scene(brush('field', [-4096, -16, -4096], [4096, 0, 4096]), spawn()), { rules: { stamina: true } });
     run(w, 0.3);

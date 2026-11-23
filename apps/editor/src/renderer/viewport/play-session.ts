@@ -1376,6 +1376,8 @@ export class PlaySession {
     return this.world.uiState();
   }
 
+  get dialogue() { return this.world.dialogue; }
+
   /** The player clicked a button on screen. */
   clickUi(id: string): void {
     this.world.clickUi(id);

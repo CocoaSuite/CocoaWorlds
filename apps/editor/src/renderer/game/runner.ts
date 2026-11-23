@@ -436,6 +436,12 @@ export class GameRunner {
       return this.setConsole(true);
     }
     if (!this.play || !(this.locked || (this.uiFree && !this.uiPaused))) return;
+    if (this.play.dialogue && e.key !== 'Escape') {
+      this.keys.clear();
+      e.preventDefault();
+      if (down && !e.repeat && ['KeyE', 'Enter', 'Space'].includes(e.code)) this.play.use();
+      return;
+    }
     // At a computer the keys are typed into its screen (notes). Esc gets up.
     if (this.play.atComputer) {
       if (this.keys.size) {

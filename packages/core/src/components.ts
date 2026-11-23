@@ -403,6 +403,13 @@ export const COMPONENTS: ComponentDef[] = [
     fields: [{ key: 'health', label: e('Health', 'Здоровье'), type: { kind: 'number', min: 1, step: 5 }, default: 50 }],
   },
   {
+    name: 'dialogue',
+    label: e('Dialogue', 'Диалог'),
+    description: e('Press E near this object to talk. Write one page per line. Start a line with “Name: ” to change speaker.', 'Нажмите E рядом с объектом для разговора. Каждая строка — страница. Начните строку с «Имя: », чтобы сменить говорящего.'),
+    appliesTo: 'any',
+    fields: [{ key: 'pages', label: e('Conversation', 'Разговор'), type: { kind: 'text' }, default: 'Hello there!' }],
+  },
+  {
     name: 'sign',
     label: e('Text sign', 'Табличка с текстом'),
     description: e('Text shown in the world: prices, names, directions. Blocks can change it while playing.', 'Текст в мире: цены, названия, указатели. Блоки могут менять его во время игры.'),

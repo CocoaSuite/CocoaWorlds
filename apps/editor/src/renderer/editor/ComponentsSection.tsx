@@ -270,7 +270,11 @@ function FieldEditor({
   const done = () => s.commit();
   const ty = field.type;
   let input;
-  if (ty.kind === "number") {
+  if (component === "dialogue" && field.key === "pages") {
+    input = <textarea key={JSON.stringify([entity, value])} className="cw-input" rows={6} aria-label={label}
+      defaultValue={String(value ?? "")} onKeyDown={(event) => event.stopPropagation()}
+      onBlur={(event) => { if (event.target.value !== value) set(event.target.value); }} />;
+  } else if (ty.kind === "number") {
     const clamp = (v: number) =>
       Math.min(ty.max ?? Infinity, Math.max(ty.min ?? -Infinity, v));
     input = (

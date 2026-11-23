@@ -580,6 +580,21 @@ export class GameWorld {
   /** Copies made while playing → what they were copied from. */
   private copyOf = new Map<string, string>();
   private useQueued = false;
+  private conversation: { speaker: string; text: string }[] = [];
+
+  get dialogue() {
+    const page = this.conversation[0];
+    return page ? { ...page, last: this.conversation.length === 1 } : null;
+  }
+
+  private dialogueTarget(targets: string[]) {
+    for (const id of targets) {
+      const entity = this.doc.get(this.copyOf.get(id) ?? id);
+      const pages = entity?.components.dialogue?.pages;
+      if (entity && typeof pages === 'string' && pages.trim()) return { name: entity.name, pages };
+    }
+    return null;
+  }
   /** Below this the player has fallen out of the world and starts again. */
   private killY = -Infinity;
   private health: number = PLAYER.maxHealth;
@@ -3140,6 +3155,7 @@ export class GameWorld {
 
   /** What the player is pressing (from the keyboard and mouse). */
   setPlayerInput(input: Partial<PlayerInput>): void {
+    if (this.conversation.length) return;
     // (A click can press and let go between two steps: the press still fires once.)
     if (input.fire && !this.hiding) this.fireQueued = true;
     if (this.player) Object.assign(this.player.input, input);
@@ -3447,6 +3463,7 @@ export class GameWorld {
    * no word), or null when there's nothing to use.
    */
   usePrompt(): string | null {
+    if (this.conversation.length) return null;
     if (this.hiding) return null;
     if (this.base && this.base.prompt(this.baseAim())) return null;
     const power = this.held ? this.powerHeldUse(false) : this.powerUse(false);
@@ -3458,6 +3475,7 @@ export class GameWorld {
     if (this.held) return this.runner.usesHolding(targets, this.heldIds(), distance) ? '' : null;
     const spot = targets.find((t) => this.spots.has(t) && this.keyOf(t) === 'KeyE' && this.seatReady(t));
     if (spot && distance <= this.reachOf(spot)) return String(this.spots.get(spot)!.prompt ?? '');
+    if (distance <= PLAYER.useReach && this.dialogueTarget(targets)) return 'Talk';
     const prompt = this.runner.usePrompt(targets, distance);
     if (prompt !== null) return prompt;
     if (distance > PLAYER.useReach) return null;
@@ -3737,6 +3755,10 @@ export class GameWorld {
 
   /** The player pressed Use: on the next step, whatever they look at within reach gets “When the player uses this”. */
   use(): void {
+    if (this.conversation.length) {
+      this.conversation.shift();
+      return;
+    }
     if (!this.frozen) this.useQueued = true;
   }
 
@@ -4124,6 +4146,18 @@ export class GameWorld {
     const spot = targets.find((t) => this.spots.has(t) && this.keyOf(t) === 'KeyE' && this.seatReady(t));
     if (spot && distance <= this.reachOf(spot)) return this.enterHiding(spot);
     if (distance <= PLAYER.useReach) {
+      const talk = this.dialogueTarget(targets);
+      if (talk && this.player) {
+        let speaker = talk.name;
+        for (const line of talk.pages.split(/\r?\n/).map((s) => s.trim()).filter(Boolean)) {
+          const match = /^([^:]+):\s+(.+)$/.exec(line);
+          if (match) speaker = match[1]!.trim();
+          this.conversation.push({ speaker, text: match?.[2] ?? line });
+        }
+        Object.assign(this.player.input, { forward: 0, right: 0, jump: false, fire: false, block: false, use: false, crouch: false });
+        this.fireQueued = false;
+        return;
+      }
       if (this.grab(id)) return;
       // Friends follow (or stay) when used.
       this.npcs.get(id)?.use();

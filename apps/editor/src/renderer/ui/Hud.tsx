@@ -10,6 +10,7 @@ import { BuildIcon } from './build-icons';
 
 /** What the in-game display shows. */
 export interface Hud {
+  dialogue: PlaySession['dialogue'];
   showHealth: boolean;
   /** Health kept but hidden: the player has health (hurt flash) without a bar. */
   hasHealth: boolean;
@@ -104,6 +105,7 @@ export function hudOf(play: PlaySession, locked: boolean): Hud {
   const screen = play.screen();
   return {
     showHealth: !!status?.showHealth,
+    dialogue: play.dialogue,
     hasHealth: !!status?.hasHealth,
     weak: status?.weak ?? 0,
     cover: ((c) => ({ color: c.color, alpha: Math.round(c.alpha * 100) / 100 }))(play.screenCover()),
@@ -201,6 +203,11 @@ export function HudView({ hud, captions }: { hud: Hud; captions?: CaptionStyle }
   const low = hud.showHealth && hud.health <= 25;
   return (
     <>
+      {hud.dialogue && <section className="cw-dialogue" aria-label="Dialogue" aria-live="polite">
+        <strong>{hud.dialogue.speaker}</strong>
+        <p>{hud.dialogue.text}</p>
+        <small><kbd>E</kbd> {hud.dialogue.last ? 'Finish' : 'Continue'}</small>
+      </section>}
       {hud.placing && (
         <div className="cw-ov cw-place-keys" data-testid="place-keys">
           <span><kbd>{t('hud.click')}</kbd>Place</span>
