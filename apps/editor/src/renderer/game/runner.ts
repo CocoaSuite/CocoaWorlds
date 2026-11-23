@@ -504,7 +504,8 @@ export class GameRunner {
   private wheel = (e: WheelEvent): void => {
     if (!this.locked || !this.play || !e.deltaY) return;
     e.preventDefault();
-    if (!this.play.wheelHeld(e.deltaY)) this.play.selectSlot(this.play.uiState().slot + Math.sign(e.deltaY));
+    if (this.cam instanceof IsometricPlayCamera) this.cam.zoomByWheel(e.deltaY, e.deltaMode);
+    else if (!this.play.wheelHeld(e.deltaY)) this.play.selectSlot(this.play.uiState().slot + Math.sign(e.deltaY));
   };
 
   private mouseUp = (e: MouseEvent): void => {

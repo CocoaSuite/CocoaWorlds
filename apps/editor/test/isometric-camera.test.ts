@@ -4,6 +4,20 @@ import { CameraRig, IsometricPlayCamera } from '../src/renderer/viewport/camera'
 import { inputFromKeys } from '../src/renderer/game/controls';
 
 describe('isometric cameras', () => {
+  it('zooms around the followed player and keeps zoom within bounds', () => {
+    const cam = new IsometricPlayCamera();
+    cam.follow(10, 32, -80);
+    const point = cam.focus.clone().add(new THREE.Vector3(32, 0, 0));
+    const before = point.clone().project(cam).x;
+    cam.zoomByWheel(-100, 0);
+    expect(point.clone().project(cam).x).toBeGreaterThan(before);
+    expect(cam.focus.clone().project(cam).x).toBeCloseTo(0);
+    cam.zoomByWheel(-10000, 1);
+    expect(cam.zoom).toBe(4);
+    cam.zoomByWheel(10000, 2);
+    expect(cam.zoom).toBe(0.5);
+  });
+
   it('looks down from above, foreshortening all three axes equally', () => {
     const rig = new CameraRig();
     rig.resize(800, 600);

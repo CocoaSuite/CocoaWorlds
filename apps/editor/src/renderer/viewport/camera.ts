@@ -14,6 +14,12 @@ const ISO_FORWARD = new THREE.Vector3(-1, -1, -1).normalize();
 
 export class IsometricPlayCamera extends THREE.OrthographicCamera {
   readonly focus = new THREE.Vector3();
+  zoomByWheel(delta: number, mode: number): void {
+    const pixels = delta * (mode === 1 ? 16 : mode === 2 ? 480 : 1);
+    this.zoom = THREE.MathUtils.clamp(this.zoom * Math.exp(-pixels * 0.0015), 0.5, 4);
+    this.updateProjectionMatrix();
+  }
+
   constructor() {
     super(-480, 480, 480, -480, 1, 65536);
   }

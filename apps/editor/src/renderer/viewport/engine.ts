@@ -2769,7 +2769,10 @@ export class ViewportEngine {
   private onWheel = (e: WheelEvent): void => {
     if (this.asPlayer) {
       e.preventDefault();
-      // The wheel moves along the hotbar.
+      if (this.locked && this.playWorldMode === 'isometric') {
+        this.isoCam.zoomByWheel(e.deltaY, e.deltaMode);
+        return;
+      }
       if (this.locked && this.play && e.deltaY && !this.play.wheelHeld(e.deltaY)) this.play.selectSlot(this.play.uiState().slot + Math.sign(e.deltaY));
       return;
     }
