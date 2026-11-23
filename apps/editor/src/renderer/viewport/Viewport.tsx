@@ -12,7 +12,7 @@ import { ContextMenu, Segmented, type MenuEntry } from '@cocoaworlds/ui';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { flyState } from '../editor/shortcuts';
 import { t } from '../i18n';
-import { GRID_SIZES, useSelectedEntities, useEditor, type ViewMode } from '../store';
+import { GRID_SIZES, SNAP_ANGLES, useSelectedEntities, useEditor, type ViewMode } from '../store';
 import type { DraftState } from './brush-draft';
 import { BrushPanel } from './BrushPanel';
 import { TerrainPanel } from './TerrainPanel';
@@ -61,6 +61,7 @@ export function Viewport() {
   const tool = useEditor((s) => s.tool);
   const view = useEditor((s) => s.view);
   const snap = useEditor((s) => s.snap);
+  const snapAngle = useEditor((s) => s.snapAngle);
   const vertexSnap = useEditor((s) => s.vertexSnap);
   const pivotEdit = useEditor((s) => s.pivotEdit);
   const showGrid = useEditor((s) => s.showGrid);
@@ -215,6 +216,9 @@ export function Viewport() {
     engine.current?.setSnap(snap, gridSize);
   }, [snap, gridSize]);
   useEffect(() => {
+    engine.current?.setSnapAngle(snapAngle);
+  }, [snapAngle]);
+  useEffect(() => {
     engine.current?.setVertexSnap(vertexSnap);
   }, [vertexSnap]);
   useEffect(() => {
@@ -366,8 +370,19 @@ export function Viewport() {
           ))}
         </select>
         <span className="cw-pill-sep" />
-        <span className="cw-pill-k">{t('grid.snap')}</span>
-        <span>{snap ? t('grid.on') : t('grid.off')}</span>
+        <button type="button" className="cw-pill-btn" aria-pressed={snap}
+          onClick={() => useEditor.getState().toggle('snap')}>
+          <span className="cw-pill-k">{t('grid.snap')}</span> {snap ? t('grid.on') : t('grid.off')}
+        </button>
+        <span className="cw-pill-sep" />
+        <span className="cw-pill-k">{t('grid.angle')}</span>
+        <select className="cw-pill-select mono" aria-label={t('grid.angle')}
+          value={snapAngle} onPointerDown={(e) => e.stopPropagation()}
+          onChange={(e) => useEditor.getState().setSnapAngle(Number(e.currentTarget.value))}>
+          {SNAP_ANGLES.map((angle) => (
+            <option key={angle} value={angle}>{angle ? `${angle}°` : t('grid.off')}</option>
+          ))}
+        </select>
         {!playing && (
           <>
             <span className="cw-pill-sep" />
