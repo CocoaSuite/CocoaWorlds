@@ -12,7 +12,7 @@ import { ContextMenu, Segmented, type MenuEntry } from '@cocoaworlds/ui';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { flyState } from '../editor/shortcuts';
 import { t } from '../i18n';
-import { GRID_SIZES, SNAP_ANGLES, useSelectedEntities, useEditor, type ViewMode } from '../store';
+import { useSelectedEntities, useEditor, type ViewMode } from '../store';
 import type { DraftState } from './brush-draft';
 import { BrushPanel } from './BrushPanel';
 import { TerrainPanel } from './TerrainPanel';
@@ -349,50 +349,13 @@ export function Viewport() {
         />
       </div>
       )}
-      {!asPlayer && (
-      <div className="cw-ov cw-ov-tr cw-pill">
-        <span className="cw-pill-k">{t('grid.grid')}</span>
-        <select
-          className="cw-pill-select mono"
-          aria-label={t('grid.size')}
-          value={gridSize}
-          onPointerDown={(e) => e.stopPropagation()}
-          onChange={(e) => useEditor.getState().setGridSize(Number(e.currentTarget.value))}
-        >
-          {GRID_SIZES.map((g) => (
-            <option key={g} value={g}>
-              {g}u
-            </option>
-          ))}
-        </select>
-        <span className="cw-pill-sep" />
-        <button type="button" className="cw-pill-btn" aria-pressed={snap}
-          onClick={() => useEditor.getState().toggle('snap')}>
-          <span className="cw-pill-k">{t('grid.snap')}</span> {snap ? t('grid.on') : t('grid.off')}
-        </button>
-        <span className="cw-pill-sep" />
-        <span className="cw-pill-k">{t('grid.angle')}</span>
-        <select className="cw-pill-select mono" aria-label={t('grid.angle')}
-          value={snapAngle} onPointerDown={(e) => e.stopPropagation()}
-          onChange={(e) => useEditor.getState().setSnapAngle(Number(e.currentTarget.value))}>
-          {SNAP_ANGLES.map((angle) => (
-            <option key={angle} value={angle}>{angle ? `${angle}°` : t('grid.off')}</option>
-          ))}
-        </select>
-        {!playing && (
-          <>
-            <span className="cw-pill-sep" />
-            <button
-              type="button"
-              className="cw-pill-btn"
-              aria-pressed={gameLighting}
-              onClick={() => useEditor.getState().toggle('gameLighting')}
-            >
-              <span className="cw-pill-k">{t('view.lighting')}</span> {gameLighting ? t('view.lightingGame') : t('view.lightingPreview')}
-            </button>
-          </>
-        )}
-      </div>
+      {!asPlayer && !playing && (
+        <div className="cw-ov cw-ov-tr cw-pill">
+          <button type="button" className="cw-pill-btn" aria-pressed={gameLighting}
+            onClick={() => useEditor.getState().toggle('gameLighting')}>
+            <span className="cw-pill-k">{t('view.lighting')}</span> {gameLighting ? t('view.lightingGame') : t('view.lightingPreview')}
+          </button>
+        </div>
       )}
       {one && !asPlayer && (
         <div className="cw-ov cw-ov-bl mono" data-testid="selection-readout">
