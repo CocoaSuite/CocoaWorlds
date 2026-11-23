@@ -228,6 +228,9 @@ function SceneSettings() {
             <p className="cw-hint">{t('insp.aoHint')}</p>
           </>
         )}
+        <Field label={t('insp.godRays')}>
+          <Switch label={t('insp.godRays')} checked={doc.settings.godRays !== false} onChange={(v) => set({ godRays: v }, v ? 'God rays on' : 'God rays off')} />
+        </Field>
         <Field label={t('insp.bloom')}>
           <Switch label={t('insp.bloom')} checked={bloom.enabled} onChange={(v) => set({ bloom: { ...bloom, enabled: v } }, v ? 'Bloom on' : 'Bloom off')} />
         </Field>
