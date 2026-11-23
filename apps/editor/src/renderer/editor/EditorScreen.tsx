@@ -1,4 +1,4 @@
-/** The main editor window: top bar, workspace tabs, then tool rail, scene list, stage and inspector, with the status bar underneath. */
+/** The main editor window: header and command bar, then scene list, stage and inspector, with the status bar underneath. */
 import { GlbExportDialog } from './GlbExport';
 import { SkyPanel } from './SkyPanel';
 import { VfxPanel } from './VfxPanel';
@@ -12,9 +12,8 @@ import { Viewport } from '../viewport/Viewport';
 import { BottomPanel } from './BottomPanel';
 import { Inspector } from './Inspector';
 import { SceneTree } from './SceneTree';
-import { ToolBar } from './ToolBar';
 import { StatusBar } from './StatusBar';
-import { TopBar, WorkspaceTabs } from './TopBar';
+import { TopBar } from './TopBar';
 import { ScreensPanel } from './ScreensPanel';
 import { MaterialsPanel } from './MaterialsPanel';
 import { PlantsPanel } from './PlantsPanel';
@@ -40,7 +39,6 @@ export function EditorScreen() {
   return (
     <div className="cw-editor">
       <TopBar onShowKeys={() => setKeysOpen(true)} />
-      <WorkspaceTabs />
       {/* The scene stays mounted (hidden) under other workspaces, so its 3D view keeps its state. */}
       {workspace === 'screens' && <ScreensPanel />}
       {workspace === 'materials' && <MaterialsPanel />}
@@ -49,14 +47,17 @@ export function EditorScreen() {
       {workspace === 'vfx' && <VfxPanel />}
       <div className={`cw-mid${playing ? ' cw-playing' : ''}`} hidden={workspace !== 'scene'}>
         {/* While playing, editing panels are inert: the game runs from a snapshot of the scene. */}
-        <div className="cw-inert-wrap" inert={playing}>
-          <ToolBar />
-          <SceneTree />
-        </div>
-        <div className="cw-stage">
-          <div className="cw-stage-row">
-            <Viewport />
-            {uvPane && !playing && <UvPane />}
+        <div className="cw-workarea">
+          <div className="cw-workarea-main">
+            <div className="cw-inert-wrap" inert={playing}>
+              <SceneTree />
+            </div>
+            <div className="cw-stage">
+              <div className="cw-stage-row">
+                <Viewport />
+                {uvPane && !playing && <UvPane />}
+              </div>
+            </div>
           </div>
           {showBottom && <BottomPanel />}
         </div>
