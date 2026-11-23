@@ -92,6 +92,8 @@ export type Op =
   /** Pops volume: play a voice-over with its captions. */
   | { op: 'voice'; sound: string; captions: Caption[] }
   | { op: 'stopvoice' }
+  | { op: 'endGame' | 'playerCamera' }
+  | { op: 'hideEffect'; effect: string }
   /** Pops the place: play an effect there. */
   | { op: 'vfx'; effect: string; follow: boolean }
   /** Pops loudness, then the place: a noise. */
@@ -162,7 +164,7 @@ export const USE_REACH = 96;
 export type GameAction = 'hurt' | 'heal' | 'addScore' | 'giveArmour';
 export type GameValue = 'health' | 'score' | 'armour';
 
-export type ActionName = 'move' | 'turn' | 'turnTo' | 'return' | 'show' | 'hide' | 'turnOn' | 'turnOff' | 'startTrain' | 'stopTrain' | 'walkTo' | 'runAway' | 'wander' | 'setSide' | 'freeze' | 'unfreeze' | 'viewFrom' | 'remove' | 'scale' | 'physical' | 'push' | 'moveTo' | 'teleport' | 'damage' | 'place' | 'pickUp' | 'drop' | 'unhide' | 'silence' | 'unsilence' | 'playerSize' | 'playerSpeed' | 'playerJump' | 'playerGravity' | 'playerMoves' | 'playerWay' | 'playerNormal' | 'lensSet' | 'lensLook' | 'lensFocus' | 'lensReset' | 'screenWhite' | 'screenBlack' | 'screenBack' | 'waitVoice';
+export type ActionName = 'move' | 'turn' | 'turnTo' | 'return' | 'show' | 'hide' | 'turnOn' | 'turnOff' | 'startTrain' | 'stopTrain' | 'walkTo' | 'runAway' | 'wander' | 'setSide' | 'freeze' | 'unfreeze' | 'cameraAt' | 'viewFrom' | 'remove' | 'scale' | 'physical' | 'push' | 'moveTo' | 'teleport' | 'damage' | 'place' | 'pickUp' | 'drop' | 'unhide' | 'silence' | 'unsilence' | 'playerSize' | 'playerSpeed' | 'playerJump' | 'playerGravity' | 'playerMoves' | 'playerWay' | 'playerNormal' | 'lensSet' | 'lensLook' | 'lensFocus' | 'lensReset' | 'screenWhite' | 'screenBlack' | 'screenBack' | 'waitVoice';
 
 export type CompiledEvent =
   | { kind: 'start' }
@@ -908,6 +910,18 @@ class HandlerCompiler {
         this.emit({ op: 'ref', ref: { player: true } });
         this.expect(s.seconds, 'number', 'The time must be a number of seconds.');
         timed({ op: 'act', name: 'lensReset', argc: 1 });
+        break;
+      case 'cameraAt':
+        this.actTarget(s.target, s.id);
+        this.emit({ op: 'act', name: 'cameraAt', argc: 0 });
+        break;
+      case 'playerCamera':
+      case 'endGame':
+        this.emit({ op: s.kind });
+        break;
+      case 'hideEffect':
+        if (!s.effect) this.problem(s.id, 'Pick an effect to hide.');
+        this.emit({ op: 'hideEffect', effect: s.effect });
         break;
       case 'viewFrom':
         this.actTarget(s.target, s.id);

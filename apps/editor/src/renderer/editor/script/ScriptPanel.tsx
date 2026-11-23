@@ -1137,6 +1137,13 @@ function statementWords(s: Statement, set: (patch: Record<string, unknown>, merg
           {w('pickUp')} <RefSlot value={s.target} onChange={(target) => set({ target })} label={w('pickUp')} />
         </>
       );
+    case 'endGame':
+    case 'playerCamera':
+      return w(s.kind);
+    case 'hideEffect':
+      return <>{w(s.kind)} <EffectSlot value={s.effect} onChange={(effect) => set({ effect })} /></>;
+    case 'cameraAt':
+      return <>{w(s.kind)} <RefSlot value={s.target} onChange={(target) => set({ target })} label={w(s.kind)} /></>;
     case 'viewFrom':
       return (
         <>

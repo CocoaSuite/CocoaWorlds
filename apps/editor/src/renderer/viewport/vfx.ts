@@ -304,6 +304,10 @@ export class VfxRenderer {
     return h;
   }
 
+  hideEffect(id: string): void {
+    for (const handle of this.live) if (handle.player.effect.id === id) this.remove(handle);
+  }
+
   /** Take an effect away at once. */
   remove(h: VfxHandle): void {
     if (!this.live.delete(h)) return;

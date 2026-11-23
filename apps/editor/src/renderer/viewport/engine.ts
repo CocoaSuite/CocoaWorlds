@@ -122,6 +122,7 @@ export interface ViewportCallbacks {
   livePivot(id: string, world: V3): void;
   /** Play mode: the player left for another scene (a level change). */
   travel(t: Travel): void;
+  endGame(): void;
   /** Play mode: the dev console was opened (true) or shut. */
   devConsole?(open: boolean): void;
 }
@@ -1759,6 +1760,10 @@ export class ViewportEngine {
     // before: what it switches on and off, lights among them, decides which shaders are wanted.)
     if (this.play && !(this.warming === this.play && this.warmed !== this.play)) {
       const frame = this.play.tick(dt);
+      if (this.play.ended) {
+        this.cb.endGame();
+        return;
+      }
       tickMs = performance.now() - now;
       const travel = this.play.travel;
       if (travel && !this.travelling) {

@@ -150,6 +150,13 @@ export function newStatement(kind: StatementKind, opts: { target?: Ref; variable
     case 'silence':
     case 'unsilence':
       return { id: id(), kind };
+    case 'endGame':
+    case 'playerCamera':
+      return { id: id(), kind };
+    case 'hideEffect':
+      return { id: id(), kind, effect: '' };
+    case 'cameraAt':
+      return { id: id(), kind, target };
     case 'viewFrom':
       return { id: id(), kind, target, seconds: num(3) };
     case 'setSide':

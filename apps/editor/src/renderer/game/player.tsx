@@ -29,6 +29,7 @@ function Player() {
   const host = useRef<HTMLDivElement>(null);
   const runner = useRef<GameRunner | null>(null);
   const [data, setData] = useState<GameData | null>(null);
+  const [ended, setEnded] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [hud, setHud] = useState<Hud | null>(null);
   const [locked, setLocked] = useState(false);
@@ -56,12 +57,14 @@ function Player() {
     if (!data || !host.current) return;
     if (!data.scene.entities.some((e) => e.components.playerSpawn)) return setError('This game has no Player start.');
     setScene(data.scene);
-    const r = new GameRunner(host.current, data, { hud: setHud, lock: setLocked, uiMouse: setUiMouse, scene: setScene, devConsole: setDevOpen });
+    const r = new GameRunner(host.current, data, { endGame: () => { runner.current = null; setEnded(true); }, hud: setHud, lock: setLocked, uiMouse: setUiMouse, scene: setScene, devConsole: setDevOpen });
     runner.current = r;
     (window as unknown as { __cwGame?: GameRunner }).__cwGame = r;
     r.start().catch((e: Error) => setError(e.message));
     return () => r.dispose();
   }, [data]);
+
+  if (ended) return <div className="cw-player"><div className="cw-player-msg" role="status">Game ended</div></div>;
 
   return (
     <div className="cw-player" ref={host}>

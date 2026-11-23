@@ -1490,6 +1490,9 @@ export class GameWorld {
         const follow = place && typeof place === 'object' && place.ref !== 'player' ? this.bodyOf(place.ref) : null;
         this.bus.emit({ type: 'sound', sound, at, follow, volume, loop: false, range: 2048, source: owner, time: this.time });
       },
+      endGame: () => { this.ended = true; },
+      playerCamera: () => { this.cameraView = null; },
+      hideEffect: (effect) => this.bus.emit({ type: 'hideEffect', effect, time: this.time }),
       playEffect: (effect, place, follow) => {
         const at = this.placePoint(place);
         if (!at) return;
@@ -3031,7 +3034,7 @@ export class GameWorld {
   /** Advance by `dt` seconds of real time, in fixed physics steps. Returns the number of steps taken. */
   step(dt: number): number {
     // (Once a level change has begun, this scene is over.)
-    if (this.disposed || this.travel) return 0;
+    if (this.disposed || this.travel || this.ended) return 0;
     this.accumulator = Math.min(this.accumulator + Math.max(0, dt) * this.dev.timeScale, STEP * MAX_STEPS_PER_FRAME);
     let n = 0;
     if (!this.startedScripts) {
@@ -3106,6 +3109,7 @@ export class GameWorld {
       n++;
       this.events.drainCollisionEvents((h1, h2, started) => this.onContact(h1, h2, started));
       this.runner.tick(STEP);
+      if (this.ended) break;
       if (this.loudSounds.size) this.callAgain();
     }
     return n;
@@ -3424,6 +3428,8 @@ export class GameWorld {
   /** A scripted scene holds the player still (no moving, jumping, firing or using; they can look around). */
   private frozen = false;
   /** A scripted scene looks through an object until a time. */
+  ended = false;
+  private copyCameraBases = new Map<string, number[]>();
   private cameraView: { id: string; until: number } | null = null;
 
   /** Whether a scripted scene holds the player still. */
@@ -3435,13 +3441,12 @@ export class GameWorld {
   private cameraEye(): { eye: [number, number, number]; yaw: number; pitch: number } | null {
     const c = this.cameraView;
     if (!c) return null;
-    if (this.time >= c.until) {
+    if (this.time >= c.until || this.gone.has(c.id)) {
       this.cameraView = null;
       return null;
     }
-    const e = this.doc.get(c.id);
-    if (!e) return null;
-    const start = this.doc.worldMatrix(c.id);
+    const start = this.copyCameraBases.get(c.id) ?? (this.doc.get(c.id) ? this.doc.worldMatrix(c.id) : null);
+    if (!start) return null;
     // (Drawn: where the object is between the last two steps, as the player's own view is.)
     const motion = this.drawnMotionOf(c.id) ?? this.drawnMotionOf(this.unitOf.get(c.id) ?? '');
     const m = motion ? multiply(motion, start) : start;
@@ -4500,11 +4505,15 @@ export class GameWorld {
       if (name === 'wander') return npc.setWander(args[0] !== false), null;
       return npc.runAway(typeof args[0] === 'number' ? args[0] : 0);
     }
+    if (name === 'cameraAt') {
+      this.cameraView = { id: target, until: Infinity };
+      return null;
+    }
     if (name === 'viewFrom') {
       const seconds = typeof args[0] === 'number' ? Math.max(0, args[0]) : 0;
       const until = this.time + seconds;
-      this.cameraView = { id: target, until };
-      return () => this.time >= until || this.cameraView?.id !== target;
+      const view = this.cameraView = { id: target, until };
+      return () => this.time >= until || this.cameraView !== view;
     }
     if (npc && name === 'damage') return this.weaponDamage(target, typeof args[0] === 'number' ? args[0] : 0, 'script', 'a script'), null;
     if (name === 'startTrain' || name === 'stopTrain') {
@@ -4795,6 +4804,7 @@ export class GameWorld {
       this.names.set(id, e.name);
       this.parentOf.set(id, e.id === template ? null : (ids.get(e.parent ?? '') ?? null));
       const world = multiply(shift, this.doc.worldMatrix(e.id));
+      this.copyCameraBases.set(id, world);
       const brushData = e.components.brush as unknown as (BrushData & { role?: string }) | undefined;
       // Inside a part of the copy that has a body of its own (a prop with Physics): carried by it, drawn with it.
       let carrier: string | null = null;
@@ -5111,7 +5121,10 @@ export class GameWorld {
       for (let y: string | null | undefined = x; y; y = this.parentOf.get(y)) if (y === id) gone.add(x);
     }
     gone.add(id);
-    for (const x of gone) this.gone.add(x);
+    for (const x of gone) {
+      this.copyCameraBases.delete(x);
+      this.gone.add(x);
+    }
     for (const x of gone) {
       const b = this.bodies.get(x);
       if (!b) {

@@ -94,6 +94,7 @@ export function Viewport() {
         createBrush: (min, max, outline) => useEditor.getState().createBrushes(min, max, outline),
         cancelTool: () => useEditor.getState().setTool('select'),
         // A level change: the next scene comes from the editor (this scene) or from its saved file.
+        endGame: () => useEditor.getState().stopPlaying(),
         travel: (t) => {
           const st = useEditor.getState();
           const session = st.session;

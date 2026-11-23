@@ -383,6 +383,10 @@ export class PlaySession {
     this.world.bus.on('hit', (e) => void this.surfaceSound(e.hard ? 'hard' : 'soft', e.surface, e.at, e.volume, 1024));
     this.group.add(this.effects.group);
     this.group.add(this.vfx.group);
+    this.world.bus.on('hideEffect', ({ effect }) => {
+      this.vfxOn = this.vfxOn.filter(({ handle }) => handle.player.effect.id !== effect);
+      this.vfx.hideEffect(effect);
+    });
     this.world.bus.on('vfx', (e) => {
       const fx = effectById(e.effect);
       if (!fx) return;
@@ -1703,6 +1707,8 @@ export class PlaySession {
   }
 
   /** A level change that has begun (the next scene should start from it), or null. */
+  get ended(): boolean { return this.world.ended; }
+
   get travel(): Travel | null {
     return this.world.travel;
   }

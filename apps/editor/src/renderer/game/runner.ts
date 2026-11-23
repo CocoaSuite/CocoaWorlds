@@ -49,6 +49,7 @@ export interface GameData {
 
 export interface RunnerEvents {
   hud(hud: Hud): void;
+  endGame(): void;
   /** The mouse is captured (playing), or free (“Click to play”). */
   lock(locked: boolean): void;
   /** A screen freed the mouse for its buttons. */
@@ -268,6 +269,12 @@ export class GameRunner {
     // (A level whose shaders are compiling in the background waits: see below. Its first tick comes before: what it
     // switches on and off, lights among them, decides which shaders are wanted.)
     if (this.warmed === play || this.warming !== play) play.tick(dt);
+    if (play.ended) {
+      if (document.pointerLockElement === this.renderer.domElement) document.exitPointerLock();
+      this.dispose();
+      this.cb.endGame();
+      return;
+    }
     tickMaterials(now);
     const hud = hudOf(play, this.locked);
     this.followUiMouse(hud.ui.freesMouse);

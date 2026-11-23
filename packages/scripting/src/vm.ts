@@ -64,6 +64,9 @@ export interface ScriptHost {
   /** Play a sound at a place (an object, the player, 'aim') or everywhere (null). */
   playSound?(sound: string, place: Value, volume: number, owner: string, loudness?: number): void;
   /** Play an effect (by id) at a place; `follow`: it moves with that object. */
+  endGame?(): void;
+  playerCamera?(): void;
+  hideEffect?(effect: string): void;
   playEffect?(effect: string, place: Value, follow: boolean, owner: string): void;
   /** A noise at a place, this loud for hunting creatures. */
   noise?(place: Value, loudness: number, owner: string): void;
@@ -800,6 +803,17 @@ export class ScriptRunner {
           this.host.hint?.(place, spread, sure, op.as);
           break;
         }
+        case 'endGame':
+          this.threads.length = 0;
+          this.running.clear();
+          this.host.endGame?.();
+          return;
+        case 'playerCamera':
+          this.host.playerCamera?.();
+          break;
+        case 'hideEffect':
+          if (op.effect) this.host.hideEffect?.(op.effect);
+          break;
         case 'vfx': {
           const place = s.pop() ?? null;
           if (op.effect) this.host.playEffect?.(op.effect, place, op.follow, t.inst.program.owner);
