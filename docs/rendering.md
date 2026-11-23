@@ -368,3 +368,7 @@ What keeps Play (and exported games) from stuttering:
   times (every 1.5–1.9 s) and the path search reuses its memory; the editor's status line is sent at most four
   times a second.
 
+
+## God rays
+
+Scene settings → Lighting → God rays is enabled by default, including older levels. This screen-space effect uses the first active directional Sun (including the day/night light), the existing scene depth texture, a quarter-resolution radial gather capped at 480 pixels on its longer edge, and a linear-light composite before bloom. It needs no extra scene or shadow render. Geometry masks the sky, allowing visible shafts around openings and silhouettes. The pass is skipped when the sun is behind or far outside the camera view, in orthographic views, and on detected software renderers. It is not volumetric fog and does not simulate spot-light shafts or occluders outside the view. Game Lighting preview, Play and exported games share the pass.
