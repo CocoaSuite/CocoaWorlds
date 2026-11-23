@@ -20,7 +20,7 @@ export const SHORTCUTS: { label: string; keys: string[] }[] = [
   { label: 'Finer or coarser snapping grid', keys: ['[', ']'] },
   { label: 'Clip tool (drag a line across brushes; Tab: what to keep; Enter: clip)', keys: ['C'] },
   { label: 'Loop cut (hover a brush, wheel for more cuts, click to cut)', keys: [`${mod}+R`] },
-  { label: 'Edit pivot: the move gizmo moves the selected object’s pivot (snaps to corners)', keys: ['O'] },
+  { label: 'Edit pivot: the move gizmo moves the selected object’s pivot (hold Ctrl to snap to corners)', keys: ['O'] },
   { label: 'Box select (drag on empty space)', keys: ['Left-drag'] },
   { label: 'Paint: pick up a material', keys: [`${mod}+click`] },
   { label: 'Perspective / Top / Front / Side', keys: ['1', '2', '3', '4'] },
@@ -42,7 +42,7 @@ export const SHORTCUTS: { label: string; keys: string[] }[] = [
   { label: 'Select all', keys: [`${mod}+A`] },
   { label: 'Save', keys: [`${mod}+S`] },
   { label: 'Toggle grid snapping', keys: ['G'] },
-  { label: 'Toggle snapping to corners', keys: ['Shift+G'] },
+  { label: 'Snap to corners while held', keys: ['Ctrl'] },
   { label: 'Deselect / step out', keys: ['Esc'] },
   { label: 'Play / Stop', keys: ['F5'] },
   { label: 'Stop playing', keys: ['Esc'] },
@@ -137,7 +137,8 @@ export function useShortcuts(openKeys: () => void): void {
         case 'KeyO':
           return s.toggle('pivotEdit');
         case 'KeyG':
-          return s.toggle(e.shiftKey ? 'vertexSnap' : 'snap');
+          if (!e.shiftKey) return s.toggle('snap');
+          return;
         case 'Enter':
           return s.enterGroup();
         case 'Digit1':

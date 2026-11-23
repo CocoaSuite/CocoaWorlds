@@ -6,7 +6,6 @@ export function StatusBar() {
   const workspace = useEditor((s) => s.workspace);
   const tool = useEditor((s) => s.tool);
   const playing = useEditor((s) => !!s.playing);
-  const vertexSnap = useEditor((s) => s.vertexSnap);
   const pivotEdit = useEditor((s) => s.pivotEdit);
   const uvPane = useEditor((s) => s.uvPane);
   const toggle = useEditor((s) => s.toggle);
@@ -26,7 +25,7 @@ export function StatusBar() {
       <span id="cw-sb-stats" className="cw-sb-stats mono" hidden={!level} />
       {level && !playing && (
         <>
-          {Toggle(vertexSnap, t('grid.vertices'), () => toggle('vertexSnap'))}
+          <span>{t('grid.vertices')}</span>
           {Toggle(pivotEdit, t('pivot.edit'), () => toggle('pivotEdit'))}
           {Toggle(uvPane, 'UV', () => toggle('uvPane'))}
         </>

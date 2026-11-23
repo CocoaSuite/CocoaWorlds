@@ -144,6 +144,8 @@ interface DragSet {
   pivotOnly?: string;
   /** Vertex snapping: the moving point nearest the cursor when the drag began. */
   grab: V3 | null;
+  /** Last raw gizmo delta, so releasing Ctrl restores grid/free movement. */
+  rawDelta?: V3;
   /** Screen positions of points that don't move (snap targets). */
   targets: { p: V3; x: number; y: number }[];
 }
@@ -184,7 +186,7 @@ export class ViewportEngine {
   /** Stand-in object the gizmo drags; the selection follows it (brush geometry lives in world space). */
   private proxy = new THREE.Object3D();
   private dragSet: DragSet | null = null;
-  private vertexSnap = true;
+  private vertexSnap = false;
   private lastPointer = { x: 0, y: 0 };
   private snapMarker: THREE.Points;
   /** Edit pivot mode: the move gizmo moves the selected object's pivot. */
@@ -956,8 +958,14 @@ export class ViewportEngine {
     return true;
   }
 
-  setVertexSnap(enabled: boolean): void {
+  private setVertexSnap(enabled: boolean, refreshDrag = false): void {
+    if (this.vertexSnap === enabled) return;
     this.vertexSnap = enabled;
+    if (!enabled) this.showSnap(null);
+    // Use the last unsnapped gizmo delta, not the already snapped proxy position.
+    const raw = this.dragSet?.rawDelta;
+    if (refreshDrag && raw) this.onProxyGizmo(raw);
+    this.invalidate();
   }
 
   setSnap(enabled: boolean, gridSize: number): void {
@@ -965,10 +973,14 @@ export class ViewportEngine {
     this.gridSize = gridSize;
     // Translation snapping is done relative to the drag start in onProxyGizmo.
     this.gizmo.setTranslationSnap(null);
-    this.gizmo.setRotationSnap(enabled ? 15 * DEG : null);
     this.gizmo.setScaleSnap(enabled ? 0.25 : null);
     this.grid.update(gridSize, this.rig.unitsPerPixel);
     this.invalidate();
+  }
+
+  /** Rotation snap is independent of the translation/scale grid. */
+  setSnapAngle(degrees: number): void {
+    this.gizmo.setRotationSnap(degrees > 0 ? degrees * DEG : null);
   }
 
   private navOn = false;
@@ -1460,7 +1472,6 @@ export class ViewportEngine {
   private buildVertexDragSet(): DragSet {
     const pivot: V3 = [this.proxy.position.x, this.proxy.position.y, this.proxy.position.z];
     const set: DragSet = { pivot, items: [], grab: null, targets: [] };
-    if (!this.vertexSnap) return set;
     const picked = this.vertexTool.pickedPoints();
     let best = Infinity;
     for (const p of picked) {
@@ -1569,8 +1580,8 @@ export class ViewportEngine {
     const only = this.pivotTarget();
     if (only) {
       // Edit pivot: snap the pivot to any corner, the object's own included (a door's hinge edge).
-      const set: DragSet = { pivot, items: [], pivotOnly: only, grab: this.vertexSnap ? pivot : null, targets: [] };
-      if (this.vertexSnap) {
+      const set: DragSet = { pivot, items: [], pivotOnly: only, grab: pivot, targets: [] };
+      {
         for (const p of this.pointsOf((this.doc?.entities ?? []).filter((e) => isShown(this.doc!, e)))) {
           const sp = this.toScreen(p);
           if (sp.z < 1) set.targets.push({ p, x: sp.x, y: sp.y });
@@ -1593,7 +1604,7 @@ export class ViewportEngine {
       grab: null,
       targets: [],
     };
-    if (this.vertexSnap && this.gizmoMode === 'translate') {
+    if (this.gizmoMode === 'translate') {
       // The grab point: the moving point nearest the cursor. Targets: every point that stays put.
       let best = Infinity;
       for (const p of this.pointsOf(inside)) {
@@ -1657,19 +1668,20 @@ export class ViewportEngine {
     }
   }
 
-  private onProxyGizmo(): void {
+  private onProxyGizmo(raw?: V3): void {
     const d = this.dragSet;
     if (!d) return;
     const p = this.proxy;
     const changes: LiveChange[] = [];
     if (this.editTool === 'vertex' || this.gizmoMode === 'translate') {
-      let delta: V3 = [p.position.x - d.pivot[0], p.position.y - d.pivot[1], p.position.z - d.pivot[2]];
+      let delta: V3 = raw ?? [p.position.x - d.pivot[0], p.position.y - d.pivot[1], p.position.z - d.pivot[2]];
+      d.rawDelta = delta;
       // Grid snapping is relative to where the drag began, so off-grid objects keep their offset.
       const axes = (this.gizmo as unknown as { axis: string | null }).axis ?? 'XYZ';
       const free = [axes.includes('X'), axes.includes('Y'), axes.includes('Z')];
       if (this.snap) delta = delta.map((v, i) => (free[i] ? Math.round(v / this.gridSize) * this.gridSize : 0)) as V3;
       let snapped: V3 | null = null;
-      if (d.grab) {
+      if (this.vertexSnap && d.grab) {
         const target = this.nearestTarget(d.targets, this.lastPointer.x, this.lastPointer.y);
         if (target) {
           delta = delta.map((v, i) => (free[i] ? target[i]! - d.grab![i]! : v)) as V3;
@@ -2406,6 +2418,7 @@ export class ViewportEngine {
 
   private trackPointer = (e: PointerEvent): void => {
     this.lastPointer = { x: e.clientX, y: e.clientY };
+    this.setVertexSnap(!this.play && e.ctrlKey);
     if (this.bevel) this.updateBevel(e.shiftKey, e.ctrlKey);
   };
 
@@ -2792,6 +2805,7 @@ export class ViewportEngine {
   }
 
   private onKeyDown = (e: KeyboardEvent): void => {
+    if (!this.play && !this.isTyping(e) && this.host.offsetParent !== null) this.setVertexSnap(e.ctrlKey, true);
     if (this.consoleOpen) return;
     if (this.play && e.code === 'Backquote' && !e.repeat && !e.ctrlKey && !e.metaKey && !this.isTyping(e)) {
       e.preventDefault();
@@ -2860,6 +2874,7 @@ export class ViewportEngine {
   };
 
   private onKeyUp = (e: KeyboardEvent): void => {
+    this.setVertexSnap(!this.play && e.ctrlKey, true);
     if (this.consoleOpen) return;
     if (this.gameKey(e, false)) return;
     if (this.bevel && (e.key === 'Shift' || e.key === 'Control')) this.updateBevel(e.shiftKey, e.ctrlKey);
@@ -2868,6 +2883,7 @@ export class ViewportEngine {
   };
 
   private onBlur = (): void => {
+    this.setVertexSnap(false);
     this.keys.clear();
     this.gameKeys.clear();
     this.sendInput();

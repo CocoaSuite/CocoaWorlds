@@ -131,6 +131,8 @@ export type Justify = 'left' | 'right' | 'top' | 'bottom' | 'center';
 export type ViewMode = 'perspective' | 'top' | 'front' | 'side';
 /** Grid sizes to snap to (u). */
 export const GRID_SIZES = [1, 2, 4, 8, 16, 32, 64, 128, 256, 512];
+/** Rotation snapping in degrees; zero means free rotation. */
+export const SNAP_ANGLES = [0, 1, 5, 10, 15, 22.5, 30, 45, 90];
 
 export type AddKind = 'empty' | 'pointLight' | 'spotLight' | 'sun' | 'spawn' | 'sign' | 'reflectionProbe' | 'poster' | 'painting' | 'decal' | 'stake' | 'junk' | 'carpet' | 'outlet' | 'extender' | 'stringLights' | 'generator' | 'lightSwitch' | 'shelf';
 export interface LogEntry {
@@ -174,6 +176,7 @@ interface State {
   showPlayBar: boolean;
   showBottom: boolean;
   snap: boolean;
+  snapAngle: number;
   dirty: boolean;
   saving: boolean;
   logs: LogEntry[];
@@ -190,8 +193,6 @@ interface State {
   paintMaterial: string;
   /** Materials used lately (paint and face edits), newest first. */
   recentMaterials: string[];
-  /** Snap moves and brush drawing to nearby brush corners. */
-  vertexSnap: boolean;
   /** Edit pivot mode: the move gizmo moves the selected object's pivot instead of the object. */
   pivotEdit: boolean;
   /** The group the user has stepped into: clicks in the view pick objects inside it. */
@@ -233,7 +234,7 @@ interface Actions {
   /** A finished terrain stroke, already made: recorded so it can be undone. */
   terrainEdit(cmd: { label: string; apply(): void; revert(): void }): void;
   setView(v: ViewMode): void;
-  toggle(k: 'showGrid' | 'showNav' | 'showGrass' | 'showProbes' | 'showCollisions' | 'zUp' | 'uvPane' | 'showStats' | 'showPlayBar' | 'showBottom' | 'snap' | 'vertexSnap' | 'pivotEdit' | 'gameLighting'): void;
+  toggle(k: 'showGrid' | 'showNav' | 'showGrass' | 'showProbes' | 'showCollisions' | 'zUp' | 'uvPane' | 'showStats' | 'showPlayBar' | 'showBottom' | 'snap' | 'pivotEdit' | 'gameLighting'): void;
   /** Put an object's pivot at a world position (null: back to the default, its middle). */
   setPivot(id: string, world: Vec3 | null, mergeKey?: string): void;
   execute(cmd: Command): void;
@@ -340,6 +341,7 @@ interface Actions {
   setSceneSettings(patch: Partial<SceneSettings>, label: string, mergeKey?: string): void;
   /** The snapping grid's size (u; saved with the project). */
   setGridSize(size: number): void;
+  setSnapAngle(angle: number): void;
   /** Next finer or coarser grid (×½ or ×2). */
   stepGrid(dir: -1 | 1): void;
   /** Replace the project's game values (saved to the project file at once). */
@@ -420,6 +422,7 @@ export const useEditor = create<State & Actions>()((set, get) => ({
   showPlayBar: savedPlayBar(),
   showBottom: true,
   snap: true,
+  snapAngle: 15,
   dirty: false,
   saving: false,
   logs: [],
@@ -432,7 +435,6 @@ export const useEditor = create<State & Actions>()((set, get) => ({
   faceSelection: [],
   paintMaterial: 'dev/wall',
   recentMaterials: [],
-  vertexSnap: true,
   pivotEdit: false,
   enteredGroup: null,
   canPaste: false,
@@ -536,6 +538,9 @@ export const useEditor = create<State & Actions>()((set, get) => ({
   },
   setTool: (tool) => set((s) => (tool === 'face' || s.tool !== 'face' ? { tool } : { tool, faceSelection: [] })),
   setView: (view) => set({ view }),
+  setSnapAngle: (angle) => {
+    if (SNAP_ANGLES.includes(angle)) set({ snapAngle: angle });
+  },
   toggle: (k) => {
     set((s) => ({ [k]: !s[k] }) as Partial<State>);
     if (k === 'zUp') saveZUp(get().zUp);

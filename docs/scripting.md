@@ -31,7 +31,7 @@ Scripts are plain-language blocks on the object they control (decision S1): a do
 ## Pivots
 
 “Move” and “Turn” act on an object's pivot: by default the middle of a brush or of a group's brushes. To swing a
-door on its hinge, select it, press **O** (Edit pivot) and drag the pivot onto the hinge edge; it snaps to corners.
+door on its hinge, select it, press **O** (Edit pivot) and hold Ctrl while dragging the pivot onto the hinge edge to snap to corners.
 
 ## Recipes (V2)
 

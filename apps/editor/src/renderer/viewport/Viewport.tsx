@@ -12,7 +12,7 @@ import { ContextMenu, Segmented, type MenuEntry } from '@cocoaworlds/ui';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { flyState } from '../editor/shortcuts';
 import { t } from '../i18n';
-import { GRID_SIZES, useSelectedEntities, useEditor, type ViewMode } from '../store';
+import { useSelectedEntities, useEditor, type ViewMode } from '../store';
 import type { DraftState } from './brush-draft';
 import { BrushPanel } from './BrushPanel';
 import { TerrainPanel } from './TerrainPanel';
@@ -61,7 +61,7 @@ export function Viewport() {
   const tool = useEditor((s) => s.tool);
   const view = useEditor((s) => s.view);
   const snap = useEditor((s) => s.snap);
-  const vertexSnap = useEditor((s) => s.vertexSnap);
+  const snapAngle = useEditor((s) => s.snapAngle);
   const pivotEdit = useEditor((s) => s.pivotEdit);
   const showGrid = useEditor((s) => s.showGrid);
   const showNav = useEditor((s) => s.showNav);
@@ -215,8 +215,8 @@ export function Viewport() {
     engine.current?.setSnap(snap, gridSize);
   }, [snap, gridSize]);
   useEffect(() => {
-    engine.current?.setVertexSnap(vertexSnap);
-  }, [vertexSnap]);
+    engine.current?.setSnapAngle(snapAngle);
+  }, [snapAngle]);
   useEffect(() => {
     engine.current?.setPivotEdit(pivotEdit);
   }, [pivotEdit]);
@@ -349,39 +349,13 @@ export function Viewport() {
         />
       </div>
       )}
-      {!asPlayer && (
-      <div className="cw-ov cw-ov-tr cw-pill">
-        <span className="cw-pill-k">{t('grid.grid')}</span>
-        <select
-          className="cw-pill-select mono"
-          aria-label={t('grid.size')}
-          value={gridSize}
-          onPointerDown={(e) => e.stopPropagation()}
-          onChange={(e) => useEditor.getState().setGridSize(Number(e.currentTarget.value))}
-        >
-          {GRID_SIZES.map((g) => (
-            <option key={g} value={g}>
-              {g}u
-            </option>
-          ))}
-        </select>
-        <span className="cw-pill-sep" />
-        <span className="cw-pill-k">{t('grid.snap')}</span>
-        <span>{snap ? t('grid.on') : t('grid.off')}</span>
-        {!playing && (
-          <>
-            <span className="cw-pill-sep" />
-            <button
-              type="button"
-              className="cw-pill-btn"
-              aria-pressed={gameLighting}
-              onClick={() => useEditor.getState().toggle('gameLighting')}
-            >
-              <span className="cw-pill-k">{t('view.lighting')}</span> {gameLighting ? t('view.lightingGame') : t('view.lightingPreview')}
-            </button>
-          </>
-        )}
-      </div>
+      {!asPlayer && !playing && (
+        <div className="cw-ov cw-ov-tr cw-pill">
+          <button type="button" className="cw-pill-btn" aria-pressed={gameLighting}
+            onClick={() => useEditor.getState().toggle('gameLighting')}>
+            <span className="cw-pill-k">{t('view.lighting')}</span> {gameLighting ? t('view.lightingGame') : t('view.lightingPreview')}
+          </button>
+        </div>
       )}
       {one && !asPlayer && (
         <div className="cw-ov cw-ov-bl mono" data-testid="selection-readout">
