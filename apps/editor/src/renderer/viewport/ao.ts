@@ -11,8 +11,9 @@ import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 import { LensPasses } from './lens';
+import { GodRaysPass } from './god-rays';
 
-type Look = { ao?: AoSettings; bloom?: BloomSettings; lens?: Partial<LensSettings> };
+type Look = { ao?: AoSettings; bloom?: BloomSettings; lens?: Partial<LensSettings>; godRays?: boolean };
 
 /** Every pixel finite and in range: NaN and infinity become black, the rest is capped. */
 const FINITE = {
@@ -29,7 +30,7 @@ void main() {
 };
 
 export class AoRenderer {
-  private c: { composer: EffectComposer; pass: GTAOPass; bloom: UnrealBloomPass; lens: LensPasses; scene: THREE.Scene; cam: THREE.Camera; w: number; h: number } | null = null;
+  private c: { composer: EffectComposer; pass: GTAOPass; bloom: UnrealBloomPass; rays: GodRaysPass; lens: LensPasses; scene: THREE.Scene; cam: THREE.Camera; w: number; h: number } | null = null;
 
   /** Software rendering (no graphics card): occlusion would slow everything down, so it is left out. */
   readonly software: boolean;
@@ -42,21 +43,22 @@ export class AoRenderer {
   }
 
   /** Whether `render` draws the scene into a render target (occlusion, bloom or a lens effect on), not straight to the screen. */
-  active(settings: Look | undefined): boolean {
+  active(settings: Look | undefined, sun: THREE.DirectionalLight | null = null): boolean {
     const s = aoOf(settings);
     const b = bloomOf(settings);
-    return (s.enabled && s.strength > 0 && !this.software) || (b.enabled && b.strength > 0) || lensOn(lensOf(settings));
+    return (s.enabled && s.strength > 0 && !this.software) || (b.enabled && b.strength > 0) || lensOn(lensOf(settings)) || (settings?.godRays !== false && !!sun && !this.software);
   }
 
   /** Draw `scene` from `cam` with occlusion, bloom and lens effects, if any is on. False: nothing drawn (draw it plainly). */
   /** `always`: through the target even with everything off (scripts may turn a lens effect on while playing). */
-  render(scene: THREE.Scene, cam: THREE.Camera, settings: Look | undefined, always = false): boolean {
+  render(scene: THREE.Scene, cam: THREE.Camera, settings: Look | undefined, always = false, sun: THREE.DirectionalLight | null = null): boolean {
     const s = aoOf(settings);
     const b = bloomOf(settings);
     const l = lensOf(settings);
     const aoOn = s.enabled && s.strength > 0 && !this.software;
     const bloomOn = b.enabled && b.strength > 0;
-    if (!always && !aoOn && !bloomOn && !lensOn(l)) return false;
+    const raysOn = settings?.godRays !== false && !!sun && !this.software && (cam as THREE.PerspectiveCamera).isPerspectiveCamera;
+    if (!always && !aoOn && !bloomOn && !lensOn(l) && !raysOn) return false;
     const size = this.r.getSize(new THREE.Vector2());
     if (!this.c || this.c.cam !== cam || this.c.scene !== scene) {
       this.dispose();
@@ -64,11 +66,13 @@ export class AoRenderer {
       const target = new THREE.WebGLRenderTarget(Math.max(1, size.x), Math.max(1, size.y), { type: THREE.HalfFloatType, depthTexture: new THREE.DepthTexture(1, 1) });
       const composer = new EffectComposer(this.r, target);
       const lens = new LensPasses();
+      const rays = new GodRaysPass();
       const scenePass = new RenderPass(scene, cam);
       // (The composer's two targets take turns: depth of field reads the depth of whichever one the scene went into.)
       const drawScene = scenePass.render.bind(scenePass);
       scenePass.render = (r, write, read, dt, mask) => {
         lens.depth = read.depthTexture;
+        rays.depth = read.depthTexture;
         drawScene(r, write, read, dt, mask);
       };
       composer.addPass(scenePass);
@@ -145,6 +149,7 @@ void main() {
         draw(r, write, read, dt, mask);
       };
       composer.addPass(pass);
+      composer.addPass(rays);
       // Clean-up before bloom: a single NaN or overflowed pixel (a broken normal, a light right against a surface going
       // past half-float's range) is blurred by bloom over the whole screen and greys it out for as long as it is in
       // view. Such pixels become black, and anything absurdly bright is capped.
@@ -161,7 +166,7 @@ void main() {
       composer.addPass(lens.lens);
       composer.addPass(new OutputPass());
       composer.addPass(lens.noise);
-      this.c = { composer, pass, bloom, lens, scene, cam, w: 0, h: 0 };
+      this.c = { composer, pass, bloom, rays, lens, scene, cam, w: 0, h: 0 };
     }
     const c = this.c;
     if (c.w !== size.x || c.h !== size.y) {
@@ -171,6 +176,7 @@ void main() {
       c.h = size.y;
     }
     c.pass.enabled = aoOn;
+    c.rays.update(cam, sun, raysOn);
     c.bloom.enabled = bloomOn;
     c.bloom.strength = Math.min(3, b.strength);
     c.bloom.radius = Math.max(0, Math.min(1, b.radius));
@@ -187,6 +193,7 @@ void main() {
     this.c?.composer.dispose();
     this.c?.pass.dispose();
     this.c?.bloom.dispose();
+    this.c?.rays.dispose();
     this.c?.lens.dispose();
     this.c = null;
   }
