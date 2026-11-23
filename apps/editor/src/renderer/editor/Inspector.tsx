@@ -2,6 +2,7 @@
 import { SurfaceSoundsEditor } from './SurfaceSounds';
 import { PaintPanel } from '../viewport/PaintPanel';
 import { useState } from 'react';
+import type { Script } from '@cocoaworlds/scripting';
 import { shown, stored, type AxisKind } from '../axes';
 import { LENS_PRESETS, PIVOT, aoOf, bloomOf, lensOf, type LensSettings, dayOf, backgroundSoundOf, gameRules, captionStyle, type CaptionStyle, pivotOf, sceneSettings, worldBoundsOf, type EmptyClass, type EntityData, type SceneSettings as SceneSettingsData, type Transform, type Vec3 } from '@cocoaworlds/core';
 import { brushBounds, brushOf } from '../brush/brushes';
@@ -47,6 +48,23 @@ export function Inspector() {
   );
 }
 
+function PromptTextFields({ e }: { e: EntityData }) {
+  const script = e.components.script as unknown as Script | undefined;
+  return <>{script?.handlers?.map(({ event }) => {
+    if (event.kind !== 'use' && event.kind !== 'press') return null;
+    const button = event.kind === 'use' ? 'E' : event.key.replace(/^Key/, '');
+    const label = `${getLang() === 'ru' ? 'Текст подсказки' : 'Prompt text'} (${button})`;
+    return <Field key={event.id} label={label}>
+      <input className="cw-input" aria-label={label} value={event.prompt ?? ''} onChange={(ev) => {
+        const prompt = ev.currentTarget.value;
+        useEditor.getState().updateScript(e.id, (current) => ({
+          ...current, handlers: current.handlers.map((h) => h.event.id === event.id ? { ...h, event: { ...h.event, prompt } } : h),
+        }), 'Edit prompt text', `prompt:${e.id}:${event.id}`);
+      }} />
+    </Field>;
+  })}</>;
+}
+
 /** Brushes: name, brush settings, visibility. Their transform lives in the geometry, so no transform rows. */
 function BrushEntity({ e }: { e: EntityData }) {
   const s = useEditor.getState();
@@ -64,6 +82,7 @@ function BrushEntity({ e }: { e: EntityData }) {
         onBlur={(ev) => s.rename(e.id, ev.currentTarget.value)}
       />
       <PrefabSection e={e} />
+      {e.components.trigger?.buttonPrompt === true && <PromptTextFields e={e} />}
       <BrushInspector e={e} />
       <PivotSection e={e} />
       <ComponentsSection e={e} />
