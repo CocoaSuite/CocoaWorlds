@@ -171,6 +171,7 @@ export function StartScreen() {
 
 function NewProjectDialog({ onClose, onCreated }: { onClose: () => void; onCreated: (o: import('../../shared/api').OpenedProject) => void }) {
   const [name, setName] = useState('My Game');
+  const [worldMode, setWorldMode] = useState<'3d' | 'isometric'>('3d');
   const [location, setLocation] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -192,8 +193,13 @@ function NewProjectDialog({ onClose, onCreated }: { onClose: () => void; onCreat
     setError(null);
     const r = await window.cocoa.projects.create(location, name);
     setBusy(false);
-    if (r.ok) onCreated(r.value);
-    else setError(r.error);
+    if (r.ok) {
+      if (worldMode === 'isometric') {
+        const saved = await window.cocoa.projects.saveSettings(r.value.dir, { ...r.value.project.settings, worldMode });
+        if (!saved.ok) { setBusy(false); setError(saved.error); return; }
+        onCreated({ ...r.value, project: saved.value });
+      } else onCreated(r.value);
+    } else setError(r.error);
   };
 
   return (
@@ -208,6 +214,13 @@ function NewProjectDialog({ onClose, onCreated }: { onClose: () => void; onCreat
         <label className="cw-f">
           <span>{t('new.name')}</span>
           <input className="cw-input" autoFocus value={name} maxLength={80} onChange={(e) => setName(e.target.value)} onKeyDown={(e) => e.stopPropagation()} />
+        </label>
+        <label className="cw-f">
+          <span>World mode</span>
+          <select className="cw-input" value={worldMode} onChange={(e) => setWorldMode(e.target.value as '3d' | 'isometric')}>
+            <option value="3d">3D World</option>
+            <option value="isometric">Isometric World (2.5D)</option>
+          </select>
         </label>
         <div className="cw-f">
           <span>{t('new.location')}</span>
