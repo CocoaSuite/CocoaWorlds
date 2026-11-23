@@ -193,8 +193,6 @@ interface State {
   paintMaterial: string;
   /** Materials used lately (paint and face edits), newest first. */
   recentMaterials: string[];
-  /** Snap moves and brush drawing to nearby brush corners. */
-  vertexSnap: boolean;
   /** Edit pivot mode: the move gizmo moves the selected object's pivot instead of the object. */
   pivotEdit: boolean;
   /** The group the user has stepped into: clicks in the view pick objects inside it. */
@@ -236,7 +234,7 @@ interface Actions {
   /** A finished terrain stroke, already made: recorded so it can be undone. */
   terrainEdit(cmd: { label: string; apply(): void; revert(): void }): void;
   setView(v: ViewMode): void;
-  toggle(k: 'showGrid' | 'showNav' | 'showGrass' | 'showProbes' | 'showCollisions' | 'zUp' | 'uvPane' | 'showStats' | 'showPlayBar' | 'showBottom' | 'snap' | 'vertexSnap' | 'pivotEdit' | 'gameLighting'): void;
+  toggle(k: 'showGrid' | 'showNav' | 'showGrass' | 'showProbes' | 'showCollisions' | 'zUp' | 'uvPane' | 'showStats' | 'showPlayBar' | 'showBottom' | 'snap' | 'pivotEdit' | 'gameLighting'): void;
   /** Put an object's pivot at a world position (null: back to the default, its middle). */
   setPivot(id: string, world: Vec3 | null, mergeKey?: string): void;
   execute(cmd: Command): void;
@@ -437,7 +435,6 @@ export const useEditor = create<State & Actions>()((set, get) => ({
   faceSelection: [],
   paintMaterial: 'dev/wall',
   recentMaterials: [],
-  vertexSnap: true,
   pivotEdit: false,
   enteredGroup: null,
   canPaste: false,
