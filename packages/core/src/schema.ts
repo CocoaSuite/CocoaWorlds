@@ -22,7 +22,11 @@ export const PREFABS_DIR = 'prefabs';
 /** Caches, autosaves and recovery data. Safe to delete; ignored by version control. */
 export const WORK_DIR = '.cocoaworlds';
 
+export type WorldMode = '3d' | 'isometric';
+
 export interface ProjectSettings {
+  /** How this World is presented; older projects default to 3D. */
+  worldMode?: WorldMode;
   /** Grid step in units used by the editor when snapping. */
   gridSize: number;
   /** Units per metre, used to convert to physics space. */
@@ -468,7 +472,7 @@ export interface SceneFile {
   entities: EntityData[];
 }
 
-export const defaultProjectSettings = (): ProjectSettings => ({ gridSize: 16, unitsPerMetre: 39.37 });
+export const defaultProjectSettings = (): ProjectSettings => ({ gridSize: 16, unitsPerMetre: 39.37, worldMode: '3d' });
 
 export const defaultSceneSettings = (): SceneSettings => ({
   ambientColor: '#b8c2d0',
