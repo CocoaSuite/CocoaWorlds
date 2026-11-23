@@ -9,7 +9,7 @@ CocoaWorlds is a member of the Cocoa software family. Its editor must look and b
 The colours below still come from CocoaCanvas. The sizes and the frame are CocoaWorlds' own and take priority over sections 2.2 to 4 wherever they disagree:
 
 - **Scale:** three text sizes (`--fs-s` 11, `--fs-m` 12, `--fs-l` 13), two radii (`--r-s` 4, `--r-m` 6), one row height (`--row` 24), one bar height (`--bar` 30). No literal sizes in editor CSS. Start screen, dialogs and in-game UI keep their own sizes.
-- **Frame:** top bar, workspace tab row, then tool rail | list | view | properties, then a status bar. Tools are a vertical rail at the far left, not a bar under the view.
+- **Frame:** top header with workspace tabs, slim horizontal command bar, then scene hierarchy | viewport | inspector, with a dockable bottom shelf and status bar. Tools are grouped in the command bar rather than a vertical rail.
 - **Headers:** sentence case, 12px, weight 500. No uppercase labels.
 - **Tooltips:** only a plain name on icon-only buttons. Anything longer is one sentence in the status bar (`hint.*` strings).
 - **Text:** no `·` separators and no `✓` typed into labels. Separate facts are separate elements; checked menu items set `checked` on the entry.
@@ -94,7 +94,7 @@ New CocoaWorlds-only semantic colours (dark-background contrast checked against 
 └────────────┴─────────────────────────────────────────────┴───────────────┘
 ```
 
-CocoaWorlds keeps this frame exactly and adds one thing: a collapsible **bottom workspace** inside `#stage` below `#tbar` (scripts, assets, console, problems, diagnostics) with a 30px tab strip. Workspaces (Level / Script / Materials) are a segmented control in the top bar, not separate windows.
+CocoaWorlds adapts the Cocoa frame to a 3D workflow: a horizontal command strip with transform tools, brush shapes, editing actions, and independent grid/angle snapping. The scene hierarchy sits to the left of the viewport, the inspector to the right, and the collapsible **bottom workspace** spans the hierarchy and viewport. Its Assets tab uses horizontal category filters; Script, Console and Problems retain their existing tabs. Workspaces are a segmented control in the header, not separate windows.
 
 ## 4. Components (CocoaCanvas class → CocoaWorlds component)
 
