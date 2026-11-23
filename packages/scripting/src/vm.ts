@@ -684,7 +684,16 @@ export class ScriptRunner {
           t.waitUntil = until;
           return; // even “Wait 0” lets the frame finish
         }
+        case 'trackDuration': {
+          const duration = num(s[s.length - 1] ?? 0);
+          if (duration > 0 && Number.isFinite(duration)) {
+            const until = this.host.now() + duration;
+            t.together.push(() => this.host.now() >= until);
+          }
+          break;
+        }
         case 'together': {
+          if (op.skipEmpty && !t.together.length) break;
           const all = t.together;
           t.together = [];
           t.waitFor = () => {

@@ -298,9 +298,8 @@ code { font: var(--fs-m) var(--mono); color: var(--fg); }
 .cw-blk-problem.error { color: var(--bad); }
 .cw-blk-problem.warning { color: var(--cw-warn); }
 .cw-list { display: flex; flex-direction: column; }
-.cw-blk-and { align-self: flex-start; height: 8px; margin: 0 0 0 10px; padding: 0 8px; border: 0; background: none; color: transparent; font-size: var(--fs-s); font-weight: 700; line-height: 8px; text-transform: uppercase; cursor: pointer; }
-.cw-blk-and:hover { height: 16px; line-height: 16px; color: var(--mute); }
-.cw-blk-and.on { height: 16px; line-height: 16px; color: var(--accent); }
+.cw-block-link { align-self: flex-start; margin-left: 10px; padding: 0 3px; field-sizing: content; max-width: 100%; background: var(--panel); color: var(--mute); border: 0; font: inherit; font-size: var(--fs-s); cursor: pointer; }
+.cw-block-link:focus-visible { outline: 1px solid var(--accent); }
 .cw-way { margin-right: 3px; }
 .cw-way.on { color: var(--accent); }
 .cw-add-blk { align-self: flex-start; margin-top: 4px; padding: 2px 8px; font-size: var(--fs-m); color: var(--mute); background: transparent; border: 1px dashed var(--line); border-radius: var(--r-m); }

@@ -136,7 +136,7 @@ export function readCaptionFile(json: unknown): { sound: string; captions: Capti
   return { sound: typeof o.sound === 'string' ? o.sound : '', captions: cleanCaptions(o.captions) };
 }
 
-export type Statement = StatementKind_ & { and?: boolean };
+export type Statement = StatementKind_ & { and?: boolean; afterPrevious?: boolean };
 
 type StatementKind_ =
   | { id: string; kind: 'move'; target: Ref; direction: Direction; distance: Expr; seconds: Expr }

@@ -587,6 +587,18 @@ function EventRow({ ev, onRemove, onCopy, pick }: { ev: EventBlock; onRemove: ()
   );
 }
 
+// These commands start work in another system without returning a completion signal.
+const startsBackgroundWork = new Set<StatementKind>(['playSound', 'playAnim', 'playEffect', 'print', 'startTrain', 'wander']);
+
+function canWaitForPrevious(list: Statement[], index: number): boolean {
+  for (let i = index - 1; i >= 0; i--) {
+    const block = list[i]!;
+    if (startsBackgroundWork.has(block.kind) || 'body' in block || 'then' in block || 'cases' in block || 'options' in block) return false;
+    if (!block.and) break;
+  }
+  return true;
+}
+
 function List({ listKey, list }: { listKey: string; list: Statement[] }) {
   const c = useC();
   return (
@@ -594,9 +606,15 @@ function List({ listKey, list }: { listKey: string; list: Statement[] }) {
       {list.map((s, i) => (
         <Fragment key={s.id}>
           {i > 0 && (
-            <button type="button" className={`cw-blk-and${s.and ? ' on' : ''}`} aria-pressed={!!s.and} onClick={() => c.update((sc) => replaceBlock(sc, s.id, (b) => ({ ...b, and: s.and ? undefined : true }) as Statement), s.and ? 'Run blocks in turn' : 'Run blocks together')}>
-              {w('and')}
-            </button>
+            <select className="cw-block-link" aria-label={w('startNext')} value={s.and ? 'and' : s.afterPrevious ? 'after' : 'next'}
+              onChange={(e) => {
+                const mode = e.currentTarget.value;
+                c.update((sc) => replaceBlock(sc, s.id, (b) => ({ ...b, and: mode === 'and' || undefined, afterPrevious: mode === 'after' || undefined }) as Statement), 'Change block timing');
+              }}>
+              <option value="next">{w('nextBlock')}</option>
+              <option value="and">{w('and')}</option>
+              <option value="after" disabled={!canWaitForPrevious(list, i)}>{w('afterPrevious')}</option>
+            </select>
           )}
           <StatementRow s={s} listKey={listKey} />
         </Fragment>
