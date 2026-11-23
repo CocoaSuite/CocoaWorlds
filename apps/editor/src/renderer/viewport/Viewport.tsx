@@ -345,6 +345,7 @@ export function Viewport() {
             { value: 'top', label: t('view.top') },
             { value: 'front', label: t('view.front') },
             { value: 'side', label: t('view.side') },
+            ...(useEditor.getState().session?.project.settings.worldMode === 'isometric' ? [{ value: 'isometric' as ViewMode, label: 'Isometric' }] : []),
           ]}
         />
       </div>
