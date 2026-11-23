@@ -368,7 +368,3 @@ What keeps Play (and exported games) from stuttering:
   times (every 1.5–1.9 s) and the path search reuses its memory; the editor's status line is sent at most four
   times a second.
 
-
-## God rays
-
-Scene settings → Lighting → God rays is enabled by default, including in older levels. A shadow-casting directional Sun (including the day/night sun) illuminates the air along its light path. Walls block that light and openings admit it, so a shaft through a window can be viewed side-on or with the sun behind the camera. Game Lighting preview, Play and exports share this pass. It uses the existing scene depth and sun shadow map, marching 32 steps up to 960 world units at quarter resolution (480 pixels maximum on the longer edge). Orthographic views and detected software renderers skip the effect.

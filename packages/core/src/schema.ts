@@ -194,8 +194,6 @@ export interface SceneSettings {
   ao?: AoSettings;
   /** Glow around very bright things: lamps, glowing materials, the sun's glare (missing: on). */
   bloom?: BloomSettings;
-  /** Screen-space sunlight shafts (missing: on). */
-  godRays?: boolean;
   /** Camera lens effects and a noise overlay: depth of field, distortion, colour fringes, vignette, grain, scanlines (missing: all off). */
   lens?: Partial<LensSettings>;
   /** Day and night: the sun goes round, the sky and light change with it (missing: off). */
@@ -478,6 +476,5 @@ export const defaultSceneSettings = (): SceneSettings => ({
   backgroundColor: '#1f1f1f',
   fog: { enabled: false, color: '#1f1f1f', near: 512, far: 4096 },
   gravity: 800,
-  godRays: true,
   sky: defaultSky(),
 });
