@@ -74,6 +74,7 @@ export class AoRenderer {
         lens.depth = read.depthTexture;
         rays.depth = read.depthTexture;
         drawScene(r, write, read, dt, mask);
+        rays.enabled &&= !!read.depthTexture && !!r.shadowMap.enabled && rays.hasShadowMap;
       };
       composer.addPass(scenePass);
       const pass = new GTAOPass(scene, cam, size.x, size.y);
