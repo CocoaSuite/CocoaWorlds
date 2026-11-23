@@ -2,6 +2,7 @@ import { Button, ContextMenu, Dialog, Divider, Icon, IconButton, MenuBar, Spacer
 import { useEffect, useState } from 'react';
 import logo from '../assets/cocoaworlds-logo.svg';
 import { t } from '../i18n';
+import { ToolBar } from './ToolBar';
 import defaultGameIcon from '../assets/game-icon.png';
 import { flushProjectSave, useEditor } from '../store';
 
@@ -18,7 +19,8 @@ export function TopBar({ onShowKeys }: { onShowKeys: () => void }) {
   const confirmClose = () => (s.dirty ? setAsking(true) : s.closeSession());
 
   return (
-    <header className="cw-top">
+    <header className="cw-editor-header">
+      <div className="cw-top">
       <img src={logo} alt="CocoaWorlds" className="cw-brand" />
       <MenuBar
         menus={[
@@ -83,6 +85,23 @@ export function TopBar({ onShowKeys }: { onShowKeys: () => void }) {
             ],
           },
           {
+            label: t('menu.help'),
+            items: [
+              { label: t('help.shortcuts'), shortcut: '?', onSelect: onShowKeys },
+              { label: `${t('help.about')} — ${window.cocoa.versions.app}`, disabled: true, onSelect: () => {} },
+            ],
+          },
+        ]}
+      />
+        <Spacer />
+        <WorkspaceTabs />
+        <Spacer />
+        <div className="cw-crumbs">
+          {session.project.name} <span className="cw-crumb-sep">/</span> <ScenePicker />
+        </div>
+      </div>
+      <div className="cw-command-row">
+        {s.workspace === 'scene' && <div className="cw-command-edit" inert={!!s.playing}><ToolBar /><MenuBar menus={[{
             label: t('menu.add'),
             items: [
               { label: t('add.empty'), onSelect: () => s.add('empty') },
@@ -112,20 +131,8 @@ export function TopBar({ onShowKeys }: { onShowKeys: () => void }) {
             { label: t('add.ladder'), onSelect: () => s.addLadder() },
             { label: t('add.terrain'), onSelect: () => s.addTerrain() },
             ],
-          },
-          {
-            label: t('menu.help'),
-            items: [
-              { label: t('help.shortcuts'), shortcut: '?', onSelect: onShowKeys },
-              { label: `${t('help.about')} — ${window.cocoa.versions.app}`, disabled: true, onSelect: () => {} },
-            ],
-          },
-        ]}
-      />
-      <div className="cw-crumbs">
-        {session.project.name} <span className="cw-crumb-sep">/</span> <ScenePicker />
-      </div>
-      <Spacer />
+          }]} /></div>}
+        <Spacer />
       <IconButton icon="undo" label={t('edit.undo')} disabled={!h.canUndo} onClick={s.undo} />
       <IconButton icon="redo" label={t('edit.redo')} disabled={!h.canRedo} onClick={s.redo} />
       <Divider />
@@ -144,6 +151,7 @@ export function TopBar({ onShowKeys }: { onShowKeys: () => void }) {
           {t('play')}
         </Button>
       )}
+      </div>
       {asking && (
         <Dialog title={t('close.title')} onClose={() => setAsking(false)}>
           <p>{t('close.body')}</p>
