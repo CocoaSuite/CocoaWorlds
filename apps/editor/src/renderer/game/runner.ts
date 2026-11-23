@@ -111,11 +111,12 @@ export class GameRunner {
 
   private hidden = new THREE.MeshBasicMaterial({ visible: false });
   /** The Three.js material for a face material (shared by every scene of the game). */
-  private materialFor = (name: string): THREE.Material => {
-    let m = this.materials.get(name);
+  private materialFor = (name: string, tint?: string): THREE.Material => {
+    const key = tint ? `${name}\u0000${tint}` : name;
+    let m = this.materials.get(key);
     if (!m) {
-      m = isInvisibleMaterial(name) ? this.hidden : sceneMaterial(name, () => {});
-      this.materials.set(name, m);
+      m = isInvisibleMaterial(name) ? this.hidden : sceneMaterial(name, () => {}, tint);
+      this.materials.set(key, m);
     }
     return m;
   };

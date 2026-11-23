@@ -46,6 +46,8 @@ export interface ScriptHost {
   /** Show a message on screen for `seconds`. */
   say?(text: string, seconds: number, owner: string): void;
   /** Change what a text sign says. */
+  brushTint?(id: string, color: string, seconds: number): void;
+  brushMaterial?(id: string, material: string): void;
   setText?(target: string, text: string): void;
   /** Change a light's setting (a number, or a colour as text) over some seconds. */
   setLight?(target: string, prop: LightProp, value: number | string, seconds: number): void;
@@ -817,6 +819,17 @@ export class ScriptRunner {
         case 'stopsound': {
           const target = s.pop();
           if (target && typeof target === 'object') this.host.stopSound?.(target.ref);
+          break;
+        }
+        case 'brushTint': {
+          const seconds = num(s.pop() ?? 0);
+          const target = s.pop();
+          if (target && typeof target === 'object') this.host.brushTint?.(target.ref, op.color, Number.isFinite(seconds) ? Math.max(0, seconds) : 0);
+          break;
+        }
+        case 'brushMaterial': {
+          const target = s.pop();
+          if (target && typeof target === 'object') this.host.brushMaterial?.(target.ref, op.material);
           break;
         }
         case 'settext': {

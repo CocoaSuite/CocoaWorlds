@@ -1179,6 +1179,8 @@ export class GameWorld {
   /** The game starts on its first day (not a saved or carried one): “When day n starts” runs for it. */
   private dayFresh = true;
   /** Models' glow set by scripts (from null: from how the model was made). */
+  readonly brushOwners = new WeakMap<Brush, string>();
+  readonly brushChanges: ({ id: string; material: string } | { id: string; color: string; seconds: number; time: number })[] = [];
   private glows = new Map<string, Fade>();
   /** Objects scripts turned on (true) or off (false), by body. */
   private switched = new Map<string, boolean>();
@@ -1311,6 +1313,7 @@ export class GameWorld {
       const brushData = e.components.brush as unknown as (BrushData & { role?: string }) | undefined;
       if (brushData?.faces) {
         const brush = brushToWorld(fromData({ faces: brushData.faces, mesh: brushData.mesh }), doc.worldMatrix(e.id));
+        this.brushOwners.set(brush, e.id);
         // (A Sound area is heard, not touched: also a trigger zone when it has one, never part of the level.)
         if (e.components.soundArea) this.addSoundArea(e, brush);
         if (e.components.soundArea && !e.components.trigger) continue;
@@ -1561,6 +1564,12 @@ export class GameWorld {
         if (!l) return;
         const to = prop === 'color' ? (isHex(String(value)) ? rgbOf(String(value)) : null) : [Math.max(0, Number(value) || 0)];
         if (to) l[prop] = { from: fadeAt(l[prop], this.time), to, t0: this.time, t1: this.time + seconds };
+      },
+      brushTint: (id, color, seconds) => {
+        if (isHex(color)) this.brushChanges.push({ id, color, seconds, time: this.time });
+      },
+      brushMaterial: (id, material) => {
+        if (material) this.brushChanges.push({ id, material });
       },
       setGlow: (target, strength, seconds) => {
         const g = this.glows.get(target);
@@ -4802,6 +4811,7 @@ export class GameWorld {
         } else if (e.components.model) (b.riders ??= []).push({ id, matrix: world });
       } else if (brushData?.faces) {
         const brush = brushToWorld(fromData({ faces: brushData.faces, mesh: brushData.mesh }), world);
+        this.brushOwners.set(brush, id);
         if (e.components.trigger) this.addTrigger(copy, brush, false);
         else if (e.components.rigidBody) this.addBrushBody(copy, brush);
         else if (brushData.role !== 'subtract' && !rootHasBody) unitFor(e).brushes.push(brush);
@@ -5090,6 +5100,7 @@ export class GameWorld {
       const desc = hull(pts);
       if (desc) this.owner.set(this.world.createCollider(this.material(desc, b.rb ?? readComponent<RigidBodyData>('rigidBody', {})), b.body).handle, id);
     }
+    this.brushOwners.set(brush, id);
     b.brushes.push(brush);
   }
 

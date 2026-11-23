@@ -127,6 +127,10 @@ export function newStatement(kind: StatementKind, opts: { target?: Ref; variable
       return { id: id(), kind, amount: num(1) };
     case 'say':
       return { id: id(), kind, text: text('Hello!'), seconds: num(3) };
+    case 'brushTint':
+      return { id: id(), kind, target, color: '#ffffff', seconds: num(1) };
+    case 'brushMaterial':
+      return { id: id(), kind, target, material: 'dev/grid' };
     case 'setText':
       return { id: id(), kind, target, text: text('Text') };
     case 'spawn':

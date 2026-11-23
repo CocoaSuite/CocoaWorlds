@@ -175,6 +175,8 @@ type StatementKind_ =
   /** Show text in the middle of the screen for a while (doesn't wait). */
   | { id: string; kind: 'say'; text: Expr; seconds: Expr }
   /** Change what a text sign says. */
+  | { id: string; kind: 'brushTint'; target: Ref; color: string; seconds: Expr }
+  | { id: string; kind: 'brushMaterial'; target: Ref; material: string }
   | { id: string; kind: 'setText'; target: Ref; text: Expr }
   /** Make a copy of an object (and everything inside it) at a place; it runs its own scripts. */
   | { id: string; kind: 'spawn'; template: Ref; at: Place }

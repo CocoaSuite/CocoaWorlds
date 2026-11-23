@@ -76,6 +76,8 @@ export type Op =
   | { op: 'say' }
   /** Pops text, then the target: change a sign's text. */
   | { op: 'settext' }
+  | { op: 'brushTint'; color: string }
+  | { op: 'brushMaterial'; material: string }
   /** Pops the place, then the template: make a copy; the stack remembers it as “the new copy”. */
   | { op: 'spawn' }
   | { op: 'print' }
@@ -566,6 +568,16 @@ class HandlerCompiler {
         this.value(s.text);
         this.expect(s.seconds, 'number', 'Show for a number of seconds.');
         this.emit({ op: 'say' });
+        break;
+      case 'brushTint':
+        this.actTarget(s.target, s.id);
+        this.expect(s.seconds, 'number', 'The fade duration must be a number of seconds.');
+        if (!/^#[0-9a-f]{6}$/i.test(s.color)) this.problem(s.id, 'Choose a brush tint color.');
+        this.emit({ op: 'brushTint', color: s.color });
+        break;
+      case 'brushMaterial':
+        this.actTarget(s.target, s.id);
+        this.emit({ op: 'brushMaterial', material: s.material });
         break;
       case 'setText': {
         const r = this.resolveRef(s.target, s.id);

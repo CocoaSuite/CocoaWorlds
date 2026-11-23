@@ -49,6 +49,7 @@ import {
 } from '@cocoaworlds/scripting';
 import { CREATURE_MOMENTS, LENS_PRESETS, UI_SCRIPT_OWNER, uiOf, type GameValue } from '@cocoaworlds/core';
 import { Button, ContextMenu, IconButton, type MenuEntry } from '@cocoaworlds/ui';
+import { DEV_MATERIALS } from '../../brush/materials';
 import { Picker, type PickGroup, type PickItem } from './Picker';
 import { Fragment, createContext, useContext, useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { getLang, t } from '../../i18n';
@@ -64,7 +65,7 @@ interface Ctx {
   update: (fn: (s: Script) => Script, label: string, mergeKey?: string) => void;
   problems: Map<string, Problem[]>;
   active: Set<string>;
-  objects: { id: string; name: string; isZone: boolean; isSign: boolean; isLight: boolean }[];
+  objects: { id: string; name: string; isBrush: boolean; isZone: boolean; isSign: boolean; isLight: boolean }[];
   menu: (x: number, y: number, items: MenuEntry[]) => void;
   pick: (x: number, y: number, groups: PickGroup[], extra?: PickItem | null) => void;
   /** The handler being drawn (for “the thing that entered”). */
@@ -124,7 +125,7 @@ export function ScriptPanel({ screens = false }: { screens?: boolean } = {}) {
   const project = useEditor((s) => s.session?.project);
   const globals = useMemo(() => project?.settings.values ?? [], [project]);
   const objects = useMemo(
-    () => (doc ? doc.entities.map((e) => ({ id: e.id, name: e.name, isZone: !!e.components.trigger, isSign: !!e.components.sign, isLight: !!e.components.light })) : []),
+    () => (doc ? doc.entities.map((e) => ({ id: e.id, name: e.name, isBrush: !!e.components.brush, isZone: !!e.components.trigger, isSign: !!e.components.sign, isLight: !!e.components.light })) : []),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [doc, useEditor.getState().rev],
   );
@@ -1313,6 +1314,17 @@ function statementWords(s: Statement, set: (patch: Record<string, unknown>, merg
           {w('setDay')} <ExprSlot expr={s.value} type="number" label={w('setDay')} />
         </>
       );
+    case 'brushTint':
+    case 'brushMaterial':
+      return (
+        <>
+          {w(s.kind)} <RefSlot value={s.target} brushesOnly onChange={(target) => set({ target })} label={w(s.kind)} /> {w('setTo')}{' '}
+          {s.kind === 'brushMaterial'
+            ? <BrushMaterialSlot value={s.material} onChange={(material) => set({ material })} />
+            : <><input type="color" aria-label={w(s.kind)} value={s.color} onChange={(e) => set({ color: e.target.value })} /> {w('over')}{' '}
+              <ExprSlot expr={s.seconds} type="number" label={w('seconds')} /> {w('seconds')}</>}
+        </>
+      );
     case 'setGlow':
       return (
         <>
@@ -1350,12 +1362,23 @@ function BlockProblems({ id }: { id: string }) {
 
 // ── Slots ──
 
+function BrushMaterialSlot({ value, onChange }: { value: string; onChange: (id: string) => void }) {
+  const materials = useEditor((s) => s.session?.project.settings.materials);
+  const textures = useEditor((s) => s.assets.textures);
+  return <select className="cw-input cw-ref" aria-label={w('brushMaterial')} value={value} onChange={(e) => onChange(e.target.value)}>
+    {DEV_MATERIALS.filter((m) => !m.tool).map((m) => <option key={m.id} value={m.id}>{m.label[getLang()]}</option>)}
+    {materials?.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+    {textures.map((t) => <option key={t.path} value={t.path}>{t.name}</option>)}
+  </select>;
+}
+
 function RefSlot<T extends Ref | Place | null>({
   value,
   onChange,
   label,
   zonesOnly,
   signsOnly,
+  brushesOnly,
   lightsOnly,
   allowNone,
   allowPlayer,
@@ -1368,6 +1391,7 @@ function RefSlot<T extends Ref | Place | null>({
   label: string;
   zonesOnly?: boolean;
   signsOnly?: boolean;
+  brushesOnly?: boolean;
   lightsOnly?: boolean;
   allowNone?: boolean;
   /** Offer “the player”. */
@@ -1396,7 +1420,7 @@ function RefSlot<T extends Ref | Place | null>({
               : v === 'held'
                 ? { held: true }
                 : { entity: v.slice(2) }) as T;
-  const objs = c.objects.filter((o) => o.id !== c.owner && (!zonesOnly || o.isZone) && (!signsOnly || o.isSign) && (!lightsOnly || o.isLight));
+  const objs = c.objects.filter((o) => o.id !== c.owner && (!brushesOnly || o.isBrush) && (!zonesOnly || o.isZone) && (!signsOnly || o.isSign) && (!lightsOnly || o.isLight));
   const current = enc(value);
   const missing = current.startsWith('e:') && !c.objects.some((o) => o.id === current.slice(2));
   return (
