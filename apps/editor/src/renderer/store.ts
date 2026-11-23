@@ -45,6 +45,7 @@ import {
   type Command,
   type EntityData,
   type ProjectFile,
+  type WorldMode,
   type SceneFile,
   type Transform,
   gameRules,
@@ -128,7 +129,7 @@ export interface TerrainBrush {
 }
 export type { FaceRef };
 export type Justify = 'left' | 'right' | 'top' | 'bottom' | 'center';
-export type ViewMode = 'perspective' | 'top' | 'front' | 'side';
+export type ViewMode = 'perspective' | 'top' | 'front' | 'side' | 'isometric';
 /** Grid sizes to snap to (u). */
 export const GRID_SIZES = [1, 2, 4, 8, 16, 32, 64, 128, 256, 512];
 /** Rotation snapping in degrees; zero means free rotation. */
@@ -234,6 +235,7 @@ interface Actions {
   /** A finished terrain stroke, already made: recorded so it can be undone. */
   terrainEdit(cmd: { label: string; apply(): void; revert(): void }): void;
   setView(v: ViewMode): void;
+  setWorldMode(mode: WorldMode): Promise<void>;
   toggle(k: 'showGrid' | 'showNav' | 'showGrass' | 'showProbes' | 'showCollisions' | 'zUp' | 'uvPane' | 'showStats' | 'showPlayBar' | 'showBottom' | 'snap' | 'pivotEdit' | 'gameLighting'): void;
   /** Put an object's pivot at a world position (null: back to the default, its middle). */
   setPivot(id: string, world: Vec3 | null, mergeKey?: string): void;
@@ -480,6 +482,7 @@ export const useEditor = create<State & Actions>()((set, get) => ({
       faceSelection: [],
       enteredGroup: null,
       tool: 'select',
+      view: o.project.settings.worldMode === 'isometric' ? 'isometric' : 'perspective',
       dirty: false,
       recovery: o.recovery,
       rev: get().rev + 1,
@@ -538,6 +541,17 @@ export const useEditor = create<State & Actions>()((set, get) => ({
   },
   setTool: (tool) => set((s) => (tool === 'face' || s.tool !== 'face' ? { tool } : { tool, faceSelection: [] })),
   setView: (view) => set({ view }),
+  async setWorldMode(mode) {
+    const session = get().session;
+    if (!session || get().playing) return;
+    const settings = { ...session.project.settings, worldMode: mode };
+    await flushProjectSave();
+    const r = await window.cocoa.projects.saveSettings(session.dir, settings);
+    if (!r.ok) { get().log('error', 'Project', r.error); return; }
+    const current = get().session;
+    if (!current || current.dir !== session.dir) return;
+    set({ session: { ...current, project: r.value }, view: mode === 'isometric' ? 'isometric' : 'perspective', rev: get().rev + 1 });
+  },
   setSnapAngle: (angle) => {
     if (SNAP_ANGLES.includes(angle)) set({ snapAngle: angle });
   },
