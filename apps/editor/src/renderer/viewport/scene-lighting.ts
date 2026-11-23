@@ -84,6 +84,10 @@ export class SceneLighting {
   private sky: THREE.Mesh;
   private skyMat: THREE.ShaderMaterial;
   private suns: THREE.DirectionalLight[] = [];
+  /** The first currently lit sun, including the day/night light. */
+  get raySun(): THREE.DirectionalLight | null {
+    return this.suns.find((s) => s.visible && s.intensity > 0) ?? null;
+  }
   /** The lights by object id, with how much brighter the light is than its Brightness (Play changes them). */
   readonly lights = new Map<string, { light: THREE.Light; falloff: number }>();
   /** With day and night on: the daytime look to change from, and what changes. */
