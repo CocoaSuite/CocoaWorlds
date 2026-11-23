@@ -62,7 +62,6 @@ export function Viewport() {
   const view = useEditor((s) => s.view);
   const snap = useEditor((s) => s.snap);
   const snapAngle = useEditor((s) => s.snapAngle);
-  const vertexSnap = useEditor((s) => s.vertexSnap);
   const pivotEdit = useEditor((s) => s.pivotEdit);
   const showGrid = useEditor((s) => s.showGrid);
   const showNav = useEditor((s) => s.showNav);
@@ -218,9 +217,6 @@ export function Viewport() {
   useEffect(() => {
     engine.current?.setSnapAngle(snapAngle);
   }, [snapAngle]);
-  useEffect(() => {
-    engine.current?.setVertexSnap(vertexSnap);
-  }, [vertexSnap]);
   useEffect(() => {
     engine.current?.setPivotEdit(pivotEdit);
   }, [pivotEdit]);
