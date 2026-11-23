@@ -1,12 +1,17 @@
-/** The tool rail down the left edge of the Level workspace. Snapping and the other toggles live in the status bar. */
-import { Icon, ToolButton, type IconName } from '@cocoaworlds/ui';
+/** Compact horizontal command bar for the Level workspace. */
+import { Icon, type IconName } from '@cocoaworlds/ui';
 import { useEffect, useRef, useState } from 'react';
 import type { BrushShape } from '../brush/brushes';
 import { t } from '../i18n';
-import { useEditor, type Tool } from '../store';
+import { GRID_SIZES, SNAP_ANGLES, useEditor, type Tool } from '../store';
 
 export function ToolBar() {
   const tool = useEditor((s) => s.tool);
+  const snap = useEditor((s) => s.snap);
+  const angle = useEditor((s) => s.snapAngle);
+  const grid = useEditor((s) => s.session?.project.settings.gridSize ?? 16);
+  const selected = useEditor((s) => s.selection.length > 0);
+  const st = useEditor.getState();
   const setTool = useEditor((s) => s.setTool);
   const shape = useEditor((s) => s.brushOptions.shape);
   const setBrushOptions = useEditor((s) => s.setBrushOptions);
@@ -37,10 +42,11 @@ export function ToolBar() {
   ];
   const current = SHAPES.find((x) => x[0] === shape) ?? SHAPES[0]!;
   const T = (id: Tool, icon: IconName, label: string, key: string) => (
-    <ToolButton icon={icon} label={label} shortcut={key} active={tool === id} onClick={() => setTool(id)} />
+    <CommandTool icon={icon} label={label} shortcut={key} active={tool === id} onClick={() => setTool(id)} text={['select', 'move', 'rotate', 'scale'].includes(id)} />
   );
   const B = (s: BrushShape, icon: IconName, label: string, key?: string) => (
-    <ToolButton
+    <CommandTool
+      text
       icon={icon}
       label={label}
       shortcut={key}
@@ -54,7 +60,7 @@ export function ToolBar() {
     />
   );
   return (
-    <div className="cw-tbar" role="toolbar" aria-orientation="vertical" aria-label="Tools">
+    <div className="cw-tbar" role="toolbar" aria-orientation="horizontal" aria-label="Tools">
       {T('select', 'select', t('tool.select'), 'V')}
       {T('move', 'move', t('tool.move'), 'W')}
       {T('rotate', 'rotate', t('tool.rotate'), 'E')}
@@ -80,7 +86,7 @@ export function ToolBar() {
       {T('clip', 'clip', t('tool.clip'), 'C')}
       {T('loopcut', 'loopcut', t('tool.loopcut'), `${navigator.platform.toLowerCase().includes('mac') ? '⌘' : 'Ctrl'}+R`)}
       <hr className="cw-rail-sep" />
-      <ToolButton
+      <CommandTool
         icon="trigger"
         label={t('tool.trigger')}
         active={tool === 'brush' && role === 'trigger'}
@@ -92,6 +98,37 @@ export function ToolBar() {
       />
       {T('paint', 'paint', t('tool.paint'), 'P')}
       {T('terrain', 'terrain', t('tool.terrain'), 'H')}
+      <hr className="cw-rail-sep" />
+      <CommandTool icon="copy" label={t('edit.duplicate')} disabled={!selected} onClick={st.duplicateSelection} />
+      <CommandTool icon="folder" label={t('edit.group')} disabled={!selected} onClick={st.groupSelection} />
+      <CommandTool icon="close" label={t('edit.delete')} disabled={!selected} onClick={st.deleteSelection} />
+      <hr className="cw-rail-sep" />
+      <div className="cw-command-snap">
+        <button type="button" className="cw-command-tool" aria-label={`${t('grid.snap')} ${snap ? t('grid.on') : t('grid.off')}`} aria-pressed={snap} onClick={() => st.toggle('snap')}>
+          <Icon name="grid" /> <span>{t('grid.snap')} {snap ? t('grid.on') : t('grid.off')}</span>
+        </button>
+        <select className="cw-pill-select mono" aria-label={t('grid.size')} value={grid}
+          onChange={(e) => st.setGridSize(Number(e.currentTarget.value))}>
+          {GRID_SIZES.map((g) => <option key={g} value={g}>{g}u</option>)}
+        </select>
+        <label className="cw-command-angle">
+          <span>{t('grid.angle')}</span>
+          <select className="cw-pill-select mono" aria-label={t('grid.angle')} value={angle}
+            onChange={(e) => st.setSnapAngle(Number(e.currentTarget.value))}>
+            {SNAP_ANGLES.map((a) => <option key={a} value={a}>{a ? `${a}°` : t('grid.off')}</option>)}
+          </select>
+        </label>
+      </div>
     </div>
   );
+}
+
+function CommandTool({ icon, label, shortcut, active, text, disabled, onClick }: {
+  icon: IconName; label: string; shortcut?: string; active?: boolean; text?: boolean; disabled?: boolean; onClick: () => void;
+}) {
+  return <button type="button" className={`cw-tool cw-command-tool${active ? ' on' : ''}`}
+    aria-label={label} aria-pressed={active === undefined ? undefined : active}
+    title={shortcut ? `${label} (${shortcut})` : label} disabled={disabled} onClick={onClick}>
+    <Icon name={icon} />{text && <span>{label}</span>}
+  </button>;
 }
