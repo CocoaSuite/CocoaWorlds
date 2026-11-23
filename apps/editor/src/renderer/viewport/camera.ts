@@ -6,12 +6,13 @@
  */
 import * as THREE from 'three';
 
-export type ViewKind = 'perspective' | 'top' | 'front' | 'side';
+export type ViewKind = 'perspective' | 'top' | 'front' | 'side' | 'isometric';
 
 const ORTHO_DIRS: Record<Exclude<ViewKind, 'perspective'>, { dir: THREE.Vector3; up: THREE.Vector3 }> = {
   top: { dir: new THREE.Vector3(0, -1, 0), up: new THREE.Vector3(0, 0, -1) },
   front: { dir: new THREE.Vector3(0, 0, -1), up: new THREE.Vector3(0, 1, 0) },
   side: { dir: new THREE.Vector3(-1, 0, 0), up: new THREE.Vector3(0, 1, 0) },
+  isometric: { dir: new THREE.Vector3(1, Math.sqrt(2), 1).normalize(), up: new THREE.Vector3(0, 1, 0) },
 };
 
 export class CameraRig {
@@ -36,6 +37,7 @@ export class CameraRig {
     top: { center: new THREE.Vector3(), upp: 2 },
     front: { center: new THREE.Vector3(0, 128, 0), upp: 2 },
     side: { center: new THREE.Vector3(0, 128, 0), upp: 2 },
+    isometric: { center: new THREE.Vector3(0, 128, 0), upp: 2 },
   };
   private w = 1;
   private h = 1;
