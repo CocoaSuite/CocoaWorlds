@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { History } from '../src/history';
+import { sceneSettings } from '../src/schema';
 import {
   SceneDoc,
   addEntitiesCmd,
+  setSceneSettingsCmd,
   deleteEntitiesCmd,
   duplicateCmd,
   newEntity,
@@ -28,6 +30,16 @@ describe('SceneDoc commands', () => {
   it('new scenes contain a spawn point and a light', () => {
     const s = newScene('a');
     expect(s.entities.map((e) => e.name)).toEqual(['player_spawn', 'sun']);
+  });
+
+  it('defaults god rays on and preserves a level override through undo and serialization', () => {
+    expect(sceneSettings(undefined).godRays).toBe(true);
+    const { doc, h } = setup();
+    expect(doc.settings.godRays).toBe(true);
+    h.execute(setSceneSettingsCmd(doc, { godRays: false }, 'God rays off'));
+    expect(new SceneDoc(doc.toFile()).settings.godRays).toBe(false);
+    h.undo();
+    expect(doc.settings.godRays).toBe(true);
   });
 
   it('adds and undoes adding', () => {
