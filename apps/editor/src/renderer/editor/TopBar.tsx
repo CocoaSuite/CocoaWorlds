@@ -105,6 +105,7 @@ export function TopBar({ onShowKeys }: { onShowKeys: () => void }) {
             label: t('menu.add'),
             items: [
               { label: t('add.empty'), onSelect: () => s.add('empty') },
+              { label: t('add.promptVolume'), onSelect: () => s.add('promptVolume') },
               'separator',
               { label: t('add.pointLight'), onSelect: () => s.add('pointLight') },
               { label: t('add.spotLight'), onSelect: () => s.add('spotLight') },

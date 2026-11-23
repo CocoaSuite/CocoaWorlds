@@ -225,6 +225,7 @@ type StatementKind_ =
   | { id: string; kind: 'unsilence' }
   /** Out of the hiding spot the player is in. */
   | { id: string; kind: 'unhide' }
+  | { id: string; kind: 'hideButtonPrompt'; target: Ref }
   | { id: string; kind: 'cameraAt'; target: Ref }
   | { id: string; kind: 'playerCamera' | 'endGame' }
   | { id: string; kind: 'hideEffect'; effect: string }

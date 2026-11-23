@@ -143,6 +143,7 @@ export function SceneTree() {
           onClose={() => setAddOpen(null)}
           items={[
             { label: t('add.empty'), onSelect: () => s.add('empty') },
+            { label: t('add.promptVolume'), onSelect: () => s.add('promptVolume') },
             'separator',
             { label: t('add.pointLight'), onSelect: () => s.add('pointLight') },
             { label: t('add.spotLight'), onSelect: () => s.add('spotLight') },

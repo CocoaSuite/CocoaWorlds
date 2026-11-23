@@ -155,6 +155,7 @@ export function newStatement(kind: StatementKind, opts: { target?: Ref; variable
       return { id: id(), kind };
     case 'hideEffect':
       return { id: id(), kind, effect: '' };
+    case 'hideButtonPrompt':
     case 'cameraAt':
       return { id: id(), kind, target };
     case 'viewFrom':

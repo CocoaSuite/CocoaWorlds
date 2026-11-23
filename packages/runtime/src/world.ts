@@ -580,6 +580,7 @@ export class GameWorld {
   /** Copies made while playing → what they were copied from. */
   private copyOf = new Map<string, string>();
   private useQueued = false;
+  private hiddenButtonPrompts = new Set<string>();
   /** Below this the player has fallen out of the world and starts again. */
   private killY = -Infinity;
   private health: number = PLAYER.maxHealth;
@@ -3469,11 +3470,13 @@ export class GameWorld {
     const hit = this.useAim();
     if (!hit) return null;
     const { id, targets, distance } = hit;
-    if (this.held) return this.runner.usesHolding(targets, this.heldIds(), distance) ? '' : null;
+    const promptTargets = targets.filter((t) => !this.hiddenButtonPrompts.has(t));
+    if (this.held) return this.runner.usesHolding(promptTargets, this.heldIds(), distance) ? '' : null;
     const spot = targets.find((t) => this.spots.has(t) && this.keyOf(t) === 'KeyE' && this.seatReady(t));
     if (spot && distance <= this.reachOf(spot)) return String(this.spots.get(spot)!.prompt ?? '');
-    const prompt = this.runner.usePrompt(targets, distance);
+    const prompt = this.runner.usePrompt(promptTargets, distance);
     if (prompt !== null) return prompt;
+    if (this.hiddenButtonPrompts.has(id)) return null;
     if (distance > PLAYER.useReach) return null;
     if (targets.some((t) => this.npcs.get(t)?.alive && this.npcs.get(t)!.data.side === 'friendly')) return '';
     if (targets.some((t) => (this.chargers.get(t)?.left ?? 0) > 0)) return '';
@@ -3485,7 +3488,7 @@ export class GameWorld {
    * player's reach or the furthest a “When the player uses” stack reaches.
    */
   private useAim(): { id: string; targets: string[]; distance: number } | null {
-    const hit = this.player?.aimAt(Math.max(PLAYER.useReach, this.runner.useReach(), this.spotReach), (c) => this.isHeld(c) || (c.isSensor() && !this.isPoster(c)), true);
+    const hit = this.player?.aimAt(Math.max(PLAYER.useReach, this.runner.useReach(), this.spotReach), (c) => this.isHeld(c) || (c.isSensor() && !this.isPoster(c) && !this.triggers.get(c.handle)?.data.buttonPrompt), true);
     const id = hit ? this.owner.get(hit.collider.handle) : undefined;
     if (!hit || !id || id === 'player') return null;
     const targets: string[] = [];
@@ -4505,6 +4508,10 @@ export class GameWorld {
       if (name === 'wander') return npc.setWander(args[0] !== false), null;
       return npc.runAway(typeof args[0] === 'number' ? args[0] : 0);
     }
+    if (name === 'hideButtonPrompt') {
+      this.hiddenButtonPrompts.add(target);
+      return null;
+    }
     if (name === 'cameraAt') {
       this.cameraView = { id: target, until: Infinity };
       return null;
@@ -5122,6 +5129,7 @@ export class GameWorld {
     }
     gone.add(id);
     for (const x of gone) {
+      this.hiddenButtonPrompts.delete(x);
       this.copyCameraBases.delete(x);
       this.gone.add(x);
     }
@@ -5782,7 +5790,7 @@ export class GameWorld {
     const seat = hit?.targets.find((t) => this.seats.has(t) && this.keyOf(t) !== 'KeyE' && hit.distance <= this.reachOf(t) && this.seatReady(t));
     if (seat) out.push({ key: this.keyOf(seat), prompt: String(this.spots.get(seat)!.prompt ?? '') });
     for (const { targets, distance } of this.pressAims())
-      for (const p of this.runner.keyPrompts(targets, distance)) if (!out.some((x) => x.key === p.key)) out.push(p);
+      for (const p of this.runner.keyPrompts(targets.filter((id) => !this.hiddenButtonPrompts.has(id)), distance)) if (!out.some((x) => x.key === p.key)) out.push(p);
     return out;
   }
 

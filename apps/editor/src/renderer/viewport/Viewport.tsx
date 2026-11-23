@@ -322,6 +322,7 @@ export function Viewport() {
         { label: t('add.ladder'), onSelect: () => s.addLadder(ctx?.ground ?? undefined) },
         { label: t('add.terrain'), onSelect: () => s.addTerrain(ctx?.ground ?? undefined) },
         { label: `${t('add.empty')}`, onSelect: () => s.add('empty', ctx?.ground ?? undefined) },
+        { label: `${t('add.promptVolume')}`, onSelect: () => s.add('promptVolume', ctx?.ground ?? undefined) },
       ];
 
   const one = sel.length === 1 ? sel[0]! : null;
