@@ -65,6 +65,7 @@ export function TopBar({ onShowKeys }: { onShowKeys: () => void }) {
               { label: t('view.top'), checked: s.view === 'top', shortcut: '2', onSelect: () => s.setView('top') },
               { label: t('view.front'), checked: s.view === 'front', shortcut: '3', onSelect: () => s.setView('front') },
               { label: t('view.side'), checked: s.view === 'side', shortcut: '4', onSelect: () => s.setView('side') },
+              ...(session.project.settings.worldMode === 'isometric' ? [{ label: 'Isometric', checked: s.view === 'isometric', onSelect: () => s.setView('isometric') }] : []),
               'separator',
               { label: t('view.frame'), shortcut: 'F', disabled: !s.selection.length, onSelect: s.frameSelection },
               'separator',
@@ -82,6 +83,13 @@ export function TopBar({ onShowKeys }: { onShowKeys: () => void }) {
               'separator',
               { label: 'English', checked: s.lang === 'en', onSelect: () => s.setLang('en') },
               { label: 'Русский', checked: s.lang === 'ru', onSelect: () => s.setLang('ru') },
+            ],
+          },
+          {
+            label: 'World',
+            items: [
+              { label: '3D World', checked: session.project.settings.worldMode !== 'isometric', disabled: !!s.playing, onSelect: () => void s.setWorldMode('3d') },
+              { label: 'Isometric World (2.5D)', checked: session.project.settings.worldMode === 'isometric', disabled: !!s.playing, onSelect: () => void s.setWorldMode('isometric') },
             ],
           },
           {
