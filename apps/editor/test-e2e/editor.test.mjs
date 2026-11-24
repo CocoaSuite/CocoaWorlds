@@ -15,7 +15,7 @@ async function launch(userData, projectsDir) {
   const app = await electron.launch({
     args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--no-sandbox', '.'],
     cwd: appDir,
-    env: { ...process.env, CW_USER_DATA: userData, CW_PROJECTS_DIR: projectsDir },
+    env: { ...process.env, CW_USER_DATA: userData, CW_PROJECTS_DIR: projectsDir, CW_E2E: '1' },
   });
   const page = await app.firstWindow();
   await page.setViewportSize({ width: 1440, height: 900 }).catch(() => {});
