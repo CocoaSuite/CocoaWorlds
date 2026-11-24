@@ -61,14 +61,14 @@ export function ToolBar() {
   );
   return (
     <div className="cw-tbar" role="toolbar" aria-orientation="horizontal" aria-label="Tools">
-      {T('select', 'select', t('tool.select'), 'V')}
-      {T('move', 'move', t('tool.move'), 'W')}
-      {T('rotate', 'rotate', t('tool.rotate'), 'E')}
-      {T('scale', 'scale', t('tool.scale'), 'R')}
+      {T('select', 'select', t('tool.select'), '1 / V')}
+      {T('move', 'move', t('tool.move'), '2 / W')}
+      {T('rotate', 'rotate', t('tool.rotate'), '3 / E')}
+      {T('scale', 'scale', t('tool.scale'), '4 / R')}
       <hr className="cw-rail-sep" />
       {/* Brushes: the shape last used, with the others in a flyout. */}
       <div className="cw-tb-group" ref={fly}>
-        {B(current[0], current[1], current[2], 'B')}
+        {B(current[0], current[1], current[2], '5 / B')}
         <button type="button" className="cw-tb-more" aria-label={t('tool.shapes')} aria-expanded={shapes} onClick={() => setShapes(!shapes)}>
           <Icon name="chevronDown" size={10} />
         </button>
@@ -81,14 +81,15 @@ export function ToolBar() {
         )}
       </div>
       <hr className="cw-rail-sep" />
-      {T('vertex', 'vertex', t('tool.vertex'), 'X')}
-      {T('face', 'face', t('tool.face'), 'T')}
-      {T('clip', 'clip', t('tool.clip'), 'C')}
-      {T('loopcut', 'loopcut', t('tool.loopcut'), `${navigator.platform.toLowerCase().includes('mac') ? '⌘' : 'Ctrl'}+R`)}
+      {T('vertex', 'vertex', t('tool.vertex'), '6 / X')}
+      {T('face', 'face', t('tool.face'), '7 / T')}
+      {T('clip', 'clip', t('tool.clip'), '8 / C')}
+      {T('loopcut', 'loopcut', t('tool.loopcut'), `9 / ${navigator.platform.toLowerCase().includes('mac') ? '⌘' : 'Ctrl'}+R`)}
       <hr className="cw-rail-sep" />
       <CommandTool
         icon="trigger"
         label={t('tool.trigger')}
+        shortcut="0"
         active={tool === 'brush' && role === 'trigger'}
         onClick={() => {
           setBrushOptions({ shape: 'box' });
@@ -96,8 +97,8 @@ export function ToolBar() {
           setTool('brush');
         }}
       />
-      {T('paint', 'paint', t('tool.paint'), 'P')}
-      {T('terrain', 'terrain', t('tool.terrain'), 'H')}
+      {T('paint', 'paint', t('tool.paint'), '- / P')}
+      {T('terrain', 'terrain', t('tool.terrain'), '= / H')}
       <hr className="cw-rail-sep" />
       <CommandTool icon="copy" label={t('edit.duplicate')} disabled={!selected} onClick={st.duplicateSelection} />
       <CommandTool icon="folder" label={t('edit.group')} disabled={!selected} onClick={st.groupSelection} />
