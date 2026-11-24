@@ -326,7 +326,9 @@ export class GameRunner {
       }
       this.reflections.update(this.scene, this.cam.getWorldPosition(new THREE.Vector3()), this.play?.doc.settings.reflections !== false);
       (this.groundBlend ??= new GroundBlend()).prepare(this.renderer, this.scene, this.cam);
-      if (!(this.ao ??= new AoRenderer(this.renderer)).render(this.scene, this.cam, this.play ? this.play.drawSettings(this.play.doc.settings) : undefined, !!this.play?.usesLens)) this.renderer.render(this.scene, this.cam);
+      play.drawCamera(this.renderer, this.cam, () => {
+        if (!(this.ao ??= new AoRenderer(this.renderer)).render(this.scene, this.cam, this.play ? this.play.drawSettings(this.play.doc.settings) : undefined, !!this.play?.usesLens)) this.renderer.render(this.scene, this.cam);
+      });
     }
   };
 

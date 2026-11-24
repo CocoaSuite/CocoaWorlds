@@ -4294,7 +4294,7 @@ export class GameWorld {
   // ── Dev console (see dev.ts) ──
 
   /** Cheats and switches set from the dev console. */
-  readonly dev = { god: false, timeScale: 1, speed: 1, emptyIcons: false };
+  readonly dev = { god: false, timeScale: 1, speed: 1, emptyIcons: false, showCulled: false };
 
   /** Set a game value (as a script's “Set” would). */
   setValue(name: string, value: Value): void {

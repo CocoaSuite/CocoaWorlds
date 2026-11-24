@@ -23,6 +23,7 @@ import { PlantRenderer, plantById } from './plants';
 import { TerrainRenderer, loadTerrain, terrainChunks } from './terrains';
 import { linkTerrainTiles } from './terrain-tiles';
 import { BATCH_MIN, ModelBatches, batchKey } from './model-batches';
+import { CameraOcclusion, blockingFaces } from './occlusion';
 import { WEAR_RING, buildLevel } from './world-build';
 import { toGeometry } from './world-render';
 import { buildSign, type SignObject } from './sign';
@@ -76,6 +77,28 @@ export class PlaySession {
   private terrains = new TerrainRenderer();
   private plants = new PlantRenderer();
   /** Still models drawn many at a time (A2c). */
+  private occlusion = new CameraOcclusion();
+
+  drawCamera(renderer: THREE.WebGLRenderer, camera: THREE.Camera, draw: () => void): void {
+    const c = this.occlusion;
+    c.begin(camera);
+    const debug = this.world.dev.showCulled;
+    if (c.ready) {
+      const visit = (o: THREE.Object3D) => {
+        if (o instanceof THREE.Mesh) c.consider(o, camera, debug);
+      };
+      for (const inst of this.models.values()) {
+        let root: THREE.Object3D | null = inst.object;
+        while (root && root !== this.group && root.visible) root = root.parent;
+        if (root === this.group) inst.object.traverseVisible(visit);
+      }
+      for (const mover of this.movers) if (mover.obj instanceof THREE.Mesh) visit(mover.obj);
+      this.batches.group.children.forEach(visit);
+      this.terrains.group.traverseVisible(visit);
+    }
+    c.draw(renderer, camera, debug, draw);
+  }
+
   readonly batches = new ModelBatches();
   /** Grass detail by distance from the camera. */
   updateFoliage(cam: THREE.Camera, unitsPerPixel?: number): void {
@@ -169,6 +192,7 @@ export class PlaySession {
       const levelMesh = new THREE.Mesh(toGeometry(m), m.groups.map((g) => material(g.material, g.tint)));
       levelMesh.castShadow = levelMesh.receiveShadow = true;
       for (const mat of levelMesh.material as THREE.Material[]) mat.shadowSide = THREE.DoubleSide;
+      this.occlusion.faces = blockingFaces(this.levelPieces, m, levelMesh.material);
       this.group.add(levelMesh);
     }
     // Plants.
@@ -1770,6 +1794,7 @@ export class PlaySession {
 
   dispose(): void {
     this.disposed = true;
+    this.occlusion.dispose();
     this.restoreFov();
     this.baseView?.dispose();
     this.mineView?.dispose();

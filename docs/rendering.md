@@ -79,6 +79,12 @@ noise), in the composer of `viewport/ao.ts` (render → occlusion → clean-up �
 → noise; full-screen passes never write depth). Settings: `SceneSettings.lens`, `lensOf`, `lensOn`, `LENS_PRESETS`
 (`packages/core/src/schema.ts`). Tests: `apps/editor/test/lens.test.ts`, e2e `test-e2e/lens.test.mjs`.
 
+## Occlusion culling
+
+In Play and exported games, opaque static brush faces can hide whole model meshes, model batches, moving brushes and terrain chunks from the camera. The renderer tests complete bounds against a limited set of large faces each frame. A partly visible mesh keeps drawing. The static level itself stays batched.
+
+Open the developer console with the backtick key and enter `showculled on` to outline each skipped mesh in pink through walls. An instanced draw has one box around the batch. Use `showculled off` to hide the outlines, or `showculled` to toggle them.
+
 ## Ambient occlusion
 
 **Ambient occlusion** (Scene settings, on by default) darkens corners, creases and the ground under things, so

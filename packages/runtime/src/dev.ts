@@ -271,6 +271,11 @@ export const DEV_COMMANDS: Record<string, DevCommand> = {
       return `Going to ${a[0]}…`;
     },
   },
+  showculled: {
+    args: '[on|off]',
+    help: 'Outline occlusion-culled meshes in pink through walls.',
+    run: (w, a) => `Culled mesh outlines ${(w.dev.showCulled = onOff(a[0], w.dev.showCulled)) ? 'on' : 'off'}.`,
+  },
   showempties: {
     args: '[on|off]',
     help: 'Show the icons of empty objects (point, asset spawn, audio, script, camera, prop).',

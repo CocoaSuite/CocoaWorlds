@@ -1997,7 +1997,7 @@ export class ViewportEngine {
       if (this.reflections.busy) this.invalidate();
       this.groundBlend.prepare(r, this.scene, this.fpCam, [this.grid.object]);
       this.play.applyWater(this.scene, this.fpCam);
-      if (!this.renderAo(this.fpCam)) r.render(this.scene, this.fpCam);
+      this.play.drawCamera(r, this.fpCam, () => { if (!this.renderAo(this.fpCam)) r.render(this.scene, this.fpCam); });
       return;
     }
     this.grid.setCamera(this.rig.camera.position);
@@ -2016,7 +2016,9 @@ export class ViewportEngine {
     (this.reflections ??= new SceneReflections(r)).update(this.scene, this.rig.target.clone().add(new THREE.Vector3(0, 64, 0)), this.reflectOn(), [this.grid.object]);
     if (this.reflections.busy) this.invalidate();
     this.groundBlend.prepare(r, this.scene, this.rig.camera, [this.grid.object]);
-    if (!this.renderAo(this.rig.camera)) r.render(this.scene, this.rig.camera);
+    const draw = () => { if (!this.renderAo(this.rig.camera)) r.render(this.scene, this.rig.camera); };
+    if (this.play) this.play.drawCamera(r, this.rig.camera, draw);
+    else draw();
     const s = 72;
     this.axisCam.quaternion.copy(this.rig.camera.quaternion);
     this.axisCam.position.set(0, 0, 5).applyQuaternion(this.rig.camera.quaternion);
