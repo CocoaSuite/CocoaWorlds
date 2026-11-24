@@ -8,22 +8,24 @@ import { useEditor } from '../store';
 const mod = navigator.platform.toLowerCase().includes('mac') ? '⌘' : 'Ctrl';
 
 export const SHORTCUTS: { label: string; keys: string[] }[] = [
-  { label: 'Select tool', keys: ['V'] },
-  { label: 'Move tool', keys: ['W'] },
-  { label: 'Rotate tool', keys: ['E'] },
-  { label: 'Scale tool', keys: ['R'] },
-  { label: 'Brush tool (draw, set height, click or Enter)', keys: ['B'] },
-  { label: 'Face tool (select faces, edit texture alignment)', keys: ['T'] },
+  { label: 'Select tool', keys: ['1', 'V'] },
+  { label: 'Move tool', keys: ['2', 'W'] },
+  { label: 'Rotate tool', keys: ['3', 'E'] },
+  { label: 'Scale tool', keys: ['4', 'R'] },
+  { label: 'Brush tool (draw, set height, click or Enter)', keys: ['5', 'B'] },
+  { label: 'Face tool (select faces, edit texture alignment)', keys: ['7', 'T'] },
   { label: 'Faces: add or remove / whole brush', keys: [`${mod}+click`, 'Shift+click'] },
-  { label: 'Paint tool (click faces to apply a material)', keys: ['P'] },
-  { label: 'Vertex tool (pick corners or edge middles, move with the arrows)', keys: ['X'] },
+  { label: 'Paint tool (click faces to apply a material)', keys: ['-', 'P'] },
+  { label: 'Vertex tool (pick corners or edge middles, move with the arrows)', keys: ['6', 'X'] },
   { label: 'Finer or coarser snapping grid', keys: ['[', ']'] },
-  { label: 'Clip tool (drag a line across brushes; Tab: what to keep; Enter: clip)', keys: ['C'] },
-  { label: 'Loop cut (hover a brush, wheel for more cuts, click to cut)', keys: [`${mod}+R`] },
+  { label: 'Clip tool (drag a line across brushes; Tab: what to keep; Enter: clip)', keys: ['8', 'C'] },
+  { label: 'Loop cut (hover a brush, wheel for more cuts, click to cut)', keys: ['9', `${mod}+R`] },
+  { label: 'Trigger tool', keys: ['0'] },
+  { label: 'Terrain tool', keys: ['=', 'H'] },
   { label: 'Edit pivot: the move gizmo moves the selected object’s pivot (hold Ctrl to snap to corners)', keys: ['O'] },
   { label: 'Box select (drag on empty space)', keys: ['Left-drag'] },
   { label: 'Paint: pick up a material', keys: [`${mod}+click`] },
-  { label: 'Perspective / Top / Front / Side', keys: ['1', '2', '3', '4'] },
+  { label: 'Perspective / Top / Front / Side', keys: ['Shift+1', 'Shift+2', 'Shift+3', 'Shift+4'] },
   { label: 'Frame selected', keys: ['F'] },
   { label: 'Look around (perspective)', keys: ['Right-drag', 'W A S D'] },
   { label: 'Orbit', keys: ['Alt', 'Left-drag'] },
@@ -109,6 +111,37 @@ export function useShortcuts(openKeys: () => void): void {
       }
       if (flyState.active) return;
       if (e.key === '?') return openKeys();
+      // Number-row tools follow the toolbar order; Shift keeps view shortcuts available.
+      if (!e.altKey) {
+        if (e.shiftKey) {
+          switch (code) {
+            case 'Digit1': return s.setView('perspective');
+            case 'Digit2': return s.setView('top');
+            case 'Digit3': return s.setView('front');
+            case 'Digit4': return s.setView('side');
+          }
+        } else {
+          switch (code) {
+            case 'Digit1': return s.setTool('select');
+            case 'Digit2': return s.setTool('move');
+            case 'Digit3': return s.setTool('rotate');
+            case 'Digit4': return s.setTool('scale');
+            case 'Digit5':
+              if (s.brushRole === 'trigger') s.setBrushRole('solid');
+              return s.setTool('brush');
+            case 'Digit6': return s.setTool('vertex');
+            case 'Digit7': return s.setTool('face');
+            case 'Digit8': return s.setTool('clip');
+            case 'Digit9': return s.setTool('loopcut');
+            case 'Digit0':
+              s.setBrushOptions({ shape: 'box' });
+              s.setBrushRole('trigger');
+              return s.setTool('brush');
+            case 'Minus': return s.setTool('paint');
+            case 'Equal': return s.setTool('terrain');
+          }
+        }
+      }
       switch (code) {
         case 'KeyV':
           return s.setTool('select');
@@ -141,14 +174,6 @@ export function useShortcuts(openKeys: () => void): void {
           return;
         case 'Enter':
           return s.enterGroup();
-        case 'Digit1':
-          return s.setView('perspective');
-        case 'Digit2':
-          return s.setView('top');
-        case 'Digit3':
-          return s.setView('front');
-        case 'Digit4':
-          return s.setView('side');
         case 'BracketLeft':
           return s.stepGrid(-1);
         case 'BracketRight':
