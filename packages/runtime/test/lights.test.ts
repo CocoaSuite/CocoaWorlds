@@ -29,6 +29,18 @@ function world(body: (lamp: string) => Statement[], light: Record<string, unknow
 }
 
 describe('lights in play', () => {
+  it('sends material and timed tint changes to the targeted brush', () => {
+    const { w, flood } = world(() => [
+      { id: 'm', kind: 'brushMaterial', target: { self: true }, material: 'dev/wall' },
+      { id: 't', kind: 'brushTint', target: { self: true }, color: '#ff0000', seconds: n(2) },
+    ]);
+    run(w, 0.2);
+    expect(w.brushChanges).toMatchObject([
+      { id: flood, material: 'dev/wall' },
+      { id: flood, color: '#ff0000', seconds: 2 },
+    ]);
+  });
+
   it('a light inside a physics object rides with it, and Turn off works on the light alone', () => {
     const { w, flood, lamp } = world((l) => [{ id: 's', kind: 'turnOff', target: { entity: l } }]);
     run(w, 0.2);

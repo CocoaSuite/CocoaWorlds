@@ -46,6 +46,8 @@ export interface ScriptHost {
   /** Show a message on screen for `seconds`. */
   say?(text: string, seconds: number, owner: string): void;
   /** Change what a text sign says. */
+  brushTint?(id: string, color: string, seconds: number): void;
+  brushMaterial?(id: string, material: string): void;
   setText?(target: string, text: string): void;
   /** Change a light's setting (a number, or a colour as text) over some seconds. */
   setLight?(target: string, prop: LightProp, value: number | string, seconds: number): void;
@@ -62,6 +64,9 @@ export interface ScriptHost {
   /** Play a sound at a place (an object, the player, 'aim') or everywhere (null). */
   playSound?(sound: string, place: Value, volume: number, owner: string, loudness?: number): void;
   /** Play an effect (by id) at a place; `follow`: it moves with that object. */
+  endGame?(): void;
+  playerCamera?(): void;
+  hideEffect?(effect: string): void;
   playEffect?(effect: string, place: Value, follow: boolean, owner: string): void;
   /** A noise at a place, this loud for hunting creatures. */
   noise?(place: Value, loudness: number, owner: string): void;
@@ -682,7 +687,16 @@ export class ScriptRunner {
           t.waitUntil = until;
           return; // even “Wait 0” lets the frame finish
         }
+        case 'trackDuration': {
+          const duration = num(s[s.length - 1] ?? 0);
+          if (duration > 0 && Number.isFinite(duration)) {
+            const until = this.host.now() + duration;
+            t.together.push(() => this.host.now() >= until);
+          }
+          break;
+        }
         case 'together': {
+          if (op.skipEmpty && !t.together.length) break;
           const all = t.together;
           t.together = [];
           t.waitFor = () => {
@@ -789,6 +803,17 @@ export class ScriptRunner {
           this.host.hint?.(place, spread, sure, op.as);
           break;
         }
+        case 'endGame':
+          this.threads.length = 0;
+          this.running.clear();
+          this.host.endGame?.();
+          return;
+        case 'playerCamera':
+          this.host.playerCamera?.();
+          break;
+        case 'hideEffect':
+          if (op.effect) this.host.hideEffect?.(op.effect);
+          break;
         case 'vfx': {
           const place = s.pop() ?? null;
           if (op.effect) this.host.playEffect?.(op.effect, place, op.follow, t.inst.program.owner);
@@ -817,6 +842,17 @@ export class ScriptRunner {
         case 'stopsound': {
           const target = s.pop();
           if (target && typeof target === 'object') this.host.stopSound?.(target.ref);
+          break;
+        }
+        case 'brushTint': {
+          const seconds = num(s.pop() ?? 0);
+          const target = s.pop();
+          if (target && typeof target === 'object') this.host.brushTint?.(target.ref, op.color, Number.isFinite(seconds) ? Math.max(0, seconds) : 0);
+          break;
+        }
+        case 'brushMaterial': {
+          const target = s.pop();
+          if (target && typeof target === 'object') this.host.brushMaterial?.(target.ref, op.material);
           break;
         }
         case 'settext': {

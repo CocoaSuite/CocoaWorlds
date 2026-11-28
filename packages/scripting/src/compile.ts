@@ -61,7 +61,9 @@ export type Op =
   | { op: 'act'; name: ActionName; argc: number; go?: true }
   | { op: 'wait'; go?: true }
   /** Wait for the blocks started together. */
-  | { op: 'together' }
+  | { op: 'together'; skipEmpty?: boolean }
+  /** Record the duration at the top of the value stack without evaluating the expression twice. */
+  | { op: 'trackDuration' }
   /** Pops the target ref (or null for everyone). */
   | { op: 'send'; message: string }
   | { op: 'log' }
@@ -76,6 +78,8 @@ export type Op =
   | { op: 'say' }
   /** Pops text, then the target: change a sign's text. */
   | { op: 'settext' }
+  | { op: 'brushTint'; color: string }
+  | { op: 'brushMaterial'; material: string }
   /** Pops the place, then the template: make a copy; the stack remembers it as “the new copy”. */
   | { op: 'spawn' }
   | { op: 'print' }
@@ -88,6 +92,8 @@ export type Op =
   /** Pops volume: play a voice-over with its captions. */
   | { op: 'voice'; sound: string; captions: Caption[] }
   | { op: 'stopvoice' }
+  | { op: 'endGame' | 'playerCamera' }
+  | { op: 'hideEffect'; effect: string }
   /** Pops the place: play an effect there. */
   | { op: 'vfx'; effect: string; follow: boolean }
   /** Pops loudness, then the place: a noise. */
@@ -158,7 +164,7 @@ export const USE_REACH = 96;
 export type GameAction = 'hurt' | 'heal' | 'addScore' | 'giveArmour';
 export type GameValue = 'health' | 'score' | 'armour';
 
-export type ActionName = 'move' | 'turn' | 'turnTo' | 'return' | 'show' | 'hide' | 'turnOn' | 'turnOff' | 'startTrain' | 'stopTrain' | 'walkTo' | 'runAway' | 'wander' | 'setSide' | 'freeze' | 'unfreeze' | 'viewFrom' | 'remove' | 'scale' | 'physical' | 'push' | 'moveTo' | 'teleport' | 'damage' | 'place' | 'pickUp' | 'drop' | 'unhide' | 'silence' | 'unsilence' | 'playerSize' | 'playerSpeed' | 'playerJump' | 'playerGravity' | 'playerMoves' | 'playerWay' | 'playerNormal' | 'lensSet' | 'lensLook' | 'lensFocus' | 'lensReset' | 'screenWhite' | 'screenBlack' | 'screenBack' | 'waitVoice';
+export type ActionName = 'move' | 'turn' | 'turnTo' | 'return' | 'show' | 'hide' | 'turnOn' | 'turnOff' | 'startTrain' | 'stopTrain' | 'walkTo' | 'runAway' | 'wander' | 'setSide' | 'freeze' | 'unfreeze' | 'hideButtonPrompt' | 'cameraAt' | 'viewFrom' | 'remove' | 'scale' | 'physical' | 'push' | 'moveTo' | 'teleport' | 'damage' | 'place' | 'pickUp' | 'drop' | 'unhide' | 'silence' | 'unsilence' | 'playerSize' | 'playerSpeed' | 'playerJump' | 'playerGravity' | 'playerMoves' | 'playerWay' | 'playerNormal' | 'lensSet' | 'lensLook' | 'lensFocus' | 'lensReset' | 'screenWhite' | 'screenBlack' | 'screenBack' | 'waitVoice';
 
 export type CompiledEvent =
   | { kind: 'start' }
@@ -478,18 +484,31 @@ class HandlerCompiler {
 
   private statements(list: Statement[]): void {
     const outer = this.go;
-    list.forEach((s, i) => {
-      const last = !!s.and && !list[i + 1]?.and;
-      // (Blocks holding other blocks still run theirs in order.)
-      this.go = (!!s.and || !!list[i + 1]?.and) && !('body' in s || 'then' in s || 'options' in s);
-      this.statement(s);
+    for (let first = 0; first < list.length;) {
+      let end = first + 1;
+      while (list[end]?.and) end++;
+      const parallel = end - first > 1;
+      const finish = !!list[end]?.afterPrevious;
+      for (let i = first; i < end; i++) {
+        const s = list[i]!;
+        this.go = parallel && !('body' in s || 'then' in s || 'options' in s || 'cases' in s);
+        this.statement(s, finish);
+      }
       this.go = false;
-      if (last) this.emit({ op: 'together' });
-    });
+      if (parallel || finish) this.emit({ op: 'together', skipEmpty: !parallel });
+      first = end;
+    }
     this.go = outer;
   }
 
-  private statement(s: Statement): void {
+  private statement(s: Statement, finish: boolean): void {
+    const timed = (op: Op) => {
+      if (finish) {
+        this.emit({ op: 'trackDuration' });
+        this.waits = true;
+      }
+      this.emit(op);
+    };
     const outer = this.stmt;
     this.stmt = s.id;
     switch (s.kind) {
@@ -565,7 +584,17 @@ class HandlerCompiler {
       case 'say':
         this.value(s.text);
         this.expect(s.seconds, 'number', 'Show for a number of seconds.');
-        this.emit({ op: 'say' });
+        timed({ op: 'say' });
+        break;
+      case 'brushTint':
+        this.actTarget(s.target, s.id);
+        this.expect(s.seconds, 'number', 'The fade duration must be a number of seconds.');
+        if (!/^#[0-9a-f]{6}$/i.test(s.color)) this.problem(s.id, 'Choose a brush tint color.');
+        timed({ op: 'brushTint', color: s.color });
+        break;
+      case 'brushMaterial':
+        this.actTarget(s.target, s.id);
+        this.emit({ op: 'brushMaterial', material: s.material });
         break;
       case 'setText': {
         const r = this.resolveRef(s.target, s.id);
@@ -854,14 +883,14 @@ class HandlerCompiler {
         this.emit({ op: 'push', v: s.prop });
         this.expect(s.value, 'number', 'This must be a number.');
         this.expect(s.seconds, 'number', 'The time must be a number of seconds.');
-        this.emit({ op: 'act', name: 'lensSet', argc: 3 });
+        timed({ op: 'act', name: 'lensSet', argc: 3 });
         break;
       case 'lensLook':
         if (!s.look) this.problem(s.id, 'Pick a look.');
         this.emit({ op: 'ref', ref: { player: true } });
         this.emit({ op: 'push', v: s.look });
         this.expect(s.seconds, 'number', 'The time must be a number of seconds.');
-        this.emit({ op: 'act', name: 'lensLook', argc: 2 });
+        timed({ op: 'act', name: 'lensLook', argc: 2 });
         break;
       case 'lensFocus':
         this.emit({ op: 'ref', ref: { player: true } });
@@ -880,7 +909,20 @@ class HandlerCompiler {
       case 'lensReset':
         this.emit({ op: 'ref', ref: { player: true } });
         this.expect(s.seconds, 'number', 'The time must be a number of seconds.');
-        this.emit({ op: 'act', name: 'lensReset', argc: 1 });
+        timed({ op: 'act', name: 'lensReset', argc: 1 });
+        break;
+      case 'hideButtonPrompt':
+      case 'cameraAt':
+        this.actTarget(s.target, s.id);
+        this.emit({ op: 'act', name: s.kind, argc: 0 });
+        break;
+      case 'playerCamera':
+      case 'endGame':
+        this.emit({ op: s.kind });
+        break;
+      case 'hideEffect':
+        if (!s.effect) this.problem(s.id, 'Pick an effect to hide.');
+        this.emit({ op: 'hideEffect', effect: s.effect });
         break;
       case 'viewFrom':
         this.actTarget(s.target, s.id);
@@ -965,6 +1007,10 @@ class HandlerCompiler {
         if (!s.sound) this.problem(s.id, 'Pick a voice-over sound (import sounds in the Assets tab).');
         this.expect(s.volume, 'number', 'The volume must be a number (1 is normal).');
         this.emit({ op: 'voice', sound: s.sound, captions: cleanCaptions(s.captions) });
+        if (finish) {
+          this.emit({ op: 'ref', ref: { player: true } });
+          this.emit({ op: 'act', name: 'waitVoice', argc: 0 });
+        }
         break;
       case 'stopVoice':
         this.emit({ op: 'stopvoice' });
@@ -977,7 +1023,7 @@ class HandlerCompiler {
         this.lightTarget(s.target, s.id);
         this.expect(s.value, s.prop === 'color' ? 'text' : 'number', s.prop === 'color' ? 'The colour must be text like #ffcc88.' : 'This must be a number.');
         this.expect(s.seconds, 'number', 'The time must be a number of seconds.');
-        this.emit({ op: 'light', prop: s.prop });
+        timed({ op: 'light', prop: s.prop });
         break;
       case 'setTime':
         this.expect(s.value, 'number', 'The time of day is a number of hours (12 is noon).');
@@ -991,7 +1037,7 @@ class HandlerCompiler {
         this.actTarget(s.target, s.id);
         this.expect(s.strength, 'number', 'The glow must be a number (0 is none).');
         this.expect(s.seconds, 'number', 'The time must be a number of seconds.');
-        this.emit({ op: 'glow' });
+        timed({ op: 'glow' });
         break;
       case 'playAnim':
         if (!s.name.trim()) this.problem(s.id, 'Type the name of the animation (as it is called in the model).');

@@ -1,0 +1,38 @@
+import { expect, it } from 'vitest';
+import * as THREE from 'three';
+import { BrushLooks } from '../src/renderer/viewport/brush-looks';
+
+it('fades only the chosen brush, resumes from the visible color, and swaps its material mid-fade', () => {
+  const base = new THREE.MeshStandardMaterial();
+  const next = new THREE.MeshStandardMaterial();
+  const looks = new BrushLooks((name) => name === 'next' ? next : base);
+  const geo = new THREE.BufferGeometry();
+  geo.setIndex([0, 1, 2, 3, 4, 5, 6, 7, 8]);
+  geo.addGroup(0, 9, 0);
+  const batch = new THREE.Mesh(geo, [base]);
+  looks.track(batch, [{ start: 0, count: 9, material: 'base', tint: '#ff0000' }], ['wall', 'door', 'wall']);
+  looks.tint('door', '#0000ff', 0, 2);
+  looks.update(1);
+  const door = batch.children[0] as THREE.InstancedMesh;
+  const color = new THREE.Color();
+  door.getColorAt(0, color);
+  expect(color.toArray()).toEqual([0.5, 0, 0.5]);
+  expect(geo.groups.map((g) => [g.start, g.count])).toEqual([[0, 3], [6, 3]]);
+  looks.setMaterial('door', 'next');
+  expect(door.material).toBe(next);
+  looks.tint('door', '#00ff00', 1, 2);
+  looks.update(2);
+  door.getColorAt(0, color);
+  expect(color.toArray()).toEqual([0.25, 0.5, 0.25]);
+  looks.update(3);
+  door.getColorAt(0, color);
+  expect(color.getHexString()).toBe('00ff00');
+  looks.tint('door', '#ffffff', 4, 0);
+  door.getColorAt(0, color);
+  expect(color.getHexString()).toBe('ffffff');
+  looks.dispose();
+  expect(batch.children).toHaveLength(0);
+  geo.dispose();
+  base.dispose();
+  next.dispose();
+});

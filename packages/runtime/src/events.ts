@@ -55,6 +55,7 @@ export type GameEvent =
   /** The voice-over playing is cut off. */
   | { type: 'voice.stop'; time: number }
   /** An effect from the VFX workspace plays at a place (`follow`: a moving body it travels with, or 'player'). */
+  | { type: 'hideEffect'; effect: string; time: number }
   | { type: 'vfx'; effect: string; at: [number, number, number]; follow: string | null; time: number }
   /** Play an animation of an object's model (the game world has no models; whoever draws them plays it). */
   | { type: 'anim'; target: string; name: string; loop: boolean; time: number }

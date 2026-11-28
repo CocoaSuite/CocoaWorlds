@@ -136,7 +136,7 @@ export function readCaptionFile(json: unknown): { sound: string; captions: Capti
   return { sound: typeof o.sound === 'string' ? o.sound : '', captions: cleanCaptions(o.captions) };
 }
 
-export type Statement = StatementKind_ & { and?: boolean };
+export type Statement = StatementKind_ & { and?: boolean; afterPrevious?: boolean };
 
 type StatementKind_ =
   | { id: string; kind: 'move'; target: Ref; direction: Direction; distance: Expr; seconds: Expr }
@@ -175,6 +175,8 @@ type StatementKind_ =
   /** Show text in the middle of the screen for a while (doesn't wait). */
   | { id: string; kind: 'say'; text: Expr; seconds: Expr }
   /** Change what a text sign says. */
+  | { id: string; kind: 'brushTint'; target: Ref; color: string; seconds: Expr }
+  | { id: string; kind: 'brushMaterial'; target: Ref; material: string }
   | { id: string; kind: 'setText'; target: Ref; text: Expr }
   /** Make a copy of an object (and everything inside it) at a place; it runs its own scripts. */
   | { id: string; kind: 'spawn'; template: Ref; at: Place }
@@ -223,6 +225,10 @@ type StatementKind_ =
   | { id: string; kind: 'unsilence' }
   /** Out of the hiding spot the player is in. */
   | { id: string; kind: 'unhide' }
+  | { id: string; kind: 'hideButtonPrompt'; target: Ref }
+  | { id: string; kind: 'cameraAt'; target: Ref }
+  | { id: string; kind: 'playerCamera' | 'endGame' }
+  | { id: string; kind: 'hideEffect'; effect: string }
   | { id: string; kind: 'viewFrom'; target: Ref; seconds: Expr }
   /** Make a creature an enemy, a friend or neutral (a guard turning on the player who took an egg). */
   | { id: string; kind: 'setSide'; target: Ref; side: 'hostile' | 'friendly' | 'neutral' }

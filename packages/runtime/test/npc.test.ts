@@ -138,6 +138,36 @@ describe('creatures', () => {
     w.dispose();
   });
 
+  it('holds a camera until restored, hides the selected effect and ends all scripts', () => {
+    const cam = newEntity('camera', {}, { position: [500, 200, 500], rotation: [0, 45, 0] });
+    const director = newEntity('director', { script: {
+      version: 1, variables: [], handlers: [{ id: 'h', event: { id: 'e', kind: 'start' }, body: [
+        { id: 'camera', kind: 'cameraAt', target: { entity: cam.id } },
+        { id: 'hide', kind: 'hideEffect', effect: 'fx/sparks' },
+        { id: 'wait', kind: 'wait', seconds: { id: 'duration', kind: 'number', value: 2 } },
+        { id: 'restore', kind: 'playerCamera' },
+        { id: 'end', kind: 'endGame' },
+        { id: 'skip', kind: 'addScore', amount: { id: 'one', kind: 'number', value: 1 } },
+      ] }],
+    } satisfies Script as never });
+    const w = GameWorld.create(scene(floor(), spawn(), cam, director));
+    const hidden: string[] = [];
+    w.bus.on('hideEffect', (e) => hidden.push(e.effect));
+    try {
+      expect(w.scriptProblems).toEqual([]);
+      run(w, 1.5);
+      expect(w.playerView()!.eye).toEqual([500, 200, 500]);
+      expect(hidden).toEqual(['fx/sparks']);
+      run(w, 1);
+      expect(w.playerView()!.eye[0]).toBeCloseTo(w.player!.feetPosition.x);
+      expect(w.ended).toBe(true);
+      expect(w.step(1)).toBe(0);
+      expect(w.playerStatus()!.score).toBe(0);
+    } finally {
+      w.dispose();
+    }
+  });
+
   it('a scripted scene: the player is held still and the view looks through a camera, then both come back', () => {
     const cam = newEntity('camera', {}, { position: [500, 200, 500], rotation: [-20, 45, 0] });
     const director = newEntity('director', {

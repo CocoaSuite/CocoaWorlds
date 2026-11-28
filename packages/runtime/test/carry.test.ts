@@ -22,6 +22,50 @@ function world(rb: Record<string, unknown>) {
   return { w, id: crate.id };
 }
 
+describe('button prompt volumes', () => {
+  const make = (blocked: boolean) => {
+    const s = newScene('prompts');
+    const volume = brush('prompt', [-20, 0, -90], [20, 92, -60], { trigger: { buttonPrompt: true } });
+    volume.components.script = { version: 1, variables: [], handlers: [
+      { id: 'use', event: { id: 'e', kind: 'use', prompt: 'Read' }, body: [{ id: 'hide', kind: 'hideButtonPrompt', target: { self: true } }] },
+      { id: 'key', event: { id: 'f', kind: 'press', key: 'KeyF', prompt: 'Inspect' }, body: [{ id: 'score', kind: 'addScore', amount: { id: 'one', kind: 'number', value: 1 } }] },
+    ] } as never;
+    s.entities = [brush('floor', [-512, -16, -512], [512, 0, 512]), newEntity('start', { playerSpawn: {} }), volume];
+    if (blocked) s.entities.push(brush('wall', [-32, 0, -42], [32, 100, -38]));
+    const w = GameWorld.create(s);
+    run(w, 0.1);
+    return { w, volume };
+  };
+  it('accepts use and key prompts, hides their labels and lets the player walk through', () => {
+    const { w, volume } = make(false);
+    try {
+      expect(w.levelIds.has(volume.id)).toBe(false);
+      expect(w.usePrompt()).toBe('Read');
+      expect(w.keyPrompts()).toContainEqual({ key: 'KeyF', prompt: 'Inspect' });
+      w.use();
+      run(w, 0.1);
+      expect(w.usePrompt()).toBeNull();
+      expect(w.keyPrompts()).toEqual([]);
+      w.pressKey('KeyF');
+      run(w, 0.1);
+      expect(w.playerStatus()!.score).toBe(1);
+      w.setPlayerInput({ forward: 1 });
+      run(w, 1);
+      expect(w.player!.feetPosition.z).toBeLessThan(-100);
+    } finally { w.dispose(); }
+  });
+  it('keeps the prompt behind a solid wall out of reach', () => {
+    const { w } = make(true);
+    try {
+      expect(w.usePrompt()).toBeNull();
+      expect(w.keyPrompts()).toEqual([]);
+      w.pressKey('KeyF');
+      run(w, 0.1);
+      expect(w.playerStatus()!.score).toBe(0);
+    } finally { w.dispose(); }
+  });
+});
+
 describe('carrying', () => {
   it('Use picks a crate up; it follows the view; Use drops it', () => {
     const { w, id } = world({});

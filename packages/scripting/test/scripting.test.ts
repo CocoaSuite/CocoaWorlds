@@ -561,6 +561,27 @@ describe('how often a stack runs', () => {
   });
 });
 
+describe('After previous finishes', () => {
+  const tint = (seconds: number): Statement => ({ id: 'tint', kind: 'brushTint', target: self, color: '#ffaa00', seconds: num(seconds) });
+  const log = (afterPrevious: boolean): Statement => ({ id: 'log', kind: 'log', text: text('done'), afterPrevious });
+  it('waits for the longest fade in an AND group', () => {
+    const { host, runFor } = run([['me', script([handler(newEvent('start'), tint(2), { ...tint(0.5), and: true }, log(true))])]]);
+    runFor(1.5);
+    expect(host.log).toEqual([]);
+    runFor(0.8);
+    expect(host.log).toHaveLength(1);
+  });
+  it('waits for a single fade and preserves immediate continuation for old scripts', () => {
+    for (const after of [true, false]) {
+      const { host, runFor } = run([['me', script([handler(newEvent('start'), tint(1), log(after))])]]);
+      runFor(0.5);
+      expect(host.log).toHaveLength(after ? 0 : 1);
+      runFor(1);
+      expect(host.log).toHaveLength(1);
+    }
+  });
+});
+
 describe('blocks joined with “and”', () => {
   it('start together; the next block waits for both', () => {
     const mv = (seconds: number, and?: boolean) => ({ ...newStatement('move', { target: entity('door') }), seconds: num(seconds), ...(and ? { and } : {}) }) as Statement;

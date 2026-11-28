@@ -24,6 +24,7 @@ import { TerrainRenderer, loadTerrain, terrainChunks } from './terrains';
 import { linkTerrainTiles } from './terrain-tiles';
 import { BATCH_MIN, ModelBatches, batchKey } from './model-batches';
 import { WEAR_RING, buildLevel } from './world-build';
+import { BrushLooks } from './brush-looks';
 import { toGeometry } from './world-render';
 import { buildSign, type SignObject } from './sign';
 import { buildDecal, type DecalObject } from './decal';
@@ -149,6 +150,7 @@ export class PlaySession {
   }
 
   private constructor(scene: SceneFile, material: (name: string, tint?: string) => THREE.Material, rules: GameRules | undefined, values: GameValue[] | undefined, models: Map<string, ModelMesh>, terrains: Map<string, ModelMesh[]>, trunks: Map<string, { width: number; height: number }>, saved: SavedProgress | null, arrive: Travel | null) {
+    this.brushLooks = new BrushLooks(material);
     this.group.name = 'play';
     this.world = GameWorld.create(scene, { rules, values, models, terrains, trunks, saved, arrive, surfaces: materialSurfaces(projectMaterials()), navBuilder: navInWorkers });
     // (Loaded now, so the first footstep or thud isn't late.)
@@ -167,6 +169,7 @@ export class PlaySession {
     if (level.mesh) {
       const m = level.mesh;
       const levelMesh = new THREE.Mesh(toGeometry(m), m.groups.map((g) => material(g.material, g.tint)));
+      this.brushLooks.track(levelMesh, m.groups, level.triangleOwner);
       levelMesh.castShadow = levelMesh.receiveShadow = true;
       for (const mat of levelMesh.material as THREE.Material[]) mat.shadowSide = THREE.DoubleSide;
       this.group.add(levelMesh);
@@ -380,6 +383,10 @@ export class PlaySession {
     this.world.bus.on('hit', (e) => void this.surfaceSound(e.hard ? 'hard' : 'soft', e.surface, e.at, e.volume, 1024));
     this.group.add(this.effects.group);
     this.group.add(this.vfx.group);
+    this.world.bus.on('hideEffect', ({ effect }) => {
+      this.vfxOn = this.vfxOn.filter(({ handle }) => handle.player.effect.id !== effect);
+      this.vfx.hideEffect(effect);
+    });
     this.world.bus.on('vfx', (e) => {
       const fx = effectById(e.effect);
       if (!fx) return;
@@ -576,6 +583,7 @@ export class PlaySession {
     }
   }
 
+  private brushLooks: BrushLooks;
   private material: (name: string, tint?: string) => THREE.Material;
   /** The scene being played (read only outside). */
   doc!: SceneDoc;
@@ -1071,7 +1079,9 @@ export class PlaySession {
       const brushes = this.world.bodyBrushes(b.id);
       if (!brushes.length) return;
       const m = buildMesh(brushes, { wearRing: WEAR_RING });
-      obj = new THREE.Mesh(toGeometry(m), m.groups.map((g) => this.material(g.material, g.tint)));
+      const mesh = new THREE.Mesh(toGeometry(m), m.groups.map((g) => this.material(g.material, g.tint)));
+      this.brushLooks.track(mesh, m.groups, Array.from(m.triangleBrushes, (i) => this.world.brushOwners.get(brushes[i]!) ?? b.id));
+      obj = mesh;
     } else {
       // A point object with a collision shape: draw its model if it has one, else the shape, placed like the
       // entity (scale in the shape).
@@ -1166,6 +1176,7 @@ export class PlaySession {
     if (!brushes.length) return;
     const m = buildMesh(brushes, { wearRing: WEAR_RING });
     const obj = new THREE.Mesh(toGeometry(m), m.groups.map((g) => this.material(g.material, g.tint)));
+    this.brushLooks.track(obj, m.groups, Array.from(m.triangleBrushes, (i) => this.world.brushOwners.get(brushes[i]!) ?? b.id));
     obj.matrixAutoUpdate = false;
     obj.castShadow = obj.receiveShadow = true;
     this.group.add(obj);
@@ -1277,6 +1288,7 @@ export class PlaySession {
         this.signs.delete(id);
       }
       for (const m of this.movers.filter((m) => gone.has(m.id))) {
+        this.brushLooks.forget(m.obj);
         this.group.remove(m.obj);
         if (m.obj instanceof THREE.Mesh) m.obj.geometry.dispose();
       }
@@ -1299,6 +1311,12 @@ export class PlaySession {
       m.obj.matrix.copy(motion.fromArray(f.bodyPose, m.i * POSE).multiply(m.base));
       m.obj.matrixWorldNeedsUpdate = true;
     }
+    for (const change of this.world.brushChanges) {
+      if ('material' in change) this.brushLooks.setMaterial(change.id, change.material);
+      else this.brushLooks.tint(change.id, change.color, change.time, change.seconds);
+    }
+    this.world.brushChanges.length = 0;
+    this.brushLooks.update(this.world.time);
     if (this.printers.length) this.updatePrinters(dt);
     this.power?.update();
     for (const v of this.switchViews) {
@@ -1689,6 +1707,8 @@ export class PlaySession {
   }
 
   /** A level change that has begun (the next scene should start from it), or null. */
+  get ended(): boolean { return this.world.ended; }
+
   get travel(): Travel | null {
     return this.world.travel;
   }
@@ -1770,6 +1790,7 @@ export class PlaySession {
 
   dispose(): void {
     this.disposed = true;
+    this.brushLooks.dispose();
     this.restoreFov();
     this.baseView?.dispose();
     this.mineView?.dispose();

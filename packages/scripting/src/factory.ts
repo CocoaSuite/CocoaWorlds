@@ -127,6 +127,10 @@ export function newStatement(kind: StatementKind, opts: { target?: Ref; variable
       return { id: id(), kind, amount: num(1) };
     case 'say':
       return { id: id(), kind, text: text('Hello!'), seconds: num(3) };
+    case 'brushTint':
+      return { id: id(), kind, target, color: '#ffffff', seconds: num(1) };
+    case 'brushMaterial':
+      return { id: id(), kind, target, material: 'dev/grid' };
     case 'setText':
       return { id: id(), kind, target, text: text('Text') };
     case 'spawn':
@@ -146,6 +150,14 @@ export function newStatement(kind: StatementKind, opts: { target?: Ref; variable
     case 'silence':
     case 'unsilence':
       return { id: id(), kind };
+    case 'endGame':
+    case 'playerCamera':
+      return { id: id(), kind };
+    case 'hideEffect':
+      return { id: id(), kind, effect: '' };
+    case 'hideButtonPrompt':
+    case 'cameraAt':
+      return { id: id(), kind, target };
     case 'viewFrom':
       return { id: id(), kind, target, seconds: num(3) };
     case 'setSide':

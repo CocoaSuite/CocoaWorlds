@@ -134,7 +134,7 @@ export const GRID_SIZES = [1, 2, 4, 8, 16, 32, 64, 128, 256, 512];
 /** Rotation snapping in degrees; zero means free rotation. */
 export const SNAP_ANGLES = [0, 1, 5, 10, 15, 22.5, 30, 45, 90];
 
-export type AddKind = 'empty' | 'pointLight' | 'spotLight' | 'sun' | 'spawn' | 'sign' | 'reflectionProbe' | 'poster' | 'painting' | 'decal' | 'stake' | 'junk' | 'carpet' | 'outlet' | 'extender' | 'stringLights' | 'generator' | 'lightSwitch' | 'shelf';
+export type AddKind = 'empty' | 'promptVolume' | 'pointLight' | 'spotLight' | 'sun' | 'spawn' | 'sign' | 'reflectionProbe' | 'poster' | 'painting' | 'decal' | 'stake' | 'junk' | 'carpet' | 'outlet' | 'extender' | 'stringLights' | 'generator' | 'lightSwitch' | 'shelf';
 export interface LogEntry {
   at: string;
   level: 'info' | 'warn' | 'error';
@@ -584,6 +584,13 @@ export const useEditor = create<State & Actions>()((set, get) => ({
       newEntity(name, components, { position: [at[0], at[1] + y, at[2]] });
     const e: EntityData = {
       empty: () => base('object', {}),
+      promptVolume: () => {
+        const volume = newBrushEntity(uniqueName(doc, 'button_prompt'), box([-16, -16, -16], [16, 16, 16]), 'solid');
+        volume.transform.position = [at[0], at[1] + 16, at[2]];
+        volume.components.trigger = { ...defaultComponent('trigger'), buttonPrompt: true };
+        volume.components.script = { ...emptyScript(), handlers: [{ id: blockId(), event: { ...newEvent('use'), prompt: t('prompt.interact') }, body: [] }] };
+        return volume;
+      },
       pointLight: () => base('point_light', { light: { kind: 'point', color: '#ffe8c4', intensity: 1.5, range: 512, castShadows: false } }, 128),
       spotLight: () => base('spot_light', { light: { kind: 'spot', color: '#ffffff', intensity: 2, range: 768, angle: 40, castShadows: true } }, 192),
       sun: () => base('sun', { light: { kind: 'directional', color: '#fff4e0', intensity: 2, castShadows: true } }, 512),

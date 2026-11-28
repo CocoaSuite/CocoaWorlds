@@ -580,6 +580,7 @@ export class GameWorld {
   /** Copies made while playing → what they were copied from. */
   private copyOf = new Map<string, string>();
   private useQueued = false;
+  private hiddenButtonPrompts = new Set<string>();
   /** Below this the player has fallen out of the world and starts again. */
   private killY = -Infinity;
   private health: number = PLAYER.maxHealth;
@@ -1179,6 +1180,8 @@ export class GameWorld {
   /** The game starts on its first day (not a saved or carried one): “When day n starts” runs for it. */
   private dayFresh = true;
   /** Models' glow set by scripts (from null: from how the model was made). */
+  readonly brushOwners = new WeakMap<Brush, string>();
+  readonly brushChanges: ({ id: string; material: string } | { id: string; color: string; seconds: number; time: number })[] = [];
   private glows = new Map<string, Fade>();
   /** Objects scripts turned on (true) or off (false), by body. */
   private switched = new Map<string, boolean>();
@@ -1311,6 +1314,7 @@ export class GameWorld {
       const brushData = e.components.brush as unknown as (BrushData & { role?: string }) | undefined;
       if (brushData?.faces) {
         const brush = brushToWorld(fromData({ faces: brushData.faces, mesh: brushData.mesh }), doc.worldMatrix(e.id));
+        this.brushOwners.set(brush, e.id);
         // (A Sound area is heard, not touched: also a trigger zone when it has one, never part of the level.)
         if (e.components.soundArea) this.addSoundArea(e, brush);
         if (e.components.soundArea && !e.components.trigger) continue;
@@ -1487,6 +1491,9 @@ export class GameWorld {
         const follow = place && typeof place === 'object' && place.ref !== 'player' ? this.bodyOf(place.ref) : null;
         this.bus.emit({ type: 'sound', sound, at, follow, volume, loop: false, range: 2048, source: owner, time: this.time });
       },
+      endGame: () => { this.ended = true; },
+      playerCamera: () => { this.cameraView = null; },
+      hideEffect: (effect) => this.bus.emit({ type: 'hideEffect', effect, time: this.time }),
       playEffect: (effect, place, follow) => {
         const at = this.placePoint(place);
         if (!at) return;
@@ -1561,6 +1568,12 @@ export class GameWorld {
         if (!l) return;
         const to = prop === 'color' ? (isHex(String(value)) ? rgbOf(String(value)) : null) : [Math.max(0, Number(value) || 0)];
         if (to) l[prop] = { from: fadeAt(l[prop], this.time), to, t0: this.time, t1: this.time + seconds };
+      },
+      brushTint: (id, color, seconds) => {
+        if (isHex(color)) this.brushChanges.push({ id, color, seconds, time: this.time });
+      },
+      brushMaterial: (id, material) => {
+        if (material) this.brushChanges.push({ id, material });
       },
       setGlow: (target, strength, seconds) => {
         const g = this.glows.get(target);
@@ -3022,7 +3035,7 @@ export class GameWorld {
   /** Advance by `dt` seconds of real time, in fixed physics steps. Returns the number of steps taken. */
   step(dt: number): number {
     // (Once a level change has begun, this scene is over.)
-    if (this.disposed || this.travel) return 0;
+    if (this.disposed || this.travel || this.ended) return 0;
     this.accumulator = Math.min(this.accumulator + Math.max(0, dt) * this.dev.timeScale, STEP * MAX_STEPS_PER_FRAME);
     let n = 0;
     if (!this.startedScripts) {
@@ -3097,6 +3110,7 @@ export class GameWorld {
       n++;
       this.events.drainCollisionEvents((h1, h2, started) => this.onContact(h1, h2, started));
       this.runner.tick(STEP);
+      if (this.ended) break;
       if (this.loudSounds.size) this.callAgain();
     }
     return n;
@@ -3415,6 +3429,8 @@ export class GameWorld {
   /** A scripted scene holds the player still (no moving, jumping, firing or using; they can look around). */
   private frozen = false;
   /** A scripted scene looks through an object until a time. */
+  ended = false;
+  private copyCameraBases = new Map<string, number[]>();
   private cameraView: { id: string; until: number } | null = null;
 
   /** Whether a scripted scene holds the player still. */
@@ -3426,13 +3442,12 @@ export class GameWorld {
   private cameraEye(): { eye: [number, number, number]; yaw: number; pitch: number } | null {
     const c = this.cameraView;
     if (!c) return null;
-    if (this.time >= c.until) {
+    if (this.time >= c.until || this.gone.has(c.id)) {
       this.cameraView = null;
       return null;
     }
-    const e = this.doc.get(c.id);
-    if (!e) return null;
-    const start = this.doc.worldMatrix(c.id);
+    const start = this.copyCameraBases.get(c.id) ?? (this.doc.get(c.id) ? this.doc.worldMatrix(c.id) : null);
+    if (!start) return null;
     // (Drawn: where the object is between the last two steps, as the player's own view is.)
     const motion = this.drawnMotionOf(c.id) ?? this.drawnMotionOf(this.unitOf.get(c.id) ?? '');
     const m = motion ? multiply(motion, start) : start;
@@ -3455,11 +3470,13 @@ export class GameWorld {
     const hit = this.useAim();
     if (!hit) return null;
     const { id, targets, distance } = hit;
-    if (this.held) return this.runner.usesHolding(targets, this.heldIds(), distance) ? '' : null;
+    const promptTargets = targets.filter((t) => !this.hiddenButtonPrompts.has(t));
+    if (this.held) return this.runner.usesHolding(promptTargets, this.heldIds(), distance) ? '' : null;
     const spot = targets.find((t) => this.spots.has(t) && this.keyOf(t) === 'KeyE' && this.seatReady(t));
     if (spot && distance <= this.reachOf(spot)) return String(this.spots.get(spot)!.prompt ?? '');
-    const prompt = this.runner.usePrompt(targets, distance);
+    const prompt = this.runner.usePrompt(promptTargets, distance);
     if (prompt !== null) return prompt;
+    if (this.hiddenButtonPrompts.has(id)) return null;
     if (distance > PLAYER.useReach) return null;
     if (targets.some((t) => this.npcs.get(t)?.alive && this.npcs.get(t)!.data.side === 'friendly')) return '';
     if (targets.some((t) => (this.chargers.get(t)?.left ?? 0) > 0)) return '';
@@ -3471,7 +3488,7 @@ export class GameWorld {
    * player's reach or the furthest a “When the player uses” stack reaches.
    */
   private useAim(): { id: string; targets: string[]; distance: number } | null {
-    const hit = this.player?.aimAt(Math.max(PLAYER.useReach, this.runner.useReach(), this.spotReach), (c) => this.isHeld(c) || (c.isSensor() && !this.isPoster(c)), true);
+    const hit = this.player?.aimAt(Math.max(PLAYER.useReach, this.runner.useReach(), this.spotReach), (c) => this.isHeld(c) || (c.isSensor() && !this.isPoster(c) && !this.triggers.get(c.handle)?.data.buttonPrompt), true);
     const id = hit ? this.owner.get(hit.collider.handle) : undefined;
     if (!hit || !id || id === 'player') return null;
     const targets: string[] = [];
@@ -4491,11 +4508,19 @@ export class GameWorld {
       if (name === 'wander') return npc.setWander(args[0] !== false), null;
       return npc.runAway(typeof args[0] === 'number' ? args[0] : 0);
     }
+    if (name === 'hideButtonPrompt') {
+      this.hiddenButtonPrompts.add(target);
+      return null;
+    }
+    if (name === 'cameraAt') {
+      this.cameraView = { id: target, until: Infinity };
+      return null;
+    }
     if (name === 'viewFrom') {
       const seconds = typeof args[0] === 'number' ? Math.max(0, args[0]) : 0;
       const until = this.time + seconds;
-      this.cameraView = { id: target, until };
-      return () => this.time >= until || this.cameraView?.id !== target;
+      const view = this.cameraView = { id: target, until };
+      return () => this.time >= until || this.cameraView !== view;
     }
     if (npc && name === 'damage') return this.weaponDamage(target, typeof args[0] === 'number' ? args[0] : 0, 'script', 'a script'), null;
     if (name === 'startTrain' || name === 'stopTrain') {
@@ -4786,6 +4811,7 @@ export class GameWorld {
       this.names.set(id, e.name);
       this.parentOf.set(id, e.id === template ? null : (ids.get(e.parent ?? '') ?? null));
       const world = multiply(shift, this.doc.worldMatrix(e.id));
+      this.copyCameraBases.set(id, world);
       const brushData = e.components.brush as unknown as (BrushData & { role?: string }) | undefined;
       // Inside a part of the copy that has a body of its own (a prop with Physics): carried by it, drawn with it.
       let carrier: string | null = null;
@@ -4802,6 +4828,7 @@ export class GameWorld {
         } else if (e.components.model) (b.riders ??= []).push({ id, matrix: world });
       } else if (brushData?.faces) {
         const brush = brushToWorld(fromData({ faces: brushData.faces, mesh: brushData.mesh }), world);
+        this.brushOwners.set(brush, id);
         if (e.components.trigger) this.addTrigger(copy, brush, false);
         else if (e.components.rigidBody) this.addBrushBody(copy, brush);
         else if (brushData.role !== 'subtract' && !rootHasBody) unitFor(e).brushes.push(brush);
@@ -5090,6 +5117,7 @@ export class GameWorld {
       const desc = hull(pts);
       if (desc) this.owner.set(this.world.createCollider(this.material(desc, b.rb ?? readComponent<RigidBodyData>('rigidBody', {})), b.body).handle, id);
     }
+    this.brushOwners.set(brush, id);
     b.brushes.push(brush);
   }
 
@@ -5100,7 +5128,11 @@ export class GameWorld {
       for (let y: string | null | undefined = x; y; y = this.parentOf.get(y)) if (y === id) gone.add(x);
     }
     gone.add(id);
-    for (const x of gone) this.gone.add(x);
+    for (const x of gone) {
+      this.hiddenButtonPrompts.delete(x);
+      this.copyCameraBases.delete(x);
+      this.gone.add(x);
+    }
     for (const x of gone) {
       const b = this.bodies.get(x);
       if (!b) {
@@ -5758,7 +5790,7 @@ export class GameWorld {
     const seat = hit?.targets.find((t) => this.seats.has(t) && this.keyOf(t) !== 'KeyE' && hit.distance <= this.reachOf(t) && this.seatReady(t));
     if (seat) out.push({ key: this.keyOf(seat), prompt: String(this.spots.get(seat)!.prompt ?? '') });
     for (const { targets, distance } of this.pressAims())
-      for (const p of this.runner.keyPrompts(targets, distance)) if (!out.some((x) => x.key === p.key)) out.push(p);
+      for (const p of this.runner.keyPrompts(targets.filter((id) => !this.hiddenButtonPrompts.has(id)), distance)) if (!out.some((x) => x.key === p.key)) out.push(p);
     return out;
   }
 

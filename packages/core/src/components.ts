@@ -1416,6 +1416,8 @@ export interface ColliderData {
 }
 
 export interface TriggerData {
+  /** This non-solid volume can be aimed at for scripted button prompts. */
+  buttonPrompt?: boolean;
   detects: 'player' | 'physics' | 'anything';
   once: boolean;
   [k: string]: unknown;

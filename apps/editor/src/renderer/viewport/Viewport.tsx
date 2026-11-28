@@ -94,6 +94,7 @@ export function Viewport() {
         createBrush: (min, max, outline) => useEditor.getState().createBrushes(min, max, outline),
         cancelTool: () => useEditor.getState().setTool('select'),
         // A level change: the next scene comes from the editor (this scene) or from its saved file.
+        endGame: () => useEditor.getState().stopPlaying(),
         travel: (t) => {
           const st = useEditor.getState();
           const session = st.session;
@@ -321,6 +322,7 @@ export function Viewport() {
         { label: t('add.ladder'), onSelect: () => s.addLadder(ctx?.ground ?? undefined) },
         { label: t('add.terrain'), onSelect: () => s.addTerrain(ctx?.ground ?? undefined) },
         { label: `${t('add.empty')}`, onSelect: () => s.add('empty', ctx?.ground ?? undefined) },
+        { label: `${t('add.promptVolume')}`, onSelect: () => s.add('promptVolume', ctx?.ground ?? undefined) },
       ];
 
   const one = sel.length === 1 ? sel[0]! : null;

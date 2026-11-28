@@ -49,6 +49,7 @@ export interface GameData {
 
 export interface RunnerEvents {
   hud(hud: Hud): void;
+  endGame(): void;
   /** The mouse is captured (playing), or free (“Click to play”). */
   lock(locked: boolean): void;
   /** A screen freed the mouse for its buttons. */
@@ -111,11 +112,12 @@ export class GameRunner {
 
   private hidden = new THREE.MeshBasicMaterial({ visible: false });
   /** The Three.js material for a face material (shared by every scene of the game). */
-  private materialFor = (name: string): THREE.Material => {
-    let m = this.materials.get(name);
+  private materialFor = (name: string, tint?: string): THREE.Material => {
+    const key = tint ? `${name}\u0000${tint}` : name;
+    let m = this.materials.get(key);
     if (!m) {
-      m = isInvisibleMaterial(name) ? this.hidden : sceneMaterial(name, () => {});
-      this.materials.set(name, m);
+      m = isInvisibleMaterial(name) ? this.hidden : sceneMaterial(name, () => {}, tint);
+      this.materials.set(key, m);
     }
     return m;
   };
@@ -267,6 +269,12 @@ export class GameRunner {
     // (A level whose shaders are compiling in the background waits: see below. Its first tick comes before: what it
     // switches on and off, lights among them, decides which shaders are wanted.)
     if (this.warmed === play || this.warming !== play) play.tick(dt);
+    if (play.ended) {
+      if (document.pointerLockElement === this.renderer.domElement) document.exitPointerLock();
+      this.dispose();
+      this.cb.endGame();
+      return;
+    }
     tickMaterials(now);
     const hud = hudOf(play, this.locked);
     this.followUiMouse(hud.ui.freesMouse);
